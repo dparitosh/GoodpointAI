@@ -1,0 +1,62 @@
+.analytics-dashboard-container {
+  padding: 20px;
+  background-color: var(--panel-bg); /* Using existing CSS var for consistency */
+  color: var(--text-color);
+  height: 100%;`
+  overflow-y: auto;
+}
+
+.dashboard-title {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+/* Generic card styling if not using a UI library */
+.card {
+  background-color: var(--input-bg); /* Example, adjust as needed */
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 15px;
+}
+
+.kpi-card { /* Specific to KPI cards */
+  text-align: center;
+}
+
+.card-header {
+  margin-bottom: 10px;
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.kpi-value {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 5px 0 0 0;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.dashboard-loading,
+.dashboard-error,
+.dashboard-nodata {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80vh; /* Take up most of the viewport height */
+  font-size: 1.2em;
+}

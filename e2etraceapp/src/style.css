@@ -1,0 +1,325 @@
+/* General Body Styles */
+body {
+    font-family: var(--ndl-font-family-sans, sans-serif); /* Use NDL font, fallback to sans-serif */
+    color: var(--ndl-color-text-default, #333);          /* NDL default text color */
+    background-color: var(--ndl-color-bg-default, #f4f4f4); /* NDL default background color */
+    margin: 0;
+    padding: 20px;
+    font-size: var(--ndl-font-size-100, 16px); /* NDL base font size */
+    line-height: var(--ndl-line-height-body, 1.6);
+}
+
+h1, h2 {
+    color: var(--ndl-color-text-headings, #111); /* NDL heading color */
+    font-family: var(--ndl-font-family-headings, var(--ndl-font-family-sans, sans-serif));
+}
+
+h1 {
+    font-size: var(--ndl-font-size-700, 2.5em); /* Example NDL font size token */
+    margin-bottom: var(--ndl-spacing-6, 24px); /* Example NDL spacing token */
+    text-align: center;
+}
+
+h2 {
+    font-size: var(--ndl-font-size-500, 1.8em);
+    margin-top: var(--ndl-spacing-7, 32px);
+    margin-bottom: var(--ndl-spacing-4, 16px);
+    border-bottom: 1px solid var(--ndl-color-border-weak, #ddd);
+    padding-bottom: var(--ndl-spacing-2, 8px);
+}
+
+h3 { /* Added basic style for h3 */
+    font-size: 1.5em; /* Adjust as needed */
+    color: #333;      /* Consistent heading color */
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+/* Header Styling */
+header {
+    background-color: var(--ndl-color-bg-strong, #e9ecef); /* Example NDL background */
+    padding: var(--ndl-spacing-4, 16px) var(--ndl-spacing-6, 24px);
+    border-bottom: 2px solid var(--ndl-color-border-default, #ccc);
+    margin-bottom: var(--ndl-spacing-6, 24px); /* Space below header */
+    display: flex; /* For aligning title and nav */
+    justify-content: space-between; /* Puts title left, nav right */
+    align-items: center; /* Vertically align items */
+}
+
+.app-nav a {
+    margin-left: var(--ndl-spacing-4, 16px);
+    text-decoration: none;
+    color: var(--ndl-color-text-primary-default, #005EA8); /* NDL primary link color */
+    font-weight: var(--ndl-font-weight-semibold, 600);
+}
+
+/* Dashboard and Panel Layout */
+.dashboard-container {
+    display: flex;
+    flex-direction: column; /* Stack main content and data panel */
+    gap: var(--ndl-spacing-6, 24px);
+}
+
+.main-content-area {
+    display: flex;
+    flex-direction: row;
+    gap: 0; /* Remove gap as resizer will be the separator */
+    height: 60vh; /* Define a height for the area, adjust as needed */
+    /* min-height: 60vh; */ /* Or use min-height if you prefer it to grow */
+}
+
+#graph-container {
+    flex: 3; /* Give graph container more space (e.g., 3 parts) */
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ndl-color-border-default, #ccc);
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    background-color: var(--ndl-color-bg-canvas, #fff); /* NDL canvas background */
+    /* position: relative; /* Moved to .cytoscape-wrapper */
+    /* min-height will be determined by parent flex container */
+    overflow: hidden; /* Prevent scrollbars on the container itself */
+    min-width: 150px; /* Minimum width during resize */
+    padding: var(--ndl-spacing-4, 16px); /* Consistent padding with chat-panel */
+}
+
+/* This ID is likely from an older version or different library, CytoscapeComponent doesn't use it directly */
+#mynetwork {
+    flex-grow: 1; /* Cytoscape canvas takes available space */
+    width: 100%;
+    height: 100%; /* Make sure it fills the graph-container */
+}
+
+/* Wrapper for Cytoscape component and overlay messages */
+.cytoscape-wrapper {
+    flex-grow: 1; /* Takes remaining space in the flex column of #graph-container */
+    position: relative; /* For absolute positioning of overlay messages */
+    width: 100%;
+    height: 100%; /* Or let flex-grow handle height if parent has fixed height */
+    overflow: hidden; /* Ensure cytoscape does not overflow this wrapper */
+}
+
+/* Common styles for overlay messages */
+.loading-message,
+.error-message,
+.info-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: var(--ndl-spacing-5, 20px);
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    z-index: 10;
+    text-align: center;
+    color: var(--ndl-color-text-subtle, #555);
+}
+
+/* Specific styles for error message */
+.error-message {
+    color: var(--ndl-color-text-danger-default, #a94442);
+    background-color: var(--ndl-color-bg-danger-weak, #f2dede);
+    border: 1px solid var(--ndl-color-border-danger-default, #ebccd1);
+    /* padding is inherited from common style, can be overridden if needed */
+}
+
+/* Specific styles for info message (if any beyond common) */
+.info-message {
+    /* Currently uses all common styles, which is fine. */
+}
+
+.chat-panel { /* Renamed/repurposed from .chat-panels-container */
+    flex: 1; /* Give chat panel less space (e.g., 1 part) */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent scrollbars on the container itself */
+    background-color: var(--ndl-color-bg-default, #fff);
+    border: 1px solid var(--ndl-color-border-default, #ccc);
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    padding: var(--ndl-spacing-4, 16px);
+    /* height will be determined by parent flex container */
+    /* flex-grow: 1; This is now the right panel itself, doesn't need flex-grow inside */
+    min-width: 150px; /* Minimum width during resize */
+}
+
+.chat-messages { /* Changed from #chat-messages to class */
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: var(--ndl-spacing-4, 16px);
+    padding: var(--ndl-spacing-2, 8px);
+    border: 1px solid var(--ndl-color-border-weak, #eee);
+    border-radius: var(--ndl-border-radius-small, 2px);
+}
+
+.chat-message {
+    margin-bottom: var(--ndl-spacing-2, 8px);
+    padding: var(--ndl-spacing-2, 8px);
+    border-radius: var(--ndl-border-radius-small, 2px);
+}
+.chat-message.user { background-color: var(--ndl-color-bg-info-weak, #e0f0ff); }
+.chat-message.ai { background-color: var(--ndl-color-bg-neutral-weak, #f0f0f0); }
+.chat-message.system { background-color: var(--ndl-color-bg-warning-weak, #fff8e1); color: var(--ndl-color-text-warning, #795548); }
+
+.chat-input-container {
+    display: flex; /* This class is not used in App.jsx, but keeping it for reference */
+    gap: var(--ndl-spacing-2, 8px);
+}
+
+#chat-input {
+    flex-grow: 1;
+    padding: var(--ndl-spacing-2, 8px) var(--ndl-spacing-3, 12px);
+    border: 1px solid var(--ndl-color-border-strong, #bbb);
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    font-size: var(--ndl-font-size-90, 14px);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; /* Smooth transition for focus */
+}
+#chat-input:focus {
+    border-color: var(--ndl-color-border-focus, #007bff); /* NDL focus border color */
+    box-shadow: 0 0 0 0.2rem var(--ndl-color-shadow-focus, rgba(0, 123, 255, 0.25)); /* NDL focus shadow */
+}
+
+#send-chat-button {
+    transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; /* Smooth transition */
+    padding: var(--ndl-spacing-2, 8px) var(--ndl-spacing-4, 16px);
+    background-color: var(--ndl-color-bg-primary-default, #0073C0); /* NDL primary button color */
+    color: var(--ndl-color-text-on-primary, #fff);
+    border: none;
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    cursor: pointer;
+    font-size: var(--ndl-font-size-90, 14px);
+}
+#send-chat-button:hover {
+    background-color: var(--ndl-color-bg-primary-hover, #005A99);
+}
+#send-chat-button:focus {
+    outline: 2px solid var(--ndl-color-border-focus, #007bff); /* NDL focus outline */
+    outline-offset: 2px;
+}
+
+/* Data Panel */
+/* New container for the table below the main content area */
+.data-table-container {
+    margin-top: var(--ndl-spacing-6, 24px); /* Add space above the table */
+    padding: var(--ndl-spacing-4, 16px);
+}
+
+/* Styles for tables inside #data-tables-container using NDL tokens */
+.data-table-container table { /* Updated selector */
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--ndl-spacing-4, 16px);
+    font-size: var(--ndl-font-size-90, 14px); /* Slightly smaller font for tables */
+    background-color: var(--ndl-color-bg-canvas, #fff);
+    box-shadow: var(--ndl-shadow-1, 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)); /* NDL shadow */
+    border-radius: var(--ndl-border-radius-medium, 4px);
+    overflow: hidden; /* To make border-radius work with table */
+}
+
+.data-table-container caption { /* Updated selector */
+    font-size: var(--ndl-font-size-200, 1.2em); /* NDL token for slightly larger caption */
+    font-weight: var(--ndl-font-weight-bold, bold);
+    color: var(--ndl-color-text-headings, #111);
+    padding: var(--ndl-spacing-3, 12px);
+    text-align: left;
+    background-color: var(--ndl-color-bg-weak, #f8f9fa); /* Light background for caption */
+    border-bottom: 1px solid var(--ndl-color-border-default, #ccc);
+}
+
+.data-table-container th, /* Updated selector */
+.data-table-container td { /* Updated selector */
+    border: 1px solid var(--ndl-color-border-weak, #ddd);
+    padding: var(--ndl-spacing-3, 12px); /* NDL spacing for padding */
+    text-align: left;
+    vertical-align: top; /* Align content to the top for consistency */
+}
+
+.data-table-container th { /* Updated selector, removed old #data-tables-container th */
+    background-color: var(--ndl-color-bg-strong, #e9ecef); /* NDL strong background for headers - Keeping old ID selector for now, but prefer class */
+    color: var(--ndl-color-text-default, #333);
+    font-weight: var(--ndl-font-weight-semibold, 600);
+    cursor: pointer; /* Indicate sortable columns */
+    transition: background-color 0.15s ease-in-out; /* Smooth transition for hover */
+}
+
+.data-table-container tbody tr:nth-child(even) { /* Apply to whole row for consistency */
+    background-color: var(--ndl-color-bg-neutral-weak-hover, #f8f9fa); /* Subtle striping for even rows */
+}
+
+
+/* Resizer (basic styling, NDL doesn't typically provide resizer styles) */
+.resizer { /* General resizer class if you had others, not strictly needed for only one */
+    /* background: var(--ndl-color-border-neutral-default, #ccc); */
+    /* cursor: ew-resize; */ /* This was for a horizontal resizer */
+}
+.resizer-v {
+    width: 10px; /* Make it easier to grab */
+    background-color: var(--ndl-color-border-neutral-strong, #aaa); /* More visible */
+    cursor: col-resize; /* Standard cursor for resizing column widths */
+    flex-shrink: 0; /* Prevent the resizer from shrinking */
+    transition: background-color 0.15s ease-in-out;
+}
+.resizer-v:hover {
+    background-color: var(--ndl-color-border-primary-default, #0073C0); /* Highlight on hover */
+}
+
+/* For highlighting neighbors */
+.dimmed {
+    opacity: 0.25 !important; /* Use !important to override default Cytoscape opacity if needed */
+    transition: opacity 0.15s ease-in-out;
+}
+
+/* Sort indicators for table headers */
+.data-table-container th.sortable:hover {
+    background-color: var(--ndl-color-bg-strong-hover, #d3d9df); /* NDL token for hover on strong backgrounds */
+}
+
+/* Default state for sort icons (both visible, muted) */
+.data-table-container th.sortable::before,
+.data-table-container th.sortable::after {
+    opacity: 0.4; /* Muted appearance */
+    margin-left: 5px;
+}
+
+.data-table-container th.sortable::before {
+    content: '▲';
+}
+.data-table-container th.sortable::after {
+    content: '▼';
+    margin-left: -2px; /* Adjust spacing if arrows are too far apart */
+}
+
+/* Highlight active sort icon */
+.data-table-container th.sortable.ascending::before,
+.data-table-container th.sortable.descending::after {
+    opacity: 1; /* Fully visible */
+    color: var(--ndl-color-text-primary-default, #005EA8); /* Or your preferred highlight color */
+}
+
+/* Styles for properties cell */
+.properties-cell .properties-toggle {
+    cursor: pointer;
+    padding: 2px 6px;
+    border: 1px solid var(--ndl-color-border-default, #ccc);
+    border-radius: var(--ndl-border-radius-small, 2px);
+    background-color: var(--ndl-color-bg-weak, #f0f0f0);
+    font-size: 0.8em;
+    margin-right: 5px;
+}
+.properties-cell .properties-toggle:hover {
+    background-color: var(--ndl-color-bg-neutral-weak-hover, #e0e0e0);
+}
+.properties-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 5px 0 0 0;
+    font-size: 0.9em;
+}
+.properties-list li {
+    padding: 2px 0;
+    border-bottom: 1px dashed var(--ndl-color-border-weak, #eee);
+}
+.properties-list li:last-child {
+    border-bottom: none;
+}
+.properties-list strong {
+    color: var(--ndl-color-text-subtle, #555);
+}

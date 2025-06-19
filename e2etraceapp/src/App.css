@@ -1,0 +1,405 @@
+/* Global Resets and Base Styles */
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark; /* Basic light/dark mode support */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424; /* Default dark background */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --border-color: #444;
+  --background-color: #242424; /* Explicit background variable */
+  --panel-bg: #2a2a2a;
+  --header-bg: #1e1e1e;
+  --accent-color: #646cff;
+  --text-color: rgba(255, 255, 255, 0.87);
+  --text-muted-color: #aaa;
+  --input-bg: #333;
+  --button-bg: #4a4a4a;
+  --button-text-color: var(--text-color);
+  --button-hover-bg: #5a5a5a;
+
+  /* Cytoscape Dark Theme Variables */
+  --cy-bg: var(--background-color); /* Background of the cytoscape canvas area */
+  --cy-node-bg: #3a3a3a; /* Slightly lighter than panel-bg for contrast */
+  --cy-node-border: #555;
+  --cy-node-text: var(--text-color);
+  --cy-node-text-outline: var(--background-color); /* Outline matches canvas bg */
+  --cy-edge-color: #777;
+  --cy-edge-text: var(--text-muted-color);
+  --cy-edge-text-bg: var(--panel-bg);
+  --cy-parent-bg: #2f2f2f;
+  --cy-parent-border: var(--border-color);
+  --cy-selected-color: var(--accent-color);
+  --cy-selected-bg: #404580; /* Darker accent for selected node bg */
+  --cy-critical-color: #ff4d4d;
+  --cy-supplier-bg: #594f31; /* Darker yellow */
+  --cy-supplier-border: #b29430;
+  --cy-manufacturer-bg: #325932; /* Darker green */
+  --cy-manufacturer-border: #43a047;
+  /* Add more --cy-color-group-N-bg/border pairs as needed */
+}
+
+
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+    --background-color: #ffffff; /* Explicit background variable */
+    --border-color: #ddd;
+    --panel-bg: #f9f9f9;
+    --header-bg: #f0f0f0;
+    --accent-color: #747bff;
+    --text-color: #213547;
+    --text-muted-color: #555;
+    --input-bg: #fff;
+    --button-bg: #e0e0e0;
+    --button-text-color: var(--text-color);
+    --button-hover-bg: #d0d0d0;
+
+    /* Cytoscape Light Theme Variables */
+    --cy-bg: var(--background-color); /* Background of the cytoscape canvas area */
+    --cy-node-bg: #E0E5E9;
+    --cy-node-border: #A6B1BB;
+    --cy-node-text: #213547;
+    --cy-node-text-outline: #FFFFFF; /* White outline for light theme */
+    --cy-edge-color: #A6B1BB;
+    --cy-edge-text: #333333;
+    --cy-edge-text-bg: #FFFFFF;
+    --cy-parent-bg: #f0f0f0;
+    --cy-parent-border: #cccccc;
+    --cy-selected-color: var(--accent-color);
+    --cy-selected-bg: #CCE5FF;
+    --cy-critical-color: #d32f2f; /* Standard red */
+    --cy-supplier-bg: #FFF9C4;
+    --cy-supplier-border: #FFC107;
+    --cy-manufacturer-bg: #C8E6C9;
+    --cy-manufacturer-border: #4CAF50;
+  }
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Dashboard Layout --- */
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Full viewport height */
+  overflow: hidden; /* Prevent scrollbars on body */
+  width: 100%;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  box-sizing: border-box; /* Include padding and border in element's total width and height */
+}
+
+.dashboard-container > header {
+  flex-shrink: 0; /* Header should not shrink */
+  padding: 1rem;
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex; /* Use flexbox for header content alignment */
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-container > header h1 {
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.app-nav a {
+  margin-left: 1rem;
+  color: var(--accent-color);
+  text-decoration: none;
+}
+.app-nav a:hover {
+  text-decoration: underline;
+}
+
+.main-content-area {
+  display: flex;
+  flex-grow: 1; /* Takes remaining vertical space after header */
+  overflow: hidden; /* Crucial for resizable panels and preventing unexpected scrollbars */
+}
+
+/* --- Graph Panel --- */
+
+.graph-panel {
+  display: flex;
+  flex-direction: column; /* Stack h3 and cytoscape-wrapper vertically */
+  overflow: hidden; /* Prevent its content from breaking layout */
+  padding: 1rem;
+  background-color: var(--panel-bg);
+  flex: 1 1 50%; /* Initial basis 50%, can grow/shrink. Resizer hook will override. */
+  min-width: 200px; /* Fallback min-width */
+  border-right: 1px solid var(--border-color); /* Separator line */
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.panel-header h3 {
+  margin: 0; /* Remove default margins from h3 */
+  font-size: 1.2em;
+  color: var(--text-color);
+}
+
+.panel-header-button {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85em;
+  background-color: var(--button-bg);
+  color: var(--button-text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.panel-header-button:hover {
+  background-color: var(--button-hover-bg);
+}
+
+
+.cytoscape-wrapper {
+  flex-grow: 1; /* CRITICAL: Allows this div to take up remaining vertical space in graph-panel */
+  width: 100%;  /* Take full width of graph-panel */
+  position: relative; /* CytoscapeComponent will fill this based on its 100% width/height */
+  background-color: var(--background-color); /* Match app background or choose a specific graph bg */
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+/* --- Resizer --- */
+.resizer-v {
+  /* This style is applied to the resizer element */
+  flex: 0 0 10px; /* width of the resizer */
+  cursor: col-resize;
+  background-color: var(--border-color); /* Make it visible */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10; /* Ensure it's above panels if they have backgrounds */
+}
+.resizer-v:hover {
+  background-color: var(--accent-color);
+}
+
+/* --- Chat Panel --- */
+.chat-panel-container {
+  /* This is the container for the chat panel and potentially other elements below it */
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 50%; /* Initial basis 50%, can grow/shrink. Resizer hook will override. */
+  overflow: hidden; /* Prevent its content from breaking layout */
+  min-width: 200px; /* Fallback min-width */
+  background-color: var(--panel-bg); /* Light background for the chat area */
+}
+
+.chat-panel {
+  /* Root div of ChatPanel component */
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; /* Make ChatPanel fill chat-panel-container */
+  padding: 1rem;
+  box-sizing: border-box;
+  min-width: 200px; /* Minimum width */
+}
+
+.chat-messages {
+  flex-grow: 1;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  background-color: var(--background-color);
+  border-radius: 4px;
+}
+
+.chat-message {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.chat-message-you {
+  background-color: var(--accent-color);
+  color: white; /* Ensure contrast */
+  margin-left: auto; /* Align to right */
+  max-width: 85%; /* Messages don't take full width */
+  text-align: left; /* Text inside bubble aligns left */
+}
+
+.chat-message-ai, .chat-message-system {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  margin-right: auto; /* Align to the left */
+  max-width: 80%;
+}
+
+.chat-message strong {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.chat-input-area {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-input-area input[type="text"] {
+  flex-grow: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  font-size: 1rem; /* Standard font size */
+}
+
+.chat-input-area button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--button-bg);
+  color: var(--button-text-color);
+  border-radius: 4px;
+  cursor: pointer; /* Standard font size */
+  transition: background-color 0.2s;
+}
+
+.chat-input-area button:hover {
+  background-color: var(--button-hover-bg);
+}
+.chat-input-area button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Data Table Container --- */
+.data-table-container {
+  /* This is the container for the data table */
+  padding: 1rem;
+  background-color: var(--panel-bg);
+  overflow-y: auto; /* Allow table to scroll if content is too tall */
+  flex-shrink: 0; /* Prevent table from shrinking if not enough space */
+  max-height: 30vh; /* Example max height, adjust as needed */
+}
+
+.data-table-wrapper {
+  overflow-x: auto; /* For wide tables */
+}
+
+.data-table-container table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.data-table-container h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 0.9em;
+}
+
+.data-table-container th, .data-table-container td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table-container th {
+  background-color: var(--header-bg);
+  cursor: pointer;
+}
+
+.data-table-container th.sortable::after {
+  content: ' \2195'; /* Up-down arrow */
+  opacity: 0.5;
+}
+.data-table-container th.sortable.ascending::after {
+  content: ' \2191'; /* Up arrow */
+  opacity: 1;
+}
+.data-table-container th.sortable.descending::after {
+  content: ' \2193'; /* Down arrow */
+  opacity: 1;
+}
+
+.properties-cell .properties-toggle {
+  margin-right: 0.5em;
+  cursor: pointer;
+  background-color: var(--button-bg);
+  border: 1px solid var(--border-color);
+  color: var(--button-text-color);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+}
+
+.properties-list {
+  list-style-type: disc;
+  margin: 0.5em 0 0 1em;
+  padding-left: 1em;
+  font-size: 0.9em;
+  color: var(--text-muted-color);
+}
+.properties-list li {
+  margin-bottom: 0.25em;
+}
+
+/* --- Utility/Overlay Messages --- */
+.loading-message, .error-message, .info-message {
+  /* These styles are for messages overlaid on panels, like the graph */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 1rem;
+  font-style: italic;
+  color: var(--text-muted-color);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 5px;
+  z-index: 10; /* Ensure it's above the graph canvas if it renders partially */
+  display: flex; /* Use flexbox for centering content */
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-message {
+  /* Specific styles for loading message if needed */
+}
+
+.info-message {
+  color: var(--text-muted-color);
+}
+.error-message {
+  color: #ff6b6b; /* A light red for errors */
+}
