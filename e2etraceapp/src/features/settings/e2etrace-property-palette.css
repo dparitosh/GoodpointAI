@@ -2,8 +2,8 @@
     padding: 24px;
     max-width: 800px;
     margin: 40px auto;
-    background-color: var(--panel-bg); /* Use theme variable */
-    border: 1px solid var(--border-color); /* Use theme variable */
+    background-color: var(--panel-bg); /* Defined in global.css */
+    border: 1px solid var(--border-color); /* Defined in global.css */
     border-radius: 8px;
     box-shadow: var(--shadow-elevation-1); /* Use theme variable */
 }
@@ -34,19 +34,20 @@
 
 .e2etrace-form-group label {
     font-weight: 600;
-    color: var(--text-muted-color); /* Use theme variable */
+    color: var(--text-muted-color); /* Defined in global.css */
 }
 
 .e2etrace-form-group input[type="number"],
 .e2etrace-form-group input[type="range"],
 .e2etrace-form-group input[type="checkbox"],
 .e2etrace-form-group select {
-    padding: var(--input-padding); /* Use theme variable for consistency */
-    border: 1px solid var(--border-color-strong); /* Use theme variable */
+    padding: var(--input-padding); /* Defined in global.css */
+    border: 1px solid var(--border-color-strong); /* Defined in global.css */
     border-radius: 4px;
     font-size: 1em; /* Use relative unit */
-    background-color: var(--input-bg); /* Use theme variable */
-    color: var(--text-color); /* Ensure text is readable */
+    background-color: var(--input-bg); /* Defined in global.css */
+    color: var(--text-color); /* Defined in global.css */
+    cursor: pointer; /* Added for select and range inputs */
 }
 
 .e2etrace-param-value-display {
@@ -64,25 +65,26 @@
 
 .e2etrace-palette-button {
     min-width: 120px;
-    padding: var(--button-padding); /* Use theme variable */
+    padding: var(--space-3) var(--space-4); /* Defined in global.css */
     border-radius: 4px;
     border: 1px solid transparent;
     cursor: pointer;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium); /* Defined in global.css */
+    transition: background-color 0.2s ease; /* Added for hover effect */
 }
 .e2etrace-palette-button.apply {
-    background-color: var(--success-bg); /* Use theme variable */
-    color: var(--text-on-success-bg); /* Use theme variable */
+    background-color: var(--accent-color); /* Defined in global.css */
+    color: var(--button-text-color); /* Defined in global.css */
 }
 .e2etrace-palette-button.apply:hover {
-    filter: brightness(0.9); /* Simple hover effect */
+    background-color: var(--accent-hover-color); /* Defined in global.css */
 }
 .e2etrace-palette-button.back {
-    background-color: var(--secondary-button-bg); /* Use theme variable */
-    color: var(--text-on-secondary-button-bg); /* Use theme variable */
+    background-color: var(--secondary-button-bg); /* Defined in global.css */
+    color: var(--text-on-secondary-button-bg); /* Defined in global.css */
 }
 .e2etrace-palette-button.back:hover {
-    filter: brightness(0.9); /* Simple hover effect */
+    background-color: var(--button-hover-bg); /* Defined in global.css */
 }
 
 .e2etrace-autosave-indicator {

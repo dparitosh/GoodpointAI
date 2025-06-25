@@ -5,6 +5,7 @@ export function E2ETraceChatPanel({
   chatInputValue,
   onChatInputChange,
   onSendMessage,
+  suggestedPrompts, // New prop for suggested prompts
   isChatSending,
 }) {
   const chatInputRef = useRef(null);
@@ -32,7 +33,7 @@ export function E2ETraceChatPanel({
   return (
     <div className="e2etrace-chat-panel">
       <h3>Chat</h3>
-      <div className="e2etrace-chat-messages">
+      <div className="e2etrace-chat-messages" role="log" aria-live="polite">
         {chatMessages.map((msg, index) => (
           <div key={index} className={`e2etrace-chat-message e2etrace-chat-message-${msg.sender.toLowerCase()}`}>
             <strong>{msg.sender}:</strong> {msg.text}
@@ -56,6 +57,16 @@ export function E2ETraceChatPanel({
           {isChatSending ? 'Sending...' : 'Send'}
         </button>
       </div>
+      {suggestedPrompts && suggestedPrompts.length > 0 && (
+        <div className="e2etrace-suggested-prompts">
+          <h4>Suggested Prompts:</h4>
+          {suggestedPrompts.map((prompt, idx) => (
+            <button key={idx} onClick={() => onChatInputChange({ target: { value: prompt } })} className="e2etrace-suggested-prompt-button">
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

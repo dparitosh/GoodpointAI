@@ -29,67 +29,63 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
     const cy = cyRef.current;
     if (!cy) return;
 
-    // Use a single tippy instance for performance
-    let tippyInstance;
+    // Store tippy instances in a Map to manage them per element
+    const tippyInstances = new Map();
 
     const makeTippy = (ele) => {
       const ref = ele.popperRef();
       const content = ele.data('tooltip');
 
       if (!ref || !content) return;
+      
+      let instance = tippyInstances.get(ele.id());
+      if (!instance) {
+        const dummyDomEle = document.createElement('div');
+        dummyDomEle.innerHTML = content;
 
-      // Destroy any existing tippy instance
-      if (tippyInstance) {
-        tippyInstance.destroy();
+        instance = tippy(dummyDomEle, {
+          getReferenceClientRect: ref.getBoundingClientRect,
+          trigger: 'manual',
+          content: () => dummyDomEle,
+          arrow: true,
+          placement: 'bottom',
+          hideOnClick: false,
+          interactive: true,
+          appendTo: document.body,
+        });
+        tippyInstances.set(ele.id(), instance);
       }
-
-      const dummyDomEle = document.createElement('div');
-      dummyDomEle.innerHTML = content;
-
-      tippyInstance = tippy(dummyDomEle, {
-        getReferenceClientRect: ref.getBoundingClientRect,
-        trigger: 'manual',
-        content: () => dummyDomEle,
-        arrow: true,
-        placement: 'bottom',
-        hideOnClick: false,
-        interactive: true,
-        appendTo: document.body,
-      });
-
-      tippyInstance.show();
+      instance.show();
     };
 
-    const destroyTippy = () => {
-      if (tippyInstance) {
-        tippyInstance.destroy();
-        tippyInstance = null;
+    const destroyTippy = (ele) => {
+      const instance = tippyInstances.get(ele.id());
+      if (instance) {
+        instance.destroy();
+        tippyInstances.delete(ele.id());
       }
     };
 
-    cy.on('mouseover', 'node, edge', (e) => makeTippy(e.target));
-    cy.on('mouseout', 'node, edge', destroyTippy);
-    cy.on('drag', 'node', destroyTippy); // Hide tooltip while dragging
+    const onMouseOver = (e) => makeTippy(e.target);
+    const onMouseOut = (e) => destroyTippy(e.target);
+    const onDrag = (e) => destroyTippy(e.target); // Hide tooltip while dragging
+
+    cy.on('mouseover', 'node, edge', onMouseOver);
+    cy.on('mouseout', 'node, edge', onMouseOut);
+    cy.on('drag', 'node', onDrag);
 
     // Cleanup on component unmount or when cyRef changes
     return () => {
       if (cy) {
-        cy.removeListener('mouseover');
-        cy.removeListener('mouseout');
-        cy.removeListener('drag');
+        cy.removeListener('mouseover', 'node, edge', onMouseOver);
+        cy.removeListener('mouseout', 'node, edge', onMouseOut);
+        cy.removeListener('drag', 'node', onDrag);
       }
-      destroyTippy();
+      // Destroy all remaining tippy instances
+      tippyInstances.forEach(instance => instance.destroy());
+      tippyInstances.clear();
     };
   }, [cyRef, elements]); // Rerun if cyRef or elements change to re-bind events
-
-  // This effect handles running the layout and fitting the graph into view
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (cy && elements && elements.length > 0) {
-      const layoutInstance = cy.layout(layout);
-      layoutInstance.run();
-    }
-  }, [elements, layout, cyRef]); // Rerun when elements or layout config changes
 
   return (
     <CytoscapeComponent
@@ -99,8 +95,9 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
       cy={(cy) => {
         cyRef.current = cy;
       }}
-      // We run the layout manually in a useEffect for more control
-      layout={{ name: 'preset' }} 
+      // Pass the layout object directly to the component for initialization.
+      // The component will handle running the layout.
+      layout={layout}
     />
   );
 });

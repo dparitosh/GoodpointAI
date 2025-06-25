@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { e2etraceUseLayout } from '../../contexts/e2etrace-layout-context'; // Corrected hook name
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 import './e2etrace-property-palette.css';
 import { E2ETraceUIPanel } from '../../components/e2etrace-ui-panel';
 import { e2etraceUseDebounce } from '../../hooks/e2etrace-use-debounce'; // For real-time updates
@@ -37,6 +38,7 @@ const layoutDefinitions = {
 
 const E2ETracePropertyPalette = () => {
     const { layoutConfig, setLayoutConfig } = e2etraceUseLayout();
+    const navigate = useNavigate(); // Initialize useNavigate hook
 
     const [selectedLayoutName, setSelectedLayoutName] = useState(layoutConfig.name);
     const [currentProps, setCurrentProps] = useState({});
@@ -142,7 +144,7 @@ const E2ETracePropertyPalette = () => {
 
             <div className="e2etrace-palette-actions"> {/* Corrected class name */}
                 <span className="e2etrace-autosave-indicator">Settings are applied automatically.</span> {/* Corrected class name */}
-                <button className="e2etrace-palette-button e2etrace-back" onClick={() => window.location.hash = '/'}>Back to Graph</button> {/* Corrected class name */}
+                <button className="e2etrace-palette-button e2etrace-back" onClick={() => navigate('/')}>Back to Graph</button> {/* Use useNavigate */}
             </div> 
         </E2ETraceUIPanel>
     );

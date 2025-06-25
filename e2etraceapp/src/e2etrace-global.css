@@ -1,28 +1,104 @@
+/* Global Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* === THEME DEFINITIONS === */
 [data-theme='light'] {
+  /* Spacing */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem;  /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem;    /* 16px */
+  --space-5: 1.25rem; /* 20px */
+  --space-6: 1.5rem;  /* 24px */
+
+  /* Font Sizes */
+  --font-size-sm: 0.875rem; /* 14px */
+  --font-size-md: 1rem;    /* 16px */
+  --font-size-h6: 1.125rem; /* 18px */
+
+  /* Font Weights */
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* Border Radii */
+  --border-radius-sm: 4px;
+  --border-radius-lg: 8px;
+
+  /* Base Colors */
   --background-color: #F8F8F8; /* A very light, almost off-white for a clean feel */
   --panel-bg: #FFFFFF;
+  --background-color-offset: #F0F0F0; /* Slightly darker than background for subtle contrast */
   --header-bg: #FFFFFF;
   --text-color: #212121;
   --text-muted-color: #757575;
+  --text-color-headings: #212121;
+  --text-on-success-bg: #FFFFFF;
+  --text-on-secondary-button-bg: #FFFFFF;
+
+  /* Borders */
   --border-color: #E0E0E0;
+  --border-color-weak: #EEEEEE; /* Lighter border for subtle separators */
+  --border-color-strong: #B0B0B0; /* Stronger border for inputs */
+
+  /* Accent & Status Colors */
   --accent-color: #007ACC;
+  --accent-hover-color: #005F99; /* Darker accent for hover states */
+  --success-color: #4CAF50;
+  --success-color-light: #E8F5E9;
+  --success-color-dark: #2E7D32;
+  --critical-color: #D32F2F;
+  --warning-color-light: #FFFDE7;
+  --warning-color-dark: #FFC107;
+  --error-color-light: #FFEBEE;
+  --error-color-dark: #C62828;
+
+  /* Button Colors */
   --button-bg: #EFEFEF;
   --button-hover-bg: #D6D6D6;
   --button-text-color: #212121;
-  --text-color-headings: #212121; /* Specific for headings in light mode */
+  --button-disabled-bg: #E0E0E0;
+  --secondary-button-bg: #607D8B;
+
+  /* Input Colors */
   --input-padding: 0.5rem 0.75rem;
   --input-bg: #FFFFFF;
-  --border-color-strong: #B0B0B0;
-  --success-bg: #4CAF50;
-  --text-on-success-bg: #FFFFFF;
-  --secondary-button-bg: #607D8B;
-  --text-on-secondary-button-bg: #FFFFFF;
+
+  /* Cytoscape Colors */
+  --cy-node-text-color: #212121;
   --cy-critical-color: #D32F2F;
   --cy-selected-color: #007ACC;
   --cy-selected-bg: rgba(0, 122, 204, 0.1);
   --cy-parent-bg: rgba(0, 0, 0, 0.03);
   --cy-parent-border: #C0C0C0;
+  --cy-node-text-on-dark-bg: white;
+  --cy-node-text-on-light-bg: black;
+
+  /* NiFi Cytoscape Colors */
+  --cy-nifi-processor-color: #66BB6A;
+  --cy-nifi-processor-outline: #388E3C;
+  --cy-nifi-processor-stopped-color: #EF5350;
+  --cy-nifi-processor-stopped-outline: #C62828;
+  --cy-nifi-processor-disabled-color: #BDBDBD;
+  --cy-nifi-processor-disabled-outline: #757575;
+  --cy-nifi-input-port-color: #29B6F6;
+  --cy-nifi-input-port-outline: #0288D1;
+  --cy-nifi-output-port-color: #FF7043;
+  --cy-nifi-output-port-outline: #E64A19;
+  --cy-nifi-process-group-color: #9CCC65;
+  --cy-nifi-process-group-outline: #689F38;
+  --cy-nifi-connection-color: #757575;
+
+  /* Sidebar Colors */
+  --sidebar-width: 240px;
+  --sidebar-background-color: #FFFFFF;
+  --sidebar-text-color: #424242;
+  --sidebar-icon-color: #757575;
+  --sidebar-hover-background-color: #F5F5F5;
+  --sidebar-hover-text-color: #212121;
+  --sidebar-active-background-color: #E0E0E0;
+  --sidebar-active-text-color: #007ACC;
 }
 
 [data-theme='dark'] {
@@ -31,24 +107,72 @@
   --header-bg: #212325; /* Darker header background */
   --text-color: #f5f6f6; /* Light text for dark mode */
   --text-muted-color: #a8acb2; /* Muted light text */
+  --text-color-headings: #f5f6f6;
+  --text-on-success-bg: #FFFFFF;
+  --text-on-secondary-button-bg: #FFFFFF;
+
+  /* Borders */
   --border-color: #3c3f44; /* Darker border */
+  --border-color-weak: #2a2d30;
+  --border-color-strong: #55585d; /* Stronger border for inputs */
+
+  /* Accent & Status Colors */
   --accent-color: #8fe3e8; /* Light blue accent */
+  --accent-hover-color: #6fd0d5;
+  --success-color: #28a745;
+  --success-color-light: #1E88E5; /* Example: a blue for success in dark mode */
+  --success-color-dark: #1565C0;
+  --critical-color: #ffaa97;
+  --warning-color-light: #FFD54F;
+  --warning-color-dark: #FFA000;
+  --error-color-light: #EF5350;
+  --error-color-dark: #D32F2F;
+
+  /* Button Colors */
   --button-bg: #3c3f44; /* Dark button background */
   --button-hover-bg: #4d5157; /* Slightly lighter button hover */
   --button-text-color: #f5f6f6; /* Light button text */
-  --text-color-headings: #f5f6f6; /* Specific for headings in dark mode */
+  --button-disabled-bg: #2a2d30;
+  --secondary-button-bg: #6c757d; /* Grey for secondary buttons */
+
+  /* Input Colors */
   --input-padding: 0.5rem 0.75rem;
   --input-bg: #2a2d30; /* Darker input background */
-  --border-color-strong: #55585d; /* Stronger border for inputs */
-  --success-bg: #28a745; /* Green for success */
-  --text-on-success-bg: #FFFFFF;
-  --secondary-button-bg: #6c757d; /* Grey for secondary buttons */
-  --text-on-secondary-button-bg: #FFFFFF;
-  --cy-critical-color: #ffaa97;
+
+  /* Cytoscape Colors */
+  --cy-node-text-color: #f5f6f6;
+  --cy-critical-color: #ffaa97; /* Lighter red for dark mode */
   --cy-selected-color: #8fe3e8;
   --cy-selected-bg: rgba(143, 227, 232, 0.15);
   --cy-parent-bg: rgba(255, 255, 255, 0.08);
   --cy-parent-border: #6f757e;
+  --cy-node-text-on-dark-bg: white;
+  --cy-node-text-on-light-bg: black;
+
+  /* NiFi Cytoscape Colors */
+  --cy-nifi-processor-color: #66BB6A;
+  --cy-nifi-processor-outline: #388E3C;
+  --cy-nifi-processor-stopped-color: #EF5350;
+  --cy-nifi-processor-stopped-outline: #C62828;
+  --cy-nifi-processor-disabled-color: #BDBDBD;
+  --cy-nifi-processor-disabled-outline: #757575;
+  --cy-nifi-input-port-color: #29B6F6;
+  --cy-nifi-input-port-outline: #0288D1;
+  --cy-nifi-output-port-color: #FF7043;
+  --cy-nifi-output-port-outline: #E64A19;
+  --cy-nifi-process-group-color: #9CCC65;
+  --cy-nifi-process-group-outline: #689F38;
+  --cy-nifi-connection-color: #757575;
+
+  /* Sidebar Colors */
+  --sidebar-width: 240px;
+  --sidebar-background-color: #212325;
+  --sidebar-text-color: #a8acb2;
+  --sidebar-icon-color: #a8acb2;
+  --sidebar-hover-background-color: #2a2d30;
+  --sidebar-hover-text-color: #f5f6f6;
+  --sidebar-active-background-color: #3c3f44;
+  --sidebar-active-text-color: #8fe3e8;
 }
 
 /* === GLOBAL RESETS & BASE STYLES === */

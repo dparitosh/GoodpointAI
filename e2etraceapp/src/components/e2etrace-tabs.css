@@ -1,0 +1,96 @@
+.e2etrace-tabs-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Occupy full height of parent */
+}
+
+.e2etrace-tab-headers {
+    display: flex;
+    border-bottom: 1px solid var(--border-color); /* Defined in global.css */
+    background-color: var(--background-color-offset); /* Defined in global.css */
+    padding: var(--space-2) var(--space-4); /* Defined in global.css */
+    gap: var(--space-2); /* Defined in global.css */
+}
+
+.e2etrace-tab-header {
+    background-color: transparent;
+    border: none;
+    padding: var(--space-3) var(--space-4); /* Defined in global.css */
+    cursor: pointer;
+    font-weight: var(--font-weight-medium); /* Defined in global.css */
+    color: var(--text-muted-color); /* Defined in global.css */
+    transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out;
+    border-radius: var(--border-radius-sm); /* Defined in global.css */
+    outline: none;
+}
+
+.e2etrace-tab-header:hover {
+    color: var(--text-color);
+    background-color: var(--background-color);
+}
+
+.e2etrace-tab-header.active {
+    color: var(--accent-color);
+    background-color: var(--background-color); /* Defined in global.css */
+    border-bottom: 2px solid var(--accent-color); /* Defined in global.css */
+    padding-bottom: calc(var(--space-3) - 2px); /* Adjust padding to keep height consistent with border */ /* Defined in global.css */
+}
+
+.e2etrace-tab-content {
+    flex-grow: 1;
+    overflow: hidden; /* Important for containing scrollable content */
+    position: relative; /* For absolute positioning of tab panels */
+}
+
+.e2etrace-tab-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; /* Allow content inside panels to scroll */
+    display: none; /* Hidden by default */
+}
+
+.e2etrace-tab-panel.active {
+    display: flex; /* Use flex to allow internal layout of graph/data/chat */
+    flex-direction: column; /* Stack children vertically */
+}
+
+/* Specific styling for the graph/data/chat panel to enable horizontal split */
+.e2etrace-tab-panel.active.graph-data-panel {
+    flex-direction: row; /* For horizontal split */
+}
+
+/* Ensure panels fill their tab content area */
+.e2etrace-tab-panel.active > * {
+    flex-grow: 1;
+    height: 100%; /* Ensure children fill height within flex container */
+    overflow: auto; /* Allow internal scrolling if content overflows */
+}
+
+/* Special handling for the main-content-area within the graph-data-panel */
+.e2etrace-tab-panel.active.graph-data-panel > .main-content-area {
+    display: flex; /* Re-enable flex for graph and resizer */
+    flex-grow: 1;
+    height: 100%;
+    overflow: hidden; /* Prevent main-content-area from scrolling, its children will */
+}
+
+.e2etrace-tab-panel.active.graph-data-panel > .main-content-area > #graph-container {
+    flex-grow: 1;
+    height: 100%;
+    overflow: hidden; /* Graph container handles its own overflow */
+}
+
+.e2etrace-tab-panel.active.graph-data-panel > .main-content-area > .right-panel-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: auto; /* Right panel can scroll if its content overflows */
+}
+
+/* Adjustments for the resizer within the tab panel */
+.e2etrace-tab-panel.active.graph-data-panel > .main-content-area > .resizer {
+    height: 100%;
+}

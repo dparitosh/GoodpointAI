@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from "react";
 
-// Helper to get a value for sorting, checking for properties on the root object or a nested 'data' object.
+// Helper to get a value for sorting from a flat object.
 const getSortableValue = (item, key) => {
-  if (item.hasOwnProperty(key)) return item[key];
-  if (item.data && item.data.hasOwnProperty(key)) return item.data[key];
-  return undefined;
+  return item[key];
 };
 
-export function E2ETraceDataTable({ tableElements, initialSortKey = "id" }) {
+export function E2ETraceDataTable({ tableElements, onRowClick, initialSortKey = "id" }) {
   const [sortConfig, setSortConfig] = useState({
     key: initialSortKey,
     direction: "ascending",
@@ -85,67 +83,33 @@ export function E2ETraceDataTable({ tableElements, initialSortKey = "id" }) {
               </tr>
             </thead>
             <tbody>
-              {sortedTableElements.map((el) => {
+              {sortedTableElements.map((el, index) => {
                 // Warn if ID is missing, as it's crucial for unique keys
                 if (el.id === undefined || el.id === null) {
                   console.warn("Table element is missing an 'id' property. This may lead to non-unique keys.", el);
                 }
-                const uniqueKey = String(
-                  el.id ||
-                    `el-${el.element_type || 'unknown'}-${Math.random()
-                      .toString(36)
-                      .substr(2, 9)}`
-                );
+                const uniqueKey = String(el.id ?? `el-index-${index}`);
                 const isExpanded = expandedProperties.has(uniqueKey);
-                const properties =
-                  el.properties || (el.data && el.data.properties) || {};
+
+                // Extract properties by removing known top-level fields
+                const properties = { ...el };
+                delete properties.id;
+                delete properties.label;
+                delete properties.element_type;
+                delete properties.group;
+                delete properties.source;
+                delete properties.target;
+
                 const hasProperties = Object.keys(properties).length > 0;
-                const displayLabel =
-                  el.label || (el.data && el.data.label) || "N/A";
-                const displayElementType =
-                  el.element_type ||
-                  (el.data && (el.data.source ? "Edge" : "Node")) ||
-                  "Unknown";
+                const displayLabel = el.label || "N/A";
+                const displayElementType = el.element_type || "Unknown";
 
                 return (
-                  <tr key={uniqueKey}>
-                    <td>{String(el.id)}</td>
+                  <tr key={el._uniqueKey} onClick={() => onRowClick && onRowClick(el.id)} className={onRowClick ? 'clickable' : ''}> {/* Use _uniqueKey for React's key */}
+                    <td>{String(el.id)}</td> {/* Display original ID */}
                     <td>{displayLabel}</td>
                     <td>{displayElementType}</td>
-                    <td className="properties-cell">
-                      {hasProperties ? (
-                        <>
-                          <button
-                            className="e2etrace-properties-toggle"
-                            onClick={() => togglePropertiesExpansion(uniqueKey)}
-                            aria-expanded={isExpanded}
-                            aria-controls={`properties-${uniqueKey}`}
-                          >
-                            {isExpanded ? "−" : "+"}
-                          </button>
-                          <span style={{ marginLeft: "5px" }}>
-                            {isExpanded ? "Hide Details" : "Show Details"}
-                          </span>
-                          {isExpanded && (
-                            <ul // Corrected class name
-                              id={`properties-${uniqueKey}`}
-                              className="e2etrace-properties-list"
-                            >
-                              {Object.entries(properties).map(
-                                ([pKey, value]) => (
-                                  <li key={pKey}>
-                                    <strong>{pKey}:</strong>{" "}
-                                    {JSON.stringify(value, null, 2)}
-                                  </li>
-                                )
-                              )}
-                            </ul>
-                          )}
-                        </>
-                      ) : (
-                        "N/A"
-                      )}
-                    </td>
+                    <td className="properties-cell">{hasProperties ? (<><button className="e2etrace-properties-toggle" onClick={() => togglePropertiesExpansion(el._uniqueKey)} aria-expanded={isExpanded} aria-controls={`properties-${el._uniqueKey}`}>{isExpanded ? "−" : "+"}</button><span style={{ marginLeft: "5px" }}>{isExpanded ? "Hide Details" : "Show Details"}</span>{isExpanded && (<ul id={`properties-${el._uniqueKey}`} className="e2etrace-properties-list">{Object.entries(properties).map(([pKey, value]) => (<li key={pKey}><strong>{pKey}:</strong>{" "}{JSON.stringify(value, null, 2)}</li>))}</ul>)}</>) : ("N/A")}</td>
                   </tr>
                 );
               })}

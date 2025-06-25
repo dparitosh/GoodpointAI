@@ -22,13 +22,17 @@ const initialLayoutConfig = {
 const E2ETraceLayoutContext = createContext({
     layoutConfig: initialLayoutConfig,
     setLayoutConfig: () => {},
+    // Add a function to reset to default if needed
+    resetLayoutConfig: () => {},
 });
 
 export const E2ETraceLayoutProvider = ({ children }) => {
     const [layoutConfig, setLayoutConfig] = useState(initialLayoutConfig);
 
+    const resetLayoutConfig = () => setLayoutConfig(initialLayoutConfig);
+
     return (
-        <E2ETraceLayoutContext.Provider value={{ layoutConfig, setLayoutConfig }}>
+        <E2ETraceLayoutContext.Provider value={{ layoutConfig, setLayoutConfig, resetLayoutConfig }}>
             {children}
         </E2ETraceLayoutContext.Provider>
     );

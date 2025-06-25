@@ -7,7 +7,7 @@ export const cytoscapeStylesheet = [
             'text-valign': 'center',
             'text-halign': 'center',
             'font-size': '11px', // Increased for readability
-            'color': 'var(--text-color)',
+            'color': 'var(--cy-node-text-color, var(--text-color))', // Use a specific variable or fallback
             'text-outline-width': 2, // Thicker for better contrast
             'text-outline-color': 'var(--background-color)',
             'width': 'mapData(properties.size, 0, 100, 20, 80)',
@@ -52,7 +52,7 @@ export const cytoscapeStylesheet = [
         style: {
             'shape': 'round-rectangle',
             'background-color': '#4D8DDA', // Blue
-            'color': 'white',
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
             'text-outline-color': '#265282',
         }
     },
@@ -61,7 +61,7 @@ export const cytoscapeStylesheet = [
         style: {
             'shape': 'barrel',
             'background-color': '#579380', // Teal
-            'color': 'white',
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
             'text-outline-color': '#2E5A4B',
         }
     },
@@ -70,7 +70,7 @@ export const cytoscapeStylesheet = [
         style: {
             'shape': 'triangle',
             'background-color': '#FFC354', // Gold
-            'color': 'black',
+            'color': 'var(--cy-node-text-on-light-bg, black)',
             'text-outline-color': '#E0A83B',
         }
     },
@@ -79,7 +79,7 @@ export const cytoscapeStylesheet = [
         style: {
             'shape': 'pentagon',
             'background-color': '#F79767', // Orange
-            'color': 'white',
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
             'text-outline-color': '#B86741',
         }
     },
@@ -88,8 +88,68 @@ export const cytoscapeStylesheet = [
         style: {
             'shape': 'hexagon',
             'background-color': '#C990C0', // Purple
-            'color': 'white',
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
             'text-outline-color': '#8A5C84',
+        }
+    },
+    // NiFi specific node styles
+    {
+        selector: 'node.nifi-processor',
+        style: {
+            'shape': 'round-rectangle',
+            'background-color': 'var(--cy-nifi-processor-color, #66BB6A)', // Green
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
+            'text-outline-color': 'var(--cy-nifi-processor-outline, #388E3C)',
+            'cursor': 'pointer'
+        }
+    },
+    {
+        selector: 'node.nifi-processor[state="STOPPED"]',
+        style: {
+            'background-color': 'var(--cy-nifi-processor-stopped-color, #EF5350)', // Red
+            'text-outline-color': 'var(--cy-nifi-processor-stopped-outline, #C62828)',
+        }
+    },
+    {
+        selector: 'node.nifi-processor[state="DISABLED"]',
+        style: {
+            'background-color': 'var(--cy-nifi-processor-disabled-color, #BDBDBD)', // Grey
+            'text-outline-color': 'var(--cy-nifi-processor-disabled-outline, #757575)',
+            'cursor': 'not-allowed'
+        }
+    },
+    {
+        selector: 'node.nifi-processor:active',
+        style: {
+            'overlay-color': 'var(--accent-color)',
+            'overlay-opacity': 0.2
+        }
+    },
+    {
+        selector: 'node.nifi-inputport',
+        style: {
+            'shape': 'octagon',
+            'background-color': 'var(--cy-nifi-input-port-color, #29B6F6)', // Light Blue
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
+            'text-outline-color': 'var(--cy-nifi-input-port-outline, #0288D1)',
+        }
+    },
+    {
+        selector: 'node.nifi-outputport',
+        style: {
+            'shape': 'octagon',
+            'background-color': 'var(--cy-nifi-output-port-color, #FF7043)', // Orange
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
+            'text-outline-color': 'var(--cy-nifi-output-port-outline, #E64A19)',
+        }
+    },
+    {
+        selector: 'node.nifi-processgroup',
+        style: {
+            'shape': 'round-rectangle',
+            'background-color': 'var(--cy-nifi-process-group-color, #9CCC65)', // Light Green
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
+            'text-outline-color': 'var(--cy-nifi-process-group-outline, #689F38)',
         }
     },
     {
@@ -116,6 +176,14 @@ export const cytoscapeStylesheet = [
             'opacity': 1,
             'line-color': 'var(--cy-selected-color)',
             'target-arrow-color': 'var(--cy-selected-color)',
+        }
+    },
+    // NiFi specific edge styles
+    {
+        selector: 'edge.nifi-connection',
+        style: {
+            'line-color': 'var(--cy-nifi-connection-color, #757575)', // Grey
+            'target-arrow-color': 'var(--cy-nifi-connection-color, #757575)',
         }
     },
     {
@@ -151,7 +219,7 @@ export const cytoscapeStylesheet = [
             'text-valign': 'center',
             'text-halign': 'center',
             'font-size': '10px',
-            'color': 'white',
+            'color': 'var(--cy-node-text-on-dark-bg, white)',
             'text-outline-width': 1,
             'text-outline-color': '#555',
             'width': '40px',

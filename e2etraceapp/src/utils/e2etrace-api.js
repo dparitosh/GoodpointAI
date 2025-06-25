@@ -1,3 +1,5 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+
 /**
  * Fetches a resource with a retry mechanism using exponential backoff.
  * This is useful for handling transient network errors or temporary server issues.
@@ -7,9 +9,11 @@
  * @returns {Promise<Response>} A promise that resolves with the fetch Response.
  */
 export async function e2etraceFetchWithRetry(url, options, retries = 3) {
+    const fullUrl = `${API_BASE_URL}${url}`;
+
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            const response = await fetch(url, options);
+            const response = await fetch(fullUrl, options);
             if (response.ok) {
                 return response;
             }
@@ -24,12 +28,12 @@ export async function e2etraceFetchWithRetry(url, options, retries = 3) {
             throw new Error(`Server Error: ${response.status}`);
         } catch (error) {
             if (attempt >= retries) {
-                console.error(`All ${retries} fetch attempts failed for ${url}.`);
+                console.error(`All ${retries} fetch attempts failed for ${fullUrl}.`);
                 throw error; // Re-throw the last error after all retries fail.
             }
             // Exponential backoff: 1s, 2s, 4s...
             const delay = Math.pow(2, attempt - 1) * 1000;
-            console.warn(`Attempt ${attempt} failed for ${url}. Retrying in ${delay}ms...`);
+            console.warn(`Attempt ${attempt} failed for ${fullUrl}. Retrying in ${delay}ms...`);
             await new Promise(res => setTimeout(res, delay));
         }
     }

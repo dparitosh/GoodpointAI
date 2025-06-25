@@ -1,0 +1,37 @@
+.e2etrace-breadcrumbs-panel {
+    background-color: var(--background-color);
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9em;
+    color: var(--text-muted-color);
+    flex-wrap: wrap;
+}
+
+.e2etrace-breadcrumb-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.e2etrace-breadcrumb-link {
+    color: var(--text-muted-color);
+    text-decoration: none;
+}
+
+.e2etrace-breadcrumb-link:hover {
+    color: var(--accent-color);
+    text-decoration: underline;
+}
+
+.e2etrace-breadcrumb-current {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.e2etrace-breadcrumb-separator {
+    margin: 0 4px;
+    color: var(--text-muted-color);
+}

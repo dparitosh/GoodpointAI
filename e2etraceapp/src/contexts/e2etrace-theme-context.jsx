@@ -5,7 +5,11 @@ const E2ETraceThemeContext = createContext();
 export const E2ETraceThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(() => {
         // You can expand this to check user preference in localStorage
-        return 'dark'; 
+        const storedTheme = localStorage.getItem('e2etrace-theme');
+        if (storedTheme) {
+            return storedTheme;
+        }
+        return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     });
 
     useEffect(() => {

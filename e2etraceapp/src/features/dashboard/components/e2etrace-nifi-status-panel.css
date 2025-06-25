@@ -1,0 +1,10 @@
+.e2etrace-nifi-status-panel {
+    flex: 1; /* Takes less space than flow diagram */
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-4);
+}
+
+.e2etrace-nifi-status-panel p {
+    margin-bottom: var(--space-2);
+}
