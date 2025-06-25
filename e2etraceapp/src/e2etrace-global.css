@@ -1,0 +1,56 @@
+/* === THEME DEFINITIONS === */
+[data-theme='light'] {
+  --background-color: #F8F8F8; /* A very light, almost off-white for a clean feel */
+  --panel-bg: #FFFFFF;
+  --header-bg: #FFFFFF;
+  --text-color: #212121;
+  --text-muted-color: #757575;
+  --border-color: #E0E0E0;
+  --accent-color: #007ACC;
+  --button-bg: #EFEFEF;
+  --button-hover-bg: #D6D6D6;
+  --button-text-color: #212121;
+  --text-color-headings: #212121; /* Specific for headings in light mode */
+  --input-padding: 0.5rem 0.75rem;
+  --input-bg: #FFFFFF;
+  --border-color-strong: #B0B0B0;
+  --success-bg: #4CAF50;
+  --text-on-success-bg: #FFFFFF;
+  --secondary-button-bg: #607D8B;
+  --text-on-secondary-button-bg: #FFFFFF;
+  --cy-critical-color: #D32F2F;
+  --cy-selected-color: #007ACC;
+  --cy-selected-bg: rgba(0, 122, 204, 0.1);
+  --cy-parent-bg: rgba(0, 0, 0, 0.03);
+  --cy-parent-border: #C0C0C0;
+}
+
+[data-theme='dark'] {
+  --background-color: #1a1b1d;
+  --panel-bg: #212325; /* Darker panel background */
+  --header-bg: #212325; /* Darker header background */
+  --text-color: #f5f6f6; /* Light text for dark mode */
+  --text-muted-color: #a8acb2; /* Muted light text */
+  --border-color: #3c3f44; /* Darker border */
+  --accent-color: #8fe3e8; /* Light blue accent */
+  --button-bg: #3c3f44; /* Dark button background */
+  --button-hover-bg: #4d5157; /* Slightly lighter button hover */
+  --button-text-color: #f5f6f6; /* Light button text */
+  --text-color-headings: #f5f6f6; /* Specific for headings in dark mode */
+  --input-padding: 0.5rem 0.75rem;
+  --input-bg: #2a2d30; /* Darker input background */
+  --border-color-strong: #55585d; /* Stronger border for inputs */
+  --success-bg: #28a745; /* Green for success */
+  --text-on-success-bg: #FFFFFF;
+  --secondary-button-bg: #6c757d; /* Grey for secondary buttons */
+  --text-on-secondary-button-bg: #FFFFFF;
+  --cy-critical-color: #ffaa97;
+  --cy-selected-color: #8fe3e8;
+  --cy-selected-bg: rgba(143, 227, 232, 0.15);
+  --cy-parent-bg: rgba(255, 255, 255, 0.08);
+  --cy-parent-border: #6f757e;
+}
+
+/* === GLOBAL RESETS & BASE STYLES === */
+#root {
+  width: 100%;

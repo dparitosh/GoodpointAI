@@ -1,0 +1,52 @@
+import { useState, useEffect } from 'react';
+import { e2etraceFetchWithRetry } from '../utils/e2etrace-api';
+import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
+
+export function e2etraceUseGraphData(setTableElements) {
+  const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
+  const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchInitialData() {
+      console.log('[useGraphData] fetchInitialData: Setting loading to true.');
+      setLoading(true);
+      setLoadingError(null);
+      try {
+        console.log('[useGraphData] fetchInitialData: Attempting to fetch /api/graph');
+        const response = await e2etraceFetchWithRetry('/api/graph');
+        console.log('[useGraphData] fetchInitialData: Received response status:', response.status);
+        const data = await response.json();
+        console.log('[useGraphData] fetchInitialData: Successfully parsed JSON data.');
+        if (isMounted) {
+            setGraphData(data);
+            console.log('[useGraphData] fetchInitialData: Graph data set.');
+            if (setTableElements) {
+                const tableData = e2etraceCreateTableElementsFromGraph(data);
+                setTableElements(tableData);
+                console.log('[useGraphData] fetchInitialData: Table elements set.');
+            }
+        }
+      } catch (error) {
+        console.error('[useGraphData] fetchInitialData: Error caught:', error);
+        if (isMounted) {
+            setLoadingError(`Error loading graph: ${error.message}. Check console for details.`);
+        }
+      } finally {
+        console.log('[useGraphData] fetchInitialData: In finally block, setting loading to false.');
+        if (isMounted) {
+            setLoading(false);
+        }
+      }
+    }
+    fetchInitialData();
+
+    return () => {
+        isMounted = false;
+    };
+  }, [setTableElements]);
+
+  return { graphData, loading, loadingError, setGraphData };
+}

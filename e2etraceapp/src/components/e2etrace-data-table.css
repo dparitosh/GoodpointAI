@@ -1,0 +1,89 @@
+.e2etrace-data-table-wrapper { /* Corrected class name */
+  overflow-x: auto; /* For wide tables */
+}
+
+.e2etrace-data-table-container table { /* Corrected class name */
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  border-radius: 4px;
+  overflow: hidden; /* To make border-radius work with table */
+  margin-top: 0.5rem; /* Space between title and table */
+}
+
+.e2etrace-data-table-container h3 { /* Corrected class name */
+  margin-top: 0; /* data-table-container provides top margin */
+  margin-bottom: 0.75rem;
+  font-size: 1.2em; /* Consistent with other panel headers */
+  color: var(--text-color-headings);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.e2etrace-data-table-container th, /* Corrected class name */
+.e2etrace-data-table-container td { /* Corrected class name */
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.e2etrace-data-table-container th { /* Corrected class name */
+  font-weight: 600; /* Semibold */
+  cursor: pointer;
+}
+
+.e2etrace-data-table-container tbody tr:nth-child(even) {
+  background-color: var(--panel-bg);
+}
+
+/* Sort indicators for table headers */
+.e2etrace-data-table-container th.sortable:hover {
+  background-color: var(--button-hover-bg); /* Use a hover variable */
+}
+
+.e2etrace-data-table-container th.sortable::after {
+  content: ' \2195'; /* Up-down arrow */
+  opacity: 0.5;
+  margin-left: 0.3em;
+}
+.e2etrace-data-table-container th.sortable.ascending::after {
+  content: ' \2191'; /* Up arrow */
+  opacity: 1;
+}
+.e2etrace-data-table-container th.sortable.descending::after {
+  content: ' \2193'; /* Down arrow */
+  opacity: 1;
+}
+
+/* Styles for properties cell */
+.e2etrace-properties-cell .e2etrace-properties-toggle {
+  margin-right: 0.5em;
+  cursor: pointer;
+  background-color: var(--button-bg);
+  border: 1px solid var(--border-color);
+  color: var(--button-text-color);
+  border-radius: 3px;
+  padding: 0.1em 0.4em;
+}
+
+.e2etrace-properties-list {
+  list-style-type: disc;
+  margin: 0.5em 0 0 1em;
+  padding-left: 1em;
+  font-size: 0.9em;
+  color: var(--text-muted-color);
+}
+.e2etrace-properties-list li {
+  margin-bottom: 0.25em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px dashed var(--border-color);
+}
+.e2etrace-properties-list li:last-child {
+  border-bottom: none;
+}
+.e2etrace-properties-list strong {
+  color: var(--text-color);
+}

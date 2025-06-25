@@ -5,7 +5,7 @@ import React, { createContext, useState, useContext } from 'react';
 const initialLayoutConfig = {
     name: 'cose-bilkent', // Defaulting to cose-bilkent as per recent request
     animate: true,
-    fit: false, // App.jsx handles fitting manually
+    fit: false, // features/dashboard/App.jsx handles fitting manually
     nodeDimensionsIncludeLabels: true,
     // Common parameters for cose-bilkent
     idealEdgeLength: 120,
@@ -16,22 +16,22 @@ const initialLayoutConfig = {
     numIter: 2500, // Number of iterations
     tile: true, // Tile disconnected components
     // randomize: false, // Not typically needed for cose-bilkent
-    padding: 50, // Default padding, can be overridden
+    padding: 50, // Default padding, can be overridden by PropertyPalette
 };
 
-const LayoutContext = createContext({
+const E2ETraceLayoutContext = createContext({
     layoutConfig: initialLayoutConfig,
     setLayoutConfig: () => {},
 });
 
-export const LayoutProvider = ({ children }) => {
+export const E2ETraceLayoutProvider = ({ children }) => {
     const [layoutConfig, setLayoutConfig] = useState(initialLayoutConfig);
 
     return (
-        <LayoutContext.Provider value={{ layoutConfig, setLayoutConfig }}>
+        <E2ETraceLayoutContext.Provider value={{ layoutConfig, setLayoutConfig }}>
             {children}
-        </LayoutContext.Provider>
+        </E2ETraceLayoutContext.Provider>
     );
 };
 
-export const useLayout = () => useContext(LayoutContext);
+export const e2etraceUseLayout = () => useContext(E2ETraceLayoutContext);

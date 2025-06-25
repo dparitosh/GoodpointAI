@@ -17,6 +17,7 @@
     "cytoscape-expand-collapse": "^4.1.1",
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-popper": "^4.0.1",
+    "echarts": "^5.6.0",
     "i": "^0.3.7",
     "npm": "^11.4.2",
     "react": "^19.1.0",

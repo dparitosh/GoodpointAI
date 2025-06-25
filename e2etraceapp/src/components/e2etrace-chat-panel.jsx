@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 
-export function ChatPanel({
+export function E2ETraceChatPanel({
   chatMessages,
   chatInputValue,
   onChatInputChange,
@@ -30,17 +30,17 @@ export function ChatPanel({
   }, [chatMessages]);
 
   return (
-    <div className="chat-panel">
+    <div className="e2etrace-chat-panel">
       <h3>Chat</h3>
-      <div className="chat-messages">
+      <div className="e2etrace-chat-messages">
         {chatMessages.map((msg, index) => (
-          <div key={index} className={`chat-message chat-message-${msg.sender.toLowerCase()}`}>
+          <div key={index} className={`e2etrace-chat-message e2etrace-chat-message-${msg.sender.toLowerCase()}`}>
             <strong>{msg.sender}:</strong> {msg.text}
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div className="chat-input-area">
+      <div className="e2etrace-chat-input-area">
         <input
           type="text"
           ref={chatInputRef}
@@ -49,7 +49,7 @@ export function ChatPanel({
           onKeyPress={handleKeyPress}
           disabled={isChatSending}
           placeholder="Ask about the graph..."
-          id="chat-input"
+          id="e2etrace-chat-input"
           aria-label="Chat input"
         />
         <button id="send-chat-button" onClick={() => !isChatSending && onSendMessage()} disabled={isChatSending}>
