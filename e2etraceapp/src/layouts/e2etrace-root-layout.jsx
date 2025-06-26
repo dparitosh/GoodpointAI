@@ -18,10 +18,10 @@ export const E2ETraceRootLayout = () => {
             <ul>
               <li><NavLink to="/">Analytics</NavLink></li>
               <li><NavLink to="/graphexplorer">Graph Explorer</NavLink></li>
-              <li><NavLink to="/quickactions">Quick Actions</NavLink></li>
               <li><NavLink to="/nifi">NiFi</NavLink></li>
               <li><NavLink to="/etl">ETL Overview</NavLink></li>
               <li><NavLink to="/settings">Settings</NavLink></li>
+              <li><NavLink to="/reporting">Reporting</NavLink></li>
             </ul>
           </nav>
         </aside>

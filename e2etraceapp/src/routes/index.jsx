@@ -5,7 +5,7 @@ import { E2ETraceETLOverviewPage } from '../pages/etl/etl/e2etrace-etl-overview-
 import E2ETraceMainDashboard from '../pages/dashboard/e2etrace-main-dashboard.jsx';
 import E2ETracePropertyPalette from '../pages/settings/settings/e2etrace-property-palette.jsx';
 import { E2ETraceNiFiMain } from '../pages/dashboard/components/e2etrace-nifi-main.jsx';
-import { E2ETraceQuickActions } from '../pages/dashboard/components/e2etrace-quick-actions.jsx';
+import ReportingPage from '../pages/reporting/ReportingPage.jsx';
 
 const router = createHashRouter([
   {
@@ -20,11 +20,6 @@ const router = createHashRouter([
         handle: { crumb: 'Graph Explorer' },
       },
       {
-        path: 'quickactions',
-        element: <E2ETraceQuickActions/>,
-        handle: { crumb: 'Quick Actions' },
-      },
-       {
         path: 'nifi',
         element: <E2ETraceNiFiMain/>,
         handle: { crumb: 'NiFi' },
@@ -38,6 +33,11 @@ const router = createHashRouter([
         path: 'settings',
         element: <E2ETracePropertyPalette />,
         handle: { crumb: 'Settings' },
+      },
+      {
+        path: 'reporting',
+        element: <ReportingPage />, 
+        handle: { crumb: 'Reporting' },
       },
     ],
   },

@@ -1,5 +1,4 @@
-import React, { useEffect, memo } from 'react';
-import CytoscapeComponent from 'react-cytoscapejs';
+import React, { useEffect, memo, useRef } from 'react';
 import cytoscape from 'cytoscape';
 
 // Import and register extensions
@@ -7,8 +6,6 @@ import fcose from 'cytoscape-fcose';
 import coseBilkent from 'cytoscape-cose-bilkent';
 import expandCollapse from 'cytoscape-expand-collapse';
 import popper from 'cytoscape-popper';
-import tippy from 'tippy.js';
-import 'tippy.js/dist/tippy.css';
 
 // Register extensions on the cytoscape object.
 // This should only be done once in the application.
@@ -23,81 +20,50 @@ try {
 
 // Memoize the component to prevent re-renders when props haven't changed.
 export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRef }) => {
+  const containerRef = useRef(null);
 
-  // Effect for Tooltip Management
   useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
-
-    // Store tippy instances in a Map to manage them per element
-    const tippyInstances = new Map();
-
-    const makeTippy = (ele) => {
-      const ref = ele.popperRef();
-      const content = ele.data('tooltip');
-
-      if (!ref || !content) return;
-      
-      let instance = tippyInstances.get(ele.id());
-      if (!instance) {
-        const dummyDomEle = document.createElement('div');
-        dummyDomEle.innerHTML = content;
-
-        instance = tippy(dummyDomEle, {
-          getReferenceClientRect: ref.getBoundingClientRect,
-          trigger: 'manual',
-          content: () => dummyDomEle,
-          arrow: true,
-          placement: 'bottom',
-          hideOnClick: false,
-          interactive: true,
-          appendTo: document.body,
-        });
-        tippyInstances.set(ele.id(), instance);
+    if (!containerRef.current) return;
+    // Initialize Cytoscape instance
+    const cy = cytoscape({
+      container: containerRef.current,
+      elements,
+      style: stylesheet,
+      layout,
+      wheelSensitivity: 0.2,
+      minZoom: 0.2,
+      maxZoom: 2.5,
+      pixelRatio: 'auto',
+    });
+    if (cyRef) cyRef.current = cy;
+    // Add corporate-style background and border
+    cy.on('render', () => {
+      if (containerRef.current) {
+        containerRef.current.style.background = 'linear-gradient(135deg, #f4f6fa 0%, #e9eef6 100%)';
+        containerRef.current.style.border = '1.5px solid #d1d7e6';
+        containerRef.current.style.borderRadius = '12px';
+        containerRef.current.style.boxShadow = '0 2px 16px 0 rgba(40,60,90,0.08)';
       }
-      instance.show();
-    };
-
-    const destroyTippy = (ele) => {
-      const instance = tippyInstances.get(ele.id());
-      if (instance) {
-        instance.destroy();
-        tippyInstances.delete(ele.id());
-      }
-    };
-
-    const onMouseOver = (e) => makeTippy(e.target);
-    const onMouseOut = (e) => destroyTippy(e.target);
-    const onDrag = (e) => destroyTippy(e.target); // Hide tooltip while dragging
-
-    cy.on('mouseover', 'node, edge', onMouseOver);
-    cy.on('mouseout', 'node, edge', onMouseOut);
-    cy.on('drag', 'node', onDrag);
-
-    // Cleanup on component unmount or when cyRef changes
+    });
+    // Clean up on unmount
     return () => {
-      if (cy) {
-        cy.removeListener('mouseover', 'node, edge', onMouseOver);
-        cy.removeListener('mouseout', 'node, edge', onMouseOut);
-        cy.removeListener('drag', 'node', onDrag);
-      }
-      // Destroy all remaining tippy instances
-      tippyInstances.forEach(instance => instance.destroy());
-      tippyInstances.clear();
+      cy.destroy();
+      if (cyRef) cyRef.current = null;
     };
-  }, [cyRef, elements]); // Rerun if cyRef or elements change to re-bind events
+  }, [elements, stylesheet, layout, cyRef]);
 
   return (
-    <CytoscapeComponent
-      elements={CytoscapeComponent.normalizeElements(elements)}
-      stylesheet={stylesheet}
-      style={{ width: '100%', height: '100%' }}
-      cy={(cy) => {
-        cyRef.current = cy;
+    <div
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(135deg, #f4f6fa 0%, #e9eef6 100%)',
+        border: '1.5px solid #d1d7e6',
+        borderRadius: '12px',
+        boxShadow: '0 2px 16px 0 rgba(40,60,90,0.08)',
+        transition: 'box-shadow 0.2s',
       }}
-      // Pass the layout object directly to the component for initialization.
-      // The component will handle running the layout.
-      layout={layout}
     />
   );
 });

@@ -3,5 +3,22 @@
   --secondary-color: #6c757d;
   --background-color: #f8f9fa;
   --text-color: #333;
-  --font-family: sans-serif;
+  --font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+body, .dashboard-widget, .e2etrace-legend-item, .e2etrace-legend-dropdown-overlay, .echarts-legend, .echarts-axis-label, .dashboard-widget-header, .dashboard-widget-subheader, .dashboard-widget-content {
+  font-family: var(--font-family);
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.e2etrace-legend-item span {
+  font-size: 1rem;
+  font-family: var(--font-family);
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  display: inline-block;
 }

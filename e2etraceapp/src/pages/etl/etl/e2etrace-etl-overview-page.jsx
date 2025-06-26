@@ -1,8 +1,27 @@
 // e2etrace-etl-overview-page.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
 import { e2etraceFetchWithRetry } from '../../../api/e2etrace-api';
 import './e2etrace-etl-overview-page.css';
+
+// --- Unified Widget Component for All Pages ---
+const Widget = ({ title, children, className, style, subheader }) => (
+  <div className={`dashboard-widget ${className || ''}`} style={style}>
+    <div className="dashboard-widget-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 1.5rem', borderBottom: '1px solid #e0e4ea', background: '#f4f7fb', fontWeight: 600, fontSize: '1.1rem' }}>
+      <span>{title}</span>
+    </div>
+    {subheader && (
+      <div className="dashboard-widget-subheader" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1.5rem', borderBottom: '1px solid #e0e4ea', background: '#f8fafd' }}>
+        {Array.isArray(subheader)
+          ? subheader.map((child, idx) => (
+              <div className="dashboard-widget-subheader-item" key={idx} style={{ display: 'flex', alignItems: 'center' }}>{child}</div>
+            ))
+          : <div className="dashboard-widget-subheader-item">{subheader}</div>
+        }
+      </div>
+    )}
+    <div className="dashboard-widget-content" style={{ padding: '1.5rem', background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(30,40,90,0.06)' }}>{children}</div>
+  </div>
+);
 
 export function E2ETraceETLOverviewPage() {
   const [etlMetrics, setEtlMetrics] = useState(null);
@@ -49,14 +68,17 @@ export function E2ETraceETLOverviewPage() {
   }, [fetchEtlData]);
 
   return (
-    <div className="e2etrace-etl-overview-panel">
-      <E2ETraceUIPanel>
-        <div className="e2etrace-etl-header">
-          <h2>ETL & Data Quality Operations</h2>
-          <button onClick={fetchEtlData} disabled={loading} className="e2etrace-refresh-button">
+    <div className="e2etrace-etl-overview-panel dashboard-widgets-layout" style={{ padding: '2rem', background: '#f0f2f8', minHeight: '100vh' }}>
+      <Widget
+        title="ETL & Data Quality Operations"
+        className="etl-widget"
+        subheader={[
+          <button onClick={fetchEtlData} disabled={loading} className="e2etrace-refresh-button" key="refresh">
             {loading ? 'Refreshing...' : 'Refresh Data'}
           </button>
-        </div>
+        ]}
+        style={{ maxWidth: 600, margin: '0 auto' }}
+      >
         {error && <p className="e2etrace-error-message">{error}</p>}
         {loading && <p>Loading ETL metrics...</p>}
         {!loading && !error && etlMetrics && (
@@ -71,7 +93,7 @@ export function E2ETraceETLOverviewPage() {
             </ul>
           </>
         )}
-      </E2ETraceUIPanel>
+      </Widget>
     </div>
   );
 }

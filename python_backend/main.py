@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .core.lifespan import lifespan_manager
 from .graph_api.router import router as graph_router
 from .nifi_api.router import router as nifi_router
+from .graph_api.reporting_services import router as reporting_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -32,6 +33,7 @@ app.add_middleware(
 
 app.include_router(graph_router)
 app.include_router(nifi_router)
+app.include_router(reporting_router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       // Proxy API requests to your Python FastAPI backend server
-      '/api': 'http://127.0.0.1:5001', // Update to the port your FastAPI server runs on
+      '/api': 'http://localhost:8000', // Update to the port your FastAPI server runs on
     },
   },
 })

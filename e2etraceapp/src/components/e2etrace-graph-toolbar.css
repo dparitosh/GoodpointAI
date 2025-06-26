@@ -1,0 +1,478 @@
+/* Graph Toolbar Styles */
+.graph-toolbar {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    margin-bottom: 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transition: all 0.3s ease;
+}
+
+.graph-toolbar.expanded {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Main Toolbar Row */
+.toolbar-main {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-expanded {
+    border-top: 1px solid #e9ecef;
+    padding: 1rem;
+    background: rgba(248, 249, 250, 0.5);
+}
+
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.toolbar-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Toolbar Sections */
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.toolbar-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #495057;
+    white-space: nowrap;
+}
+
+/* Search Container */
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 250px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.search-clear {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.search-clear:hover {
+    background: #f8f9fa;
+    color: #495057;
+}
+
+/* Layout Select */
+.layout-select, .scheme-select {
+    padding: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: white;
+    color: #495057;
+    min-width: 140px;
+    transition: all 0.2s ease;
+}
+
+.layout-select:focus, .scheme-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: white;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    padding: 0.25rem;
+}
+
+.zoom-controls button {
+    background: none;
+    border: none;
+    padding: 0.375rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zoom-controls button:hover {
+    background: #f8f9fa;
+    color: #007bff;
+}
+
+.zoom-controls button:active {
+    background: #e9ecef;
+}
+
+.zoom-level {
+    font-size: 0.75rem;
+    color: #6c757d;
+    padding: 0 0.5rem;
+    min-width: 3rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Expand Toggle */
+.expand-toggle {
+    background: #f8f9fa;
+    border: 1px solid #ced4da;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.expand-toggle:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+/* Graph Stats */
+.graph-stats {
+    display: flex;
+    gap: 1rem;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 0.875rem;
+    color: #495057;
+    font-weight: 700;
+    background: #f8f9fa;
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+}
+
+/* Filter Sections */
+.filter-section {
+    flex-direction: column;
+    align-items: flex-start;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.75rem;
+    min-width: 0;
+}
+
+.filter-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    max-width: 100%;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: #495057;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.filter-checkbox:hover {
+    background: #e9ecef;
+    border-color: #ced4da;
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #007bff;
+}
+
+.filter-checkbox input[type="checkbox"]:checked + span {
+    font-weight: 600;
+    color: #007bff;
+}
+
+/* Status-specific styling */
+.status-healthy { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-error { color: #dc3545; }
+.status-running { color: #17a2b8; }
+.status-stopped { color: #6c757d; }
+.status-disabled { color: #868e96; }
+
+/* Clear Filters Button */
+.clear-filters-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clear-filters-btn:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+}
+
+.clear-filters-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .toolbar-main {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .toolbar-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.375rem;
+    }
+    
+    .search-container {
+        min-width: auto;
+    }
+    
+    .zoom-controls {
+        justify-content: center;
+    }
+    
+    .graph-stats {
+        justify-content: center;
+    }
+    
+    .filter-checkboxes {
+        justify-content: center;
+    }
+    
+    .toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .graph-toolbar {
+        margin: 0 -0.5rem 1rem -0.5rem;
+        border-radius: 0;
+    }
+    
+    .toolbar-main, .toolbar-expanded {
+        padding: 0.75rem;
+    }
+    
+    .filter-section {
+        padding: 0.5rem;
+    }
+    
+    .filter-checkboxes {
+        gap: 0.25rem;
+    }
+    
+    .filter-checkbox {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+    .graph-toolbar {
+        background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+        border-color: #4a5568;
+        color: #e2e8f0;
+    }
+    
+    .toolbar-expanded {
+        background: rgba(26, 32, 44, 0.5);
+        border-color: #4a5568;
+    }
+    
+    .toolbar-label {
+        color: #a0aec0;
+    }
+    
+    .search-input, .layout-select, .scheme-select {
+        background: #2d3748;
+        border-color: #4a5568;
+        color: #e2e8f0;
+    }
+    
+    .search-input:focus, .layout-select:focus, .scheme-select:focus {
+        border-color: #63b3ed;
+        box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.1);
+    }
+    
+    .zoom-controls {
+        background: #2d3748;
+        border-color: #4a5568;
+    }
+    
+    .zoom-controls button {
+        color: #a0aec0;
+    }
+    
+    .zoom-controls button:hover {
+        background: #4a5568;
+        color: #63b3ed;
+    }
+    
+    .expand-toggle {
+        background: #4a5568;
+        border-color: #718096;
+        color: #a0aec0;
+    }
+    
+    .expand-toggle:hover {
+        background: #718096;
+    }
+    
+    .graph-stats, .filter-section {
+        background: #2d3748;
+        border-color: #4a5568;
+    }
+    
+    .stat-value {
+        background: #1a202c;
+        color: #e2e8f0;
+    }
+    
+    .filter-checkbox {
+        background: #4a5568;
+        border-color: #718096;
+        color: #a0aec0;
+    }
+    
+    .filter-checkbox:hover {
+        background: #718096;
+    }
+}
+
+/* Animation for toolbar expansion */
+.graph-toolbar {
+    overflow: hidden;
+    transition: max-height 0.3s ease, box-shadow 0.3s ease;
+}
+
+.toolbar-expanded {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Focus styles for accessibility */
+.graph-toolbar button:focus,
+.graph-toolbar input:focus,
+.graph-toolbar select:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .graph-toolbar {
+        border-width: 2px;
+        border-color: #000;
+    }
+    
+    .toolbar-label {
+        color: #000;
+        font-weight: 700;
+    }
+    
+    .search-input, .layout-select, .scheme-select {
+        border-width: 2px;
+        border-color: #000;
+    }
+    
+    .zoom-controls {
+        border-width: 2px;
+        border-color: #000;
+    }
+}

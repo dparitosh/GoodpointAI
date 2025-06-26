@@ -10,23 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@popperjs/core": "^2.11.8",
-    "chart.js": "^4.5.0",
     "cytoscape": "^3.32.0",
     "cytoscape-cose-bilkent": "^4.1.0",
     "cytoscape-expand-collapse": "^4.1.1",
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-popper": "^4.0.1",
     "echarts": "^5.6.0",
-    "i": "^0.3.7",
-    "npm": "^11.4.2",
+    "echarts-for-react": "^3.0.2",
+    "file-saver": "^2.0.5",
     "react": "^19.1.0",
-    "react-chartjs-2": "^5.3.0",
-    "react-cytoscapejs": "^2.0.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
-    "react-tippy": "^1.4.0",
-    "tippy.js": "^6.2.5"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

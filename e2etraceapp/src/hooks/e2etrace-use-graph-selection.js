@@ -36,7 +36,7 @@ export const e2etraceUseGraphSelection = (cyRef, graphData, setTableElements) =>
         cy.on('unselect', 'node, edge', onUnselect);
 
         return () => {
-            if (cy && !cy.isDestroyed()) {
+            if (cy) {
                 cy.off('select', 'node, edge', onSelect);
                 cy.off('unselect', 'node, edge', onUnselect);
             }

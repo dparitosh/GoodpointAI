@@ -16,17 +16,32 @@
             type: 'category',
             data: Object.keys(metrics.labelCounts),
             axisTick: { alignWithLabel: true },
-            axisLabel: { color: 'var(--text-color)' }
+            axisLabel: {
+                color: 'var(--text-color)',
+                fontFamily: 'var(--font-family)',
+                fontSize: 14,
+                overflow: 'break',
+                ellipsis: true,
+                formatter: function(value) {
+                  return value.length > 12 ? value.slice(0, 12) + '…' : value;
+                }
+            }
         }],
-        yAxis: [{ type: 'value', axisLabel: { color: 'var(--text-color)' } }],
+        yAxis: [{ type: 'value', axisLabel: { color: 'var(--text-color)', fontFamily: 'var(--font-family)', fontSize: 14 } }],
         series: [{
             name: 'Node Count',
             type: 'bar',
             barWidth: '60%',
             data: Object.values(metrics.labelCounts),
-            itemStyle: { color: 'var(--accent-color)' }
+            itemStyle: { color: 'var(--accent-color)' },
+            label: {
+                show: false,
+                fontFamily: 'var(--font-family)',
+                fontSize: 14
+            }
         }],
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        textStyle: { fontFamily: 'var(--font-family)', fontSize: 14, color: 'var(--text-color)' }
     };
 };
 
@@ -39,11 +54,9 @@
  */
 export const getMappingCoverageGaugeOption = (metrics, theme) => {
     if (!metrics || !metrics.mappingCoverage) return null;
-
     const coveragePercentage = (metrics.mappingCoverage.mapped + metrics.mappingCoverage.unmapped) > 0
         ? (metrics.mappingCoverage.mapped / (metrics.mappingCoverage.mapped + metrics.mappingCoverage.unmapped)) * 100
         : 0;
-
     return {
         series: [{
             type: 'gauge',
@@ -73,18 +86,20 @@ export const getMappingCoverageGaugeOption = (metrics, theme) => {
             },
             axisTick: { length: 12, lineStyle: { color: 'auto', width: 2 } },
             splitLine: { length: 20, lineStyle: { color: 'auto', width: 5 } },
-            axisLabel: { color: 'var(--text-muted-color)', fontSize: 14, distance: -55 },
-            title: { offsetCenter: [0, '-10%'], fontSize: 20, color: 'var(--text-color)' },
+            axisLabel: { color: 'var(--text-muted-color)', fontSize: 14, distance: -55, fontFamily: 'var(--font-family)' },
+            title: { offsetCenter: [0, '-10%'], fontSize: 20, color: 'var(--text-color)', fontFamily: 'var(--font-family)' },
             detail: {
                 fontSize: 30,
                 offsetCenter: [0, '-35%'],
                 valueAnimation: true,
                 formatter: (value) => `${Math.round(value)}%`,
-                color: 'inherit'
+                color: 'inherit',
+                fontFamily: 'var(--font-family)'
             },
             data: [{ value: coveragePercentage, name: 'Mapping Coverage' }]
         }],
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        textStyle: { fontFamily: 'var(--font-family)', fontSize: 14, color: 'var(--text-color)' }
     };
 };
 
@@ -97,20 +112,38 @@ export const getMappingCoverageGaugeOption = (metrics, theme) => {
  */
 export const getStatusDistributionChartOption = (metrics, theme) => {
     if (!metrics || !metrics.propertyValueCounts || !metrics.propertyValueCounts.status) return null;
-
     return {
         tooltip: { trigger: 'item' },
-        legend: { orient: 'vertical', left: 'left', textStyle: { color: 'var(--text-color)' } },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            textStyle: { color: 'var(--text-color)', fontFamily: 'var(--font-family)', fontSize: 14 },
+            itemGap: 12,
+            formatter: function(name) {
+                return name.length > 16 ? name.slice(0, 16) + '…' : name;
+            }
+        },
         series: [{
             name: 'Node Status',
             type: 'pie',
             radius: ['40%', '70%'],
             data: Object.entries(metrics.propertyValueCounts.status).map(([name, value]) => ({ name, value })),
-            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } },
+            label: {
+                fontFamily: 'var(--font-family)',
+                fontSize: 14,
+                overflow: 'break',
+                ellipsis: true,
+                formatter: function(params) {
+                  return params.name.length > 16 ? params.name.slice(0, 16) + '…' : params.name;
+                }
+            }
         }],
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        textStyle: { fontFamily: 'var(--font-family)', fontSize: 14, color: 'var(--text-color)' }
     };
 };
+
 
 /**
  * Generates the ECharts option for the relationship types pie chart.
@@ -120,17 +153,37 @@ export const getStatusDistributionChartOption = (metrics, theme) => {
  */
 export const getRelationshipChartOption = (metrics, theme) => {
     if (!metrics || !metrics.relationshipCounts) return null;
-
     return {
         tooltip: { trigger: 'item' },
-        legend: { orient: 'vertical', left: 'left', textStyle: { color: 'var(--text-color)' } },
+        legend: {
+            type: 'scroll', // Enable scroll for many items
+            orient: 'horizontal', // Move legend to bottom
+            left: 'center',
+            bottom: 0,
+            width: '90%', // Allow more space horizontally
+            textStyle: { color: 'var(--text-color)', fontFamily: 'var(--font-family)', fontSize: 14, overflow: 'truncate', ellipsis: true },
+            itemGap: 12,
+            formatter: function(name) {
+                return name.length > 14 ? name.slice(0, 14) + '…' : name;
+            }
+        },
         series: [{
             name: 'Relationship Types',
             type: 'pie',
             radius: '70%',
             data: Object.entries(metrics.relationshipCounts).map(([name, value]) => ({ name, value })),
-            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } },
+            label: {
+                fontFamily: 'var(--font-family)',
+                fontSize: 14,
+                overflow: 'truncate',
+                ellipsis: true,
+                formatter: function(params) {
+                  return params.name.length > 14 ? params.name.slice(0, 14) + '…' : params.name;
+                }
+            }
         }],
-        backgroundColor: 'transparent'
+        backgroundColor: 'transparent',
+        textStyle: { fontFamily: 'var(--font-family)', fontSize: 14, color: 'var(--text-color)' }
     };
 };

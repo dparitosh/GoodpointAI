@@ -12,10 +12,24 @@ import {
 } from './e2etrace-analytics-charts';
 import './e2etrace-analytics-page.css';
 
-const Widget = ({ title, children, className }) => (
-  <div className={`dashboard-widget ${className || ''}`}>
-    <div className="dashboard-widget-header">{title}</div>
-    <div className="dashboard-widget-content">{children}</div>
+
+// --- Unified Widget Component for All Pages ---
+const Widget = ({ title, children, className, style, subheader }) => (
+  <div className={`dashboard-widget ${className || ''}`} style={style}>
+    <div className="dashboard-widget-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 1.5rem', borderBottom: '1px solid #e0e4ea', background: '#f4f7fb', fontWeight: 600, fontSize: '1.1rem' }}>
+      <span>{title}</span>
+    </div>
+    {subheader && (
+      <div className="dashboard-widget-subheader" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1.5rem', borderBottom: '1px solid #e0e4ea', background: '#f8fafd' }}>
+        {Array.isArray(subheader)
+          ? subheader.map((child, idx) => (
+              <div className="dashboard-widget-subheader-item" key={idx} style={{ display: 'flex', alignItems: 'center' }}>{child}</div>
+            ))
+          : <div className="dashboard-widget-subheader-item">{subheader}</div>
+        }
+      </div>
+    )}
+    <div className="dashboard-widget-content" style={{ padding: '1.5rem', background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(30,40,90,0.06)' }}>{children}</div>
   </div>
 );
 
@@ -48,29 +62,29 @@ export function E2ETraceAnalyticsPage() {
     const relationshipChartOption = useMemo(() => getRelationshipChartOption(metrics, theme), [metrics, theme]);
 
     return (
-        <div className="e2etrace-analytics-page dashboard-widgets-layout">
-            <h1>Graph Analytics Dashboard</h1>
-            {error && <E2ETraceUIPanel><div className="e2etrace-analytics-page-error">Error loading analytics: {error}</div></E2ETraceUIPanel>}
-            {!error && !loading && !metrics && <E2ETraceUIPanel><div className="e2etrace-analytics-page-no-data">No metrics to display.</div></E2ETraceUIPanel>}
+        <div className="e2etrace-analytics-page dashboard-widgets-layout" style={{ padding: '2rem', background: '#f0f2f8', minHeight: '100vh' }}>
+            <h1 style={{ marginBottom: '2rem' }}>Graph Analytics Dashboard</h1>
+            {error && <Widget title="Error" className="error-widget"><div className="e2etrace-analytics-page-error">Error loading analytics: {error}</div></Widget>}
+            {!error && !loading && !metrics && <Widget title="No Data" className="no-data-widget"><div className="e2etrace-analytics-page-no-data">No metrics to display.</div></Widget>}
             {!error && (
-            <div className="dashboard-widgets-row">
-                <Widget title="Migration Mapping Coverage" className="chart-widget">
+            <div className="dashboard-widgets-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', marginBottom: '2rem' }}>
+                <Widget title="Migration Mapping Coverage" className="chart-widget" style={{ flex: 1, minWidth: 320 }}>
                     <EChartsReact option={mappingCoverageGaugeOption || {}} style={{ height: '300px' }} theme={theme} showLoading={loading} />
                 </Widget>
-                <Widget title="Node Status Distribution" className="chart-widget">
+                <Widget title="Node Status Distribution" className="chart-widget" style={{ flex: 1, minWidth: 320 }}>
                     <EChartsReact option={statusDistributionChartOption || {}} style={{ height: '300px' }} theme={theme} showLoading={loading} />
                 </Widget>
-                <Widget title="Node Distribution by System" className="chart-widget">
+                <Widget title="Node Distribution by System" className="chart-widget" style={{ flex: 1, minWidth: 320 }}>
                     <EChartsReact option={labelChartOption || {}} style={{ height: '300px' }} theme={theme} showLoading={loading} />
                 </Widget>
-                <Widget title="Relationship Distribution" className="chart-widget">
+                <Widget title="Relationship Distribution" className="chart-widget" style={{ flex: 1, minWidth: 320 }}>
                     <EChartsReact option={relationshipChartOption || {}} style={{ height: '300px' }} theme={theme} showLoading={loading} />
                 </Widget>
             </div>
             )}
             {!error && metrics && (
-            <div className="dashboard-widgets-row">
-                <Widget title="Key Metrics" className="metrics-widget">
+            <div className="dashboard-widgets-row" style={{ display: 'flex', gap: '2rem' }}>
+                <Widget title="Key Metrics" className="metrics-widget" style={{ flex: 1, minWidth: 320 }}>
                     {loading ? <p>Loading metrics...</p> : (
                         <>
                             <div className="e2etrace-metric-card">Total Data Quality Issues: <strong>{metrics.dataQualityIssues}</strong></div>
@@ -84,7 +98,7 @@ export function E2ETraceAnalyticsPage() {
                         </>
                     )}
                 </Widget>
-                <Widget title="Property-wise Counts" className="property-widget">
+                <Widget title="Property-wise Counts" className="property-widget" style={{ flex: 2, minWidth: 320 }}>
                     {loading ? <p>Loading counts...</p> : metrics && (
                         <div className="e2etrace-property-metrics">
                             {Object.entries(metrics.propertyValueCounts).map(([prop, values]) => (

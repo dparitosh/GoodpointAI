@@ -1,0 +1,98 @@
+.e2etrace-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(30,40,90,0.06);
+  padding: 1rem;
+}
+.e2etrace-chat-messages {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  padding-right: 0.5rem;
+  max-height: 320px;
+}
+.e2etrace-chat-message {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  max-width: 80%;
+  word-break: break-word;
+  font-size: 1rem;
+  line-height: 1.4;
+  background: #f4f7fb;
+  display: flex;
+  align-items: flex-end;
+}
+.e2etrace-chat-message-user {
+  background: #e6f0fa;
+  align-self: flex-end;
+  text-align: right;
+  flex-direction: row-reverse;
+}
+.e2etrace-chat-message-agent {
+  background: #f4f7fb;
+  align-self: flex-start;
+  text-align: left;
+  flex-direction: row;
+}
+.e2etrace-chat-input-area {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.e2etrace-chat-input-area input[type="text"] {
+  flex: 1 1 auto;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #c0c6d1;
+  font-size: 1rem;
+}
+.e2etrace-chat-input-area button {
+  padding: 0.5rem 1.2rem;
+  border-radius: 6px;
+  border: none;
+  background: #2e90fa;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.e2etrace-chat-input-area button:disabled {
+  background: #b3c7e6;
+  cursor: not-allowed;
+}
+.e2etrace-suggested-prompts {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.e2etrace-suggested-prompt-button {
+  background: #f4f7fb;
+  border: 1px solid #e0e4ea;
+  border-radius: 6px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #2e90fa;
+  transition: background 0.2s;
+}
+.e2etrace-suggested-prompt-button:hover {
+  background: #e6f0fa;
+}
+.e2etrace-chat-typing-indicator {
+  font-style: italic;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+.e2etrace-chat-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 1px 4px rgba(30,40,90,0.10);
+}

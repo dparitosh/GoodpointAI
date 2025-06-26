@@ -1,7 +1,0 @@
-.e2etrace-tabs-container {}
-.e2etrace-tab-headers {}
-.e2etrace-tab-header {}
-.e2etrace-tab-header.active { font-weight: bold; }
-.e2etrace-tab-content {}
-.e2etrace-tab-panel { display: none; }
-.e2etrace-tab-panel.active { display: block; }
