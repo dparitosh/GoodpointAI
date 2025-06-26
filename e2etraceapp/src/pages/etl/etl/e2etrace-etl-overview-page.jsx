@@ -1,30 +1,40 @@
+// e2etrace-etl-overview-page.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { E2ETraceUIPanel } from '../../components/e2etrace-ui-panel';
-import './e2etrace-etl-overview-page.css'; // Assuming a new CSS file for this panel
+import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
+import { e2etraceFetchWithRetry } from '../../../api/e2etrace-api';
+import './e2etrace-etl-overview-page.css';
 
 export function E2ETraceETLOverviewPage() {
   const [etlMetrics, setEtlMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Function to simulate fetching ETL data
+  // Function to fetch actual ETL data from the backend
   const fetchEtlData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // --- CHANGE START ---
+      // Replace the setTimeout and mockData with an actual API call
+      const response = await e2etraceFetchWithRetry('/api/etl/metrics'); // Assuming this endpoint exists
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
+        throw new Error(errorData.message || `Failed to fetch ETL data: ${response.status}`);
+      }
+      const realData = await response.json();
 
-      // Mock data - in a real application, this would come from an API
-      const mockData = {
-        latestStatus: Math.random() > 0.1 ? 'Success' : 'Failed',
-        ingestionVolume: `${(Math.random() * 2 + 0.5).toFixed(1)} TB (Last 24h)`,
-        pendingDQIssues: Math.floor(Math.random() * 20) + 5,
-        criticalDQIssues: Math.floor(Math.random() * 5),
-        scheduledJobs: Math.floor(Math.random() * 10) + 3,
-        lastRemediation: new Date().toLocaleString(),
-      };
-      setEtlMetrics(mockData);
+      // Assuming realData structure matches what you want to display
+      // You might need to transform realData if its structure differs from etlMetrics
+      setEtlMetrics({
+        latestStatus: realData.latestStatus || 'Unknown',
+        ingestionVolume: realData.ingestionVolume || 'N/A',
+        pendingDQIssues: realData.pendingDQIssues || 0,
+        criticalDQIssues: realData.criticalDQIssues || 0,
+        scheduledJobs: realData.scheduledJobs || 0,
+        lastRemediation: realData.lastRemediation || 'N/A',
+      });
+      // --- CHANGE END ---
+
     } catch (e) {
       setError('Failed to fetch ETL data. Please try again.');
       console.error('ETL data fetch error:', e);

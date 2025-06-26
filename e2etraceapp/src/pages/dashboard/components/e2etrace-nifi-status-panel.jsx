@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
-import { e2etraceFetchWithRetry } from '../../../utils/e2etrace-api';
+import { e2etraceFetchWithRetry } from '../../../api/e2etrace-api';
 import './e2etrace-nifi-status-panel.css';
 
 export function E2ETraceNiFiStatusPanel({ processGroupId }) {

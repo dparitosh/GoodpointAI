@@ -1,6 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import * as echarts from 'echarts';
-
+import { PieChart, BarChart } from 'echarts/charts';
+import { CanvasRenderer } from 'echarts/renderers';
+import { LegendComponent, TooltipComponent } from 'echarts/components';
+echarts.use([PieChart, BarChart, CanvasRenderer, LegendComponent, TooltipComponent]); // Register the required components
 /**
  * A reusable React component to render Apache ECharts for E2ETrace.
  * @param {object} option - The ECharts option object that defines the chart.

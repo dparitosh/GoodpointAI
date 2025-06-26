@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
-import { e2etraceFetchWithRetry } from '../../../utils/e2etrace-api';
+import { e2etraceFetchWithRetry } from '../../../api/e2etrace-api';
 import { E2ETraceCytoscapeGraph } from '../e2etrace-cytoscape-graph';
 import { cytoscapeStylesheet } from '../e2etrace-cytoscape-stylesheet';
 import { e2etraceUseLayout } from '../../../contexts/e2etrace-layout-context';

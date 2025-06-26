@@ -1,0 +1,148 @@
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: #f4f6fa;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+.main-content-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.5rem 1.5rem 1rem 1.5rem;
+}
+
+.top-panels {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  background: #fff;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  overflow: hidden;
+}
+
+.graph-panel, .chat-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.graph-panel {
+  border-right: 1px solid #e0e0e0;
+  padding: 1rem 1rem 1rem 2rem;
+}
+
+.chat-panel {
+  padding: 1rem 2rem 1rem 1rem;
+}
+
+.resizer {
+  width: 8px;
+  background: #e0e0e0;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.resizer:hover {
+  background: #b0b0b0;
+}
+
+.bottom-panel {
+  width: 100%;
+  background: #fff;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  border-top: 1px solid #e0e0e0;
+  margin-top: 1.5rem;
+  padding: 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dashboard-widgets-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
+  background: #f4f6fa;
+  min-height: 100vh;
+}
+
+.dashboard-widgets-row {
+  display: flex;
+  gap: 2rem;
+}
+
+.dashboard-widget {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-widget-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3a4a;
+  background: #f7f9fb;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dashboard-widget-content {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.graph-widget {
+  min-height: 480px;
+  max-height: 60vh;
+}
+
+.chat-widget {
+  min-width: 350px;
+  max-width: 450px;
+  min-height: 480px;
+  max-height: 60vh;
+}
+
+.table-widget, .filter-widget, .legend-widget {
+  min-width: 300px;
+  max-width: 33vw;
+  min-height: 320px;
+}
+
+#loading, #loading-error, #no-graph-data {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.2em;
+  color: #888;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-widgets-row {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .dashboard-widget {
+    max-width: 100%;
+  }
+}

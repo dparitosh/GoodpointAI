@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { e2etraceUseLayout } from '../../contexts/e2etrace-layout-context'; // Corrected hook name
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { e2etraceUseLayout } from '../../../contexts/e2etrace-layout-context';
+import { useNavigate } from 'react-router-dom';
 import './e2etrace-property-palette.css';
-import { E2ETraceUIPanel } from '../../components/e2etrace-ui-panel';
-import { e2etraceUseDebounce } from '../../hooks/e2etrace-use-debounce'; // For real-time updates
+import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
+import { e2etraceUseDebounce } from '../../../hooks/e2etrace-use-debounce';
 
 const layoutDefinitions = {
-    'fcose': { // Corrected key for fCOSE
+    'fcose': { 
         displayName: 'fCOSE',
         params: [
             { name: 'quality', type: 'select', options: ['default', 'proof'], defaultValue: 'default' },
@@ -19,7 +19,7 @@ const layoutDefinitions = {
             { name: 'animate', type: 'boolean', defaultValue: true },
         ],
     },
-    'cose-bilkent': { // Corrected definition for COSE Bilkent
+    'cose-bilkent': { 
         displayName: 'COSE Bilkent',
         params: [
             { name: 'idealEdgeLength', type: 'number', defaultValue: 120, min: 10, max: 500, step: 10 },
@@ -30,7 +30,7 @@ const layoutDefinitions = {
             { name: 'numIter', type: 'number', defaultValue: 2500, min: 100, max: 10000, step: 100 },
             { name: 'padding', type: 'number', defaultValue: 50, min: 0, max: 200, step: 5 },
             { name: 'nodeDimensionsIncludeLabels', type: 'boolean', defaultValue: true },
-            { name: 'tile', type: 'boolean', defaultValue: true }, // Whether to tile disconnected components
+            { name: 'tile', type: 'boolean', defaultValue: true }, 
             { name: 'animate', type: 'boolean', defaultValue: true },
         ],
     },
@@ -38,32 +38,32 @@ const layoutDefinitions = {
 
 const E2ETracePropertyPalette = () => {
     const { layoutConfig, setLayoutConfig } = e2etraceUseLayout();
-    const navigate = useNavigate(); // Initialize useNavigate hook
+    const navigate = useNavigate(); 
 
     const [selectedLayoutName, setSelectedLayoutName] = useState(layoutConfig.name);
     const [currentProps, setCurrentProps] = useState({});
-    const debouncedProps = e2etraceUseDebounce(currentProps, 500); // Debounce changes for 500ms
+    const debouncedProps = e2etraceUseDebounce(currentProps, 500); 
 
     useEffect(() => {
-        // Initialize currentProps when selectedLayoutName changes or on initial load
+        
         const definition = layoutDefinitions[selectedLayoutName];
         if (definition) {
             const initialProps = {};
             definition.params.forEach(param => {
-                // When switching layouts, always start with the new layout's defaults
+                
                 initialProps[param.name] = param.defaultValue;
             });
             setCurrentProps(initialProps);
         }
-    }, [selectedLayoutName]); // Rerun only when the layout *name* changes
+    }, [selectedLayoutName]); 
 
-    // This effect listens for debounced changes and applies them to the global context
+    
     useEffect(() => {
         if (Object.keys(debouncedProps).length > 0) {
             setLayoutConfig({
                 name: selectedLayoutName,
                 ...debouncedProps,
-                fit: false, // Always ensure fit is false as App.jsx handles it
+                fit: false, 
             });
         }
     }, [debouncedProps, selectedLayoutName, setLayoutConfig]);
@@ -82,10 +82,10 @@ const E2ETracePropertyPalette = () => {
     const selectedDefinition = layoutDefinitions[selectedLayoutName];
 
     return (
-        <E2ETraceUIPanel className="e2etrace-property-palette-container e2etrace-card-like"> {/* Use the new Panel component */}
+        <E2ETraceUIPanel className="e2etrace-property-palette-container e2etrace-card-like"> 
             <h2>E2ETrace Graph Layout Settings</h2>
-            <div className="e2etrace-palette-section"> {/* Corrected class name */}
-                <div className="e2etrace-form-group"> {/* Corrected class name */}
+            <div className="e2etrace-palette-section"> 
+                <div className="e2etrace-form-group"> 
                     <label htmlFor="layout-select">Select Layout:</label>
                     <select
                         id="layout-select"
@@ -101,13 +101,13 @@ const E2ETracePropertyPalette = () => {
                 </div>
             </div>
 
-            <div className="e2etrace-palette-controls"> {/* Corrected class name */}
+            <div className="e2etrace-palette-controls"> 
                  {selectedDefinition && selectedDefinition.params.map(param => (
-                    <div key={param.name} className="e2etrace-form-group"> {/* Corrected class name */}
+                    <div key={param.name} className="e2etrace-form-group"> 
                         <label htmlFor={`param-${param.name}`}>{param.name}:</label>
                         {param.type === 'number' && (
                             <input
-                                type="range" // Using range for slider-like behavior
+                                type="range" 
                                 id={`param-${param.name}`}
                                 value={currentProps[param.name] || param.defaultValue}
                                 min={param.min}
@@ -133,18 +133,16 @@ const E2ETracePropertyPalette = () => {
                                 {param.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                         )}
-                         {param.type === 'number' && <span className="e2etrace-param-value-display">{currentProps[param.name] !== undefined ? currentProps[param.name] : param.defaultValue}</span>} {/* Corrected class name */}
+                         {param.type === 'number' && <span className="e2etrace-param-value-display">{currentProps[param.name] !== undefined ? currentProps[param.name] : param.defaultValue}</span>} 
                     </div>
                 ))}
             </div>
 
-            {/* NDL Theme Customization Section Removed */}
-            {/* <hr className="palette-divider" />
-            <h2>Theme Customization (NDL Overrides)</h2> ... */}
+            
 
-            <div className="e2etrace-palette-actions"> {/* Corrected class name */}
-                <span className="e2etrace-autosave-indicator">Settings are applied automatically.</span> {/* Corrected class name */}
-                <button className="e2etrace-palette-button e2etrace-back" onClick={() => navigate('/')}>Back to Graph</button> {/* Use useNavigate */}
+            <div className="e2etrace-palette-actions"> 
+                <span className="e2etrace-autosave-indicator">Settings are applied automatically.</span> 
+                <button className="e2etrace-palette-button e2etrace-back" onClick={() => navigate('/')}>Back to Graph</button> 
             </div> 
         </E2ETraceUIPanel>
     );

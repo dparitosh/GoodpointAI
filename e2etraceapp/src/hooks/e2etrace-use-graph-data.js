@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { e2etraceFetchWithRetry } from '../utils/e2etrace-api';
+import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
 
 export function e2etraceUseGraphData(setTableElements) {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { e2etraceFetchWithRetry } from '../utils/e2etrace-api';
+import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
 
 export function e2etraceUseDashboardState(setGraphData, _setDashboardMetrics, setTableElements) { // _setDashboardMetrics is ignored as dashboard metrics are now handled by analytics page
