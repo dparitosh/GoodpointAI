@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { applyETLFilter, highlightPerformanceIssues, calculatePipelineMetrics } from '../utils/e2etrace-graph-enhancement.js';
+import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import './e2etrace-etl-overview.css';
 
 const ETLOverview = ({ 
@@ -15,6 +16,49 @@ const ETLOverview = ({
   const [activeTab, setActiveTab] = useState('metrics');
   const [expanded, setExpanded] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
+  const [qualityData, setQualityData] = useState({
+    totalRecords: '0',
+    validRecords: '0',
+    duplicates: '0',
+    nullValues: '0',
+    qualityScore: '0.0'
+  });
+
+  // Load data quality metrics from API
+  useEffect(() => {
+    const fetchDataQuality = async () => {
+      try {
+        const response = await e2etraceFetchWithRetry('/api/monitoring/data-quality');
+        const data = await response.json();
+        setQualityData({
+          totalRecords: data.totalRecords?.toLocaleString() || '0',
+          validRecords: data.validRecords?.toLocaleString() || '0',
+          duplicates: data.duplicates?.toLocaleString() || '0',
+          nullValues: data.nullValues?.toLocaleString() || '0',
+          qualityScore: data.qualityScore?.toFixed(1) || '0.0'
+        });
+      } catch (error) {
+        console.error('Error fetching data quality metrics:', error);
+        // Fallback to calculated values from graph data
+        if (graphData && graphData.nodes) {
+          const totalNodes = graphData.nodes.length;
+          const validNodes = graphData.nodes.filter(n => n.data && n.data.id).length;
+          const duplicateNodes = graphData.nodes.filter(n => n.data && n.data.status === 'duplicate').length;
+          const nullNodes = graphData.nodes.filter(n => n.data && Object.values(n.data).some(v => v === null || v === undefined)).length;
+          
+          setQualityData({
+            totalRecords: totalNodes.toLocaleString(),
+            validRecords: validNodes.toLocaleString(),
+            duplicates: duplicateNodes.toLocaleString(),
+            nullValues: nullNodes.toLocaleString(),
+            qualityScore: ((validNodes / Math.max(totalNodes, 1)) * 100).toFixed(1)
+          });
+        }
+      }
+    };
+
+    fetchDataQuality();
+  }, [graphData]);
 
   // Enhanced ETL metrics calculated from graph data
   const etlMetrics = useMemo(() => {
@@ -88,24 +132,6 @@ const ETLOverview = ({
       latency,
       errorRate: errorRate.toFixed(1),
       pipelineMetrics
-    };
-  }, [graphData]);
-
-  // Data quality metrics
-  const dataQualityMetrics = useMemo(() => {
-    if (!graphData || !graphData.nodes) return {};
-
-    const totalRecords = 1000000 + Math.floor(Math.random() * 9000000);
-    const validRecords = Math.floor(totalRecords * (0.92 + Math.random() * 0.07));
-    const duplicates = Math.floor(totalRecords * (0.01 + Math.random() * 0.03));
-    const nullValues = Math.floor(totalRecords * (0.02 + Math.random() * 0.04));
-
-    return {
-      totalRecords: totalRecords.toLocaleString(),
-      validRecords: validRecords.toLocaleString(),
-      duplicates: duplicates.toLocaleString(),
-      nullValues: nullValues.toLocaleString(),
-      qualityScore: ((validRecords / totalRecords) * 100).toFixed(1)
     };
   }, [graphData]);
 
@@ -351,32 +377,32 @@ const ETLOverview = ({
           <div className="metrics-grid">
             <MetricCard
               title="Quality Score"
-              value={`${dataQualityMetrics.qualityScore}%`}
-              color={parseFloat(dataQualityMetrics.qualityScore) > 90 ? '#28a745' : '#ffc107'}
+              value={`${qualityData.qualityScore}%`}
+              color={parseFloat(qualityData.qualityScore) > 90 ? '#28a745' : '#ffc107'}
               subtitle="Overall Data Health"
               trend={1.5}
             />
             <MetricCard
               title="Total Records"
-              value={dataQualityMetrics.totalRecords}
+              value={qualityData.totalRecords}
               color="#007bff"
               subtitle="Processed Today"
             />
             <MetricCard
               title="Valid Records"
-              value={dataQualityMetrics.validRecords}
+              value={qualityData.validRecords}
               color="#28a745"
               subtitle="Passed Validation"
             />
             <MetricCard
               title="Duplicates"
-              value={dataQualityMetrics.duplicates}
+              value={qualityData.duplicates}
               color="#ffc107"
               subtitle="Duplicate Entries"
             />
             <MetricCard
               title="Null Values"
-              value={dataQualityMetrics.nullValues}
+              value={qualityData.nullValues}
               color="#dc3545"
               subtitle="Missing Data"
             />

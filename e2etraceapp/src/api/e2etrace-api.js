@@ -1,15 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { API_CONFIG, getFullUrl } from '../config/api-config.js';
 
 /**
  * Fetches a resource with a retry mechanism using exponential backoff.
  * This is useful for handling transient network errors or temporary server issues.
  * @param {string} url The URL to fetch for E2ETrace.
  * @param {object} options Fetch options.
- * @param {number} retries Number of retries.
+ * @param {number} retries Number of retries (defaults to config value).
  * @returns {Promise<Response>} A promise that resolves with the fetch Response.
  */
-export async function e2etraceFetchWithRetry(url, options, retries = 3) {
-    const fullUrl = `${API_BASE_URL}${url}`;
+export async function e2etraceFetchWithRetry(url, options, retries = API_CONFIG.API_RETRY_ATTEMPTS) {
+    const fullUrl = getFullUrl(url);
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -31,8 +31,8 @@ export async function e2etraceFetchWithRetry(url, options, retries = 3) {
                 console.error(`All ${retries} fetch attempts failed for ${fullUrl}.`);
                 throw error; // Re-throw the last error after all retries fail.
             }
-            // Exponential backoff: 1s, 2s, 4s...
-            const delay = Math.pow(2, attempt - 1) * 1000;
+            // Exponential backoff using config delay: 1s, 2s, 4s...
+            const delay = Math.pow(2, attempt - 1) * API_CONFIG.API_RETRY_DELAY;
             console.warn(`Attempt ${attempt} failed for ${fullUrl}. Retrying in ${delay}ms...`);
             await new Promise(res => setTimeout(res, delay));
         }

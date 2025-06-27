@@ -14,7 +14,7 @@ from .helpers import (
     _add_node_from_info_dict, _process_relationship_from_info_dict
 )
 from .dependencies import get_driver
-from ..core.config import NEO4J_DATABASE
+from core.config import NEO4J_DATABASE
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Graph Operations"])

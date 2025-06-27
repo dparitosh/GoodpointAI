@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 import neo4j
-from ..core.config import NEO4J_DATABASE
+from datetime import datetime
+from core.config import NEO4J_DATABASE
 from .dependencies import get_driver
 
 router = APIRouter(prefix="/api")
+
+@router.get("/health", summary="Health check endpoint")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.now().isoformat(), "service": "Neo4j GraphTrace API"}
 
 @router.get("/entities", summary="Get all node labels and relationship types with properties")
 async def get_entities(driver_instance: neo4j.AsyncDriver = Depends(get_driver)):

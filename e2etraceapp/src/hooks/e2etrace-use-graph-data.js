@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
+import { API_CONFIG } from '../config/api-config.js';
 
 export function e2etraceUseGraphData(setTableElements) {
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
@@ -15,8 +16,8 @@ export function e2etraceUseGraphData(setTableElements) {
       setLoading(true);
       setLoadingError(null);
       try {
-        console.log('[useGraphData] fetchInitialData: Attempting to fetch /api/graph');
-        const response = await e2etraceFetchWithRetry('/api/graph');
+        console.log('[useGraphData] fetchInitialData: Attempting to fetch', API_CONFIG.ENDPOINTS.GRAPH);
+        const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.GRAPH);
         console.log('[useGraphData] fetchInitialData: Received response status:', response.status);
         const data = await response.json();
         console.log('[useGraphData] fetchInitialData: Successfully parsed JSON data.');

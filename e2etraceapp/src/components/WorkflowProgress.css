@@ -1,0 +1,436 @@
+/* Workflow Progress Component Styles */
+.workflow-progress-container {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover-color) 100%);
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 4px 20px rgba(0, 122, 204, 0.15);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color-weak);
+}
+
+.workflow-progress-container.expanded {
+  box-shadow: 0 8px 32px rgba(0, 122, 204, 0.2);
+  transform: translateY(-2px);
+}
+
+.workflow-header {
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.1) 0%, 
+    rgba(255, 255, 255, 0.05) 100%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.workflow-header:hover {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.2) 0%, 
+    rgba(255, 255, 255, 0.1) 100%);
+  transform: translateY(-1px);
+}
+
+.workflow-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-h6);
+  font-weight: var(--font-weight-bold);
+}
+
+.workflow-title i {
+  font-size: 1.2rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.progress-indicator {
+  background: rgba(255, 255, 255, 0.25);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 20px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.expand-toggle {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.expand-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.workflow-content {
+  background: white;
+  padding: 2rem;
+}
+
+.workflow-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.workflow-stage {
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+}
+
+.stage-connector {
+  position: relative;
+  width: 2rem;
+  display: flex;
+  justify-content: center;
+  margin-right: 1rem;
+}
+
+.connector-line {
+  position: absolute;
+  top: -2rem;
+  width: 3px;
+  height: 2rem;
+  background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+  border-radius: 2px;
+}
+
+.workflow-stage.completed .connector-line {
+  background: linear-gradient(to bottom, #28a745, #20c997);
+}
+
+.workflow-stage.active .connector-line {
+  background: linear-gradient(to bottom, #007bff, #6f42c1);
+}
+
+.stage-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #f8f9fa;
+  border: 3px solid #dee2e6;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.workflow-stage.completed .stage-icon {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  border-color: #28a745;
+  color: white;
+}
+
+.workflow-stage.active .stage-icon {
+  background: linear-gradient(135deg, #007bff, #6f42c1);
+  border-color: #007bff;
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+.workflow-stage.pending .stage-icon {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+  color: #6c757d;
+}
+
+.stage-content {
+  flex: 1;
+  padding-left: 1rem;
+}
+
+.stage-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary, #2c3e50);
+  margin: 0 0 0.5rem 0;
+}
+
+.workflow-stage.current-page .stage-title {
+  color: var(--primary-color, #007bff);
+}
+
+.stage-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6c757d);
+  margin: 0 0 1rem 0;
+  line-height: 1.4;
+}
+
+.stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stage-link {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stage-link.completed {
+  background: #e7f3ff;
+  color: #0056b3;
+  border: 1px solid #b3d7ff;
+}
+
+.stage-link.completed:hover {
+  background: #cce7ff;
+  transform: translateY(-1px);
+}
+
+.stage-link.active {
+  background: linear-gradient(135deg, #007bff, #6f42c1);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.stage-link.active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 123, 255, 0.4);
+}
+
+.stage-link.pending {
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+}
+
+.stage-link.pending:hover {
+  background: #e9ecef;
+}
+
+.current-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--primary-color, #007bff);
+  font-weight: 600;
+}
+
+.current-indicator i {
+  animation: blink 1.5s infinite;
+}
+
+.workflow-summary {
+  border-top: 2px solid #e9ecef;
+  padding-top: 1.5rem;
+}
+
+.summary-progress {
+  margin-bottom: 1rem;
+}
+
+.progress-bar-full {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill-full {
+  height: 100%;
+  background: linear-gradient(90deg, #007bff, #28a745);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.progress-stats span:first-child {
+  color: var(--text-secondary, #6c757d);
+}
+
+.progress-percentage {
+  font-weight: 700;
+  color: var(--primary-color, #007bff);
+}
+
+.completion-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.completion-message i {
+  font-size: 1.2rem;
+  color: #ffd700;
+}
+
+/* Minimal Progress Bar */
+.workflow-progress-minimal {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+}
+
+.workflow-progress-minimal .progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.workflow-progress-minimal .progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007bff, #28a745);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.workflow-progress-minimal .progress-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-color, #007bff);
+  white-space: nowrap;
+}
+
+/* Animations */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+  }
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0.3;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .workflow-content {
+    padding: 1rem;
+  }
+
+  .workflow-stages {
+    gap: 1.5rem;
+  }
+
+  .stage-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .workflow-progress-minimal {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+
+  .workflow-progress-minimal .progress-bar {
+    order: 2;
+  }
+
+  .workflow-progress-minimal .progress-text {
+    order: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .workflow-header {
+    padding: 1rem;
+  }
+
+  .workflow-title {
+    font-size: 1rem;
+  }
+
+  .stage-title {
+    font-size: 1rem;
+  }
+
+  .stage-description {
+    font-size: 0.85rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .workflow-content {
+    background: #2d2d2d;
+    color: #e9ecef;
+  }
+
+  .stage-title {
+    color: #e9ecef;
+  }
+
+  .stage-description {
+    color: #adb5bd;
+  }
+
+  .workflow-summary {
+    border-top-color: #495057;
+  }
+
+  .progress-bar-full {
+    background: #495057;
+  }
+
+  .workflow-progress-minimal {
+    background: #2d2d2d;
+    color: #e9ecef;
+  }
+
+  .workflow-progress-minimal .progress-bar {
+    background: #495057;
+  }
+}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts'; // Add this import for gradients
+import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import { API_CONFIG } from '../../config/api-config.js';
 
 const chartTypes = [
   { value: 'bar', label: 'Bar Chart' },
@@ -35,7 +37,7 @@ export default function ReportingPage() {
   // Fetch available entities and properties
   useEffect(() => {
     setLoadingEntities(true);
-    fetch('/api/entities')
+    e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.ENTITIES)
       .then(res => res.json())
       .then(data => {
         const validEntities = data.filter(en => Array.isArray(en.properties) && en.properties.length > 0);
@@ -202,7 +204,7 @@ export default function ReportingPage() {
     }
 
     try {
-      const res = await fetch('/api/query', {
+      const res = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.GRAPH_QUERY, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cypher }),
@@ -465,6 +467,45 @@ export default function ReportingPage() {
           </div>
         </div>
       )}
+
+      {/* Link to dedicated spreadsheet page */}
+      <div style={{ 
+        marginTop: '3rem', 
+        textAlign: 'center',
+        padding: '2rem',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: '12px',
+        color: 'white'
+      }}>
+        <h3 style={{ margin: '0 0 1rem 0' }}>📊 Need Advanced Data Analysis?</h3>
+        <p style={{ margin: '0 0 1.5rem 0', opacity: 0.9 }}>
+          Use our dedicated ECharts Spreadsheet for Excel import/export, advanced charting, and data manipulation.
+        </p>
+        <a 
+          href="#/spreadsheet" 
+          style={{
+            display: 'inline-block',
+            padding: '0.75rem 1.5rem',
+            background: 'rgba(255, 255, 255, 0.2)',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: '8px',
+            color: 'white',
+            textDecoration: 'none',
+            fontWeight: 'bold',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.3)';
+            e.target.style.transform = 'translateY(-2px)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.background = 'rgba(255, 255, 255, 0.2)';
+            e.target.style.transform = 'translateY(0)';
+          }}
+        >
+          🚀 Open ECharts Spreadsheet
+        </a>
+      </div>
     </div>
   );
 }

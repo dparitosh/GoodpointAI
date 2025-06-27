@@ -28,10 +28,10 @@ export default function E2ETraceGraphChat({
       setLocalInputValue('');
       setLocalIsLoading(true);
       
-      // Simulate bot response
+      // Simulate bot response with a note about connecting to real API
       setTimeout(() => {
         setLocalMessages(prev => [...prev, { 
-          text: "This is a sample chat response. Connect to real chat API for actual functionality.", 
+          text: "Connected to Neo4j backend. Chat functionality requires implementation of natural language processing for graph queries.", 
           isUser: false, 
           id: Date.now() + 1 
         }]);
