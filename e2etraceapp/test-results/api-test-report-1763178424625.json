@@ -1,0 +1,102 @@
+{
+  "timestamp": "2025-11-15T03:47:04.625Z",
+  "summary": {
+    "total": 14,
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "coverage": 100
+  },
+  "results": [
+    {
+      "test": "GET /health",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "349ms"
+    },
+    {
+      "test": "GET /openapi.json",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "19ms",
+      "endpoints": 53
+    },
+    {
+      "test": "GET /api/data-sources",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "19ms",
+      "count": 0
+    },
+    {
+      "test": "GET /api/monitoring/health",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "16ms"
+    },
+    {
+      "test": "GET /api/analytics/quality/dashboard",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "10ms"
+    },
+    {
+      "test": "GET /api/ui-config/system",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "146ms"
+    },
+    {
+      "test": "GET /api/ui-config/ssl-config",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "9ms",
+      "sslEnabled": false
+    },
+    {
+      "test": "GET /api/ui-config/templates",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "7ms"
+    },
+    {
+      "test": "GET /api/graphql/catalogue/queries",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "130ms",
+      "count": 0
+    },
+    {
+      "test": "GET /api/report-search/indexes",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "14ms"
+    },
+    {
+      "test": "GET /docs",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "8ms"
+    },
+    {
+      "test": "GET /redoc",
+      "status": "PASSED",
+      "statusCode": 200,
+      "duration": "7ms"
+    },
+    {
+      "test": "POST /api/data-sources (validation)",
+      "status": "PASSED",
+      "statusCode": 422,
+      "duration": "13ms",
+      "note": "Validation working"
+    },
+    {
+      "test": "GET /api/nonexistent",
+      "status": "PASSED",
+      "statusCode": 404,
+      "duration": "8ms",
+      "note": "404 handling works"
+    }
+  ]
+}

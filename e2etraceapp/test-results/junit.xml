@@ -1,0 +1,181 @@
+<testsuites id="" name="" tests="14" failures="0" skipped="0" errors="0" time="6.927193000000001">
+<testsuite name="api-simple-tests.spec.ts" timestamp="2025-11-15T03:47:01.565Z" hostname="API Tests - Simple" tests="14" failures="0" skipped="0" time="0.924" errors="0">
+<testcase name="REST API Comprehensive Testing › 1. Health Check - Backend Running" classname="api-simple-tests.spec.ts" time="0.389">
+<system-out>
+<![CDATA[✅ GET /health - PASSED (349ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 2. OpenAPI Specification Available" classname="api-simple-tests.spec.ts" time="0.042">
+<system-out>
+<![CDATA[✅ GET /openapi.json - PASSED (19ms) - 53 endpoints discovered
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 3. GET /api/data-sources" classname="api-simple-tests.spec.ts" time="0.034">
+<system-out>
+<![CDATA[✅ GET /api/data-sources - PASSED (19ms) - 0 sources
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 4. GET /api/monitoring/health" classname="api-simple-tests.spec.ts" time="0.028">
+<system-out>
+<![CDATA[✅ GET /api/monitoring/health - PASSED (16ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 5. GET /api/analytics/quality/dashboard" classname="api-simple-tests.spec.ts" time="0.021">
+<system-out>
+<![CDATA[✅ GET /api/analytics/quality/dashboard - PASSED (10ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 6. GET /api/ui-config/system" classname="api-simple-tests.spec.ts" time="0.156">
+<system-out>
+<![CDATA[✅ GET /api/ui-config/system - PASSED (146ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 7. GET /api/ui-config/ssl-config" classname="api-simple-tests.spec.ts" time="0.016">
+<system-out>
+<![CDATA[✅ GET /api/ui-config/ssl-config - PASSED (9ms) - SSL: false
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 8. GET /api/ui-config/templates" classname="api-simple-tests.spec.ts" time="0.015">
+<system-out>
+<![CDATA[✅ GET /api/ui-config/templates - PASSED (7ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 9. GET /api/graphql/catalogue/queries" classname="api-simple-tests.spec.ts" time="0.137">
+<system-out>
+<![CDATA[✅ GET /api/graphql/catalogue/queries - PASSED (130ms) - 0 queries
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 10. GET /api/report-search/indexes" classname="api-simple-tests.spec.ts" time="0.02">
+<system-out>
+<![CDATA[✅ GET /api/report-search/indexes - PASSED (14ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 11. GET /docs - Swagger UI" classname="api-simple-tests.spec.ts" time="0.017">
+<system-out>
+<![CDATA[✅ GET /docs - PASSED (8ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 12. GET /redoc - ReDoc UI" classname="api-simple-tests.spec.ts" time="0.015">
+<system-out>
+<![CDATA[✅ GET /redoc - PASSED (7ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 13. POST /api/data-sources - Validation" classname="api-simple-tests.spec.ts" time="0.02">
+<system-out>
+<![CDATA[✅ POST /api/data-sources (validation) - PASSED (13ms)
+]]>
+</system-out>
+</testcase>
+<testcase name="REST API Comprehensive Testing › 14. GET /api/nonexistent - 404 Handling" classname="api-simple-tests.spec.ts" time="0.014">
+<system-out>
+<![CDATA[✅ GET /api/nonexistent - PASSED (8ms) - 404 handling works
+
+================================================================================
+📊 REST API TEST REPORT - COMPLETE
+================================================================================
+📅 Date: 2025-11-15T03:47:04.614Z
+📈 Total Tests: 14
+✅ Passed: 14 (100.00%)
+❌ Failed: 0 (0.00%)
+⏭️  Skipped: 0 (0.00%)
+📊 Coverage: 100.00%
+================================================================================
+
+📝 DETAILED RESULTS:
+
+✅ 1. GET /health
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 349ms
+
+✅ 2. GET /openapi.json
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 19ms
+   Endpoints: 53
+
+✅ 3. GET /api/data-sources
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 19ms
+   Items: 0
+
+✅ 4. GET /api/monitoring/health
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 16ms
+
+✅ 5. GET /api/analytics/quality/dashboard
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 10ms
+
+✅ 6. GET /api/ui-config/system
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 146ms
+
+✅ 7. GET /api/ui-config/ssl-config
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 9ms
+
+✅ 8. GET /api/ui-config/templates
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 7ms
+
+✅ 9. GET /api/graphql/catalogue/queries
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 130ms
+   Items: 0
+
+✅ 10. GET /api/report-search/indexes
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 14ms
+
+✅ 11. GET /docs
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 8ms
+
+✅ 12. GET /redoc
+   Status: PASSED
+   HTTP Status: 200
+   Duration: 7ms
+
+✅ 13. POST /api/data-sources (validation)
+   Status: PASSED
+   HTTP Status: 422
+   Duration: 13ms
+   Note: Validation working
+
+✅ 14. GET /api/nonexistent
+   Status: PASSED
+   HTTP Status: 404
+   Duration: 8ms
+   Note: 404 handling works
+
+================================================================================
+
+💾 Report saved to: D:\Software\boiSoftware\graphTrace\e2etraceapp\test-results\api-test-report-1763178424625.json
+
+]]>
+</system-out>
+</testcase>
+</testsuite>
+</testsuites>
