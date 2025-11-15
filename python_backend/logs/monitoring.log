@@ -9406,3 +9406,7 @@
 2025-11-15 09:32:09,259 - core.monitoring - INFO - Cleaned up old monitoring data
 2025-11-15 09:38:25,598 - core.monitoring - WARNING - Alert created: warning - system - High memory usage: 86.3%
 2025-11-15 09:56:26,504 - core.monitoring - INFO - Cleaned up old monitoring data
+2025-11-15 10:10:05,499 - core.monitoring - ERROR - Error in health check monitor: 
+2025-11-15 10:10:07,573 - core.monitoring - ERROR - Error in alert processor: 
+2025-11-15 10:10:07,574 - core.monitoring - ERROR - Error collecting system metrics: 
+2025-11-15 10:10:07,576 - core.monitoring - ERROR - Error cleaning up old data: 
