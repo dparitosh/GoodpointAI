@@ -12,6 +12,9 @@ from graph_api.data_mapping_router import router as data_mapping_router
 from graph_api.migration_router import router as migration_router
 from graph_api.analytics_router import router as analytics_router
 from graph_api.reporting_services import router as reporting_router
+from graph_api.graphql_router import router as graphql_router
+from graph_api.graphql_catalogue_router import router as graphql_catalogue_router
+from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -47,6 +50,9 @@ app.include_router(data_mapping_router)
 app.include_router(migration_router)
 app.include_router(analytics_router)
 app.include_router(reporting_router)
+app.include_router(graphql_router)
+app.include_router(graphql_catalogue_router)
+app.include_router(neo4j_graphrag_router)
 
 if __name__ == "__main__":
     import uvicorn
