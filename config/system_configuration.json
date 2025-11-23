@@ -1,0 +1,63 @@
+{
+  "services": {
+    "backend_gateway": {
+      "port": 8003,
+      "timeout": 30,
+      "max_upload_size_mb": 150
+    },
+    "plm_xml_service": {
+      "port": 8005,
+      "timeout": 60
+    },
+    "migration_engine": {
+      "port": 8007,
+      "timeout": 45,
+      "websocket_update_interval": 1
+    },
+    "analytics_storage": {
+      "port": 8006,
+      "timeout": 10
+    }
+  },
+  "databases": {
+    "postgresql": {
+      "main_port": 5432,
+      "backup_port": 5433,
+      "backup_schedule": "hourly"
+    },
+    "neo4j": {
+      "bolt_port": 7687,
+      "http_port": 7474
+    },
+    "redis": {
+      "port": 6379,
+      "ttl_seconds": 600
+    },
+    "opensearch": {
+      "port": 9200,
+      "index_prefix": "graphtrace-vectors-"
+    }
+  },
+  "migration": {
+    "retry_attempts": 2,
+    "retry_delay_seconds": [1, 4],
+    "session_persistence": "postgresql",
+    "progress_snapshot_store": "redis"
+  },
+  "opensearch": {
+    "health_poll_interval": 30,
+    "latency_thresholds": {
+      "green": 500,
+      "yellow": 1000
+    },
+    "default_k": 10
+  },
+  "cors": {
+    "allowed_origins": [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:8000"
+    ]
+  }
+}
