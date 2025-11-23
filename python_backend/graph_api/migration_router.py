@@ -265,7 +265,7 @@ async def websocket_migration_updates(websocket: WebSocket, session_id: str):
         while True:
             data = await websocket.receive_text()
             # Echo back for heartbeat
-            await websocket.send_json({"type": "heartbeat", "timestamp": None})
+            await websocket.send_json({"type": "heartbeat", "timestamp": datetime.utcnow().isoformat()})
             
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}")

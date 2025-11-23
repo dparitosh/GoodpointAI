@@ -63,7 +63,7 @@ const PLMMigrationStatechartVisualizer = ({ currentState, onNavigate }) => {
         tabIndex={0}
         role="button"
         aria-label={`${stateConfig.label} state. ${stateConfig.description}`}
-        aria-pressed={isActive}
+        aria-pressed={isActive ? 'true' : 'false'}
       >
         <div className="state-node-content">
           <div className="state-node-label">{stateConfig.label}</div>

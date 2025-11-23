@@ -128,8 +128,11 @@ class AnalyticsStorageService:
             if m.get("service_name") == service_name
         ]
         
-        # Keep the most recent records up to the limit
-        self.metrics_store["service_health"] = existing_records + service_records[-(MAX_HEALTH_RECORDS_PER_SERVICE - 1):] + [metric]
+        # Add new metric and keep only the most recent up to the limit
+        service_records.append(metric)
+        service_records = service_records[-MAX_HEALTH_RECORDS_PER_SERVICE:]
+        
+        self.metrics_store["service_health"] = existing_records + service_records
         
         logger.debug(f"Recorded health metric for {service_name}")
         
