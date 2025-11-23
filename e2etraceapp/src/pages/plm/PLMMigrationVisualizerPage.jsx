@@ -7,6 +7,11 @@ import PLMMigrationStatechartVisualizer from '../../components/plm/PLMMigrationS
 import { MigrationStates, MigrationEvents, getAvailableActions } from '../../machines/plmMigrationMachine.js';
 import './PLMMigrationVisualizerPage.css';
 
+// Configuration
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000'
+  : `${window.location.protocol}//${window.location.hostname}:8000`;
+
 const PLMMigrationVisualizerPage = () => {
   const [sessionId, setSessionId] = useState(null);
   const [currentState, setCurrentState] = useState(MigrationStates.IDLE);
@@ -48,7 +53,8 @@ const PLMMigrationVisualizerPage = () => {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.hostname}:8000/api/migration/advanced/ws/${sid}`;
+    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    const wsUrl = `${protocol}//${host}/api/migration/advanced/ws/${sid}`;
 
     const ws = new WebSocket(wsUrl);
 
@@ -106,7 +112,7 @@ const PLMMigrationVisualizerPage = () => {
     setControlsDisabled(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/migration/advanced/start', {
+      const response = await fetch(`${API_BASE_URL}/api/migration/advanced/start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,6 +144,7 @@ const PLMMigrationVisualizerPage = () => {
         setStartTime(Date.now());
         connectWebSocket(sid);
       } else {
+        console.error('Failed to start migration:', data.message);
         alert('Failed to start migration: ' + data.message);
       }
     } catch (error) {
@@ -155,7 +162,7 @@ const PLMMigrationVisualizerPage = () => {
     setControlsDisabled(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/migration/advanced/${sessionId}/events`, {
+      const response = await fetch(`${API_BASE_URL}/api/migration/advanced/${sessionId}/events`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,6 +173,7 @@ const PLMMigrationVisualizerPage = () => {
       const data = await response.json();
 
       if (data.status !== 'success') {
+        console.error('Control event failed:', data.message);
         alert('Control event failed: ' + data.message);
       }
     } catch (error) {
@@ -182,7 +190,7 @@ const PLMMigrationVisualizerPage = () => {
     if (!sessionId) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/migration/advanced/${sessionId}/history?format=csv`);
+      const response = await fetch(`${API_BASE_URL}/api/migration/advanced/${sessionId}/history?format=csv`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

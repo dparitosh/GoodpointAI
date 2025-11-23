@@ -10,6 +10,9 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+# Constants
+MAX_HEALTH_RECORDS_PER_SERVICE = 100
+
 
 class MetricType(str, Enum):
     """Types of metrics tracked"""
@@ -115,11 +118,18 @@ class AnalyticsStorageService:
             "error_rate": error_rate
         }
         
-        # Keep only last 100 health records per service
-        self.metrics_store["service_health"] = [
+        # Keep only last MAX_HEALTH_RECORDS_PER_SERVICE records per service
+        existing_records = [
             m for m in self.metrics_store["service_health"]
             if m.get("service_name") != service_name
-        ][-99:] + [metric]
+        ]
+        service_records = [
+            m for m in self.metrics_store["service_health"]
+            if m.get("service_name") == service_name
+        ]
+        
+        # Keep the most recent records up to the limit
+        self.metrics_store["service_health"] = existing_records + service_records[-(MAX_HEALTH_RECORDS_PER_SERVICE - 1):] + [metric]
         
         logger.debug(f"Recorded health metric for {service_name}")
         

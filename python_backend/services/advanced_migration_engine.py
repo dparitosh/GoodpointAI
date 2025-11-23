@@ -197,7 +197,8 @@ class AdvancedMigrationEngine:
             
             # Send to all connected clients for this session
             disconnected = []
-            for ws in self.active_websockets[session.session_id]:
+            websockets_copy = list(self.active_websockets[session.session_id])  # Create copy to avoid race condition
+            for ws in websockets_copy:
                 try:
                     await ws.send_json(message)
                 except Exception as e:
@@ -206,7 +207,10 @@ class AdvancedMigrationEngine:
             
             # Remove disconnected clients
             for ws in disconnected:
-                self.active_websockets[session.session_id].remove(ws)
+                try:
+                    self.active_websockets[session.session_id].remove(ws)
+                except ValueError:
+                    pass  # Already removed
     
     async def handle_event(
         self, 
