@@ -162,7 +162,7 @@ const DataProcessingHubPage = () => {
         <div className="page-header-branding">
           <img src={goodPointLogo} alt="GoodPoint" className="page-logo" />
           <div className="page-title-section">
-            <h1>🏭 Data Processing Hub</h1>
+            <h1>Data Processing Hub</h1>
             <p className="page-subtitle">AI powered PLM Data migration</p>
           </div>
         </div>
