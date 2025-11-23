@@ -23,6 +23,7 @@ export const E2ETraceRootLayout = () => {
               <ul>
                 <li><NavLink to="/processing">🏭 Processing Hub</NavLink></li>
                 <li><NavLink to="/plm-migration-visualizer">🔀 PLM Migration Visualizer</NavLink></li>
+                <li><NavLink to="/graph-explorer">🕸️ Graph Explorer</NavLink></li>
               </ul>
             </div>
           </nav>

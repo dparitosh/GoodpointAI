@@ -2,6 +2,7 @@ import { createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
 import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
 import PLMMigrationVisualizerPage from '../pages/plm/PLMMigrationVisualizerPage.jsx';
+import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 
 const router = createHashRouter([
   {
@@ -28,6 +29,13 @@ const router = createHashRouter([
         path: 'plm-migration-visualizer',
         element: <PLMMigrationVisualizerPage />,
         handle: { crumb: 'PLM Migration Visualizer' },
+      },
+      
+      // Graph Explorer (Graph Features)
+      {
+        path: 'graph-explorer',
+        element: <GraphExplorerPage />,
+        handle: { crumb: 'Graph Explorer' },
       },
     ],
   },
