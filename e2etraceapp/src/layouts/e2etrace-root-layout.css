@@ -32,6 +32,24 @@
 }
 
 .e2etrace-app-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.goodpoint-logo-img {
+  height: 40px;
+  width: auto;
+  filter: drop-shadow(0 2px 4px rgba(0, 122, 204, 0.2));
+}
+
+.e2etrace-branding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.e2etrace-title {
   font-size: var(--font-size-h6);
   font-weight: var(--font-weight-bold);
   background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover-color) 100%);
@@ -39,17 +57,15 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   text-shadow: 0 2px 4px rgba(0, 122, 204, 0.1);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  line-height: 1.2;
 }
 
-.e2etrace-app-logo i {
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover-color) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 2px 4px rgba(0, 122, 204, 0.2));
+.e2etrace-subtitle {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--accent-color);
+  letter-spacing: 0.5px;
+  opacity: 0.9;
 }
 
 .e2etrace-main-content-wrapper {
@@ -213,6 +229,18 @@
   
   .e2etrace-app-logo {
     font-size: var(--font-size-md);
+  }
+  
+  .goodpoint-logo-img {
+    height: 32px;
+  }
+  
+  .e2etrace-title {
+    font-size: var(--font-size-md);
+  }
+  
+  .e2etrace-subtitle {
+    font-size: 0.65rem;
   }
   
   .e2etrace-sidebar {

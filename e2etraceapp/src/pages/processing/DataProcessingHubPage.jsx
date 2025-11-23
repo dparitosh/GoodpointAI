@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { etlWorkflowService } from '../../services/etl-workflow-service';
 import { etlEngine } from '../../services/etl-engine';
+import goodPointLogo from '../../assets/goodpoint-logo.svg';
 import './DataProcessingHubPage.css';
 
 const DataProcessingHubPage = () => {
@@ -158,7 +159,13 @@ const DataProcessingHubPage = () => {
   return (
     <div className="data-processing-hub">
       <div className="page-header">
-        <h1>🏭 Data Processing Hub</h1>
+        <div className="page-header-branding">
+          <img src={goodPointLogo} alt="GoodPoint" className="page-logo" />
+          <div className="page-title-section">
+            <h1>🏭 Data Processing Hub</h1>
+            <p className="page-subtitle">AI powered PLM Data migration</p>
+          </div>
+        </div>
         <p className="page-description">
           Centralized Extract, Transform, Load (ETL) operations and data processing workflows
         </p>

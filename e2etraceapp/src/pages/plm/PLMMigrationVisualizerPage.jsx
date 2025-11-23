@@ -1,10 +1,12 @@
 /**
  * PLM Migration Visualizer Page
  * Main page for visualizing and controlling PLM database migration
+ * Powered by GoodPoint AI
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PLMMigrationStatechartVisualizer from '../../components/plm/PLMMigrationStatechartVisualizer.jsx';
 import { MigrationStates, MigrationEvents, getAvailableActions } from '../../machines/plmMigrationMachine.js';
+import goodPointLogo from '../../assets/goodpoint-logo.svg';
 import './PLMMigrationVisualizerPage.css';
 
 // Configuration
@@ -226,7 +228,13 @@ const PLMMigrationVisualizerPage = () => {
   return (
     <div className="plm-migration-visualizer-page">
       <div className="page-header">
-        <h1>PLM Migration Visualizer</h1>
+        <div className="page-header-content">
+          <img src={goodPointLogo} alt="GoodPoint" className="page-logo" />
+          <div className="page-title-group">
+            <h1>PLM Migration Visualizer</h1>
+            <p className="page-subtitle">AI powered PLM Data migration</p>
+          </div>
+        </div>
         <div className="connection-status">
           <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}></span>
           <span>{isConnected ? 'Connected' : 'Disconnected'}</span>

@@ -1,0 +1,11 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- GP Icon Circle -->
+  <circle cx="20" cy="20" r="18" fill="#0078D4" stroke="#005A9E" stroke-width="2"/>
+  
+  <!-- GP Letters -->
+  <text x="20" y="27" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white" text-anchor="middle">GP</text>
+  
+  <!-- GoodPoint Text -->
+  <text x="45" y="16" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#0078D4">Good</text>
+  <text x="45" y="30" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#005A9E">Point</text>
+</svg>

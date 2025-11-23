@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { E2ETraceBreadcrumbs } from '../components/e2etrace-breadcrumbs';
 import WorkflowProgress from '../components/WorkflowProgress';
+import goodPointLogo from '../assets/goodpoint-logo.svg';
 import './e2etrace-root-layout.css';
 
 export const E2ETraceRootLayout = () => {
@@ -11,7 +12,11 @@ export const E2ETraceRootLayout = () => {
     <div className="e2etrace-app-container">
       <header className="e2etrace-app-header">
         <div className="e2etrace-app-logo">
-          <i className="fas fa-project-diagram"></i> E2ETrace
+          <img src={goodPointLogo} alt="GoodPoint" className="goodpoint-logo-img" />
+          <div className="e2etrace-branding">
+            <span className="e2etrace-title">E2ETrace</span>
+            <span className="e2etrace-subtitle">AI powered PLM Data migration</span>
+          </div>
         </div>
       </header>
 

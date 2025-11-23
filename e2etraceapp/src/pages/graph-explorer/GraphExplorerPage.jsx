@@ -1,6 +1,7 @@
 /**
  * Graph Explorer Page - Main page for Neo4j graph visualization
  * Integrates with GraphQL, Neo4j GraphRAG, and migration history
+ * Powered by GoodPoint AI
  */
 
 import React, { useState, useEffect } from 'react';
@@ -13,6 +14,7 @@ import {
 } from '../../state/atoms/graphAtoms';
 import connectionService from '../../services/connectionService';
 import graphIntegrationService from '../../services/GraphIntegrationService';
+import goodPointLogo from '../../assets/goodpoint-logo.svg';
 import './GraphExplorerPage.css';
 
 const GraphExplorerPage = () => {
@@ -109,7 +111,13 @@ const GraphExplorerPage = () => {
   return (
     <div className="graph-explorer-page">
       <header className="graph-explorer-header">
-        <h1>Graph Explorer</h1>
+        <div className="header-content">
+          <img src={goodPointLogo} alt="GoodPoint" className="page-logo" />
+          <div className="header-title-group">
+            <h1>Graph Explorer</h1>
+            <p className="header-subtitle">AI powered PLM Data migration</p>
+          </div>
+        </div>
         <div className="connection-controls">
           {!connection.connected ? (
             <button onClick={handleConnect} disabled={loading}>
