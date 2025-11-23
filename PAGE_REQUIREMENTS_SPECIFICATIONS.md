@@ -52,6 +52,17 @@
 - ✅ **API for Dashboards**: `/api/analytics/uploads` returns time-series for governance views.  
 - ✅ **Migration Quality Metrics**: Track row mismatches, schema drift detection, quality scores.
 
+### 3.6 Graph Features - ETL/XState/OpenSearch Centerpiece (C-GRAPH)
+- ✅ **GraphQL Toolkit**: Schema introspection (XML/JSON), data transforms, query execution, persisted catalogue for ETL data mapping.  
+- ✅ **Neo4j GraphRAG**: Hybrid semantic search combining graph relationships with vector similarity; bridges graph data to OpenSearch.  
+- 🔄 **Graph Explorer UI**: Interactive visualization of Neo4j data, Cypher query execution, migration state history rendering.  
+- ✅ **ETL Integration**: GraphQL transforms power migration DATA_MIGRATION phase; schema discovery in DISCOVERING phase.  
+- ✅ **XState Integration**: Neo4j stores migration state transitions; Graph Explorer visualizes as interactive state graph.  
+- ✅ **OpenSearch Bridge**: GraphRAG enables hybrid search (Neo4j context + OpenSearch vectors) for semantic queries.  
+- 📝 **Data Lineage**: Track data flows from source → transform → target as Neo4j relationships (future).
+
+_See `GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md` for detailed implementation specifications._
+
 ---
 
 ## 4. Functional Requirements (FR-*)
@@ -165,13 +176,16 @@ Status Legend matches Section 3.
 ---
 
 ## 10. Reference Index
+- **Related Specifications**: 
+  - `GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md` - GraphQL toolkit, Graph Explorer, Neo4j GraphRAG (ETL/XState/OpenSearch centerpiece)
+  - `TASK_COMPLETION_VERIFICATION.md` - T-03, T-04, T-05 implementation verification
 - Frontend pages: `e2etraceapp/src/pages/gp_plm_data_management.jsx`, `e2etraceapp/src/pages/gp_processing_hub.jsx`, `e2etraceapp/src/pages/VectorSearchPage.jsx`, `e2etraceapp/src/pages/PLMMigrationVisualizerPage.jsx`.  
-- Shared components: `e2etraceapp/src/components/XStateVisualizer/XStateGraphVisualizer.jsx`, `e2etraceapp/src/components/plm/PLMMigrationStatechartVisualizer.jsx`.  
-- Backend routers: `python_backend/graph_api/opensearch_router.py`, `python_backend/graph_api/plm_xml_router.py`, `python_backend/graph_api/migration_router.py`, `python_backend/main.py`.  
-- Services: `python_backend/services/opensearch_service.py`, `python_backend/services/plm_xml_service.py`, `python_backend/services/advanced_migration_engine.py`, `python_backend/services/analytics_storage_service.py`.  
+- Shared components: `e2etraceapp/src/components/XStateVisualizer/XStateGraphVisualizer.jsx`, `e2etraceapp/src/components/plm/PLMMigrationStatechartVisualizer.jsx`, `e2etraceapp/src/components/GraphExplorer.jsx`.  
+- Backend routers: `python_backend/graph_api/opensearch_router.py`, `python_backend/graph_api/plm_xml_router.py`, `python_backend/graph_api/migration_router.py`, `python_backend/graph_api/graphql_router.py`, `python_backend/graph_api/neo4j_graphrag_router.py`, `python_backend/main.py`.  
+- Services: `python_backend/services/opensearch_service.py`, `python_backend/services/plm_xml_service.py`, `python_backend/services/advanced_migration_engine.py`, `python_backend/services/analytics_storage_service.py`, `python_backend/services/graphql_service.py`, `python_backend/services/neo4j_graphrag_service.py`.  
 - Configuration: `config/system_configuration.json`, `config/monitoring_thresholds.json`, `config/environments.json`.  
 - Tooling & Scripts: `scripts/merge_markdown.ps1`, `scripts/delete_markdown.ps1`, `start_windows.ps1`, `deploy_windows.ps1`.  
-- Tests: `python_backend/tests/test_advanced_migration_features.py`, `test_health_monitoring.py`, `test_xml_upload.py`, `test_runtime_config.py`.
+- Tests: `python_backend/tests/test_advanced_migration_features.py`, `test_health_monitoring.py`, `test_xml_upload.py`, `test_runtime_config.py`, `test_analytics_storage.py`.
 
 ---
 
