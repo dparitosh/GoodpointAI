@@ -10,6 +10,7 @@ from graph_api.config_router import router as config_router
 from graph_api.data_sources_router import router as data_sources_router
 from graph_api.data_mapping_router import router as data_mapping_router
 from graph_api.migration_router import router as migration_router
+from graph_api.analytics_router import router as analytics_router
 from nifi_api.router import router as nifi_router
 from graph_api.reporting_services import router as reporting_router
 
@@ -45,6 +46,7 @@ app.include_router(config_router)
 app.include_router(data_sources_router)
 app.include_router(data_mapping_router)
 app.include_router(migration_router)
+app.include_router(analytics_router)
 app.include_router(nifi_router)
 app.include_router(reporting_router)
 
