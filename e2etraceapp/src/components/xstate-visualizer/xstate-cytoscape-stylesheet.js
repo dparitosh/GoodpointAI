@@ -70,41 +70,22 @@ export const xstateStylesheet = [
     }
   },
 
-  // === PLM NODE TYPES (XSTATE COLOR SCHEME) ===
+  // === ETL/DATA SOURCE NODE TYPES (XSTATE COLOR SCHEME) ===
   
-  // Part Nodes
+  // Database Sources
   {
-    selector: 'node[type="Part"], node[group="Part"]',
+    selector: 'node[type="Database"], node[group="Database"], node[group="Teamcenter"], node[group="CustomDB"]',
     style: {
       'background-color': '#48a4ff',
       'color': 'white',
       'border-color': '#3b87d6',
+      'shape': 'barrel',
     }
   },
 
-  // Document Nodes
+  // File Sources - CSV
   {
-    selector: 'node[type="Document"], node[group="Document"]',
-    style: {
-      'background-color': '#6e6fff',
-      'color': 'white',
-      'border-color': '#5555e6',
-    }
-  },
-
-  // Recipe Nodes
-  {
-    selector: 'node[type="Recipe"], node[group="Recipe"]',
-    style: {
-      'background-color': '#21d5c1',
-      'color': 'white',
-      'border-color': '#1ab39f',
-    }
-  },
-
-  // Material Nodes
-  {
-    selector: 'node[type="Material"], node[group="Material"]',
+    selector: 'node[type="CSV"], node[group="CSV"]',
     style: {
       'background-color': '#ffba5a',
       'color': 'white',
@@ -112,19 +93,9 @@ export const xstateStylesheet = [
     }
   },
 
-  // Supplier Nodes
+  // File Sources - JSON
   {
-    selector: 'node[type="Supplier"], node[group="Supplier"]',
-    style: {
-      'background-color': '#ff7077',
-      'color': 'white',
-      'border-color': '#e65660',
-    }
-  },
-
-  // Batch Nodes
-  {
-    selector: 'node[type="Batch"], node[group="Batch"]',
+    selector: 'node[type="JSON"], node[group="JSON"]',
     style: {
       'background-color': '#9b6cff',
       'color': 'white',
@@ -132,13 +103,45 @@ export const xstateStylesheet = [
     }
   },
 
-  // BOM Nodes
+  // File Sources - XML/PLMXML
   {
-    selector: 'node[type="BOM"], node[group="BOM"]',
+    selector: 'node[type="XML"], node[group="XML"], node[group="PLMXML"]',
     style: {
-      'background-color': '#4caf50',
+      'background-color': '#ff7077',
       'color': 'white',
-      'border-color': '#388e3c',
+      'border-color': '#e65660',
+    }
+  },
+
+  // Processing/Transform Nodes
+  {
+    selector: 'node[type="Processor"], node[group="Processor"], node[type="Transform"], node[group="Transform"], node[type="ETL"], node[group="ETL"]',
+    style: {
+      'background-color': '#21d5c1',
+      'color': 'white',
+      'border-color': '#1ab39f',
+      'shape': 'diamond',
+    }
+  },
+
+  // API/Service Nodes
+  {
+    selector: 'node[type="API"], node[group="API"], node[type="Service"], node[group="Service"], node[type="Endpoint"], node[group="Endpoint"]',
+    style: {
+      'background-color': '#6e6fff',
+      'color': 'white',
+      'border-color': '#5555e6',
+    }
+  },
+
+  // Data Quality Issues
+  {
+    selector: 'node[type="DataQualityIssue"], node[group="DataQualityIssue"]',
+    style: {
+      'background-color': '#e74c3c',
+      'color': 'white',
+      'border-color': '#c0392b',
+      'shape': 'star',
     }
   },
 

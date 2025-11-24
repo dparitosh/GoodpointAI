@@ -1,19 +1,20 @@
-# XState-Style Visualizer for PLM Graph
+# XState-Style Visualizer for ETL & Data Migration
 
-An interactive XState-inspired graph visualization system for PLM (Product Lifecycle Management) data with advanced features and smooth animations.
+An interactive XState-inspired graph visualization system for ETL (Extract, Transform, Load) and data migration operations with advanced features and smooth animations.
 
 ## Features
 
 ### 🎨 Visual Design
 - **XState-Inspired UI**: Clean, modern interface mimicking XState Visualizer's aesthetic
 - **Dark/Light Themes**: Smooth theme switching with persistent preferences
-- **Color-Coded Nodes**: Distinct colors for each PLM entity type
-  - Part: `#48a4ff` (Blue)
-  - Document: `#6e6fff` (Purple)
-  - Recipe: `#21d5c1` (Teal)
-  - Material: `#ffba5a` (Orange)
-  - Supplier: `#ff7077` (Red)
-  - Batch: `#9b6cff` (Violet)
+- **Color-Coded Nodes**: Distinct colors for each ETL entity type
+  - Database/Teamcenter: `#48a4ff` (Blue)
+  - CSV Files: `#ffba5a` (Orange)
+  - JSON Files: `#9b6cff` (Violet)
+  - XML/PLMXML: `#ff7077` (Red)
+  - ETL/Transform: `#21d5c1` (Teal)
+  - API/Services: `#6e6fff` (Purple)
+  - Data Quality Issues: `#e74c3c` (Red Alert)
 - **Rounded Rectangles**: Soft, professional node shapes with shadows
 - **Animated Edges**: Smooth, curved connections with directional arrows
 

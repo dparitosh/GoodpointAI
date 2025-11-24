@@ -94,19 +94,28 @@ export const TreeNavigator = ({ nodes = [], onNodeClick, selectedNodeId, theme =
   );
 };
 
-// Helper function to get color based on node type
+// Helper function to get color based on node type (ETL/Data Migration)
 const getColorForType = (type) => {
   const colorMap = {
-    'Part': '#48a4ff',
-    'Document': '#6e6fff',
-    'Recipe': '#21d5c1',
-    'Material': '#ffba5a',
-    'Supplier': '#ff7077',
-    'Batch': '#9b6cff',
-    'BOM': '#4caf50',
-    'Process': '#ff9800',
-    'Database': '#4a90e2',
-    'API': '#8e44ad',
+    // Data Sources
+    'Database': '#48a4ff',
+    'Teamcenter': '#48a4ff',
+    'CustomDB': '#48a4ff',
+    'CSV': '#ffba5a',
+    'JSON': '#9b6cff',
+    'XML': '#ff7077',
+    'PLMXML': '#ff7077',
+    // Processing/Transform
+    'Processor': '#21d5c1',
+    'Transform': '#21d5c1',
+    'ETL': '#21d5c1',
+    // Services
+    'API': '#6e6fff',
+    'Service': '#6e6fff',
+    'Endpoint': '#6e6fff',
+    // Issues
+    'DataQualityIssue': '#e74c3c',
+    // Default
     'default': '#95a5a6'
   };
   return colorMap[type] || colorMap['default'];

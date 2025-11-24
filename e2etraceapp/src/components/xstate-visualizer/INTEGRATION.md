@@ -20,7 +20,7 @@ const graphData = {
     {
       id: 'unique-id',
       label: 'Display Name',
-      type: 'Part',  // or Document, Recipe, Material, Supplier, Batch, BOM
+      type: 'Database',  // or CSV, JSON, XML, ETL, Transform, API, Service, DataQualityIssue
       properties: {
         // Custom properties
       },
@@ -31,8 +31,8 @@ const graphData = {
     {
       source: 'node-id-1',
       target: 'node-id-2',
-      label: 'HAS_PART',
-      type: 'HAS_PART'
+      label: 'EXTRACT',
+      type: 'EXTRACT'  // or LOAD, TRANSFORM, INDEX, etc.
     }
   ]
 };
