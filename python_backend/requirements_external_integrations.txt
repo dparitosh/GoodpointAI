@@ -1,0 +1,102 @@
+# Core FastAPI & Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+httpx==0.27.2
+aiofiles==24.1.0
+
+# Database & ORM
+sqlalchemy==2.0.35
+alembic==1.13.1
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Graph Databases
+neo4j==5.25.0
+
+# NoSQL Databases
+pymongo==4.10.1
+redis==5.1.1
+
+# Data Validation & Settings
+pydantic==2.9.2
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+
+# Azure Cloud Services
+azure-storage-blob==12.23.1
+azure-storage-file-datalake==12.17.0
+azure-identity==1.19.0
+azure-keyvault-secrets==4.9.0
+azure-cosmos==4.7.0
+azure-servicebus==7.12.3
+azure-eventhub==5.11.7
+azure-monitor-opentelemetry==1.6.3
+
+# AWS Cloud Services
+boto3==1.35.77
+aioboto3==13.2.0
+botocore==1.35.77
+
+# Google Cloud (Optional)
+google-cloud-storage==2.18.2
+google-cloud-bigquery==3.26.0
+
+# OData & REST APIs
+requests==2.32.3
+requests-oauthlib==2.0.0
+oauthlib==3.2.2
+pyodata==1.13.0
+
+# LLM & AI Services
+openai==1.57.0
+anthropic==0.39.0
+langchain==0.3.9
+langchain-openai==0.2.9
+langchain-community==0.3.8
+tiktoken==0.8.0
+
+# Ollama Local LLM
+ollama==0.4.4
+
+# PLM System Integrations
+zeep==4.2.1  # SOAP client for PLM APIs
+xmltodict==0.14.2
+lxml==5.3.0
+
+# File Format Support
+openpyxl==3.1.5
+pandas==2.2.3
+pyarrow==18.1.0
+xlrd==2.0.1
+python-docx==1.1.2
+
+# XML/JSON Processing
+xmlschema==3.4.3
+jsonschema==4.23.0
+pyyaml==6.0.2
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==44.0.0
+
+# Monitoring & Logging
+prometheus-client==0.21.0
+sentry-sdk==2.18.0
+
+# Task Queue & Background Jobs
+celery==5.4.0
+kombu==5.4.2
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+httpx==0.27.2
+
+# Utilities
+python-dateutil==2.9.0
+tenacity==9.0.0
+schedule==1.2.2
+cachetools==5.5.0

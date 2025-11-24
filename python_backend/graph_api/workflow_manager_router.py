@@ -69,90 +69,9 @@ async def list_workflows(
     - search: Search in workflow name and description
     """
     # TODO: Implement actual database query
-    # For now, return mock data
-    
-    mock_workflows = [
-        {
-            "id": "wf_teamcenter_neo4j_001",
-            "name": "Teamcenter → Neo4j Migration",
-            "description": "Migrate 125K parts from Teamcenter to Neo4j Knowledge Graph",
-            "source_id": "teamcenter_prod",
-            "source_name": "Teamcenter Production",
-            "source_type": "teamcenter",
-            "target_id": "neo4j_prod",
-            "target_name": "Neo4j Knowledge Graph",
-            "target_type": "neo4j",
-            "status": WorkflowStatus.RUNNING,
-            "current_stage": WorkflowStage.TRANSFORMING,
-            "progress_percentage": 67.5,
-            "total_records": 125000,
-            "processed_records": 84375,
-            "failed_records": 234,
-            "quality_score": 97.8,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-            "started_at": datetime.now(),
-            "completed_at": None,
-            "created_by": "admin@company.com",
-            "schedule_enabled": True,
-            "schedule_cron": "0 2 * * *",
-            "next_run_at": datetime.now()
-        },
-        {
-            "id": "wf_windchill_cloudplm_002",
-            "name": "Windchill → Cloud PLM Migration",
-            "description": "Migrate change orders and workflows to Cloud PLM",
-            "source_id": "windchill_prod",
-            "source_name": "Windchill Production",
-            "source_type": "windchill",
-            "target_id": "cloud_plm_prod",
-            "target_name": "Cloud PLM Production",
-            "target_type": "cloud_plm",
-            "status": WorkflowStatus.COMPLETED,
-            "current_stage": WorkflowStage.FINALIZING,
-            "progress_percentage": 100.0,
-            "total_records": 98000,
-            "processed_records": 97766,
-            "failed_records": 0,
-            "quality_score": 99.2,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-            "started_at": datetime.now(),
-            "completed_at": datetime.now(),
-            "created_by": "admin@company.com",
-            "schedule_enabled": False,
-            "schedule_cron": None,
-            "next_run_at": None
-        },
-        {
-            "id": "wf_catia_opensearch_003",
-            "name": "CATIA → OpenSearch Index",
-            "description": "Index CAD models and metadata for search",
-            "source_id": "catia_v6",
-            "source_name": "CATIA V6",
-            "source_type": "catia",
-            "target_id": "opensearch_prod",
-            "target_name": "OpenSearch Production",
-            "target_type": "opensearch",
-            "status": WorkflowStatus.DRAFT,
-            "current_stage": WorkflowStage.IDLE,
-            "progress_percentage": 0.0,
-            "total_records": 34000,
-            "processed_records": 0,
-            "failed_records": 0,
-            "quality_score": None,
-            "created_at": datetime.now(),
-            "updated_at": datetime.now(),
-            "started_at": None,
-            "completed_at": None,
-            "created_by": "admin@company.com",
-            "schedule_enabled": False,
-            "schedule_cron": None,
-            "next_run_at": None
-        }
-    ]
-    
-    return [WorkflowInstanceResponse(**wf) for wf in mock_workflows]
+    # Return empty list until database integration is complete
+    logger.info(f"Listing workflows with filters - status: {status}, source_type: {source_type}, target_type: {target_type}, search: {search}")
+    return []
 
 
 @router.post("/", response_model=WorkflowInstanceResponse, status_code=201)
@@ -198,7 +117,6 @@ async def create_workflow(
         # db.commit()
         # db.refresh(db_workflow)
         
-        # Mock response
         return WorkflowInstanceResponse(
             id=workflow_id,
             name=workflow.name,

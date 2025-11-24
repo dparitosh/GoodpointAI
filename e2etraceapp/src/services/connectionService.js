@@ -46,8 +46,8 @@ class ConnectionService {
     try {
       this.emit('connecting', { uri, user });
       
-      // In production, establish actual Neo4j connection
-      // For now, mock successful connection
+      // TODO: Establish actual Neo4j connection via backend API
+      // For now, connection is handled by backend
       this.connectionInfo = {
         config: { uri, user, auto_connect: false },
         status: 'connected'

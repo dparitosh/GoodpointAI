@@ -14,9 +14,11 @@ export const E2ETraceBreadcrumbs = () => {
       const isLast = index === array.length - 1;
       const path = match.pathname; // Use full pathname for linking
       const crumbText = match.handle.crumb;
+      // Create unique key by combining path and index to avoid duplicate key warnings
+      const uniqueKey = `${path}-${index}`;
 
       return (
-        <span key={path} className="e2etrace-breadcrumb-item">
+        <span key={uniqueKey} className="e2etrace-breadcrumb-item">
           {isLast ? (
             <span className="e2etrace-breadcrumb-current">{crumbText}</span>
           ) : (

@@ -56,35 +56,23 @@ const DataExportPage = () => {
       setAvailableDatasets([...datasets, ...relationships]);
     } catch (error) {
       console.error('Failed to load datasets:', error);
-      // Fallback mock data
-      setAvailableDatasets([
-        { id: 'nodes', name: 'All Nodes', type: 'neo4j_node', count: 1250, description: 'All graph nodes' },
-        { id: 'relationships', name: 'All Relationships', type: 'neo4j_relationship', count: 3400, description: 'All graph relationships' },
-        { id: 'analytics', name: 'Analytics Data', type: 'computed', count: 89, description: 'Computed analytics results' }
-      ]);
+      setAvailableDatasets([]);
     }
   };
 
-  const loadExportHistory = () => {
-    // Mock export history - in real app, load from backend
-    setExportHistory([
-      {
-        id: 1,
-        timestamp: new Date('2024-01-15T10:30:00'),
-        format: 'excel',
-        datasets: ['nodes', 'relationships'],
-        fileSize: '2.3 MB',
-        status: 'completed'
-      },
-      {
-        id: 2,
-        timestamp: new Date('2024-01-14T15:45:00'),
-        format: 'csv',
-        datasets: ['analytics'],
-        fileSize: '156 KB',
-        status: 'completed'
+  const loadExportHistory = async () => {
+    try {
+      const response = await fetch('/api/export/history');
+      if (response.ok) {
+        const history = await response.json();
+        setExportHistory(history);
+      } else {
+        setExportHistory([]);
       }
-    ]);
+    } catch (error) {
+      console.error('Failed to load export history:', error);
+      setExportHistory([]);
+    }
   };
 
   const handleDatasetSelection = (datasetId) => {

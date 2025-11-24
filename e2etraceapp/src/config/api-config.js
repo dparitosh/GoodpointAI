@@ -358,13 +358,13 @@ export const executeBatchOperations = async (operations) => {
 export const getEnvironmentFeatures = () => {
   const features = {
     development: {
-      enableMockData: true,
+      enableMockData: false,
       enableDebugLogs: true,
       skipAuthentication: true,
       enableHotReload: true
     },
     testing: {
-      enableMockData: true,
+      enableMockData: false,
       enableDebugLogs: true,
       skipAuthentication: true,
       enableHotReload: false
