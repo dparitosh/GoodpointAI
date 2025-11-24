@@ -50,9 +50,9 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
     return grouped;
   }, [nodes, stages]);
 
-  // Calculate connections between stages
-  const stageConnections = useMemo(() => {
-    const connections = new Set();
+  // Calculate detailed connections for visualization
+  const flowConnections = useMemo(() => {
+    const connections = [];
     
     edges.forEach(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
@@ -66,14 +66,47 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
           nodesByStage[stage].some(n => n.id === targetNode.id)
         );
         
-        if (sourceStage && targetStage && sourceStage !== targetStage) {
-          connections.add(`${sourceStage}->${targetStage}`);
+        if (sourceStage && targetStage) {
+          connections.push({
+            id: edge.id || `${edge.source}-${edge.target}`,
+            source: edge.source,
+            target: edge.target,
+            sourceNode,
+            targetNode,
+            sourceStage,
+            targetStage,
+            label: edge.label || edge.type,
+            type: edge.type,
+            weight: edge.weight || 1
+          });
         }
       }
     });
 
-    return Array.from(connections);
+    return connections;
   }, [edges, nodes, nodesByStage]);
+
+  // Calculate stage-to-stage flow lines
+  const stageFlowLines = useMemo(() => {
+    const lines = new Map();
+    
+    flowConnections.forEach(conn => {
+      const key = `${conn.sourceStage}-${conn.targetStage}`;
+      if (!lines.has(key)) {
+        lines.set(key, {
+          from: conn.sourceStage,
+          to: conn.targetStage,
+          count: 0,
+          connections: []
+        });
+      }
+      const line = lines.get(key);
+      line.count++;
+      line.connections.push(conn);
+    });
+
+    return Array.from(lines.values());
+  }, [flowConnections]);
 
   const getNodeIcon = (node) => {
     const type = (node.type || '').toLowerCase();
@@ -97,7 +130,7 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
   return (
     <div className="swimlane-container">
       <div className="swimlane-header">
-        <h3>ETL Workflow Pipeline</h3>
+        <h3>ETL Workflow Pipeline - Interactive State Flow</h3>
         <div className="swimlane-stats">
           <span className="stat">
             <span className="stat-label">Total Nodes:</span>
@@ -111,10 +144,37 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
             <span className="stat-label">Stages:</span>
             <span className="stat-value">{stages.length}</span>
           </span>
+          <span className="stat">
+            <span className="stat-label">Flow Lines:</span>
+            <span className="stat-value">{stageFlowLines.length}</span>
+          </span>
         </div>
       </div>
 
-      <div className="swimlane-stages">
+      <div className="swimlane-wrapper">
+        {/* Stage Flow Indicators */}
+        <div className="stage-flow-indicators">
+          {stages.map((stage, idx) => (
+            <React.Fragment key={stage.id}>
+              <div className="stage-indicator" style={{ backgroundColor: stage.color }}>
+                <span className="stage-indicator-label">{stage.label}</span>
+              </div>
+              {idx < stages.length - 1 && (
+                <div className="stage-flow-arrow">
+                  <div className="flow-line"></div>
+                  <div className="flow-arrow">➜</div>
+                  <div className="flow-count">
+                    {stageFlowLines.find(l => 
+                      stages[idx].id === l.from && stages[idx + 1].id === l.to
+                    )?.count || 0}
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        <div className="swimlane-stages">
         {stages.map(stage => (
           <div key={stage.id} className="swimlane-stage" data-stage={stage.id}>
             <div className="swimlane-stage-header" style={{ backgroundColor: stage.color }}>
@@ -159,9 +219,46 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
           </div>
         ))}
       </div>
+      </div>
 
-      {/* Flow Connections Overlay */}
-      <svg className="swimlane-connections" aria-hidden="true">
+      {/* Interactive Flow Connections */}
+      <div className="swimlane-flow-details">
+        <h4>Active Data Flows ({flowConnections.length})</h4>
+        <div className="flow-connections-list">
+          {flowConnections.slice(0, 10).map((conn) => (
+            <div 
+              key={conn.id} 
+              className={`flow-connection-item ${
+                selectedNode?.id === conn.source || selectedNode?.id === conn.target ? 'highlighted' : ''
+              }`}
+              onClick={() => {
+                if (onNodeClick) {
+                  onNodeClick(selectedNode?.id === conn.source ? conn.targetNode : conn.sourceNode);
+                }
+              }}
+            >
+              <div className="flow-source">
+                {getNodeIcon(conn.sourceNode)} {conn.sourceNode.label}
+              </div>
+              <div className="flow-arrow-label">
+                <div className="flow-type">{conn.label || conn.type}</div>
+                <div className="flow-arrow-icon">→</div>
+              </div>
+              <div className="flow-target">
+                {getNodeIcon(conn.targetNode)} {conn.targetNode.label}
+              </div>
+            </div>
+          ))}
+          {flowConnections.length > 10 && (
+            <div className="flow-more">
+              +{flowConnections.length - 10} more connections
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SVG Connection Lines Overlay */}
+      <svg className="swimlane-connections-svg" aria-hidden="true">
         <defs>
           <marker
             id="arrowhead-swimlane"
@@ -171,9 +268,37 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
             refY="3"
             orient="auto"
           >
-            <polygon points="0 0, 10 3, 0 6" fill="#0078D4" />
+            <polygon points="0 0, 10 3, 0 6" fill="#0078D4" opacity="0.6" />
           </marker>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
         </defs>
+        {/* Draw connections between selected node and related nodes */}
+        {selectedNode && flowConnections
+          .filter(conn => conn.source === selectedNode.id || conn.target === selectedNode.id)
+          .map((conn, idx) => (
+            <g key={conn.id}>
+              <line
+                x1="20%"
+                y1={`${(idx + 1) * 10}%`}
+                x2="80%"
+                y2={`${(idx + 1) * 10}%`}
+                stroke="#0078D4"
+                strokeWidth="2"
+                strokeDasharray="5,5"
+                opacity="0.6"
+                markerEnd="url(#arrowhead-swimlane)"
+                filter="url(#glow)"
+                className="connection-line-animated"
+              />
+            </g>
+          ))
+        }
       </svg>
     </div>
   );

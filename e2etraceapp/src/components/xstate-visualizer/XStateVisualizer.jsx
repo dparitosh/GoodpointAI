@@ -5,6 +5,7 @@ import { InspectorPanel } from './InspectorPanel';
 import { EventPanel } from './EventPanel';
 import { DetailDrawer } from './DetailDrawer';
 import { SwimLaneLayout } from './SwimLaneLayout';
+import { StateFlowDiagram } from './StateFlowDiagram';
 import { E2ETraceCytoscapeGraph } from '../../pages/dashboard/e2etrace-cytoscape-graph';
 import { xstateStylesheet, xstateStylesheetDark } from './xstate-cytoscape-stylesheet';
 import { useAdvancedCytoscapeInteractions } from '../../hooks/useAdvancedCytoscapeInteractions';
@@ -12,7 +13,8 @@ import './XStateVisualizer.css';
 
 /**
  * XState Visualizer Main Component
- * Complete XState-style graph visualization with 3-panel layout + swimlane workflow view
+ * Complete XState-style graph visualization with 3-panel layout
+ * Modes: Graph View, Swimlane Workflow, State Flow Diagram
  */
 export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
   const [theme, setTheme] = useState('light');
@@ -20,7 +22,7 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
   const [events, setEvents] = useState([]);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [detailDrawerNode, setDetailDrawerNode] = useState(null);
-  const [viewMode, setViewMode] = useState('graph'); // 'graph' or 'swimlane'
+  const [viewMode, setViewMode] = useState('stateflow'); // 'graph', 'swimlane', or 'stateflow'
   const cyRef = useRef(null);
 
   // Convert graph data to tree structure for navigator
@@ -305,6 +307,13 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
         </button>
         <div className="xstate-visualizer__view-toggle">
           <button
+            className={`view-toggle-btn ${viewMode === 'stateflow' ? 'active' : ''}`}
+            onClick={() => setViewMode('stateflow')}
+            title="State Flow Diagram - XState Style"
+          >
+            🔀 State Flow
+          </button>
+          <button
             className={`view-toggle-btn ${viewMode === 'graph' ? 'active' : ''}`}
             onClick={() => setViewMode('graph')}
             title="Graph View"
@@ -316,7 +325,7 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
             onClick={() => setViewMode('swimlane')}
             title="Swimlane Workflow View"
           >
-            📊 Workflow
+            📊 Swimlane
           </button>
         </div>
       </div>
@@ -329,7 +338,47 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
         theme={theme}
       />
 
-      {viewMode === 'graph' ? (
+      {viewMode === 'stateflow' ? (
+        <XStateLayout
+          theme={theme}
+          treePanel={
+            <TreeNavigator
+              nodes={treeNodes}
+              onNodeClick={handleNodeClick}
+              selectedNodeId={selectedNode?.id}
+              theme={theme}
+            />
+          }
+          graphPanel={
+            <StateFlowDiagram
+              nodes={graphData?.nodes || []}
+              edges={graphData?.edges || []}
+              selectedNode={selectedNode}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={(node) => {
+                setDetailDrawerNode(node);
+                setIsDetailDrawerOpen(true);
+              }}
+              theme={theme}
+              layout="fcose"
+            />
+          }
+          inspectorPanel={
+            <InspectorPanel
+              selectedNode={selectedNode}
+              onPropertyChange={handlePropertyChange}
+              theme={theme}
+            />
+          }
+          eventPanel={
+            <EventPanel
+              events={events}
+              onEventClick={handleEventClick}
+              theme={theme}
+            />
+          }
+        />
+      ) : viewMode === 'graph' ? (
         <XStateLayout
           theme={theme}
           treePanel={
