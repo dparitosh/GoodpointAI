@@ -1,8 +1,6 @@
 import { createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
 import XStateLandingPage from '../pages/xstate-landing/XStateLandingPage.jsx';
-import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
-import PLMMigrationVisualizerPage from '../pages/plm/PLMMigrationVisualizerPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
@@ -18,20 +16,6 @@ const router = createHashRouter([
         index: true, 
         element: <XStateLandingPage />, 
         handle: { crumb: 'Interactive State Flow' } 
-      },
-      
-      // Data Processing
-      {
-        path: 'processing',
-        element: <DataProcessingHubPage />,
-        handle: { crumb: 'Data Processing Hub' },
-      },
-      
-      // PLM Migration Visualizer (T-04)
-      {
-        path: 'plm-migration-visualizer',
-        element: <PLMMigrationVisualizerPage />,
-        handle: { crumb: 'PLM Migration Visualizer' },
       },
       
       // Graph Explorer (Graph Features)
