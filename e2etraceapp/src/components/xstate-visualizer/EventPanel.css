@@ -1,0 +1,293 @@
+/* Event Panel Styles */
+
+.event-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Toolbar */
+.event-panel__toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid;
+  flex-shrink: 0;
+}
+
+.event-panel--light .event-panel__toolbar {
+  background-color: #f8f9fa;
+  border-bottom-color: #e1e4e8;
+}
+
+.event-panel--dark .event-panel__toolbar {
+  background-color: #1e1e1e;
+  border-bottom-color: #3e3e42;
+}
+
+.event-panel__clear-btn,
+.event-panel__export-btn {
+  padding: 6px 12px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: none;
+}
+
+.event-panel--light .event-panel__clear-btn,
+.event-panel--light .event-panel__export-btn {
+  border-color: #d1d5db;
+  color: #586069;
+}
+
+.event-panel--light .event-panel__clear-btn:hover,
+.event-panel--light .event-panel__export-btn:hover {
+  background-color: #e9ecef;
+  border-color: #a8b1bd;
+}
+
+.event-panel--dark .event-panel__clear-btn,
+.event-panel--dark .event-panel__export-btn {
+  border-color: #3e3e42;
+  color: #a8b1bd;
+}
+
+.event-panel--dark .event-panel__clear-btn:hover,
+.event-panel--dark .event-panel__export-btn:hover {
+  background-color: #2d2d30;
+  border-color: #4e4e52;
+}
+
+/* Content */
+.event-panel__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Event Item */
+.event-panel__event {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 3px solid;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  animation: slideInEvent 0.3s ease;
+}
+
+@keyframes slideInEvent {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.event-panel--light .event-panel__event {
+  background-color: #f8f9fa;
+  border-left-color: #cbd2d9;
+}
+
+.event-panel--light .event-panel__event:hover {
+  background-color: #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.event-panel--dark .event-panel__event {
+  background-color: #1e1e1e;
+  border-left-color: #4e4e52;
+}
+
+.event-panel--dark .event-panel__event:hover {
+  background-color: #2d2d30;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Event Type-specific Colors */
+.event-panel__event--migration {
+  border-left-color: #007acc !important;
+}
+
+.event-panel__event--validation {
+  border-left-color: #28a745 !important;
+}
+
+.event-panel__event--error,
+.event-panel__event--failure {
+  border-left-color: #dc3545 !important;
+}
+
+.event-panel--light .event-panel__event--error,
+.event-panel--light .event-panel__event--failure {
+  background-color: #fff5f5;
+}
+
+.event-panel--dark .event-panel__event--error,
+.event-panel--dark .event-panel__event--failure {
+  background-color: #2d1515;
+}
+
+.event-panel__event--warning {
+  border-left-color: #ffc107 !important;
+}
+
+.event-panel--light .event-panel__event--warning {
+  background-color: #fffbf0;
+}
+
+.event-panel--dark .event-panel__event--warning {
+  background-color: #2d2815;
+}
+
+.event-panel__event--success,
+.event-panel__event--completed {
+  border-left-color: #28a745 !important;
+}
+
+.event-panel--light .event-panel__event--success,
+.event-panel--light .event-panel__event--completed {
+  background-color: #f0fff4;
+}
+
+.event-panel--dark .event-panel__event--success,
+.event-panel--dark .event-panel__event--completed {
+  background-color: #152d1f;
+}
+
+.event-panel__event--info {
+  border-left-color: #17a2b8 !important;
+}
+
+.event-panel__event--processing {
+  border-left-color: #6c757d !important;
+}
+
+/* Event Icon */
+.event-panel__event-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Event Content */
+.event-panel__event-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-panel__event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.event-panel__event-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.event-panel__event-timestamp {
+  font-size: 11px;
+  opacity: 0.6;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  flex-shrink: 0;
+}
+
+.event-panel__event-details {
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.event-panel__event-nodes {
+  font-size: 11px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.event-panel--light .event-panel__event-nodes {
+  background-color: #e9ecef;
+  color: #495057;
+}
+
+.event-panel--dark .event-panel__event-nodes {
+  background-color: #2d2d30;
+  color: #a8b1bd;
+}
+
+/* Empty State */
+.event-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  opacity: 0.5;
+  padding: 32px 16px;
+}
+
+.event-panel__empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.event-panel__empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Scrollbar */
+.event-panel__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.event-panel--light .event-panel__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.event-panel--light .event-panel__content::-webkit-scrollbar-thumb {
+  background: #cbd2d9;
+  border-radius: 3px;
+}
+
+.event-panel--light .event-panel__content::-webkit-scrollbar-thumb:hover {
+  background: #a8b1bd;
+}
+
+.event-panel--dark .event-panel__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.event-panel--dark .event-panel__content::-webkit-scrollbar-thumb {
+  background: #3e3e42;
+  border-radius: 3px;
+}
+
+.event-panel--dark .event-panel__content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e52;
+}

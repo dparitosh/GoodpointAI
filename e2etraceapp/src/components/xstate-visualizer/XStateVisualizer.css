@@ -1,0 +1,194 @@
+/* XState Visualizer Main Styles */
+
+.xstate-visualizer {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  overflow: hidden;
+}
+
+.xstate-visualizer--light {
+  background-color: #f5f7fa;
+  color: #2c3e50;
+}
+
+.xstate-visualizer--dark {
+  background-color: #1e1e1e;
+  color: #e4e6eb;
+}
+
+/* Theme Toggle Button */
+.xstate-visualizer__theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.xstate-visualizer--light .xstate-visualizer__theme-toggle {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.xstate-visualizer--light .xstate-visualizer__theme-toggle:hover {
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  transform: scale(1.05);
+}
+
+.xstate-visualizer--dark .xstate-visualizer__theme-toggle {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.xstate-visualizer--dark .xstate-visualizer__theme-toggle:hover {
+  box-shadow: 0 6px 16px rgba(240, 147, 251, 0.4);
+  transform: scale(1.05);
+}
+
+/* Graph Controls Overlay */
+.xstate-visualizer__controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.xstate-visualizer__control-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.xstate-visualizer--light .xstate-visualizer__control-btn {
+  background-color: white;
+  color: #2c3e50;
+  border: 1px solid #e1e4e8;
+}
+
+.xstate-visualizer--light .xstate-visualizer__control-btn:hover {
+  background-color: #f8f9fa;
+  border-color: #007acc;
+  color: #007acc;
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.2);
+}
+
+.xstate-visualizer--dark .xstate-visualizer__control-btn {
+  background-color: #252526;
+  color: #e4e6eb;
+  border: 1px solid #3e3e42;
+}
+
+.xstate-visualizer--dark .xstate-visualizer__control-btn:hover {
+  background-color: #2d2d30;
+  border-color: #007acc;
+  color: #64b5f6;
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+}
+
+.xstate-visualizer__control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Animation keyframes */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0, 122, 204, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 122, 204, 0.6);
+  }
+}
+
+/* Loading State */
+.xstate-visualizer__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.xstate-visualizer__loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.xstate-visualizer--light .xstate-visualizer__loading-spinner {
+  border-color: #e1e4e8;
+  border-top-color: #007acc;
+}
+
+.xstate-visualizer--dark .xstate-visualizer__loading-spinner {
+  border-color: #3e3e42;
+  border-top-color: #64b5f6;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.xstate-visualizer__loading-text {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .xstate-visualizer__theme-toggle {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    top: 12px;
+    right: 12px;
+  }
+
+  .xstate-visualizer__controls {
+    top: 12px;
+    right: 12px;
+  }
+
+  .xstate-visualizer__control-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+}
