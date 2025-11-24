@@ -472,10 +472,32 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
   );
 };
 
-// Helper function to get color based on node type (ETL/Data Migration)
+// Helper function to get color based on node type (PLM Data Migration AI Factory)
 const getColorForType = (type) => {
   const colorMap = {
-    // Data Sources
+    // PLM Sources
+    'plm_source': '#4A90E2',      // Blue - Teamcenter, Windchill
+    'cad_source': '#9B59B6',      // Purple - CATIA, NX, Creo
+    
+    // AI Agents
+    'ai_agent': '#FF6B6B',        // Coral Red - AI Orchestration Layer
+    
+    // Extract
+    'extract': '#21d5c1',         // Cyan - Extraction processes
+    
+    // Transform
+    'transform': '#F39C12',       // Orange - Transformations
+    
+    // Quality (SODA)
+    'quality': '#27AE60',         // Green - Quality checks
+    
+    // Load
+    'load': '#8E44AD',            // Deep Purple - Loading stages
+    
+    // Target Systems
+    'target': '#34495E',          // Dark Slate - Target systems
+    
+    // Legacy support
     'Database': '#48a4ff',
     'Teamcenter': '#48a4ff',
     'CustomDB': '#48a4ff',
@@ -483,17 +505,12 @@ const getColorForType = (type) => {
     'JSON': '#9b6cff',
     'XML': '#ff7077',
     'PLMXML': '#ff7077',
-    // Processing/Transform
     'Processor': '#21d5c1',
-    'Transform': '#21d5c1',
     'ETL': '#21d5c1',
-    // Services
     'API': '#6e6fff',
     'Service': '#6e6fff',
     'Endpoint': '#6e6fff',
-    // Issues
     'DataQualityIssue': '#e74c3c',
-    // Default
     'default': '#95a5a6'
   };
   return colorMap[type] || colorMap['default'];

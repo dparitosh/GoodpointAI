@@ -473,15 +473,37 @@ const getStylesheet = (theme) => {
   ];
 };
 
-// Helper: Get color for node type
+// Helper: Get color for node type (PLM Data Migration AI Factory)
 const getColorForType = (type) => {
   const colorMap = {
+    // PLM Sources
+    'plm_source': '#4A90E2',      // Blue - Teamcenter, Windchill
+    'cad_source': '#9B59B6',      // Purple - CATIA, NX, Creo
+    
+    // AI Agents
+    'ai_agent': '#FF6B6B',        // Coral Red - AI Orchestration Layer
+    
+    // Extract
+    'extract': '#21d5c1',         // Cyan - Extraction processes
+    
+    // Transform
+    'transform': '#F39C12',       // Orange - Transformations
+    
+    // Quality (SODA)
+    'quality': '#27AE60',         // Green - Quality checks
+    
+    // Load
+    'load': '#8E44AD',            // Deep Purple - Loading stages
+    
+    // Target Systems
+    'target': '#34495E',          // Dark Slate - Target systems
+    
+    // Legacy support
     'Database': '#48a4ff',
     'CSV': '#ffba5a',
     'JSON': '#9b6cff',
     'XML': '#ff7077',
     'Processor': '#21d5c1',
-    'Transform': '#21d5c1',
     'ETL': '#21d5c1',
     'API': '#6e6fff',
     'Service': '#6e6fff',
