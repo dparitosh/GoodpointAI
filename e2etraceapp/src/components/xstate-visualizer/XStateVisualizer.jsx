@@ -3,8 +3,10 @@ import { XStateLayout } from './XStateLayout';
 import { TreeNavigator } from './TreeNavigator';
 import { InspectorPanel } from './InspectorPanel';
 import { EventPanel } from './EventPanel';
+import { DetailDrawer } from './DetailDrawer';
 import { E2ETraceCytoscapeGraph } from '../../pages/dashboard/e2etrace-cytoscape-graph';
 import { xstateStylesheet, xstateStylesheetDark } from './xstate-cytoscape-stylesheet';
+import { useAdvancedCytoscapeInteractions } from '../../hooks/useAdvancedCytoscapeInteractions';
 import './XStateVisualizer.css';
 
 /**
@@ -15,6 +17,8 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
   const [theme, setTheme] = useState('light');
   const [selectedNode, setSelectedNode] = useState(null);
   const [events, setEvents] = useState([]);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [detailDrawerNode, setDetailDrawerNode] = useState(null);
   const cyRef = useRef(null);
 
   // Convert graph data to tree structure for navigator
@@ -195,6 +199,49 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
       }));
   };
 
+  // Handle double-click on nodes
+  const handleNodeDoubleClick = useCallback((nodeData) => {
+    const fullNode = {
+      ...nodeData,
+      relationships: getNodeRelationships(nodeData.id, graphData)
+    };
+    
+    setDetailDrawerNode(fullNode);
+    setIsDetailDrawerOpen(true);
+
+    addEvent({
+      type: 'info',
+      title: 'Node Detail View',
+      details: `Opened detailed view for ${nodeData.label || nodeData.id}`,
+      timestamp: new Date().toISOString(),
+      affectedNodes: [nodeData.id]
+    });
+  }, [graphData]);
+
+  // Handle multi-select
+  const handleMultiSelect = useCallback((nodeIds) => {
+    addEvent({
+      type: 'info',
+      title: 'Multi-Select',
+      details: `Selected ${nodeIds.length} nodes`,
+      timestamp: new Date().toISOString(),
+      affectedNodes: nodeIds
+    });
+  }, []);
+
+  // Handle canvas pan
+  const handleCanvasPan = useCallback(() => {
+    // Optional: Add logic for pan tracking
+  }, []);
+
+  // Setup advanced interactions
+  useAdvancedCytoscapeInteractions(cyRef, {
+    onNodeDoubleClick: handleNodeDoubleClick,
+    onMultiSelect: handleMultiSelect,
+    onCanvasPan: handleCanvasPan,
+    enableSmartSnapping: true
+  });
+
   // Setup cytoscape event listeners
   useEffect(() => {
     if (!cyRef.current) return;
@@ -253,6 +300,14 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
       >
         {theme === 'light' ? '🌙' : '☀️'}
       </button>
+
+      {/* Detail Drawer */}
+      <DetailDrawer
+        node={detailDrawerNode}
+        isOpen={isDetailDrawerOpen}
+        onClose={() => setIsDetailDrawerOpen(false)}
+        theme={theme}
+      />
 
       <XStateLayout
         theme={theme}

@@ -138,7 +138,7 @@ export const xstateStylesheet = [
     style: {
       'background-color': '#4caf50',
       'color': 'white',
-      'border-color': #388e3c',
+      'border-color': '#388e3c',
     }
   },
 
