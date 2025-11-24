@@ -3,6 +3,8 @@ import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
 import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
 import PLMMigrationVisualizerPage from '../pages/plm/PLMMigrationVisualizerPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
+import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx';
+import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 
 const router = createHashRouter([
   {
@@ -36,6 +38,20 @@ const router = createHashRouter([
         path: 'graph-explorer',
         element: <GraphExplorerPage />,
         handle: { crumb: 'Graph Explorer' },
+      },
+      
+      // Data Quality Dashboard (SODA)
+      {
+        path: 'data-quality',
+        element: <DataQualityDashboard />,
+        handle: { crumb: 'Data Quality' },
+      },
+      
+      // Observability Dashboard
+      {
+        path: 'observability',
+        element: <ObservabilityDashboard />,
+        handle: { crumb: 'Observability' },
       },
     ],
   },

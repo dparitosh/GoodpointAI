@@ -31,6 +31,14 @@ export const E2ETraceRootLayout = () => {
                 <li><NavLink to="/graph-explorer">Graph Explorer</NavLink></li>
               </ul>
             </div>
+            
+            <div className="nav-section">
+              <h3 className="nav-section-title">Quality & Monitoring</h3>
+              <ul>
+                <li><NavLink to="/data-quality">Data Quality (SODA)</NavLink></li>
+                <li><NavLink to="/observability">Observability</NavLink></li>
+              </ul>
+            </div>
           </nav>
         </aside>
         <div className="e2etrace-content-area">
