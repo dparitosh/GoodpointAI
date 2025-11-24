@@ -19,6 +19,75 @@
 }
 
 /* Theme Toggle Button */
+.xstate-visualizer__toolbar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.xstate-visualizer__theme-toggle {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.xstate-visualizer__view-toggle {
+  display: flex;
+  background: white;
+  border-radius: 24px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.xstate-visualizer__view-toggle .view-toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #586069;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xstate-visualizer__view-toggle .view-toggle-btn:hover {
+  background: #f6f8fa;
+}
+
+.xstate-visualizer__view-toggle .view-toggle-btn.active {
+  background: var(--primary-color, #0078D4);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 120, 212, 0.3);
+}
+
+.xstate-visualizer--dark .xstate-visualizer__view-toggle {
+  background: #2d2d30;
+}
+
+.xstate-visualizer--dark .xstate-visualizer__view-toggle .view-toggle-btn {
+  color: #e0e0e0;
+}
+
+.xstate-visualizer--dark .xstate-visualizer__view-toggle .view-toggle-btn:hover {
+  background: #3e3e42;
+}
+
 .xstate-visualizer__theme-toggle {
   position: fixed;
   top: 16px;

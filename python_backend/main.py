@@ -15,15 +15,19 @@ from graph_api.reporting_services import router as reporting_router
 from graph_api.graphql_router import router as graphql_router
 from graph_api.graphql_catalogue_router import router as graphql_catalogue_router
 from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
+from graph_api.agentic_router import router as agentic_router
+from graph_api.quality_router import router as quality_router
+from graph_api.agentic_graph_router import router as agentic_graph_router
+from graph_api.agentic_config_router import router as agentic_config_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="GraphTrace API",
-    description="API for interacting with a Neo4j graph database and visualizing trace data.",
-    version="0.1.0",
+    title="GoodPoint AgenticAI API",
+    description="AI-powered PLM data migration and graph visualization with multi-agent orchestration.",
+    version="2.0.0",
     lifespan=lifespan_manager
 )
 
@@ -34,6 +38,8 @@ app.add_middleware(
         "http://localhost:8000", 
         "http://localhost:5173", # For Swagger UI/docs
         "http://localhost:5174", # Updated Vite dev server port
+        "http://localhost:5175", # Additional Vite port
+        "http://localhost:5176", # Additional Vite port
         "https://your-frontend-domain.com",  # Add other origins as needed
     ],
     allow_credentials=True,
@@ -53,6 +59,10 @@ app.include_router(reporting_router)
 app.include_router(graphql_router)
 app.include_router(graphql_catalogue_router)
 app.include_router(neo4j_graphrag_router)
+app.include_router(agentic_router)
+app.include_router(quality_router)
+app.include_router(agentic_graph_router)
+app.include_router(agentic_config_router)
 
 if __name__ == "__main__":
     import uvicorn
