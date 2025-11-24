@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://2cccd05b.databases.neo4j.io")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "TCS12345")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 # --- NiFi Configuration ---
@@ -22,6 +22,3 @@ NIFI_BASE_URL = os.getenv("NIFI_BASE_URL", "http://localhost:8080/nifi-api")
 NIFI_USERNAME = os.getenv("NIFI_USERNAME") # Optional: for username/password auth
 NIFI_PASSWORD = os.getenv("NIFI_PASSWORD") # Optional: for username/password auth
 
-if not NEO4J_PASSWORD:
-    logger.error("NEO4J_PASSWORD environment variable is not set. Cannot connect to Neo4j.")
-    raise ValueError("NEO4J_PASSWORD environment variable is not set. Cannot connect to Neo4j.")
