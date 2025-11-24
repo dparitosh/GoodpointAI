@@ -41,27 +41,27 @@
 
 /* Dark Theme */
 .xstate-layout--dark {
-  background-color: #1e1e1e;
+  background-color: #020617;
   color: #e4e6eb;
 }
 
 .xstate-layout--dark .xstate-layout__panel-header {
-  background: linear-gradient(135deg, #252526 0%, #2d2d30 100%);
-  border-bottom: 1px solid #3e3e42;
+  background: #0f1720;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   color: #e4e6eb;
 }
 
 .xstate-layout--dark .xstate-layout__panel-content {
-  background-color: #252526;
+  background-color: #0f1720;
   color: #e4e6eb;
 }
 
 .xstate-layout--dark .xstate-layout__resizer {
-  background-color: #3e3e42;
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .xstate-layout--dark .xstate-layout__resizer:hover {
-  background-color: #007acc;
+  background-color: #48a4ff;
 }
 
 /* Panel Styles */

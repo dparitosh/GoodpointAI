@@ -17,12 +17,13 @@ import './XStateVisualizer.css';
  * Modes: Graph View, Swimlane Workflow, State Flow Diagram
  */
 export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState('dark');
   const [selectedNode, setSelectedNode] = useState(null);
   const [events, setEvents] = useState([]);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [detailDrawerNode, setDetailDrawerNode] = useState(null);
   const [viewMode, setViewMode] = useState('stateflow'); // 'graph', 'swimlane', or 'stateflow'
+  const [layoutMode, setLayoutMode] = useState('hierarchical');
   const cyRef = useRef(null);
 
   // Convert graph data to tree structure for navigator

@@ -9,12 +9,12 @@
 }
 
 .xstate-visualizer--light {
-  background-color: #f5f7fa;
+  background-color: #f7fafc;
   color: #2c3e50;
 }
 
 .xstate-visualizer--dark {
-  background-color: #1e1e1e;
+  background-color: #020617;
   color: #e4e6eb;
 }
 
