@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 import logging
 
-from python_backend.services.graphql_catalogue_service import GraphQLCatalogueService
+from services.graphql_catalogue_service import GraphQLCatalogueService
 
 logger = logging.getLogger(__name__)
 

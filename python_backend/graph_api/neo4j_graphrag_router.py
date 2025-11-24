@@ -21,7 +21,7 @@ def get_service():
     global _service_instance
     if _service_instance is None:
         try:
-            from python_backend.services.neo4j_graphrag_service import Neo4jGraphRAGService
+            from services.neo4j_graphrag_service import Neo4jGraphRAGService
             _service_instance = Neo4jGraphRAGService()
         except Exception as e:
             logger.error(f"Failed to initialize Neo4j GraphRAG service: {str(e)}")

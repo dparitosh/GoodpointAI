@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from python_backend.models.graphql_models import (
+from models.graphql_models import (
     PersistedGraphQLQueryModel,
     SchemaCacheModel
 )

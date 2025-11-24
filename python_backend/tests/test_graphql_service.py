@@ -4,7 +4,7 @@ Tests schema introspection, query execution, and data transformation.
 """
 
 import pytest
-from python_backend.services.graphql_service import GraphQLService
+from services.graphql_service import GraphQLService
 
 
 @pytest.fixture

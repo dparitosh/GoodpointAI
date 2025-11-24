@@ -44,17 +44,17 @@
   --border-color-weak: #EEEEEE; /* Lighter border for subtle separators */
   --border-color-strong: #B0B0B0; /* Stronger border for inputs */
 
-  /* Accent & Status Colors */
-  --accent-color: #007ACC;
-  --accent-hover-color: #005F99; /* Darker accent for hover states */
-  --success-color: #4CAF50;
+  /* Accent & Status Colors - TCS Brand */
+  --accent-color: #0066CC;
+  --accent-hover-color: #0052A3;
+  --success-color: #24A148;
   --success-color-light: #E8F5E9;
-  --success-color-dark: #2E7D32;
-  --critical-color: #D32F2F;
-  --warning-color-light: #FFFDE7;
-  --warning-color-dark: #FFC107;
+  --success-color-dark: #1B7D34;
+  --critical-color: #DA1E28;
+  --warning-color-light: #FFF4E5;
+  --warning-color-dark: #FF832B;
   --error-color-light: #FFEBEE;
-  --error-color-dark: #C62828;
+  --error-color-dark: #C41E3A;
 
   /* Button Colors */
   --button-bg: #EFEFEF;
@@ -67,12 +67,12 @@
   --input-padding: 0.5rem 0.75rem;
   --input-bg: #FFFFFF;
 
-  /* Cytoscape Colors */
+  /* Cytoscape Colors - TCS Brand */
   --cy-node-text-color: #212121;
-  --cy-critical-color: #D32F2F;
-  --cy-selected-color: #007ACC;
-  --cy-selected-bg: rgba(0, 122, 204, 0.1);
-  --cy-parent-bg: rgba(0, 0, 0, 0.03);
+  --cy-critical-color: #DA1E28;
+  --cy-selected-color: #0066CC;
+  --cy-selected-bg: rgba(0, 102, 204, 0.1);
+  --cy-parent-bg: rgba(0, 102, 204, 0.03);
   --cy-parent-border: #C0C0C0;
   --cy-node-text-on-dark-bg: white;
   --cy-node-text-on-light-bg: black;

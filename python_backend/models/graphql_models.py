@@ -62,7 +62,7 @@ class SchemaCacheModel(Base):
     schema_hash = Column(String(64), nullable=False, index=True)  # SHA-256 of content
     fields = Column(JSON, nullable=False, default={})
     types = Column(JSON, nullable=False, default={})
-    metadata = Column(JSON, nullable=True, default={})
+    schema_metadata = Column(JSON, nullable=True, default={})  # Renamed from metadata to avoid SQLAlchemy conflict
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     access_count = Column(Integer, default=0, nullable=False)

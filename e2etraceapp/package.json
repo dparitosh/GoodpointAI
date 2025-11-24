@@ -1,13 +1,15 @@
 {
-  "name": "e2etraceapp",
+  "name": "goodpoint-agenticai",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "GoodPoint AgenticAI - PLM Data Migration Platform",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest"
   },
   "dependencies": {
     "cytoscape": "^3.32.0",
@@ -21,6 +23,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
+    "recoil": "^0.7.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

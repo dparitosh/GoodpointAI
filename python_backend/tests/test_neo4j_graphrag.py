@@ -4,7 +4,7 @@ Tests hybrid search, health checks, and tool invocation.
 """
 
 import pytest
-from python_backend.services.neo4j_graphrag_service import Neo4jGraphRAGService
+from services.neo4j_graphrag_service import Neo4jGraphRAGService
 
 
 @pytest.fixture

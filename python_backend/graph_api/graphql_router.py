@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 import logging
 
-from python_backend.services.graphql_service import GraphQLService
+from services.graphql_service import GraphQLService
 
 logger = logging.getLogger(__name__)
 
