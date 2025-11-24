@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 NEO4J_URI = os.getenv("NEO4J_URI", "neo4j+s://2cccd05b.databases.neo4j.io")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "TCS12345")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "tcs12345")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 # --- NiFi Configuration ---
