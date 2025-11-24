@@ -54,18 +54,24 @@ export const useAdvancedCytoscapeInteractions = (cyRef, options = {}) => {
         if (onNodeDoubleClick) {
           onNodeDoubleClick(node.data());
         }
-        // Animate expansion effect
+        // Animate expansion effect - store original sizes
+        const originalWidth = node.data('originalWidth') || node.style('width');
+        const originalHeight = node.data('originalHeight') || node.style('height');
+        
+        node.data('originalWidth', originalWidth);
+        node.data('originalHeight', originalHeight);
+        
         node.animate({
           style: {
-            width: node.style('width') * 1.2,
-            height: node.style('height') * 1.2
+            width: parseFloat(originalWidth) * 1.2,
+            height: parseFloat(originalHeight) * 1.2
           },
           duration: 200,
           complete: () => {
             node.animate({
               style: {
-                width: node.style('width') / 1.2,
-                height: node.style('height') / 1.2
+                width: originalWidth,
+                height: originalHeight
               },
               duration: 200
             });
@@ -152,15 +158,11 @@ export const useAdvancedCytoscapeInteractions = (cyRef, options = {}) => {
           // Snap to X alignment
           if (dx < snapThreshold && dy > snapThreshold) {
             draggedNode.position('x', nodePos.x);
-            // Visual feedback
-            flashSnapGuide(cy, nodePos.x, 'vertical');
           }
 
           // Snap to Y alignment
           if (dy < snapThreshold && dx > snapThreshold) {
             draggedNode.position('y', nodePos.y);
-            // Visual feedback
-            flashSnapGuide(cy, nodePos.y, 'horizontal');
           }
         });
       };
@@ -204,13 +206,5 @@ export const useAdvancedCytoscapeInteractions = (cyRef, options = {}) => {
     selectedNodes: Array.from(selectedNodesRef.current)
   };
 };
-
-// Helper function to show snap guides
-function flashSnapGuide(cy, position, orientation) {
-  // This would create a temporary visual guide line
-  // Implementation depends on how you want to render the guide
-  // For now, we'll just use a simple console log
-  console.log(`Snap guide: ${orientation} at ${position}`);
-}
 
 export default useAdvancedCytoscapeInteractions;

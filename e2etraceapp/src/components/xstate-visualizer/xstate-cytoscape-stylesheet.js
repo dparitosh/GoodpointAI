@@ -20,7 +20,7 @@ export const xstateStylesheet = [
       'shape': 'round-rectangle',
       'z-index': 10,
       'opacity': 1,
-      'transition-property': 'background-color, line-color, target-arrow-color, width, height, border-color, shadow-blur, shadow-opacity',
+      'transition-property': 'background-color, line-color, target-arrow-color, width, height, border-color',
       'transition-duration': '0.4s',
       'transition-timing-function': 'cubic-bezier(0.4, 0.0, 0.2, 1)',
       'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
