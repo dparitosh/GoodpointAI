@@ -1,6 +1,5 @@
 import logging
 from contextlib import asynccontextmanager
-from anyio import to_thread
 import neo4j
 from fastapi import FastAPI
 from .config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
@@ -20,7 +19,7 @@ async def lifespan_manager(app: FastAPI):
         temp_driver = neo4j.AsyncGraphDatabase.driver(NEO4J_URI, auth=neo4j.basic_auth(NEO4J_USER, NEO4J_PASSWORD))
         logger.info("Neo4j driver object created. Attempting to verify connectivity...")
 
-        await to_thread.run_sync(temp_driver.verify_connectivity)
+        await temp_driver.verify_connectivity()
 
         logger.info("Successfully connected to Neo4j and verified connectivity.")
         app.state.driver = temp_driver
