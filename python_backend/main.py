@@ -20,6 +20,7 @@ from graph_api.quality_router import router as quality_router
 from graph_api.agentic_graph_router import router as agentic_graph_router
 from graph_api.agentic_config_router import router as agentic_config_router
 from graph_api.plm_workflow_router import router as plm_workflow_router
+from graph_api.workflow_manager_router import router as workflow_manager_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -65,6 +66,7 @@ app.include_router(quality_router)
 app.include_router(agentic_graph_router)
 app.include_router(agentic_config_router)
 app.include_router(plm_workflow_router)
+app.include_router(workflow_manager_router)
 
 if __name__ == "__main__":
     import uvicorn

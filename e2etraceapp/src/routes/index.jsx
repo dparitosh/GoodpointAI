@@ -4,6 +4,8 @@ import XStateLandingPage from '../pages/xstate-landing/XStateLandingPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
+import WorkflowManagerPage from '../pages/workflow-manager/WorkflowManagerPage.jsx';
+import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
 
 const router = createHashRouter([
   {
@@ -37,6 +39,20 @@ const router = createHashRouter([
         path: 'observability',
         element: <ObservabilityDashboard />,
         handle: { crumb: 'Observability' },
+      },
+      
+      // Workflow Manager - Multi-instance workflow management
+      {
+        path: 'workflow-manager',
+        element: <WorkflowManagerPage />,
+        handle: { crumb: 'Workflow Manager' },
+      },
+      
+      // Workflow Detail - Individual workflow instance view
+      {
+        path: 'workflow/:workflowId',
+        element: <WorkflowDetailPage />,
+        handle: { crumb: 'Workflow Detail' },
       },
     ],
   },

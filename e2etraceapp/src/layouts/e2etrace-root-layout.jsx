@@ -24,9 +24,16 @@ export const E2ETraceRootLayout = () => {
         <aside className="e2etrace-sidebar">
           <nav className="e2etrace-sidebar-nav">
             <div className="nav-section">
+              <h3 className="nav-section-title">Workflow Management</h3>
+              <ul>
+                <li><NavLink to="/workflow-manager">🏭 Workflow Manager</NavLink></li>
+                <li><NavLink to="/">📊 Interactive State Flow</NavLink></li>
+              </ul>
+            </div>
+            
+            <div className="nav-section">
               <h3 className="nav-section-title">Data Operations</h3>
               <ul>
-                <li><NavLink to="/">Interactive State Flow</NavLink></li>
                 <li><NavLink to="/graph-explorer">Graph Explorer</NavLink></li>
               </ul>
             </div>
