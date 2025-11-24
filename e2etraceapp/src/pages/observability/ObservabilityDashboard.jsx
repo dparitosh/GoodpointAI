@@ -6,7 +6,7 @@ import './ObservabilityDashboard.css';
  * Observability & Monitoring Dashboard
  * Real-time system monitoring, alerts, and performance metrics
  */
-export default function ObservabilityDashboard() {
+export const ObservabilityDashboard = () => {
   const [alerts, setAlerts] = useState([]);
   const [qualityMetrics, setQualityMetrics] = useState(null);
   const [agenticStatus, setAgenticStatus] = useState(null);
@@ -261,4 +261,6 @@ export default function ObservabilityDashboard() {
       )}
     </div>
   );
-}
+};
+
+export default ObservabilityDashboard;

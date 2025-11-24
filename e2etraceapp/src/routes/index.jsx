@@ -1,5 +1,6 @@
 import { createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
+import XStateLandingPage from '../pages/xstate-landing/XStateLandingPage.jsx';
 import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
 import PLMMigrationVisualizerPage from '../pages/plm/PLMMigrationVisualizerPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
@@ -12,11 +13,11 @@ const router = createHashRouter([
     element: <E2ETraceRootLayout />,
     handle: { crumb: 'Home' },
     children: [
-      // Default route - Data Processing Hub
+      // Default route - XState Interactive Visualizer
       { 
         index: true, 
-        element: <DataProcessingHubPage />, 
-        handle: { crumb: 'Data Processing Hub' } 
+        element: <XStateLandingPage />, 
+        handle: { crumb: 'Interactive State Flow' } 
       },
       
       // Data Processing
