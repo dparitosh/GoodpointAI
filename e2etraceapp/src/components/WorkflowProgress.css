@@ -1,80 +1,79 @@
-/* Workflow Progress Component Styles */
+/* Workflow Progress Component Styles - XState Design System */
 .workflow-progress-container {
-  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-hover-color) 100%);
-  border-radius: var(--border-radius-lg);
-  box-shadow: 0 4px 20px rgba(0, 122, 204, 0.15);
-  margin-bottom: var(--space-4);
+  background: linear-gradient(135deg, #0078D4 0%, #005a9e 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 120, 212, 0.15);
+  margin-bottom: 16px;
   overflow: hidden;
-  transition: all 0.3s ease;
-  border: 1px solid var(--border-color-weak);
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border: 1px solid rgba(0, 120, 212, 0.2);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .workflow-progress-container.expanded {
-  box-shadow: 0 8px 32px rgba(0, 122, 204, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.25);
   transform: translateY(-2px);
 }
 
 .workflow-header {
-  padding: var(--space-3) var(--space-4);
+  padding: 12px 16px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
   color: white;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.1) 0%, 
     rgba(255, 255, 255, 0.05) 100%);
-  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .workflow-header:hover {
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.2) 0%, 
-    rgba(255, 255, 255, 0.1) 100%);
-  transform: translateY(-1px);
+    rgba(255, 255, 255, 0.15) 0%, 
+    rgba(255, 255, 255, 0.08) 100%);
 }
 
 .workflow-title {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-h6);
-  font-weight: var(--font-weight-bold);
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .workflow-title i {
-  font-size: 1.2rem;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  font-size: 16px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .progress-indicator {
-  background: rgba(255, 255, 255, 0.25);
-  padding: var(--space-1) var(--space-3);
-  border-radius: 20px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 24px;
+  font-size: 12px;
+  font-weight: 600;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .expand-toggle {
   background: none;
   border: none;
   color: white;
-  font-size: 1rem;
+  font-size: 14px;
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 50%;
-  transition: all 0.3s ease;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
 }
 
 .expand-toggle:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
 }
 
 .workflow-content {

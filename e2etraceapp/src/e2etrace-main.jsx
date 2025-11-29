@@ -9,6 +9,7 @@ import router from './routes';
 
 // Stylesheets
 import './e2etrace-global.css';
+import './styles/xstate-design-system.css';
 
 function App() {
   return (
