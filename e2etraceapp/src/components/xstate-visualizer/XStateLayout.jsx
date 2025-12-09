@@ -13,10 +13,10 @@ export const XStateLayout = ({
   eventPanel,
   theme = 'light'
 }) => {
-  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
-  const [rightPanelWidth, setRightPanelWidth] = useState(320);
-  const [eventPanelHeight, setEventPanelHeight] = useState(200);
-  const [isEventPanelOpen, setIsEventPanelOpen] = useState(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(220);
+  const [rightPanelWidth, setRightPanelWidth] = useState(280);
+  const [eventPanelHeight, setEventPanelHeight] = useState(150);
+  const [isEventPanelOpen, setIsEventPanelOpen] = useState(false);
 
   return (
     <div className={`xstate-layout xstate-layout--${theme}`}>

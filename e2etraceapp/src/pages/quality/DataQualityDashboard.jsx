@@ -176,7 +176,7 @@ export const DataQualityDashboard = () => {
           className={`quality-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          📊 Dashboard
+          ▦ Dashboard
         </button>
         <button 
           className={`quality-tab ${activeTab === 'reports' ? 'active' : ''}`}
@@ -188,7 +188,7 @@ export const DataQualityDashboard = () => {
           className={`quality-tab ${activeTab === 'rules' ? 'active' : ''}`}
           onClick={() => setActiveTab('rules')}
         >
-          ⚙️ Rules
+          ⚙ Rules
         </button>
       </div>
 
@@ -204,7 +204,7 @@ export const DataQualityDashboard = () => {
           {/* Summary Cards */}
           <div className="quality-summary-cards">
             <div className="quality-card summary-card">
-              <div className="card-icon">📊</div>
+              <div className="card-icon">▦</div>
               <div className="card-content">
                 <h3>{dashboardData.summary.total_tables_scanned}</h3>
                 <p>Tables Scanned</p>
@@ -236,7 +236,7 @@ export const DataQualityDashboard = () => {
             </div>
 
             <div className="quality-card summary-card">
-              <div className="card-icon">🔧</div>
+              <div className="card-icon">⚙</div>
               <div className="card-content">
                 <h3>{dashboardData.summary.active_rules}</h3>
                 <p>Active Rules</p>

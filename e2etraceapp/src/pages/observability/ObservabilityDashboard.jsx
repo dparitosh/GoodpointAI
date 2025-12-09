@@ -51,10 +51,10 @@ export const ObservabilityDashboard = () => {
 
   const getAlertIcon = (level) => {
     switch (level) {
-      case 'error': return '🔴';
-      case 'warning': return '🟡';
-      case 'info': return '🟢';
-      default: return '⚪';
+      case 'error': return '●';
+      case 'warning': return '●';
+      case 'info': return '●';
+      default: return '○';
     }
   };
 
@@ -81,7 +81,7 @@ export const ObservabilityDashboard = () => {
             <option value={300000}>Refresh: 5min</option>
           </select>
           <button onClick={fetchAllMetrics} className="refresh-btn">
-            🔄 Refresh Now
+            ↻ Refresh Now
           </button>
         </div>
       </div>
@@ -141,7 +141,7 @@ export const ObservabilityDashboard = () => {
             <div className="metric-card">
               <div className="metric-header">
                 <h3>Active Alerts</h3>
-                <span className="metric-icon">🔔</span>
+                <span className="metric-icon">◉</span>
               </div>
               <div className="metric-value">
                 {alerts.length}
@@ -163,7 +163,7 @@ export const ObservabilityDashboard = () => {
               <div className="metric-card">
                 <div className="metric-header">
                   <h3>Agentic System</h3>
-                  <span className="metric-icon">🤖</span>
+                  <span className="metric-icon">◈</span>
                 </div>
                 <div className="metric-value" style={{ color: '#24A148' }}>
                   {agenticStatus.active_agents?.length || 0}

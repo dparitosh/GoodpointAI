@@ -589,6 +589,175 @@
   margin-top: 16px;
 }
 
+/* Configuration Modal */
+.modal-large {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.config-notice {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  border-radius: 4px;
+}
+
+.config-notice p {
+  margin: 0;
+  color: #856404;
+}
+
+.config-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.config-section:last-child {
+  border-bottom: none;
+}
+
+.config-section h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b8c5d0;
+}
+
+.form-control {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #48a4ff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-control[readonly] {
+  background: rgba(255, 255, 255, 0.02);
+  color: #8b92a7;
+  cursor: not-allowed;
+}
+
+.config-summary {
+  background: rgba(72, 164, 255, 0.1);
+  border: 1px solid rgba(72, 164, 255, 0.3);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 24px 0;
+}
+
+.config-summary h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #48a4ff;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.summary-item {
+  padding: 8px 0;
+  font-size: 14px;
+  color: #b8c5d0;
+}
+
+.summary-item strong {
+  color: #ffffff;
+  margin-right: 8px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-actions .btn {
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-actions .btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #b8c5d0;
+}
+
+.modal-actions .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-actions .btn-primary {
+  background: linear-gradient(135deg, #48a4ff 0%, #0078d4 100%);
+  border: none;
+  color: white;
+}
+
+.modal-actions .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(72, 164, 255, 0.4);
+}
+
+.modal-actions .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.config-note {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.config-note p {
+  margin: 0;
+  color: #8b92a7;
+  font-size: 13px;
+}
+
+
 /* Animations */
 @keyframes spin {
   to { transform: rotate(360deg); }

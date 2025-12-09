@@ -246,7 +246,7 @@ export const StateFlowDiagram = ({
           className="toolbar-btn"
           title="Export PNG"
         >
-          📷
+          ▣
         </button>
       </div>
 
@@ -476,40 +476,40 @@ const getStylesheet = (theme) => {
 // Helper: Get color for node type (PLM Data Migration AI Factory)
 const getColorForType = (type) => {
   const colorMap = {
-    // PLM Sources
-    'plm_source': '#4A90E2',      // Blue - Teamcenter, Windchill
-    'cad_source': '#9B59B6',      // Purple - CATIA, NX, Creo
+    // PLM Sources - TCS Blue shades
+    'plm_source': '#0033A0',      // TCS Blue - Teamcenter, Windchill
+    'cad_source': '#00539B',      // TCS Dark Blue - CATIA, NX, Creo
     
-    // AI Agents
-    'ai_agent': '#FF6B6B',        // Coral Red - AI Orchestration Layer
+    // AI Agents - TCS Purple
+    'ai_agent': '#6A1B9A',        // Purple - AI Orchestration Layer
     
-    // Extract
-    'extract': '#21d5c1',         // Cyan - Extraction processes
+    // Extract - Light blue
+    'extract': '#42A5F5',         // Light Blue - Extraction processes
     
-    // Transform
-    'transform': '#F39C12',       // Orange - Transformations
+    // Transform - TCS Orange
+    'transform': '#FB8C00',       // Orange - Transformations
     
-    // Quality (SODA)
-    'quality': '#27AE60',         // Green - Quality checks
+    // Quality (SODA) - TCS Green
+    'quality': '#43A047',         // Green - Quality checks
     
-    // Load
-    'load': '#8E44AD',            // Deep Purple - Loading stages
+    // Load - TCS Indigo
+    'load': '#5E35B1',            // Indigo - Loading stages
     
-    // Target Systems
-    'target': '#34495E',          // Dark Slate - Target systems
+    // Target Systems - TCS Dark
+    'target': '#263238',          // Dark - Target systems
     
     // Legacy support
-    'Database': '#48a4ff',
-    'CSV': '#ffba5a',
-    'JSON': '#9b6cff',
-    'XML': '#ff7077',
-    'Processor': '#21d5c1',
-    'ETL': '#21d5c1',
-    'API': '#6e6fff',
-    'Service': '#6e6fff',
-    'Quality': '#24A148',
-    'DataQualityIssue': '#e74c3c',
-    'default': '#95a5a6'
+    'Database': '#1976D2',
+    'CSV': '#FB8C00',
+    'JSON': '#7B1FA2',
+    'XML': '#E53935',
+    'Processor': '#42A5F5',
+    'ETL': '#42A5F5',
+    'API': '#5E35B1',
+    'Service': '#5E35B1',
+    'Quality': '#43A047',
+    'DataQualityIssue': '#D32F2F',
+    'default': '#78909C'
   };
   return colorMap[type] || colorMap['default'];
 };

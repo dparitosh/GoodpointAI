@@ -76,20 +76,7 @@ const XStateLandingPage = () => {
         </div>
       </div>
 
-      <div className="landing-info-banner">
-        <div className="info-item">
-          <span className="info-icon">🏭</span>
-          <span className="info-text">PLM Data Migration AI Factory - 5 PLM Sources, 4 AI Agents, 5 Target Systems</span>
-        </div>
-        <div className="info-item">
-          <span className="info-icon">🤖</span>
-          <span className="info-text">AI-Orchestrated ETL: Data Analyst, ETL Orchestrator, Quality Monitor, Visualization</span>
-        </div>
-        <div className="info-item">
-          <span className="info-icon">🎯</span>
-          <span className="info-text">Teamcenter, Windchill, CATIA, NX, Creo → Neo4j, Cloud PLM, OpenSearch</span>
-        </div>
-      </div>
+
 
       <XStateVisualizer
         graphData={graphData}

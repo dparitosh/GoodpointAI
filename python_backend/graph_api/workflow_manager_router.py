@@ -35,6 +35,8 @@ from models.workflow_models import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/workflows", tags=["Workflow Instance Manager"])
 
+# In-memory storage for workflows (temporary solution until database integration)
+WORKFLOWS_STORE = {}
 
 # Dependency to get database session (you'll need to configure this based on your setup)
 def get_db():
@@ -68,10 +70,23 @@ async def list_workflows(
     - target_type: Filter by target system type (neo4j, cloud_plm, etc.)
     - search: Search in workflow name and description
     """
-    # TODO: Implement actual database query
-    # Return empty list until database integration is complete
+    # Query from in-memory store
     logger.info(f"Listing workflows with filters - status: {status}, source_type: {source_type}, target_type: {target_type}, search: {search}")
-    return []
+    
+    workflows = list(WORKFLOWS_STORE.values())
+    
+    # Apply filters
+    if status:
+        workflows = [w for w in workflows if w.get('status') == status]
+    if source_type:
+        workflows = [w for w in workflows if w.get('source_type') == source_type]
+    if target_type:
+        workflows = [w for w in workflows if w.get('target_type') == target_type]
+    if search:
+        search_lower = search.lower()
+        workflows = [w for w in workflows if search_lower in w.get('name', '').lower() or search_lower in w.get('description', '').lower()]
+    
+    return workflows[skip:skip+limit]
 
 
 @router.post("/", response_model=WorkflowInstanceResponse, status_code=201)
@@ -163,13 +178,48 @@ async def get_workflow(
     - AI agent assignments
     - Execution history and metadata
     """
-    # TODO: Query from database
-    # workflow = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
-    # if not workflow:
-    #     raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+    # Query from in-memory store
+    if workflow_id not in WORKFLOWS_STORE:
+        raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
     
-    # Mock response
+    workflow_data = WORKFLOWS_STORE[workflow_id]
+    
+    # Return detailed workflow information
     return WorkflowInstanceDetail(
+        id=workflow_data['id'],
+        name=workflow_data['name'],
+        description=workflow_data['description'],
+        source_id=workflow_data['source_id'],
+        source_name=workflow_data['source_name'],
+        source_type=workflow_data['source_type'],
+        source_config=workflow_data.get('source_config', {}),
+        target_id=workflow_data['target_id'],
+        target_name=workflow_data['target_name'],
+        target_type=workflow_data['target_type'],
+        target_config=workflow_data.get('target_config', {}),
+        workflow_config=workflow_data.get('workflow_config', {'nodes': [], 'edges': [], 'ai_agents': []}),
+        ai_agents_enabled=workflow_data.get('ai_agents_enabled', []),
+        status=workflow_data['status'],
+        current_stage=workflow_data['current_stage'],
+        progress_percentage=workflow_data['progress_percentage'],
+        total_records=workflow_data['total_records'],
+        processed_records=workflow_data['processed_records'],
+        failed_records=workflow_data['failed_records'],
+        quality_score=workflow_data.get('quality_score'),
+        execution_metadata=workflow_data.get('execution_metadata', {}),
+        last_execution_id=workflow_data.get('last_execution_id'),
+        created_at=workflow_data['created_at'],
+        updated_at=workflow_data.get('updated_at'),
+        started_at=workflow_data.get('started_at'),
+        completed_at=workflow_data.get('completed_at'),
+        created_by=workflow_data['created_by'],
+        schedule_enabled=workflow_data['schedule_enabled'],
+        schedule_cron=workflow_data.get('schedule_cron'),
+        next_run_at=workflow_data.get('next_run_at')
+    )
+
+    # OLD MOCK RESPONSE REMOVED
+    old_mock = WorkflowInstanceDetail(
         id=workflow_id,
         name="Teamcenter → Neo4j Migration",
         description="Migrate 125K parts from Teamcenter to Neo4j Knowledge Graph",
@@ -454,4 +504,81 @@ async def instantiate_from_template(
     - Default transformation mappings
     - Quality validation rules
     """
-    raise HTTPException(status_code=501, detail="Template instantiation not yet implemented")
+    # Get template information
+    templates_response = await list_workflow_templates()
+    template = next((t for t in templates_response if t["id"] == template_id), None)
+    
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+    
+    # Generate workflow ID and use template name if no custom name provided
+    workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
+    workflow_name = name or f"{template['name']} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    
+    # Create workflow instance with template configuration
+    new_workflow = WorkflowInstanceResponse(
+        id=workflow_id,
+        name=workflow_name,
+        description=template["description"],
+        source_id=source_id,
+        source_name=f"Source System ({source_id})",
+        source_type=template["source_type"],
+        target_id=target_id,
+        target_name=f"Target System ({target_id})",
+        target_type=template["target_type"],
+        status=WorkflowStatus.DRAFT,
+        current_stage=WorkflowStage.IDLE,
+        progress_percentage=0.0,
+        total_records=0,
+        processed_records=0,
+        failed_records=0,
+        quality_score=None,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        started_at=None,
+        completed_at=None,
+        created_by="system",
+        schedule_enabled=False,
+        schedule_cron=None,
+        next_run_at=None
+    )
+    
+    logger.info(f"Created workflow {workflow_id} from template {template_id}")
+    
+    # Persist to in-memory store
+    WORKFLOWS_STORE[workflow_id] = {
+        'id': new_workflow.id,
+        'name': new_workflow.name,
+        'description': new_workflow.description,
+        'source_id': new_workflow.source_id,
+        'source_name': new_workflow.source_name,
+        'source_type': new_workflow.source_type,
+        'source_config': {},
+        'target_id': new_workflow.target_id,
+        'target_name': new_workflow.target_name,
+        'target_type': new_workflow.target_type,
+        'target_config': {},
+        'workflow_config': {'nodes': [], 'edges': [], 'ai_agents': []},
+        'ai_agents_enabled': [],
+        'status': new_workflow.status,
+        'current_stage': new_workflow.current_stage,
+        'progress_percentage': new_workflow.progress_percentage,
+        'total_records': new_workflow.total_records,
+        'processed_records': new_workflow.processed_records,
+        'failed_records': new_workflow.failed_records,
+        'quality_score': new_workflow.quality_score,
+        'execution_metadata': {},
+        'last_execution_id': None,
+        'created_at': new_workflow.created_at,
+        'updated_at': new_workflow.updated_at,
+        'started_at': new_workflow.started_at,
+        'completed_at': new_workflow.completed_at,
+        'created_by': new_workflow.created_by,
+        'schedule_enabled': new_workflow.schedule_enabled,
+        'schedule_cron': new_workflow.schedule_cron,
+        'next_run_at': new_workflow.next_run_at
+    }
+    
+    logger.info(f"Workflow {workflow_id} persisted to in-memory store")
+    
+    return new_workflow

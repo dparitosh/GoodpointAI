@@ -304,7 +304,7 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
           onClick={toggleTheme}
           aria-label="Toggle theme"
         >
-          {theme === 'light' ? '🌙' : '☀️'}
+          {theme === 'light' ? '◐' : '◑'}
         </button>
         <div className="xstate-visualizer__view-toggle">
           <button
@@ -312,21 +312,21 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
             onClick={() => setViewMode('stateflow')}
             title="State Flow Diagram - XState Style"
           >
-            🔀 State Flow
+            ⇄ State Flow
           </button>
           <button
             className={`view-toggle-btn ${viewMode === 'graph' ? 'active' : ''}`}
             onClick={() => setViewMode('graph')}
             title="Graph View"
           >
-            🔷 Graph
+            ◆ Graph
           </button>
           <button
             className={`view-toggle-btn ${viewMode === 'swimlane' ? 'active' : ''}`}
             onClick={() => setViewMode('swimlane')}
             title="Swimlane Workflow View"
           >
-            📊 Swimlane
+            ▥ Swimlane
           </button>
         </div>
       </div>
@@ -475,43 +475,43 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
 // Helper function to get color based on node type (PLM Data Migration AI Factory)
 const getColorForType = (type) => {
   const colorMap = {
-    // PLM Sources
-    'plm_source': '#4A90E2',      // Blue - Teamcenter, Windchill
-    'cad_source': '#9B59B6',      // Purple - CATIA, NX, Creo
+    // PLM Sources - TCS Blue shades
+    'plm_source': '#0033A0',      // TCS Blue - Teamcenter, Windchill
+    'cad_source': '#00539B',      // TCS Dark Blue - CATIA, NX, Creo
     
-    // AI Agents
-    'ai_agent': '#FF6B6B',        // Coral Red - AI Orchestration Layer
+    // AI Agents - TCS Purple
+    'ai_agent': '#6A1B9A',        // Purple - AI Orchestration Layer
     
-    // Extract
-    'extract': '#21d5c1',         // Cyan - Extraction processes
+    // Extract - Light blue
+    'extract': '#42A5F5',         // Light Blue - Extraction processes
     
-    // Transform
-    'transform': '#F39C12',       // Orange - Transformations
+    // Transform - TCS Orange
+    'transform': '#FB8C00',       // Orange - Transformations
     
-    // Quality (SODA)
-    'quality': '#27AE60',         // Green - Quality checks
+    // Quality (SODA) - TCS Green
+    'quality': '#43A047',         // Green - Quality checks
     
-    // Load
-    'load': '#8E44AD',            // Deep Purple - Loading stages
+    // Load - TCS Indigo
+    'load': '#5E35B1',            // Indigo - Loading stages
     
-    // Target Systems
-    'target': '#34495E',          // Dark Slate - Target systems
+    // Target Systems - TCS Dark
+    'target': '#263238',          // Dark - Target systems
     
     // Legacy support
-    'Database': '#48a4ff',
-    'Teamcenter': '#48a4ff',
-    'CustomDB': '#48a4ff',
-    'CSV': '#ffba5a',
-    'JSON': '#9b6cff',
-    'XML': '#ff7077',
-    'PLMXML': '#ff7077',
-    'Processor': '#21d5c1',
-    'ETL': '#21d5c1',
-    'API': '#6e6fff',
-    'Service': '#6e6fff',
-    'Endpoint': '#6e6fff',
-    'DataQualityIssue': '#e74c3c',
-    'default': '#95a5a6'
+    'Database': '#1976D2',
+    'Teamcenter': '#1976D2',
+    'CustomDB': '#1976D2',
+    'CSV': '#FB8C00',
+    'JSON': '#7B1FA2',
+    'XML': '#E53935',
+    'PLMXML': '#E53935',
+    'Processor': '#42A5F5',
+    'ETL': '#42A5F5',
+    'API': '#5E35B1',
+    'Service': '#5E35B1',
+    'Endpoint': '#5E35B1',
+    'DataQualityIssue': '#D32F2F',
+    'default': '#78909C'
   };
   return colorMap[type] || colorMap['default'];
 };

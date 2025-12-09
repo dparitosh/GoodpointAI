@@ -97,26 +97,26 @@ export const TreeNavigator = ({ nodes = [], onNodeClick, selectedNodeId, theme =
 // Helper function to get color based on node type (ETL/Data Migration)
 const getColorForType = (type) => {
   const colorMap = {
-    // Data Sources
-    'Database': '#48a4ff',
-    'Teamcenter': '#48a4ff',
-    'CustomDB': '#48a4ff',
-    'CSV': '#ffba5a',
-    'JSON': '#9b6cff',
-    'XML': '#ff7077',
-    'PLMXML': '#ff7077',
+    // Data Sources - TCS Blues
+    'Database': '#1976D2',
+    'Teamcenter': '#1976D2',
+    'CustomDB': '#1976D2',
+    'CSV': '#FB8C00',
+    'JSON': '#7B1FA2',
+    'XML': '#E53935',
+    'PLMXML': '#E53935',
     // Processing/Transform
-    'Processor': '#21d5c1',
-    'Transform': '#21d5c1',
-    'ETL': '#21d5c1',
+    'Processor': '#42A5F5',
+    'Transform': '#42A5F5',
+    'ETL': '#42A5F5',
     // Services
-    'API': '#6e6fff',
-    'Service': '#6e6fff',
-    'Endpoint': '#6e6fff',
+    'API': '#5E35B1',
+    'Service': '#5E35B1',
+    'Endpoint': '#5E35B1',
     // Issues
-    'DataQualityIssue': '#e74c3c',
+    'DataQualityIssue': '#D32F2F',
     // Default
-    'default': '#95a5a6'
+    'default': '#78909C'
   };
   return colorMap[type] || colorMap['default'];
 };

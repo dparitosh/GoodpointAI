@@ -19,7 +19,7 @@ export const InspectorPanel = ({
     return (
       <div className={`inspector-panel inspector-panel--${theme}`}>
         <div className="inspector-panel__empty">
-          <div className="inspector-panel__empty-icon">📋</div>
+          <div className="inspector-panel__empty-icon">◻</div>
           <p>Select a node to view details</p>
         </div>
       </div>
@@ -27,11 +27,11 @@ export const InspectorPanel = ({
   }
 
   const tabs = [
-    { id: 'properties', label: 'Properties', icon: '⚙️' },
-    { id: 'relationships', label: 'Relationships', icon: '🔗' },
-    { id: 'metadata', label: 'Metadata', icon: '📝' },
-    { id: 'ai', label: 'AI Insights', icon: '🤖' },
-    { id: 'history', label: 'History', icon: '📊' }
+    { id: 'properties', label: 'Properties', icon: '⚙' },
+    { id: 'relationships', label: 'Relationships', icon: '⛭' },
+    { id: 'metadata', label: 'Metadata', icon: '✎' },
+    { id: 'ai', label: 'AI Insights', icon: '✧' },
+    { id: 'history', label: 'History', icon: '◰' }
   ];
 
   const handleFieldEdit = (field, value) => {
@@ -175,7 +175,7 @@ export const InspectorPanel = ({
                 ))
               ) : (
                 <div className="inspector-panel__empty-state">
-                  <span>🤖 No AI insights available</span>
+                  <span>◈ No AI insights available</span>
                   <button className="inspector-panel__generate-btn">Generate Insights</button>
                 </div>
               )}

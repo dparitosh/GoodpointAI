@@ -845,7 +845,7 @@ const EChartsSpreadsheetPage = () => {
           className={`tab ${activeTab === 'validation' ? 'active' : ''}`}
           onClick={() => setActiveTab('validation')}
         >
-          ✅ Validation
+          ✓ Validation
         </button>
         <button 
           className={`tab ${activeTab === 'templates' ? 'active' : ''}`}
@@ -863,7 +863,7 @@ const EChartsSpreadsheetPage = () => {
           className={`tab ${activeTab === 'config' ? 'active' : ''}`}
           onClick={() => setActiveTab('config')}
         >
-          ⚙️ Config
+          ⚙ Config
         </button>
       </div>
 
@@ -1040,7 +1040,7 @@ const EChartsSpreadsheetPage = () => {
             <div className="mapping-header">
               <h3>Data Mapping Rules</h3>
               <button onClick={addMappingRule} className="btn btn-primary">
-                ➕ Add Mapping Rule
+                ✚ Add Mapping Rule
               </button>
             </div>
 
@@ -1132,7 +1132,7 @@ const EChartsSpreadsheetPage = () => {
                 className="btn btn-success"
                 disabled={mappingRules.length === 0}
               >
-                ✅ Apply Mapping Rules
+                ✓ Apply Mapping Rules
               </button>
             </div>
           </div>

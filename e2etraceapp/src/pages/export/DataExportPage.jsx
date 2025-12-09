@@ -205,7 +205,7 @@ const DataExportPage = () => {
   return (
     <div className="data-export-page">
       <div className="page-header">
-        <h1>📤 Data Export</h1>
+        <h1>↗ Data Export</h1>
         <p>Export your data in various formats for analysis, backup, or migration</p>
       </div>
 

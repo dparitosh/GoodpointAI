@@ -20,17 +20,21 @@ const WorkflowDetailPage = () => {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Load workflow details on mount and when workflowId changes
   useEffect(() => {
     loadWorkflowDetails();
-    // Auto-refresh every 5 seconds if workflow is running
-    const interval = setInterval(() => {
-      if (workflow?.status === 'running') {
-        loadWorkflowDetails();
-      }
-    }, 5000);
-    
-    return () => clearInterval(interval);
   }, [workflowId]);
+
+  // Auto-refresh when workflow is running
+  useEffect(() => {
+    if (workflow?.status === 'running') {
+      const interval = setInterval(() => {
+        loadWorkflowDetails();
+      }, 5000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [workflow?.status]);
 
   const loadWorkflowDetails = async () => {
     try {

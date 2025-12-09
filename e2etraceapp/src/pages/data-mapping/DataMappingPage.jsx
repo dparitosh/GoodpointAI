@@ -275,7 +275,7 @@ const DataMappingPage = () => {
                 onClick={createNewMapping}
                 className="btn btn-primary"
               >
-                ➕ New Mapping
+                ✚ New Mapping
               </button>
             </div>
 
@@ -304,7 +304,7 @@ const DataMappingPage = () => {
                   <div className="mapping-details">
                     <p className="mapping-description">{mapping.description}</p>
                     <div className="mapping-stats">
-                      <span className="stat">📊 {mapping.fields} fields</span>
+                      <span className="stat">▦ {mapping.fields} fields</span>
                       <span className="stat">📅 {new Date(mapping.lastModified).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -321,7 +321,7 @@ const DataMappingPage = () => {
                       className="btn btn-outline btn-sm"
                       disabled={isLoading}
                     >
-                      ✅ Validate
+                      ✓ Validate
                     </button>
                     <button 
                       onClick={() => executeMapping(mapping.id)}
@@ -349,7 +349,7 @@ const DataMappingPage = () => {
             <div className="section-header">
               <h2>Mapping Templates</h2>
               <button className="btn btn-primary">
-                ➕ Create Template
+                ✚ Create Template
               </button>
             </div>
 
@@ -398,7 +398,7 @@ const DataMappingPage = () => {
               <h2>Mapping Editor</h2>
               <div className="editor-actions">
                 <button className="btn btn-outline">
-                  💾 Save Draft
+                  ● Save Draft
                 </button>
                 <button className="btn btn-success">
                   🚀 Deploy Mapping
@@ -494,11 +494,11 @@ const DataMappingPage = () => {
                           <option>Custom function</option>
                         </select>
                         <input type="text" placeholder="Enter target field" />
-                        <button className="btn btn-sm btn-danger">🗑️</button>
+                        <button className="btn btn-sm btn-danger">✗</button>
                       </div>
                     </div>
                     <button className="btn btn-outline">
-                      ➕ Add Field Mapping
+                      ✚ Add Field Mapping
                     </button>
                   </div>
                 </div>

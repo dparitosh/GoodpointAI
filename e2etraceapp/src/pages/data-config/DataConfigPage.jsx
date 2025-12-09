@@ -368,7 +368,7 @@ const DataConfigPage = () => {
   return (
     <div className="data-config-page">
       <div className="page-header">
-        <h1>📊 Data Configuration</h1>
+        <h1>▦ Data Configuration</h1>
         <p className="page-description">
           Configure and manage your data sources, schemas, and connections
         </p>
@@ -379,25 +379,25 @@ const DataConfigPage = () => {
           className={`tab ${activeTab === 'sources' ? 'active' : ''}`}
           onClick={() => setActiveTab('sources')}
         >
-          🔗 Connected Sources
+          ⚭ Connected Sources
         </button>
         <button 
           className={`tab ${activeTab === 'manage' ? 'active' : ''}`}
           onClick={() => setActiveTab('manage')}
         >
-          ⚙️ Manage Sources
+          ⚙ Manage Sources
         </button>
         <button 
           className={`tab ${activeTab === 'schema' ? 'active' : ''}`}
           onClick={() => setActiveTab('schema')}
         >
-          📊 Schema & Structure
+          ▦ Schema & Structure
         </button>
         <button 
           className={`tab ${activeTab === 'validation' ? 'active' : ''}`}
           onClick={() => setActiveTab('validation')}
         >
-          ✅ Data Validation
+          ✓ Data Validation
         </button>
       </div>
 
@@ -412,7 +412,7 @@ const DataConfigPage = () => {
                 className="btn btn-primary"
                 disabled={isLoading}
               >
-                🔄 Refresh Connections
+                ↻ Refresh Connections
               </button>
             </div>
 
@@ -422,7 +422,7 @@ const DataConfigPage = () => {
                   <div className="source-header">
                     <h3>{source.name}</h3>
                     <span className={`status-badge ${source.status}`}>
-                      {source.status === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
+                      {source.status === 'connected' ? '● Connected' : '● Disconnected'}
                     </span>
                   </div>
                   
@@ -447,7 +447,7 @@ const DataConfigPage = () => {
                       className="btn btn-secondary"
                       disabled={isLoading}
                     >
-                      🔍 Test Connection
+                      ✓ Test Connection
                     </button>
                     <button 
                       className="btn btn-outline"
@@ -457,7 +457,7 @@ const DataConfigPage = () => {
                         }
                       }}
                     >
-                      ⚙️ Configure
+                      ⚙ Configure
                     </button>
                   </div>
                 </div>
@@ -524,7 +524,7 @@ const DataConfigPage = () => {
                     <span className="source-name">{source.name}</span>
                     <span className="source-type">{source.type}</span>
                     <span className={`source-status ${source.status}`}>
-                      {source.status === 'connected' ? '✅ Connected' : '❌ Disconnected'}
+                      {source.status === 'connected' ? '✓ Connected' : '✗ Disconnected'}
                     </span>
                     <div className="source-actions">
                       <button 
@@ -532,7 +532,7 @@ const DataConfigPage = () => {
                         onClick={() => testConnection(source.id)}
                         disabled={isLoading}
                       >
-                        🔌 Test
+                        ✓ Test
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary"
@@ -544,7 +544,7 @@ const DataConfigPage = () => {
                         className="btn btn-sm btn-danger"
                         onClick={() => deleteDataSource(source.id)}
                       >
-                        🗑️ Delete
+                        ✗ Delete
                       </button>
                     </div>
                   </div>
@@ -564,7 +564,7 @@ const DataConfigPage = () => {
                 className="btn btn-primary"
                 disabled={isLoading}
               >
-                🔄 Refresh Schema
+                ↻ Refresh Schema
               </button>
             </div>
 
@@ -619,7 +619,7 @@ const DataConfigPage = () => {
             <div className="section-header">
               <h2>Data Quality Validation</h2>
               <button className="btn btn-primary">
-                🔍 Run Validation
+                • Run Validation
               </button>
             </div>
 
@@ -628,11 +628,11 @@ const DataConfigPage = () => {
               <div className="rules-list">
                 <div className="rule-item">
                   <span className="rule-name">Node Completeness</span>
-                  <span className="rule-status">✅ Passed</span>
+                  <span className="rule-status">✓ Passed</span>
                 </div>
                 <div className="rule-item">
                   <span className="rule-name">Relationship Integrity</span>
-                  <span className="rule-status">✅ Passed</span>
+                  <span className="rule-status">✓ Passed</span>
                 </div>
                 <div className="rule-item">
                   <span className="rule-name">Data Type Consistency</span>
@@ -653,12 +653,12 @@ const DataConfigPage = () => {
         <div className="modal-overlay" onClick={() => setShowCreateSourceModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>➕ Create New Data Source</h2>
+              <h2>✚ Create New Data Source</h2>
               <button 
                 className="modal-close"
                 onClick={() => setShowCreateSourceModal(false)}
               >
-                ✕
+                ×
               </button>
             </div>
 
@@ -741,12 +741,12 @@ const DataConfigPage = () => {
         <div className="modal-overlay" onClick={() => setShowNeo4jConfig(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>🗄️ Neo4j Database Configuration</h2>
+              <h2>▦ Neo4j Database Configuration</h2>
               <button 
                 className="modal-close"
                 onClick={() => setShowNeo4jConfig(false)}
               >
-                ✕
+                ×
               </button>
             </div>
 
@@ -805,7 +805,7 @@ const DataConfigPage = () => {
                 {configTestResult && (
                   <div className={`test-result ${configTestResult.status}`}>
                     <div className="result-icon">
-                      {configTestResult.status === 'success' ? '✅' : '❌'}
+                      {configTestResult.status === 'success' ? '✓' : '✗'}
                     </div>
                     <div className="result-message">
                       {configTestResult.message}
@@ -828,7 +828,7 @@ const DataConfigPage = () => {
                 onClick={saveNeo4jConfig}
                 disabled={isLoading || !neo4jConfig.uri || !neo4jConfig.username || !neo4jConfig.password}
               >
-                💾 Save Configuration
+                ● Save Configuration
               </button>
               <button
                 className="btn btn-outline"

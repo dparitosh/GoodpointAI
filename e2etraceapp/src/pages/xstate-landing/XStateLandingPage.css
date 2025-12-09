@@ -5,7 +5,7 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
   overflow: hidden;
 }
 
@@ -28,16 +28,19 @@
 }
 
 .landing-logo {
-  height: 48px;
+  height: 108px;
   width: auto;
+  background: white;
+  padding: 8px;
+  border-radius: 8px;
 }
 
 .landing-title-group h1 {
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #0078D4;
-  background: linear-gradient(135deg, #0078D4 0%, #00BCF2 100%);
+  color: #0033A0;
+  background: linear-gradient(135deg, #0033A0 0%, #00539B 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -61,9 +64,9 @@
   flex-direction: column;
   align-items: center;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0033A0 0%, #00539B 100%);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 51, 160, 0.3);
   min-width: 80px;
 }
 
@@ -82,37 +85,7 @@
   margin-top: 4px;
 }
 
-/* Info Banner */
-.landing-info-banner {
-  display: flex;
-  gap: 16px;
-  padding: 12px 32px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
-  justify-content: center;
-  flex-wrap: wrap;
-}
 
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 16px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  backdrop-filter: blur(10px);
-}
-
-.info-icon {
-  font-size: 18px;
-}
-
-.info-text {
-  white-space: nowrap;
-}
 
 /* Loading */
 .xstate-landing-loading {
@@ -123,14 +96,14 @@
   align-items: center;
   justify-content: center;
   gap: 20px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
 }
 
 .loading-spinner {
   width: 64px;
   height: 64px;
   border: 6px solid #f3f3f3;
-  border-top: 6px solid #0078D4;
+  border-top: 6px solid #0033A0;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -165,16 +138,7 @@
     justify-content: space-around;
   }
 
-  .landing-info-banner {
-    flex-direction: column;
-    align-items: center;
-  }
 
-  .info-item {
-    width: 100%;
-    max-width: 400px;
-    justify-content: center;
-  }
 }
 
 @media (max-width: 768px) {
@@ -203,11 +167,5 @@
     font-size: 10px;
   }
 
-  .landing-info-banner {
-    padding: 12px 20px;
-  }
 
-  .info-item {
-    font-size: 12px;
-  }
 }

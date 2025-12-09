@@ -174,7 +174,7 @@ const MonitoringPage = () => {
             <option value={300}>5 minutes</option>
           </select>
           <button onClick={loadMonitoringData} className="btn btn-primary btn-sm">
-            🔄 Refresh Now
+            ↻ Refresh Now
           </button>
         </div>
       </div>
@@ -184,7 +184,7 @@ const MonitoringPage = () => {
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          📊 Overview
+          ▦ Overview
         </button>
         <button 
           className={`tab ${activeTab === 'flows' ? 'active' : ''}`}
@@ -202,7 +202,7 @@ const MonitoringPage = () => {
           className={`tab ${activeTab === 'performance' ? 'active' : ''}`}
           onClick={() => setActiveTab('performance')}
         >
-          📈 Performance
+          ▲ Performance
         </button>
       </div>
 
@@ -214,32 +214,32 @@ const MonitoringPage = () => {
               <div className="metric-card">
                 <div className="metric-value">{metrics.totalFlowFiles?.toLocaleString() || 0}</div>
                 <div className="metric-label">Total Flow Files</div>
-                <div className="metric-trend">📈 +5.2%</div>
+                <div className="metric-trend">▲ +5.2%</div>
               </div>
               <div className="metric-card">
                 <div className="metric-value">{formatBytes(metrics.bytesRead || 0)}</div>
                 <div className="metric-label">Data Read</div>
-                <div className="metric-trend">📈 +12.8%</div>
+                <div className="metric-trend">▲ +12.8%</div>
               </div>
               <div className="metric-card">
                 <div className="metric-value">{formatBytes(metrics.bytesWritten || 0)}</div>
                 <div className="metric-label">Data Written</div>
-                <div className="metric-trend">📈 +8.9%</div>
+                <div className="metric-trend">▲ +8.9%</div>
               </div>
               <div className="metric-card">
                 <div className="metric-value">{metrics.activeThreads || 0}</div>
                 <div className="metric-label">Active Threads</div>
-                <div className="metric-trend">📉 -2.1%</div>
+                <div className="metric-trend">▼ -2.1%</div>
               </div>
               <div className="metric-card">
                 <div className="metric-value">{metrics.queuedFlowFiles || 0}</div>
                 <div className="metric-label">Queued Files</div>
-                <div className="metric-trend">📈 +15.3%</div>
+                <div className="metric-trend">▲ +15.3%</div>
               </div>
               <div className="metric-card">
                 <div className="metric-value">{(metrics.systemLoad * 100)?.toFixed(1) || 0}%</div>
                 <div className="metric-label">System Load</div>
-                <div className="metric-trend">📊 Normal</div>
+                <div className="metric-trend">■ Normal</div>
               </div>
             </div>
 
@@ -305,10 +305,10 @@ const MonitoringPage = () => {
 
                   <div className="flow-actions">
                     <button className="btn btn-secondary btn-sm">
-                      📊 View Details
+                      ▦ View Details
                     </button>
                     <button className="btn btn-outline btn-sm">
-                      ⚙️ Configure
+                      ⚙ Configure
                     </button>
                   </div>
                 </div>
@@ -323,7 +323,7 @@ const MonitoringPage = () => {
             <div className="section-header">
               <h2>System Alerts</h2>
               <button className="btn btn-outline">
-                ⚙️ Alert Settings
+                ⚙ Alert Settings
               </button>
             </div>
 
@@ -331,7 +331,7 @@ const MonitoringPage = () => {
               {alerts.map(alert => (
                 <div key={alert.id} className={`alert-item ${alert.level}`}>
                   <div className="alert-icon">
-                    {alert.level === 'warning' ? '⚠️' : alert.level === 'error' ? '❌' : 'ℹ️'}
+                    {alert.level === 'warning' ? '⚠' : alert.level === 'error' ? '✗' : 'ⓘ'}
                   </div>
                   <div className="alert-content">
                     <div className="alert-message">{alert.message}</div>
@@ -350,7 +350,7 @@ const MonitoringPage = () => {
 
             {alerts.length === 0 && (
               <div className="no-alerts">
-                <p>✅ No active alerts. All systems are running normally.</p>
+                <p>✓ No active alerts. All systems are running normally.</p>
               </div>
             )}
           </div>
