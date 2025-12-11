@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom';
 import { E2ETraceThemeProvider } from './contexts/e2etrace-theme-context.jsx';
 import { E2ETraceLayoutProvider } from './contexts/e2etrace-layout-context.jsx';
 import { GraphFilterProvider } from './contexts/e2etrace-graph-filter-context.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import router from './routes';
 
 // Stylesheets
@@ -13,13 +14,15 @@ import './styles/xstate-design-system.css';
 
 function App() {
   return (
-    <E2ETraceThemeProvider>
-      <E2ETraceLayoutProvider>
-        <GraphFilterProvider>
-          <RouterProvider router={router} />
-        </GraphFilterProvider>
-      </E2ETraceLayoutProvider>
-    </E2ETraceThemeProvider>
+    <ErrorBoundary>
+      <E2ETraceThemeProvider>
+        <E2ETraceLayoutProvider>
+          <GraphFilterProvider>
+            <RouterProvider router={router} />
+          </GraphFilterProvider>
+        </E2ETraceLayoutProvider>
+      </E2ETraceThemeProvider>
+    </ErrorBoundary>
   );
 }
 

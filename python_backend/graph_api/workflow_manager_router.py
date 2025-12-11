@@ -13,7 +13,7 @@ Features:
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -105,8 +105,9 @@ async def create_workflow(
     - Scheduling options
     """
     try:
-        # Generate unique workflow ID
-        workflow_id = f"wf_{workflow.source.type}_{workflow.target.type}_{uuid.uuid4().hex[:8]}"
+        # Generate unique workflow ID with timestamp and UUID
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        workflow_id = f"wf_{timestamp}_{uuid.uuid4().hex[:8]}"
         
         # TODO: Save to database
         # db_workflow = WorkflowInstance(
@@ -149,7 +150,7 @@ async def create_workflow(
             processed_records=0,
             failed_records=0,
             quality_score=None,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
             updated_at=None,
             started_at=None,
             completed_at=None,
@@ -216,56 +217,6 @@ async def get_workflow(
         schedule_enabled=workflow_data['schedule_enabled'],
         schedule_cron=workflow_data.get('schedule_cron'),
         next_run_at=workflow_data.get('next_run_at')
-    )
-
-    # OLD MOCK RESPONSE REMOVED
-    old_mock = WorkflowInstanceDetail(
-        id=workflow_id,
-        name="Teamcenter → Neo4j Migration",
-        description="Migrate 125K parts from Teamcenter to Neo4j Knowledge Graph",
-        source_id="teamcenter_prod",
-        source_name="Teamcenter Production",
-        source_type="teamcenter",
-        source_config={
-            "version": "13.2",
-            "endpoint": "https://teamcenter.company.com/tc",
-            "authentication": "SOA"
-        },
-        target_id="neo4j_prod",
-        target_name="Neo4j Knowledge Graph",
-        target_type="neo4j",
-        target_config={
-            "uri": "neo4j+s://prod.databases.neo4j.io",
-            "database": "plm_migration"
-        },
-        workflow_config={
-            "nodes": [],
-            "edges": [],
-            "ai_agents": ["data_analyst", "etl_orchestrator", "quality_monitor"]
-        },
-        ai_agents_enabled=["data_analyst", "etl_orchestrator", "quality_monitor"],
-        status=WorkflowStatus.RUNNING,
-        current_stage=WorkflowStage.TRANSFORMING,
-        progress_percentage=67.5,
-        total_records=125000,
-        processed_records=84375,
-        failed_records=234,
-        quality_score=97.8,
-        execution_metadata={
-            "current_batch": 169,
-            "total_batches": 250,
-            "throughput_records_per_sec": 450,
-            "estimated_completion": "2025-11-24T15:30:00Z"
-        },
-        last_execution_id="exec_20251124_123045",
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-        started_at=datetime.now(),
-        completed_at=None,
-        created_by="admin@company.com",
-        schedule_enabled=True,
-        schedule_cron="0 2 * * *",
-        next_run_at=datetime.now()
     )
 
 
@@ -339,7 +290,8 @@ async def execute_workflow(
     """
     try:
         # TODO: Implement actual execution control
-        execution_id = f"exec_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        now_utc = datetime.now(timezone.utc)
+        execution_id = f"exec_{now_utc.strftime('%Y%m%d_%H%M%S')}"
         
         action = execution_request.action.lower()
         
@@ -366,7 +318,7 @@ async def execute_workflow(
             execution_id=execution_id,
             status=status,
             message=message,
-            started_at=datetime.now() if action == "start" else None
+            started_at=now_utc if action == "start" else None
         )
         
     except HTTPException:
@@ -512,10 +464,12 @@ async def instantiate_from_template(
         raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
     
     # Generate workflow ID and use template name if no custom name provided
-    workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
-    workflow_name = name or f"{template['name']} - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    workflow_id = f"wf_{timestamp}_{uuid.uuid4().hex[:8]}"
+    workflow_name = name or f"{template['name']} - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC"
     
     # Create workflow instance with template configuration
+    now_utc = datetime.now(timezone.utc)
     new_workflow = WorkflowInstanceResponse(
         id=workflow_id,
         name=workflow_name,
@@ -533,8 +487,8 @@ async def instantiate_from_template(
         processed_records=0,
         failed_records=0,
         quality_score=None,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+        created_at=now_utc,
+        updated_at=now_utc,
         started_at=None,
         completed_at=None,
         created_by="system",

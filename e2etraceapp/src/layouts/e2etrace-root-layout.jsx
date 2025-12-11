@@ -28,6 +28,8 @@ export const E2ETraceRootLayout = () => {
               <ul>
                 <li><NavLink to="/workflow-manager">🏭 Workflow Manager</NavLink></li>
                 <li><NavLink to="/">📊 Interactive State Flow</NavLink></li>
+                <li><NavLink to="/self-healing">🔄 Self-Healing Monitor</NavLink></li>
+                <li><NavLink to="/multimodal">⚡ Multi-Modal Analyzer</NavLink></li>
               </ul>
             </div>
             
@@ -35,6 +37,7 @@ export const E2ETraceRootLayout = () => {
               <h3 className="nav-section-title">Data Operations</h3>
               <ul>
                 <li><NavLink to="/graph-explorer">Graph Explorer</NavLink></li>
+                <li><NavLink to="/lineage">🧬 Data Lineage</NavLink></li>
               </ul>
             </div>
             

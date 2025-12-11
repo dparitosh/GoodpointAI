@@ -6,6 +6,9 @@ import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx'
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 import WorkflowManagerPage from '../pages/workflow-manager/WorkflowManagerPage.jsx';
 import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
+import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
+import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
+import MultiModalAnalyzerPage from '../pages/multimodal/MultiModalAnalyzerPage.jsx';
 
 const router = createHashRouter([
   {
@@ -53,6 +56,27 @@ const router = createHashRouter([
         path: 'workflow/:workflowId',
         element: <WorkflowDetailPage />,
         handle: { crumb: 'Workflow Detail' },
+      },
+      
+      // Data Lineage Visualizer
+      {
+        path: 'lineage',
+        element: <LineageVisualizerPage />,
+        handle: { crumb: 'Data Lineage' },
+      },
+      
+      // Self-Healing Orchestration Monitor
+      {
+        path: 'self-healing',
+        element: <SelfHealingMonitorPage />,
+        handle: { crumb: 'Self-Healing Monitor' },
+      },
+      
+      // Multi-Modal Data Analyzer
+      {
+        path: 'multimodal',
+        element: <MultiModalAnalyzerPage />,
+        handle: { crumb: 'Multi-Modal Analyzer' },
       },
     ],
   },

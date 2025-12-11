@@ -11,7 +11,7 @@ from sqlalchemy.sql import func
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 Base = declarative_base()
 
@@ -134,6 +134,28 @@ class WorkflowInstanceCreate(BaseModel):
     schedule_enabled: bool = False
     schedule_cron: Optional[str] = None
     created_by: Optional[str] = "system"
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Workflow name cannot be empty')
+        return v.strip()
+    
+    @validator('source')
+    def validate_source(cls, v):
+        if not v.id or len(v.id) < 3:
+            raise ValueError('Source system ID must be at least 3 characters')
+        if not v.type:
+            raise ValueError('Source system type is required')
+        return v
+    
+    @validator('target')
+    def validate_target(cls, v):
+        if not v.id or len(v.id) < 3:
+            raise ValueError('Target system ID must be at least 3 characters')
+        if not v.type:
+            raise ValueError('Target system type is required')
+        return v
 
 
 class WorkflowInstanceUpdate(BaseModel):

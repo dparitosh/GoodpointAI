@@ -23,17 +23,30 @@ const WorkflowDetailPage = () => {
   // Load workflow details on mount and when workflowId changes
   useEffect(() => {
     loadWorkflowDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowId]);
 
-  // Auto-refresh when workflow is running
+  // Auto-refresh when workflow is running (separate effect)
   useEffect(() => {
+    let interval;
     if (workflow?.status === 'running') {
-      const interval = setInterval(() => {
-        loadWorkflowDetails();
+      interval = setInterval(() => {
+        // Wrap in try-catch to prevent interval from continuing on error
+        try {
+          loadWorkflowDetails();
+        } catch (error) {
+          console.error('Error in auto-refresh:', error);
+          clearInterval(interval);
+        }
       }, 5000);
-      
-      return () => clearInterval(interval);
     }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflow?.status]);
 
   const loadWorkflowDetails = async () => {
@@ -53,7 +66,7 @@ const WorkflowDetailPage = () => {
             const graphData = await graphRes.json();
             setGraphData(graphData);
           }
-        } catch (err) {
+        } catch {
           // Fallback to default PLM workflow if custom graph not available
           const fallbackRes = await fetch('/api/plm/workflow');
           if (fallbackRes.ok) {
@@ -62,11 +75,15 @@ const WorkflowDetailPage = () => {
           }
         }
       } else {
-        alert('Workflow not found');
-        navigate('/workflow-manager');
+        console.error('Workflow not found:', workflowId);
+        navigate('/workflow-manager', { 
+          state: { error: 'Workflow not found' } 
+        });
       }
     } catch (error) {
       console.error('Error loading workflow details:', error);
+      // Don't navigate on network errors, just show error state
+      setWorkflow(null);
     } finally {
       setLoading(false);
     }
@@ -74,23 +91,33 @@ const WorkflowDetailPage = () => {
 
   const handleWorkflowAction = async (action) => {
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, execution_params: {} })
+        body: JSON.stringify({ action, execution_params: {} }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const result = await response.json();
-        alert(result.message);
-        loadWorkflowDetails();
+        console.log(`Workflow action ${action} succeeded:`, result.message);
+        await loadWorkflowDetails();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        console.error(`Workflow action ${action} failed:`, error.detail);
       }
     } catch (error) {
-      console.error('Error executing workflow action:', error);
-      alert('Failed to execute workflow action');
+      if (error.name === 'AbortError') {
+        console.error('Workflow action request timed out');
+      } else {
+        console.error('Error executing workflow action:', error);
+      }
     }
   };
 

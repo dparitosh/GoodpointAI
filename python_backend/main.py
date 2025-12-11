@@ -28,6 +28,9 @@ from graph_api.llm_integration_router import router as llm_integration_router
 from graph_api.plm_systems_integration_router import router as plm_systems_integration_router
 from graph_api.filesystem_integration_router import router as filesystem_integration_router
 from graph_api.api_gateway_router import router as api_gateway_router
+from graph_api.lineage_router import router as lineage_router
+from graph_api.self_healing_router import router as self_healing_router
+from graph_api.multimodal_router import router as multimodal_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -81,6 +84,9 @@ app.include_router(llm_integration_router)
 app.include_router(plm_systems_integration_router)
 app.include_router(filesystem_integration_router)
 app.include_router(api_gateway_router)
+app.include_router(lineage_router)
+app.include_router(self_healing_router)
+app.include_router(multimodal_router)
 
 if __name__ == "__main__":
     import uvicorn

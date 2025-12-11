@@ -54,6 +54,7 @@ const WorkflowManagerPage = () => {
 
   useEffect(() => {
     loadWorkflowData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   const loadWorkflowData = async () => {
@@ -101,23 +102,33 @@ const WorkflowManagerPage = () => {
 
   const handleWorkflowAction = async (workflowId, action) => {
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, execution_params: {} })
+        body: JSON.stringify({ action, execution_params: {} }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const result = await response.json();
-        alert(result.message);
-        loadWorkflowData();
+        console.log(`Workflow ${action} action succeeded:`, result.message);
+        await loadWorkflowData();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail}`);
+        console.error(`Workflow ${action} action failed:`, error.detail);
       }
     } catch (error) {
-      console.error('Error executing workflow action:', error);
-      alert('Failed to execute workflow action');
+      if (error.name === 'AbortError') {
+        console.error('Workflow action request timed out');
+      } else {
+        console.error('Error executing workflow action:', error);
+      }
     }
   };
 
@@ -126,20 +137,33 @@ const WorkflowManagerPage = () => {
   };
 
   const handleDeleteWorkflow = async (workflowId) => {
-    if (!confirm('Are you sure you want to delete this workflow?')) return;
+    // TODO: Replace with proper confirmation modal
+    if (!window.confirm('Are you sure you want to delete this workflow?')) return;
     
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(`/api/workflows/${workflowId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
-        alert('Workflow deleted successfully');
-        loadWorkflowData();
+        console.log('Workflow deleted successfully:', workflowId);
+        await loadWorkflowData();
+      } else {
+        console.error('Failed to delete workflow:', workflowId);
       }
     } catch (error) {
-      console.error('Error deleting workflow:', error);
-      alert('Failed to delete workflow');
+      if (error.name === 'AbortError') {
+        console.error('Delete workflow request timed out');
+      } else {
+        console.error('Error deleting workflow:', error);
+      }
     }
   };
 
@@ -212,43 +236,55 @@ const WorkflowManagerPage = () => {
   const handleCreateWorkflow = async () => {
     // Final validation
     if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
-      alert('Please fix validation errors before creating the workflow');
+      console.warn('Validation failed before creating workflow');
       return;
     }
 
     setIsLoading(true);
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(
         `/api/workflows/templates/${selectedTemplate.id}/instantiate?source_id=${encodeURIComponent(workflowConfig.source.system)}&target_id=${encodeURIComponent(workflowConfig.target.system)}&name=${encodeURIComponent(workflowConfig.name)}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal
         }
       );
       
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const newWorkflow = await response.json();
+        // Close modal and reset state first
         setShowConfigModal(false);
         setConfigStep(1);
+        setValidationErrors({});
         // Wait for workflow list to refresh before navigating
         await loadWorkflowData();
         // Navigate immediately - no arbitrary timeout needed
         navigate(`/workflow/${newWorkflow.id}`);
       } else {
         const error = await response.json();
-        alert(`Error creating workflow: ${error.detail || 'Unknown error'}`);
+        console.error('Error creating workflow:', error.detail || 'Unknown error');
       }
     } catch (error) {
-      console.error('Error creating workflow:', error);
-      alert('Failed to create workflow. Please check your network connection and try again.');
+      if (error.name === 'AbortError') {
+        console.error('Workflow creation request timed out');
+      } else {
+        console.error('Error creating workflow:', error);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCustomConfig = () => {
-    console.log('Custom config button clicked');
-    alert('Custom workflow configuration coming soon! This will allow you to manually configure source and target systems.');
+    console.info('Custom workflow configuration coming soon');
+    // TODO: Implement custom configuration modal
     setShowCreateModal(false);
   };
 
