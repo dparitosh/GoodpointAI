@@ -41,28 +41,28 @@ const WorkflowProgress = ({ currentPage, showDetails = true, showNavigation = tr
     const stageMap = {
       [WORKFLOW_STAGES.DATA_CONFIGURATION]: {
         title: 'Data Configuration',
-        icon: '📊',
+        icon: '◳',
         description: 'Set up data sources, schema, and quality rules',
         route: '/data-config',
         pages: ['/data-config', '/spreadsheet', '/analytics']
       },
       [WORKFLOW_STAGES.DATA_PIPELINES]: {
         title: 'Data Pipelines',
-        icon: '🔄',
+        icon: '↻',
         description: 'Configure NiFi pipelines, ETL processes, and mappings',
         route: '/nifi',
         pages: ['/nifi', '/etl', '/data-mapping']
       },
       [WORKFLOW_STAGES.DATA_FLOW]: {
         title: 'Data Flow',
-        icon: '🌊',
+        icon: '∿',
         description: 'Visualize and monitor data flow through the system',
         route: '/',
         pages: ['/', '/graphexplorer', '/monitoring']
       },
       [WORKFLOW_STAGES.REPORTING]: {
         title: 'Reporting',
-        icon: '📋',
+        icon: '◻',
         description: 'Generate reports, dashboards, and export data',
         route: '/reporting',
         pages: ['/reporting', '/export']

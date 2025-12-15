@@ -1,5 +1,5 @@
 """
-🧬 Data Lineage Tracking Service
+ Data Lineage Tracking Service
 ==================================
 
 Intelligent lineage tracking for PLM data migration with:
@@ -278,7 +278,7 @@ class LineageService:
         
         critical_nodes = [n for n in affected_nodes if n["impact_level"] == "critical"]
         if critical_nodes:
-            recommendations.append(f"⚠️ {len(critical_nodes)} critical systems affected - immediate attention required")
+            recommendations.append(f"! {len(critical_nodes)} critical systems affected - immediate attention required")
             recommendations.append("Consider phased rollout with validation checkpoints")
         
         if change_type == "schema_change":

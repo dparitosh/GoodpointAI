@@ -2,7 +2,7 @@ import { createMachine, assign, interpret } from 'xstate';
 import { ETLEngine } from './etl-engine.js';
 
 /**
- * 🧠 AGENTIC ETL ORCHESTRATOR - Modular Cognition Pattern Implementation
+ * AGENTIC ETL ORCHESTRATOR - Modular Cognition Pattern Implementation
  * Applies Pareto principle to focus on 20% of ETL operations that provide 80% value
  * Integrates with existing ETL Engine using agentic orchestration patterns
  */
@@ -10,7 +10,7 @@ import { ETLEngine } from './etl-engine.js';
 
 
 
-// 🎯 AGENTIC STATES - FSM for ETL Orchestration
+// AGENTIC STATES - FSM for ETL Orchestration
 const etlOrchestrationMachine = createMachine({
   id: 'etlOrchestration',
   initial: 'idle',
@@ -126,7 +126,7 @@ const etlOrchestrationMachine = createMachine({
       errors: []
     }),
     deployAnalysisAgent: (context, event) => {
-      console.log('🔍 Deploying Analysis Agent for pipeline:', context.currentPipeline?.name);
+      console.log('Deploying Analysis Agent for pipeline:', context.currentPipeline?.name);
     },
     storeAnalysis: assign({
       metrics: (context, event) => ({ ...context.metrics, analysis: event.results })
@@ -142,11 +142,11 @@ const etlOrchestrationMachine = createMachine({
   }
 });
 
-// 🤖 AGENTIC ETL AGENTS - Specialized AI Agents for ETL Operations
+// AGENTIC ETL AGENTS - Specialized AI Agents for ETL Operations
 class AgenticETLAgent {
   constructor(type, _config = {}) {
     this.type = type;
-    this.config = config;
+    this.config = _config;
     this.status = 'idle';
     this.metrics = {};
     this.etlEngine = new ETLEngine();
@@ -196,7 +196,7 @@ class AgenticETLAgent {
     }
   }
 
-  // 🔍 ANALYSIS AGENT - Applies Pareto analysis to identify critical data sources
+  // ANALYSIS AGENT - Applies Pareto analysis to identify critical data sources
   async analyzeDataSources(task) {
     const { dataSources } = task;
     
@@ -235,7 +235,7 @@ class AgenticETLAgent {
     };
   }
 
-  // 📥 EXTRACTION AGENT - Focus on high-value sources first
+  // EXTRACTION AGENT - Focus on high-value sources first
   async extractData(task) {
     const { sources, prioritization } = task;
     const results = [];
@@ -271,7 +271,7 @@ class AgenticETLAgent {
     };
   }
 
-  // 🔄 TRANSFORMATION AGENT - Smart transformation based on data analysis
+  // TRANSFORMATION AGENT - Smart transformation based on data analysis
   async transformData(task) {
     const { data, transformations } = task;
     
@@ -311,7 +311,7 @@ class AgenticETLAgent {
     };
   }
 
-  // 📤 LOADING AGENT - Optimized loading strategies
+  // LOADING AGENT - Optimized loading strategies
   async loadData(task) {
     const { data, targets } = task;
     const results = [];
@@ -343,7 +343,7 @@ class AgenticETLAgent {
     };
   }
 
-  // 📊 MONITORING AGENT - Real-time quality monitoring
+  // MONITORING AGENT - Real-time quality monitoring
   async monitorQuality(task) {
     const { data, thresholds } = task;
     
@@ -376,7 +376,7 @@ class AgenticETLAgent {
     };
   }
 
-  // 🎯 HELPER METHODS for Pareto Analysis
+  // HELPER METHODS for Pareto Analysis
   assessDataQuality(_data) {
     if (!_data || data.length === 0) return 0;
     
@@ -483,7 +483,7 @@ class AgenticETLAgent {
   }
 }
 
-// 🎼 AGENTIC ETL ORCHESTRATOR - Main orchestration class
+// AGENTIC ETL ORCHESTRATOR - Main orchestration class
 export class AgenticETLOrchestrator {
   constructor() {
     this.machine = etlOrchestrationMachine;
@@ -494,7 +494,7 @@ export class AgenticETLOrchestrator {
     this.service.start();
   }
 
-  // 🚀 Start an agentic ETL pipeline
+  // Start an agentic ETL pipeline
   async executePipeline(pipelineConfig) {
     const jobId = `job_${Date.now()}`;
     
@@ -579,7 +579,7 @@ export class AgenticETLOrchestrator {
     }
   }
 
-  // 🤖 Deploy specialized agents for the pipeline
+  // Deploy specialized agents for the pipeline
   deployAgents(pipelineConfig) {
     return {
       analyzer: new AgenticETLAgent('analyzer', pipelineConfig.analysisConfig),
@@ -590,7 +590,7 @@ export class AgenticETLOrchestrator {
     };
   }
 
-  // 📊 Calculate overall pipeline metrics
+  // Calculate overall pipeline metrics
   calculateOverallMetrics(results) {
     const totalRecords = results.reduce((sum, result) => {
       return sum + (result.totalRecords || result.recordsProcessed || 0);
@@ -615,7 +615,7 @@ export class AgenticETLOrchestrator {
     return 0.8; // Placeholder
   }
 
-  // 📈 Get current orchestration status
+  // Get current orchestration status
   getStatus() {
     return {
       currentState: this.service.state.value,
@@ -628,7 +628,7 @@ export class AgenticETLOrchestrator {
     };
   }
 
-  // 🧹 Cleanup completed jobs
+  // Cleanup completed jobs
   cleanup() {
     const completedJobs = Array.from(this.activeJobs.entries())
       .filter(([_, job]) => job.status === 'completed' || job.status === 'error');
@@ -639,5 +639,5 @@ export class AgenticETLOrchestrator {
   }
 }
 
-// 📡 Export for integration with existing ETL Engine
+// Export for integration with existing ETL Engine
 export default AgenticETLOrchestrator;

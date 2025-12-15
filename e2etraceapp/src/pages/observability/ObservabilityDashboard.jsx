@@ -27,16 +27,16 @@ export const ObservabilityDashboard = () => {
     setLoading(true);
     try {
       // Fetch monitoring alerts
-      const alertsResponse = await e2etraceFetchWithRetry('http://localhost:8000/api/monitoring/alerts');
+      const alertsResponse = await e2etraceFetchWithRetry('/api/monitoring/alerts');
       setAlerts(alertsResponse || []);
 
       // Fetch data quality metrics
-      const qualityResponse = await e2etraceFetchWithRetry('http://localhost:8000/api/monitoring/data-quality');
+      const qualityResponse = await e2etraceFetchWithRetry('/api/monitoring/data-quality');
       setQualityMetrics(qualityResponse);
 
       // Fetch agentic system status
       try {
-        const agenticResponse = await e2etraceFetchWithRetry('http://localhost:8000/api/agentic/system/status');
+        const agenticResponse = await e2etraceFetchWithRetry('/api/agentic/system/status');
         setAgenticStatus(agenticResponse);
       } catch (err) {
         console.warn('Agentic system not available:', err);
@@ -120,7 +120,7 @@ export const ObservabilityDashboard = () => {
             <div className="metric-card">
               <div className="metric-header">
                 <h3>Data Issues</h3>
-                <span className="metric-icon">⚠️</span>
+                <span className="metric-icon">!</span>
               </div>
               <div className="metric-value" style={{ color: '#FF832B' }}>
                 {((qualityMetrics?.duplicates || 0) + (qualityMetrics?.nullValues || 0))}

@@ -1,5 +1,5 @@
 """
-🔄 Self-Healing Orchestration Service
+ Self-Healing Orchestration Service
 ======================================
 
 Resilient task execution with:

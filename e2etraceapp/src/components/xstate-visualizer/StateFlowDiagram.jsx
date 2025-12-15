@@ -75,7 +75,6 @@ export const StateFlowDiagram = ({
       layout: getLayoutConfig(layout),
       minZoom: 0.3,
       maxZoom: 3,
-      wheelSensitivity: 0.2,
       boxSelectionEnabled: true,
       selectionType: 'single'
     });
@@ -346,9 +345,8 @@ const getStylesheet = (theme) => {
         'padding': '12px',
         'text-margin-y': '2px',
         'overlay-opacity': 0,
-        'transition-property': 'border-color, border-width, box-shadow',
+        'transition-property': 'border-color, border-width',
         'transition-duration': '0.3s',
-        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.15)',
         'z-index': 10
       }
     },
@@ -364,7 +362,6 @@ const getStylesheet = (theme) => {
       style: {
         'border-color': '#0078D4',
         'border-width': '4px',
-        'box-shadow': '0 0 0 4px rgba(0, 120, 212, 0.2), 0 8px 24px rgba(0, 0, 0, 0.2)',
         'z-index': 999
       }
     },

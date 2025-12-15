@@ -1,5 +1,5 @@
 """
-🧠 AGENTIC GRAPH ROUTER - Enhanced with Modular Cognition Pattern
+ AGENTIC GRAPH ROUTER - Enhanced with Modular Cognition Pattern
 Applies Pareto analysis to Neo4j operations: 20% of queries provide 80% of insights
 Integrates multi-agent orchestration for intelligent graph processing
 """
@@ -22,7 +22,7 @@ from .helpers import _add_node_from_neo4j_node, _process_neo4j_relationship
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agentic-graph", tags=["Agentic Graph Operations"])
 
-# 🎯 AGENTIC MODELS
+#  AGENTIC MODELS
 class GraphAnalysisRequest(BaseModel):
     focus_areas: List[str] = Field(default=["connectivity", "centrality", "clustering"])
     pareto_optimization: bool = Field(default=True, description="Apply Pareto analysis to prioritize insights")
@@ -47,7 +47,7 @@ class MultiAgentOrchestrationRequest(BaseModel):
     agents: List[AgentTaskRequest]
     coordination_rules: Dict[str, Any] = Field(default_factory=dict)
 
-# 🤖 GRAPH ANALYSIS AGENTS
+#  GRAPH ANALYSIS AGENTS
 class GraphAnalysisAgent:
     """Base class for specialized graph analysis agents"""
     
@@ -97,7 +97,7 @@ class ConnectivityAnalysisAgent(GraphAnalysisAgent):
     """Agent specialized in analyzing graph connectivity patterns"""
     
     async def _execute_task(self, task: Dict[str, Any], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
-        # 🎯 Pareto Query: Focus on most connected nodes (20% that drive 80% of connections)
+        #  Pareto Query: Focus on most connected nodes (20% that drive 80% of connections)
         connectivity_query = """
         MATCH (n)
         WITH n, size((n)--()) as degree
@@ -149,7 +149,7 @@ class CentralityAnalysisAgent(GraphAnalysisAgent):
     """Agent specialized in centrality analysis"""
     
     async def _execute_task(self, task: Dict[str, Any], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
-        # 🎯 Betweenness centrality approximation for key influencer nodes
+        #  Betweenness centrality approximation for key influencer nodes
         centrality_query = """
         MATCH (n)
         OPTIONAL MATCH (n)-[r1]-(m)-[r2]-(o)
@@ -196,7 +196,7 @@ class ClusteringAnalysisAgent(GraphAnalysisAgent):
     """Agent specialized in community detection and clustering"""
     
     async def _execute_task(self, task: Dict[str, Any], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
-        # 🎯 Simple clustering based on shared relationships
+        #  Simple clustering based on shared relationships
         clustering_query = """
         MATCH (n)-[r]-(m)
         WITH n, collect(DISTINCT type(r)) as relationship_types, count(r) as connections
@@ -364,7 +364,7 @@ class InsightGenerationAgent(GraphAnalysisAgent):
         
         return sum(efficiencies) / len(efficiencies) if efficiencies else 0.0
 
-# 🎼 MULTI-AGENT ORCHESTRATOR
+#  MULTI-AGENT ORCHESTRATOR
 class AgenticGraphOrchestrator:
     """Orchestrates multiple graph analysis agents using various coordination patterns"""
     
@@ -524,7 +524,7 @@ class AgenticGraphOrchestrator:
         
         return True
 
-# 🔗 AGENT FACTORY
+#  AGENT FACTORY
 def create_agent(agent_type: str, config: Dict[str, Any] = None) -> GraphAnalysisAgent:
     """Factory function to create agents"""
     agent_classes = {
@@ -539,7 +539,7 @@ def create_agent(agent_type: str, config: Dict[str, Any] = None) -> GraphAnalysi
     
     return agent_classes[agent_type](agent_type, config)
 
-# 🌐 FASTAPI ENDPOINTS
+#  FASTAPI ENDPOINTS
 
 @router.post("/analyze", response_model=GraphInsightsResponse)
 async def execute_graph_analysis(

@@ -1,6 +1,6 @@
 # External Integrations - Quick Start Guide
 
-## 🚀 Quick Setup (5 minutes)
+##  Quick Setup (5 minutes)
 
 ### Step 1: Install Dependencies
 ```bash
@@ -35,25 +35,25 @@ open http://localhost:8000/docs
 
 ---
 
-## 📋 Quick Reference
+##  Quick Reference
 
 ### All Available API Prefixes
 
 | Prefix | Description | Endpoints | Status |
 |--------|-------------|-----------|--------|
-| `/api/azure` | Azure cloud services | 12 | ✅ Ready |
-| `/api/aws` | AWS cloud services | 11 | ✅ Ready |
-| `/api/odata` | OData & SAP integration | 10 | ✅ Ready |
-| `/api/llm` | LLM providers (OpenAI, Claude, Ollama) | 10 | ✅ Ready |
-| `/api/plm` | PLM systems (Teamcenter, Windchill, etc.) | 9 | ✅ Ready |
-| `/api/filesystem` | File operations (XML, JSON, CSV) | 14 | ✅ Ready |
-| `/api/gateway` | API gateway management | 11 | ✅ Ready |
+| `/api/azure` | Azure cloud services | 12 | ✓ Ready |
+| `/api/aws` | AWS cloud services | 11 | ✓ Ready |
+| `/api/odata` | OData & SAP integration | 10 | ✓ Ready |
+| `/api/llm` | LLM providers (OpenAI, Claude, Ollama) | 10 | ✓ Ready |
+| `/api/plm` | PLM systems (Teamcenter, Windchill, etc.) | 9 | ✓ Ready |
+| `/api/filesystem` | File operations (XML, JSON, CSV) | 14 | ✓ Ready |
+| `/api/gateway` | API gateway management | 11 | ✓ Ready |
 
 **Total New Endpoints: 77**
 
 ---
 
-## 🎯 Common Use Cases
+##  Common Use Cases
 
 ### Use Case 1: Upload File to Azure
 ```bash
@@ -104,7 +104,7 @@ curl -X POST http://localhost:8000/api/aws/s3/upload \
 
 ---
 
-## 🔧 Configuration Snippets
+##  Configuration Snippets
 
 ### Minimal .env for Testing
 
@@ -146,7 +146,7 @@ OPENAI_MODEL=gpt-4-turbo-preview
 
 ---
 
-## 📦 Dependency Groups
+##  Dependency Groups
 
 ### Core (Always Required)
 ```bash
@@ -180,7 +180,7 @@ pip install pandas openpyxl xmltodict jsonschema
 
 ---
 
-## 🧪 Testing Endpoints
+##  Testing Endpoints
 
 ### Using Python
 ```python
@@ -221,7 +221,7 @@ fetch('http://localhost:8000/api/llm/openai/chat', {
 
 ---
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Issue: "Module not found"
 ```bash
@@ -267,7 +267,7 @@ MAX_UPLOAD_SIZE_MB=500
 
 ---
 
-## 📚 Where to Find More Info
+##  Where to Find More Info
 
 1. **Complete API Reference**: `EXTERNAL_INTEGRATIONS_API_REFERENCE.md`
 2. **Implementation Details**: `EXTERNAL_INTEGRATIONS_IMPLEMENTATION_SUMMARY.md`
@@ -276,7 +276,7 @@ MAX_UPLOAD_SIZE_MB=500
 
 ---
 
-## 🎨 Frontend Integration
+##  Frontend Integration
 
 ### React/JavaScript Example
 ```javascript
@@ -329,9 +329,9 @@ export const chatWithLLM = async (message, provider = 'openai') => {
 
 ---
 
-## 🔐 Security Notes
+##  Security Notes
 
-⚠️ **Important Security Considerations:**
+! **Important Security Considerations:**
 
 1. **Never commit .env file**
    ```bash
@@ -358,7 +358,7 @@ export const chatWithLLM = async (message, provider = 'openai') => {
 
 ---
 
-## 🚦 Health Check Dashboard
+##  Health Check Dashboard
 
 Create a simple health check script:
 
@@ -379,10 +379,10 @@ services = [
 for name, url in services:
     try:
         response = requests.get(url, timeout=5)
-        status = '✅' if response.status_code == 200 else '❌'
+        status = '✓' if response.status_code == 200 else '✗'
         print(f"{status} {name}: {response.status_code}")
     except Exception as e:
-        print(f"❌ {name}: {str(e)}")
+        print(f"✗ {name}: {str(e)}")
 ```
 
 Run with:
@@ -392,7 +392,7 @@ python3 health_check.py
 
 ---
 
-## 📊 Performance Tips
+##  Performance Tips
 
 1. **Use async operations for bulk processing**
 2. **Enable Redis caching for repeated queries**
@@ -402,7 +402,7 @@ python3 health_check.py
 
 ---
 
-## 🎓 Learning Path
+##  Learning Path
 
 ### Day 1: File System Operations
 - Upload files
@@ -431,7 +431,7 @@ python3 health_check.py
 
 ---
 
-## ✅ Checklist Before Production
+## ✓ Checklist Before Production
 
 - [ ] All credentials configured in .env
 - [ ] Health checks passing
@@ -446,7 +446,7 @@ python3 health_check.py
 
 ---
 
-## 🤝 Need Help?
+##  Need Help?
 
 1. Check logs: `tail -f logs/app.log`
 2. Review API docs: http://localhost:8000/docs
@@ -456,7 +456,7 @@ python3 health_check.py
 
 ---
 
-## 📝 Quick Commands Cheat Sheet
+##  Quick Commands Cheat Sheet
 
 ```bash
 # Start backend
@@ -485,6 +485,6 @@ open http://localhost:8000/docs
 
 ---
 
-**Ready to integrate! 🎉**
+**Ready to integrate! **
 
 All 77 endpoints are live and documented. Start with health checks, then move to file operations, then cloud services!

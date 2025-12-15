@@ -538,7 +538,7 @@ const DataConfigPage = () => {
                         className="btn btn-sm btn-secondary"
                         onClick={() => setEditingSource(source)}
                       >
-                        ✏️ Edit
+                        ✎ Edit
                       </button>
                       <button 
                         className="btn btn-sm btn-danger"
@@ -636,11 +636,11 @@ const DataConfigPage = () => {
                 </div>
                 <div className="rule-item">
                   <span className="rule-name">Data Type Consistency</span>
-                  <span className="rule-status">⚠️ Warning</span>
+                  <span className="rule-status">! Warning</span>
                 </div>
                 <div className="rule-item">
                   <span className="rule-name">Duplicate Detection</span>
-                  <span className="rule-status">❌ Failed</span>
+                  <span className="rule-status">✗ Failed</span>
                 </div>
               </div>
             </div>
@@ -821,7 +821,7 @@ const DataConfigPage = () => {
                 onClick={testNeo4jConfig}
                 disabled={isLoading || !neo4jConfig.uri || !neo4jConfig.username || !neo4jConfig.password}
               >
-                🔍 Test Connection
+                Test Connection
               </button>
               <button
                 className="btn btn-primary"

@@ -37,7 +37,7 @@ print_status() {
         echo -e "${RED}✗ FAIL${NC} - $message"
         ((FAILED++))
     elif [ "$status" == "WARN" ]; then
-        echo -e "${YELLOW}⚠ WARN${NC} - $message"
+        echo -e "${YELLOW}! WARN${NC} - $message"
         ((WARNINGS++))
     else
         echo -e "${BLUE}ℹ INFO${NC} - $message"

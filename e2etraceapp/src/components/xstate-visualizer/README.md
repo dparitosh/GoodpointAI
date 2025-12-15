@@ -4,7 +4,7 @@ An interactive XState-inspired graph visualization system for ETL (Extract, Tran
 
 ## Features
 
-### 🎨 Visual Design
+### Visual Design
 - **XState-Inspired UI**: Clean, modern interface mimicking XState Visualizer's aesthetic
 - **Dark/Light Themes**: Smooth theme switching with persistent preferences
 - **Color-Coded Nodes**: Distinct colors for each ETL entity type
@@ -18,13 +18,13 @@ An interactive XState-inspired graph visualization system for ETL (Extract, Tran
 - **Rounded Rectangles**: Soft, professional node shapes with shadows
 - **Animated Edges**: Smooth, curved connections with directional arrows
 
-### 🖥️ Layout
+### Layout
 - **3-Panel Design**: Tree Navigator | Graph Canvas | Inspector Panel
 - **Resizable Panels**: Drag dividers to adjust panel widths
 - **Bottom Event Drawer**: Collapsible event log with timeline
 - **Responsive**: Adapts to different screen sizes
 
-### 🎯 Interactions
+### Interactions
 - **Click**: Select nodes and edges
 - **Double-Click**: Open detailed node drawer
 - **Ctrl+Click**: Multi-select nodes
@@ -32,7 +32,7 @@ An interactive XState-inspired graph visualization system for ETL (Extract, Tran
 - **Hover**: Glow effects on nodes and edges
 - **Smart Snapping**: Nodes snap to alignment when dragging
 
-### 📊 Panels
+### Panels
 
 #### Left Panel - Tree Navigator
 - Hierarchical view of all nodes grouped by type
@@ -63,7 +63,7 @@ An interactive XState-inspired graph visualization system for ETL (Extract, Tran
 - Export functionality
 - Timestamp tracking
 
-### 🚀 Advanced Features
+### Advanced Features
 
 #### Detail Drawer
 - Slides in from right on double-click

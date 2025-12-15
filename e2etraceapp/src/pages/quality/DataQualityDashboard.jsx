@@ -25,7 +25,7 @@ export const DataQualityDashboard = () => {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/analytics/quality/dashboard');
+      const response = await fetch('/api/analytics/quality/dashboard');
       if (!response.ok) throw new Error('Failed to fetch dashboard data');
       const data = await response.json();
       setDashboardData(data);
@@ -41,7 +41,7 @@ export const DataQualityDashboard = () => {
   // Fetch quality reports
   const fetchReports = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/analytics/quality/reports');
+      const response = await fetch('/api/analytics/quality/reports');
       if (!response.ok) throw new Error('Failed to fetch reports');
       const data = await response.json();
       setQualityReports(data);
@@ -53,7 +53,7 @@ export const DataQualityDashboard = () => {
   // Fetch quality rules
   const fetchRules = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/analytics/quality/rules?enabled_only=false');
+      const response = await fetch('/api/analytics/quality/rules?enabled_only=false');
       if (!response.ok) throw new Error('Failed to fetch rules');
       const data = await response.json();
       setQualityRules(data);
@@ -71,7 +71,7 @@ export const DataQualityDashboard = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:8000/api/analytics/quality/scan/${newScanForm.table_name}`, {
+      const response = await fetch(`/api/analytics/quality/scan/${newScanForm.table_name}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newScanForm)
@@ -100,7 +100,7 @@ export const DataQualityDashboard = () => {
   // Toggle rule enabled/disabled
   const toggleRule = async (ruleId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/analytics/quality/rules/${ruleId}/toggle`, {
+      const response = await fetch(`/api/analytics/quality/rules/${ruleId}/toggle`, {
         method: 'PUT'
       });
       if (!response.ok) throw new Error('Failed to toggle rule');
@@ -159,7 +159,7 @@ export const DataQualityDashboard = () => {
       {/* Header */}
       <div className="quality-header">
         <div className="quality-header-content">
-          <h1>🔍 Data Quality Management</h1>
+          <h1>Data Quality Management</h1>
           <p className="quality-subtitle">SODA-Style Quality Monitoring & Validation</p>
         </div>
         <button 
@@ -182,19 +182,19 @@ export const DataQualityDashboard = () => {
           className={`quality-tab ${activeTab === 'reports' ? 'active' : ''}`}
           onClick={() => setActiveTab('reports')}
         >
-          📋 Reports
+          ◻ Reports
         </button>
         <button 
           className={`quality-tab ${activeTab === 'rules' ? 'active' : ''}`}
           onClick={() => setActiveTab('rules')}
         >
-          ⚙ Rules
+          ▦ Rules
         </button>
       </div>
 
       {error && (
         <div className="quality-error">
-          ⚠️ {error}
+          ! {error}
         </div>
       )}
 
@@ -213,7 +213,7 @@ export const DataQualityDashboard = () => {
 
             <div className="quality-card summary-card">
               <div className="card-icon" style={{ color: getScoreColor(dashboardData.summary.average_quality_score / 100) }}>
-                {dashboardData.summary.average_quality_score >= 90 ? '✓' : '⚠'}
+                {dashboardData.summary.average_quality_score >= 90 ? '✓' : '!'}
               </div>
               <div className="card-content">
                 <h3 style={{ color: getScoreColor(dashboardData.summary.average_quality_score / 100) }}>
@@ -225,7 +225,7 @@ export const DataQualityDashboard = () => {
 
             <div className="quality-card summary-card">
               <div className="card-icon" style={{ color: dashboardData.summary.critical_issues > 0 ? '#dc3545' : '#6c757d' }}>
-                ⚠
+                !
               </div>
               <div className="card-content">
                 <h3 style={{ color: dashboardData.summary.critical_issues > 0 ? '#dc3545' : '#6c757d' }}>
@@ -393,7 +393,7 @@ export const DataQualityDashboard = () => {
                           <span>Columns: {issue.affected_columns.join(', ')}</span>
                         </div>
                         <div className="issue-suggestion">
-                          💡 {issue.suggestion}
+                          Suggestion: {issue.suggestion}
                         </div>
                       </div>
                     ))}

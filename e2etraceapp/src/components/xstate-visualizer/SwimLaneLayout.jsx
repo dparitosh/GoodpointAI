@@ -110,16 +110,16 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
 
   const getNodeIcon = (node) => {
     const type = (node.type || '').toLowerCase();
-    if (type.includes('database')) return '🗄️';
-    if (type.includes('csv')) return '📄';
-    if (type.includes('json')) return '📋';
-    if (type.includes('xml')) return '📝';
-    if (type.includes('etl')) return '⚙️';
-    if (type.includes('transform')) return '🔄';
-    if (type.includes('api')) return '🔌';
+    if (type.includes('database')) return '▦';
+    if (type.includes('csv')) return '◳';
+    if (type.includes('json')) return '◻';
+    if (type.includes('xml')) return '◰';
+    if (type.includes('etl')) return '⚙';
+    if (type.includes('transform')) return '↻';
+    if (type.includes('api')) return '⚭';
     if (type.includes('quality')) return '✓';
-    if (type.includes('neo4j')) return '🔷';
-    return '📦';
+    if (type.includes('neo4j')) return '◆';
+    return '◻';
   };
 
   const getStatusClass = (node) => {
@@ -209,7 +209,7 @@ export const SwimLaneLayout = ({ nodes, edges, selectedNode, onNodeClick }) => {
                   {node.status && (
                     <div className={`swimlane-node-status-indicator status-${node.status}`}>
                       {node.status === 'healthy' && '✓'}
-                      {node.status === 'warning' && '⚠'}
+                      {node.status === 'warning' && '!'}
                       {node.status === 'error' && '✗'}
                     </div>
                   )}

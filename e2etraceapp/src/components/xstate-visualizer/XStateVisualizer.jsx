@@ -112,36 +112,36 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
 
   // Handle node selection
   const handleNodeClick = useCallback((node) => {
+    if (!node?.id) return;
+
+    // Always update selected node state (works for all view modes)
+    setSelectedNode({
+      ...node,
+      relationships: getNodeRelationships(node.id, graphData)
+    });
+
+    // Add event
+    addEvent({
+      type: 'info',
+      title: 'Node Selected',
+      details: `Selected ${node.type || 'node'}: ${node.label || node.id}`,
+      timestamp: new Date().toISOString(),
+      affectedNodes: [node.id]
+    });
+
+    // If Cytoscape is mounted, also visually select + focus
     if (!cyRef.current) return;
 
     const cy = cyRef.current;
     const cyNode = cy.getElementById(node.id);
-    
+
     if (cyNode.length > 0) {
-      // Unselect all and select the clicked node
       cy.elements().unselect();
       cyNode.select();
-      
-      // Animate to focus on the node
       cy.animate({
         fit: { eles: cyNode, padding: 100 },
         duration: 500,
         easing: 'ease-out-quad'
-      });
-
-      // Update selected node state
-      setSelectedNode({
-        ...node,
-        relationships: getNodeRelationships(node.id, graphData)
-      });
-
-      // Add event
-      addEvent({
-        type: 'info',
-        title: 'Node Selected',
-        details: `Selected ${node.type || 'node'}: ${node.label || node.id}`,
-        timestamp: new Date().toISOString(),
-        affectedNodes: [node.id]
       });
     }
   }, [graphData]);

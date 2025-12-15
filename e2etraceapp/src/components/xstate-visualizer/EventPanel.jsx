@@ -17,17 +17,17 @@ export const EventPanel = ({ events = [], onEventClick, theme = 'light' }) => {
 
   const getEventIcon = (type) => {
     const iconMap = {
-      'migration': '🚀',
+      'migration': '➔',
       'validation': '✓',
-      'error': '⚠️',
-      'warning': '⚡',
-      'info': 'ℹ️',
-      'success': '✅',
-      'failure': '❌',
-      'processing': '⏳',
-      'completed': '🎉'
+      'error': '✗',
+      'warning': '!',
+      'info': 'i',
+      'success': '✓',
+      'failure': '✗',
+      'processing': '…',
+      'completed': '✓'
     };
-    return iconMap[type] || '📌';
+    return iconMap[type] || '•';
   };
 
   const getEventClass = (type) => {
@@ -90,7 +90,7 @@ export const EventPanel = ({ events = [], onEventClick, theme = 'light' }) => {
           ))
         ) : (
           <div className="event-panel__empty">
-            <span className="event-panel__empty-icon">📭</span>
+            <span className="event-panel__empty-icon">◻</span>
             <p>No events to display</p>
           </div>
         )}

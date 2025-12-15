@@ -503,7 +503,7 @@ const EnhancedETLOverview = ({
             onClick={exportToExcel}
             title="Export to Excel"
           >
-            📊 Excel
+            ◳ Excel
           </button>
           <button 
             className="expand-button"
@@ -619,11 +619,11 @@ const EnhancedETLOverview = ({
               <h4>Export Options</h4>
               <div className="export-buttons">
                 <button className="export-btn excel" onClick={exportToExcel}>
-                  📊 Export to Excel
+                  ◳ Export to Excel
                   <span>Complete ETL metrics with charts data</span>
                 </button>
                 <button className="export-btn pdf" onClick={() => window.print()}>
-                  📄 Export to PDF
+                  ◻ Export to PDF
                   <span>Print current dashboard view</span>
                 </button>
                 <button className="export-btn json" onClick={() => {
@@ -631,7 +631,7 @@ const EnhancedETLOverview = ({
                   const dataBlob = new Blob([dataStr], {type: 'application/json'});
                   saveAs(dataBlob, `ETL_Data_${new Date().toISOString().split('T')[0]}.json`);
                 }}>
-                  🔧 Export Raw Data
+                  ▦ Export Raw Data
                   <span>JSON format for API integration</span>
                 </button>
               </div>
@@ -659,7 +659,7 @@ const EnhancedETLOverview = ({
 
         {loadingError && (
           <div className="etl-error">
-            <div className="error-icon">⚠</div>
+            <div className="error-icon">!</div>
             <div className="error-content">
               <strong>Pipeline Error:</strong> {loadingError}
             </div>

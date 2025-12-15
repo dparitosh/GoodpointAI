@@ -41,7 +41,7 @@ const Widget = ({
         <div className="widget-content">
           {error ? (
             <div className="widget-error">
-              <div className="error-icon">⚠</div>
+              <div className="error-icon">!</div>
               <div className="error-message">{error}</div>
             </div>
           ) : (

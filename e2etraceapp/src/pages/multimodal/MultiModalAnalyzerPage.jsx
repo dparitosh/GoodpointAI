@@ -123,18 +123,18 @@ const MultiModalAnalyzerPage = () => {
 
   const getFileIcon = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
-    if (['pdf'].includes(ext)) return '📄';
-    if (['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(ext)) return '🖼';
-    if (['xls', 'xlsx', 'csv', 'xlsm'].includes(ext)) return '📊';
-    if (['doc', 'docx'].includes(ext)) return '📝';
+    if (['pdf'].includes(ext)) return '◳';
+    if (['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(ext)) return '◻';
+    if (['xls', 'xlsx', 'csv', 'xlsm'].includes(ext)) return '◳';
+    if (['doc', 'docx'].includes(ext)) return '✎';
     if (['dwg', 'dxf', 'step', 'igs', 'iges', 'stp'].includes(ext)) return '⚙';
-    return '📎';
+    return '◻';
   };
 
   return (
     <div className="multimodal-page">
       <div className="multimodal-header">
-        <h1>⚡ Multi-Modal Data Analyzer</h1>
+        <h1>↯ Multi-Modal Data Analyzer</h1>
         <p>Extract text, metadata, and insights from PDFs, images, CAD files, Excel, and Word documents using vision AI</p>
       </div>
 
@@ -228,7 +228,7 @@ const MultiModalAnalyzerPage = () => {
 
           {/* File Upload Area */}
           <div className="upload-section">
-            <h3>📤 Upload File</h3>
+            <h3>Upload File</h3>
             
             <div
               className={`drop-zone ${dragActive ? 'active' : ''} ${file ? 'has-file' : ''}`}
@@ -293,7 +293,7 @@ const MultiModalAnalyzerPage = () => {
 
         {/* Right Panel: Results */}
         <div className="multimodal-right-panel">
-          <h3>📊 Analysis Results</h3>
+          <h3>◳ Analysis Results</h3>
 
           {analyzing && (
             <div className="analyzing-state">
@@ -345,7 +345,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Extracted Text */}
               {result.extracted_text && result.extracted_text.length > 0 && (
                 <div className="result-section">
-                  <h4>📝 Extracted Text ({result.extracted_text.length} characters)</h4>
+                  <h4>✎ Extracted Text ({result.extracted_text.length} characters)</h4>
                   <div className="text-content">
                     {result.extracted_text}
                   </div>
@@ -355,7 +355,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Vision Analysis */}
               {result.vision_analysis && (
                 <div className="result-section">
-                  <h4>👁 Vision AI Analysis</h4>
+                  <h4>◉ Vision AI Analysis</h4>
                   <div className="analysis-content">
                     {result.vision_analysis}
                   </div>
@@ -382,7 +382,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Images Found */}
               {result.images_analyzed && result.images_analyzed.length > 0 && (
                 <div className="result-section">
-                  <h4>🖼 Images Analyzed ({result.images_analyzed.length})</h4>
+                  <h4>◻ Images Analyzed ({result.images_analyzed.length})</h4>
                   <div className="images-list">
                     {result.images_analyzed.map((img, idx) => (
                       <div key={idx} className="image-analysis-item">
@@ -399,7 +399,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Excel/Structured Data */}
               {result.structured_data && (
                 <div className="result-section">
-                  <h4>📊 Structured Data</h4>
+                  <h4>◳ Structured Data</h4>
                   <div className="structured-data">
                     <pre>{JSON.stringify(result.structured_data, null, 2)}</pre>
                   </div>

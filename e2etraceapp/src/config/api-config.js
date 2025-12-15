@@ -218,7 +218,7 @@ export const validateConfig = () => {
 
 // Debug logging (only in development)
 if (API_CONFIG.DEBUG) {
-  console.log('🔧 API Configuration Loaded:', {
+  console.log('API Configuration Loaded:', {
     environment: API_CONFIG.ENVIRONMENT,
     baseUrl: API_CONFIG.API_BASE_URL,
     timeout: API_CONFIG.API_TIMEOUT,

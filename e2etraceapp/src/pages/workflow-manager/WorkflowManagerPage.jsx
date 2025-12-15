@@ -433,7 +433,7 @@ const WorkflowManagerPage = () => {
         <div className="filter-group filter-search">
           <input 
             type="text"
-            placeholder="🔍 Search workflows..."
+            placeholder="Search workflows..."
             value={filter.search}
             onChange={(e) => setFilter({...filter, search: e.target.value})}
           />
@@ -520,7 +520,7 @@ const WorkflowManagerPage = () => {
                 onClick={() => handleViewWorkflow(workflow.id)}
                 title="View Workflow Graph"
               >
-                👁️ View
+                View
               </button>
               
               {workflow.status === 'draft' || workflow.status === 'configured' || workflow.status === 'paused' ? (
@@ -529,7 +529,7 @@ const WorkflowManagerPage = () => {
                   onClick={() => handleWorkflowAction(workflow.id, 'start')}
                   title="Start Workflow"
                 >
-                  ▶️ Start
+                  ▶ Start
                 </button>
               ) : null}
               
@@ -540,14 +540,14 @@ const WorkflowManagerPage = () => {
                     onClick={() => handleWorkflowAction(workflow.id, 'pause')}
                     title="Pause Workflow"
                   >
-                    ⏸️ Pause
+                    ‖ Pause
                   </button>
                   <button 
                     className="btn-action btn-stop"
                     onClick={() => handleWorkflowAction(workflow.id, 'stop')}
                     title="Stop Workflow"
                   >
-                    ⏹️ Stop
+                    ■ Stop
                   </button>
                 </>
               ) : null}
@@ -558,7 +558,7 @@ const WorkflowManagerPage = () => {
                   onClick={() => handleDeleteWorkflow(workflow.id)}
                   title="Delete Workflow"
                 >
-                  🗑️ Delete
+                  ✗ Delete
                 </button>
               )}
             </div>
@@ -568,14 +568,14 @@ const WorkflowManagerPage = () => {
 
       {workflows.length === 0 && (
         <div className="empty-state">
-          <div className="empty-icon">📭</div>
+          <div className="empty-icon">◻</div>
           <h3>No Workflows Found</h3>
           <p>Create your first workflow to start migrating PLM data</p>
           <button 
             className="btn-create-workflow"
             onClick={() => setShowCreateModal(true)}
           >
-            ➕ Create Workflow
+            ✚ Create Workflow
           </button>
         </div>
       )}

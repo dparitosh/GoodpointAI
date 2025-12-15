@@ -1,5 +1,5 @@
 """
-🧠 AGENTIC BACKEND ORCHESTRATOR - FastAPI Multi-Agent Coordination
+ AGENTIC BACKEND ORCHESTRATOR - FastAPI Multi-Agent Coordination
     
 Implements Modular Cognition Pattern (MCP) with intelligent agent routing
 Following AGENTIC_REFACTORING_GUIDE.md principles
@@ -21,7 +21,7 @@ from .models import QueryRequest, QueryResponse
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agentic", tags=["Agentic Orchestration"])
 
-# 🧩 AGENT TYPE DEFINITIONS
+#  AGENT TYPE DEFINITIONS
 class AgentType(str, Enum):
     DATA_ANALYST = "data_analyst"
     ETL_ORCHESTRATOR = "etl_orchestrator"
@@ -30,7 +30,7 @@ class AgentType(str, Enum):
     QUALITY_MONITOR = "quality_monitor"
     CHAT_COORDINATOR = "chat_coordinator"
 
-# 🎯 TASK DEFINITIONS
+#  TASK DEFINITIONS
 class TaskType(str, Enum):
     DATA_ANALYSIS = "data_analysis"
     PIPELINE_ORCHESTRATION = "pipeline_orchestration"
@@ -39,7 +39,7 @@ class TaskType(str, Enum):
     QUALITY_ASSESSMENT = "quality_assessment"
     CHAT_PROCESSING = "chat_processing"
 
-# 📊 PYDANTIC MODELS
+#  PYDANTIC MODELS
 class AgentCapability(BaseModel):
     name: str
     description: str
@@ -93,7 +93,7 @@ class SystemStatus(BaseModel):
     performance_metrics: Dict[str, Any]
     timestamp: datetime = Field(default_factory=datetime.now)
 
-# 🧠 AGENTIC ORCHESTRATOR CLASS
+#  AGENTIC ORCHESTRATOR CLASS
 class AgenticOrchestrator:
     def __init__(self):
         self.agents: Dict[str, AgentDefinition] = {}
@@ -516,10 +516,10 @@ class AgenticOrchestrator:
             performance_metrics=self.system_metrics
         )
 
-# 🎮 GLOBAL ORCHESTRATOR INSTANCE
+#  GLOBAL ORCHESTRATOR INSTANCE
 orchestrator = AgenticOrchestrator()
 
-# 🌐 API ENDPOINTS
+#  API ENDPOINTS
 
 @router.post("/task", response_model=AgenticTaskResult)
 async def process_agentic_task(
@@ -606,7 +606,7 @@ async def get_performance_metrics():
         "timestamp": datetime.now()
     }
 
-# 🔌 SYSTEM STATUS ENDPOINTS
+#  SYSTEM STATUS ENDPOINTS
 
 @router.get("/system/status")
 async def get_agentic_system_status():

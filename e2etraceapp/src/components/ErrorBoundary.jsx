@@ -63,7 +63,7 @@ class ErrorBoundary extends React.Component {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}>
           <h1 style={{ color: '#d32f2f', marginBottom: '20px' }}>
-            ⚠️ Something went wrong
+            ! Something went wrong
           </h1>
           <p style={{ color: '#666', marginBottom: '30px', fontSize: '16px' }}>
             We're sorry for the inconvenience. The application encountered an unexpected error.

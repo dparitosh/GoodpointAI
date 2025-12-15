@@ -1,5 +1,5 @@
 """
-🏭 Workflow Instance Manager Router
+ Workflow Instance Manager Router
 
 Manages multiple workflow instances for PLM Data Migration AI Factory.
 Each workflow instance represents a unique source→target migration pipeline.

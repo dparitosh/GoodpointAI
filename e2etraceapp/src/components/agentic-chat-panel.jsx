@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { agenticOrchestrator, AGENT_TYPES } from '../services/agentic-orchestrator.js';
 
 /**
- * 🧠 AGENTIC CHAT PANEL - Multi-Agent Conversation Interface
+ * AGENTIC CHAT PANEL - Multi-Agent Conversation Interface
  * 
  * Implements threaded conversations with intelligent agent coordination
  * Following AGENTIC_REFACTORING_GUIDE.md principles
@@ -31,7 +31,7 @@ const AgenticChatPanel = ({
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // 🧠 INITIALIZE AGENTIC CHAT SYSTEM
+  // INITIALIZE AGENTIC CHAT SYSTEM
   useEffect(() => {
     initializeAgenticChat();
     return () => {
@@ -48,7 +48,7 @@ const AgenticChatPanel = ({
       const welcomeMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         type: 'agent',
-        content: '🧠 Hello! I\'m your AI assistant with specialized agents ready to help. I can analyze data, orchestrate ETL processes, optimize queries, and more. What would you like to explore?',
+        content: 'Hello! I\'m your AI assistant with specialized agents ready to help. I can analyze data, orchestrate ETL processes, optimize queries, and more. What would you like to explore?',
         agent: AGENT_TYPES.CHAT_COORDINATOR,
         timestamp: new Date(),
         thread: 'main'
@@ -68,7 +68,7 @@ const AgenticChatPanel = ({
     }
   };
 
-  // 💬 PROCESS USER MESSAGE with Agent Coordination
+  // PROCESS USER MESSAGE with Agent Coordination
   const handleSendMessage = useCallback(async (message = inputValue) => {
     if (!message.trim() || isProcessing) return;
 
@@ -123,7 +123,7 @@ const AgenticChatPanel = ({
     }
   }, [inputValue, isProcessing, currentThread, messages, selectedNodeLabel, onSendMessage]);
 
-  // 🤖 PROCESS AGENT RESPONSE and Coordination
+  // Process agent response and coordination
   const processAgentResponse = async (response, userMessage) => {
     const { intent, suggestedAgents, primaryResponse, collaborationNeeded } = response;
 
@@ -146,7 +146,7 @@ const AgenticChatPanel = ({
     }
   };
 
-  // 🎭 ORCHESTRATE MULTI-AGENT RESPONSES
+  // Orchestrate multi-agent responses
   const orchestrateMultiAgentResponse = async (userMessage, agents, intent) => {
     for (const agentType of agents) {
       setAgentTypingIndicator(agentType);
@@ -181,7 +181,7 @@ const AgenticChatPanel = ({
     setAgentTypingIndicator(null);
   };
 
-  // 🎯 CREATE AGENT-SPECIFIC TASKS
+  // Create agent-specific tasks
   const createAgentSpecificTask = (message, agentType, intent) => {
     const baseTasks = {
       [AGENT_TYPES.DATA_ANALYST]: {
@@ -214,7 +214,7 @@ const AgenticChatPanel = ({
     return baseTasks[agentType] || baseTasks[AGENT_TYPES.CHAT_COORDINATOR];
   };
 
-  // 🔄 HANDLE INPUT CHANGES
+  // Handle input changes
   const handleInputChange = (e) => {
     const value = e.target.value;
     setInputValue(value);
@@ -224,7 +224,7 @@ const AgenticChatPanel = ({
     }
   };
 
-  // ⌨️ HANDLE KEY PRESS
+  // Handle key press
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -232,13 +232,13 @@ const AgenticChatPanel = ({
     }
   };
 
-  // 🏷️ HANDLE SUGGESTED PROMPTS
+  // Handle suggested prompts
   const handleSuggestedPrompt = (prompt) => {
     setInputValue(prompt);
     inputRef.current?.focus();
   };
 
-  // 🎯 ASK ABOUT SELECTED NODE
+  // Ask about selected node
   const handleAskSelectedNode = () => {
     if (selectedNodeLabel && onAskSelectedNode) {
       const nodeQuery = `Tell me about the selected node: ${selectedNodeLabel}`;
@@ -247,7 +247,7 @@ const AgenticChatPanel = ({
     }
   };
 
-  // 🚨 ADD ERROR MESSAGE
+  // Add error message
   const addErrorMessage = (errorText) => {
     const errorMessage = {
       id: `msg_${Date.now()}error`,
@@ -261,7 +261,7 @@ const AgenticChatPanel = ({
     setMessages(prev => [...prev, errorMessage]);
   };
 
-  // 💡 ADD INTELLIGENT SUGGESTIONS
+  // Add intelligent suggestions
   const addIntelligentSuggestions = () => {
     const _suggestions = [
       'Analyze the graph structure and patterns',
@@ -276,12 +276,12 @@ const AgenticChatPanel = ({
     // This could be expanded with dynamic suggestions from agents
   };
 
-  // 📜 SCROLL TO BOTTOM
+  // SCROLL TO BOTTOM
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 🎨 RENDER MESSAGE with Agent-Specific Styling
+  // RENDER MESSAGE with Agent-Specific Styling
   const renderMessage = (message) => {
     const isUser = message.type === 'user';
     const _isSystem = message.type === 'system';
@@ -322,7 +322,7 @@ const AgenticChatPanel = ({
             <div className="message-visualizations">
               {message.visualizations.map((viz, index) => (
                 <div key={index} className="visualization-suggestion">
-                  📊 {viz.title}: {viz.description}
+                  ◳ {viz.title}: {viz.description}
                 </div>
               ))}
             </div>
@@ -332,21 +332,21 @@ const AgenticChatPanel = ({
     );
   };
 
-  // 🤖 GET AGENT INFORMATION
+  // GET AGENT INFORMATION
   const getAgentInfo = (agentType) => {
     const agentConfig = {
-      [AGENT_TYPES.CHAT_COORDINATOR]: { icon: '🧠', name: 'Chat Coordinator' },
-      [AGENT_TYPES.DATA_ANALYST]: { icon: '📊', name: 'Data Analyst' },
-      [AGENT_TYPES.ETL_ORCHESTRATOR]: { icon: '🔄', name: 'ETL Orchestrator' },
-      [AGENT_TYPES.QUERY_PLANNER]: { icon: '🎯', name: 'Query Planner' },
-      [AGENT_TYPES.VISUALIZATION_AGENT]: { icon: '🎨', name: 'Visualization Agent' },
-      [AGENT_TYPES.QUALITY_MONITOR]: { icon: '✅', name: 'Quality Monitor' }
+      [AGENT_TYPES.CHAT_COORDINATOR]: { icon: '◉', name: 'Chat Coordinator' },
+      [AGENT_TYPES.DATA_ANALYST]: { icon: '◳', name: 'Data Analyst' },
+      [AGENT_TYPES.ETL_ORCHESTRATOR]: { icon: '↻', name: 'ETL Orchestrator' },
+      [AGENT_TYPES.QUERY_PLANNER]: { icon: '◆', name: 'Query Planner' },
+      [AGENT_TYPES.VISUALIZATION_AGENT]: { icon: '◻', name: 'Visualization Agent' },
+      [AGENT_TYPES.QUALITY_MONITOR]: { icon: '✓', name: 'Quality Monitor' }
     };
 
-    return agentConfig[agentType] || { icon: '🤖', name: 'AI Agent' };
+    return agentConfig[agentType] || { icon: '✧', name: 'AI Agent' };
   };
 
-  // 💭 RENDER TYPING INDICATOR
+  // RENDER TYPING INDICATOR
   const renderTypingIndicator = () => {
     if (!agentTypingIndicator) return null;
 
@@ -375,7 +375,7 @@ const AgenticChatPanel = ({
   return (
     <div className={`agentic-chat-panel ${className}`}>
       <div className="chat-header">
-        <h3>🧠 Multi-Agent Assistant</h3>
+        <h3>◉ Multi-Agent Assistant</h3>
         <div className="active-agents">
           {activeAgents.slice(0, 3).map(agent => {
             const agentInfo = getAgentInfo(agent.type);
@@ -420,7 +420,7 @@ const AgenticChatPanel = ({
             disabled={isProcessing}
             title={`Ask about ${selectedNodeLabel}`}
           >
-            🔍 Ask about "{selectedNodeLabel}"
+            ? Ask about "{selectedNodeLabel}"
           </button>
         )}
 
@@ -439,7 +439,7 @@ const AgenticChatPanel = ({
             disabled={isProcessing || !inputValue.trim()}
             className="send-button"
           >
-            {isProcessing ? '⏳' : '🚀'}
+            {isProcessing ? '…' : '➔'}
           </button>
         </div>
       </div>

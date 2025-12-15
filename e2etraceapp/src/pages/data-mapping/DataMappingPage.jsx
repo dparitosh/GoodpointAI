@@ -238,7 +238,7 @@ const DataMappingPage = () => {
   return (
     <div className="data-mapping-page">
       <div className="page-header">
-        <h1>🗺️ Data Mapping</h1>
+        <h1>◳ Data Mapping</h1>
         <p className="page-description">
           Configure data transformation and mapping rules between systems
         </p>
@@ -249,19 +249,19 @@ const DataMappingPage = () => {
           className={`tab ${activeTab === 'mappings' ? 'active' : ''}`}
           onClick={() => setActiveTab('mappings')}
         >
-          📋 Active Mappings
+          ◻ Active Mappings
         </button>
         <button 
           className={`tab ${activeTab === 'templates' ? 'active' : ''}`}
           onClick={() => setActiveTab('templates')}
         >
-          📝 Templates
+          ✎ Templates
         </button>
         <button 
           className={`tab ${activeTab === 'editor' ? 'active' : ''}`}
           onClick={() => setActiveTab('editor')}
         >
-          ✏️ Mapping Editor
+          ✎ Mapping Editor
         </button>
       </div>
 
@@ -305,7 +305,7 @@ const DataMappingPage = () => {
                     <p className="mapping-description">{mapping.description}</p>
                     <div className="mapping-stats">
                       <span className="stat">▦ {mapping.fields} fields</span>
-                      <span className="stat">📅 {new Date(mapping.lastModified).toLocaleDateString()}</span>
+                      <span className="stat">◷ {new Date(mapping.lastModified).toLocaleDateString()}</span>
                     </div>
                   </div>
 
@@ -314,7 +314,7 @@ const DataMappingPage = () => {
                       onClick={() => editMapping(mapping)}
                       className="btn btn-secondary btn-sm"
                     >
-                      ✏️ Edit
+                      ✎ Edit
                     </button>
                     <button 
                       onClick={() => validateMapping(mapping.id)}
@@ -328,13 +328,13 @@ const DataMappingPage = () => {
                       className="btn btn-success btn-sm"
                       disabled={isLoading}
                     >
-                      🚀 Execute
+                      ➔ Execute
                     </button>
                     <button 
                       onClick={() => deleteMapping(mapping.id)}
                       className="btn btn-danger btn-sm"
                     >
-                      �️ Delete
+                      ✗ Delete
                     </button>
                   </div>
                 </div>
@@ -379,10 +379,10 @@ const DataMappingPage = () => {
                       onClick={() => applyTemplate(template)}
                       className="btn btn-primary btn-sm"
                     >
-                      📥 Use Template
+                      ➔ Use Template
                     </button>
                     <button className="btn btn-outline btn-sm">
-                      ✏️ Edit Template
+                      ✎ Edit Template
                     </button>
                   </div>
                 </div>
@@ -401,7 +401,7 @@ const DataMappingPage = () => {
                   ● Save Draft
                 </button>
                 <button className="btn btn-success">
-                  🚀 Deploy Mapping
+                  ➔ Deploy Mapping
                 </button>
               </div>
             </div>

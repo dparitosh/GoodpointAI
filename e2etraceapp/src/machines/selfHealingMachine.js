@@ -1,5 +1,5 @@
 /**
- * 🔄 Self-Healing Orchestration Machine
+ * Self-Healing Orchestration Machine
  * =====================================
  * 
  * XState machine for resilient data migration with:
@@ -181,7 +181,7 @@ export const selfHealingMachine = createMachine({
         label: 'Idle',
         description: 'Waiting for task execution',
         color: '#6c757d',
-        icon: '⏸️'
+        icon: '‖'
       },
       on: {
         [SelfHealingEvents.START]: {
@@ -201,7 +201,7 @@ export const selfHealingMachine = createMachine({
         label: 'Executing',
         description: 'Running task on primary route',
         color: '#007bff',
-        icon: '▶️',
+        icon: '▶',
         progress: true
       },
       entry: ['logExecution', 'trackLineage'],
@@ -300,7 +300,7 @@ export const selfHealingMachine = createMachine({
         label: 'Retrying',
         description: 'Exponential backoff retry in progress',
         color: '#ffc107',
-        icon: '🔄',
+        icon: '↻',
         progress: true
       },
       entry: ['calculateBackoff', 'logRetry'],
@@ -328,7 +328,7 @@ export const selfHealingMachine = createMachine({
         label: 'Circuit Open',
         description: 'Circuit breaker tripped - cooling down',
         color: '#dc3545',
-        icon: '🚫',
+        icon: '!',
         alert: true
       },
       entry: ['logCircuitOpen', 'notifyMonitoring'],
@@ -353,7 +353,7 @@ export const selfHealingMachine = createMachine({
         label: 'Circuit Half-Open',
         description: 'Testing if service recovered',
         color: '#fd7e14',
-        icon: '🔶',
+        icon: '!',
         progress: true
       },
       entry: ['logCircuitHalfOpen'],
@@ -394,7 +394,7 @@ export const selfHealingMachine = createMachine({
         label: 'Alternative Route',
         description: 'Switching to backup route',
         color: '#17a2b8',
-        icon: '🔀',
+        icon: '⇄',
         progress: true
       },
       entry: ['selectAlternativeRoute', 'logRouteChange'],
@@ -418,7 +418,7 @@ export const selfHealingMachine = createMachine({
         label: 'Recovering',
         description: 'Executing recovery strategy',
         color: '#6f42c1',
-        icon: '🔧',
+        icon: '▦',
         progress: true
       },
       entry: ['executeRecoveryStrategy'],
@@ -440,7 +440,7 @@ export const selfHealingMachine = createMachine({
         label: 'Completed',
         description: 'Task completed successfully',
         color: '#28a745',
-        icon: '✅',
+        icon: '✓',
         final: true
       },
       type: 'final',
@@ -452,7 +452,7 @@ export const selfHealingMachine = createMachine({
         label: 'Failed',
         description: 'Task failed after all recovery attempts',
         color: '#dc3545',
-        icon: '❌',
+        icon: '✗',
         alert: true,
         final: true
       },
@@ -465,7 +465,7 @@ export const selfHealingMachine = createMachine({
         label: 'Dead Letter Queue',
         description: 'Task moved to DLQ for manual review',
         color: '#6c757d',
-        icon: '📮',
+        icon: '◻',
         alert: true,
         final: true
       },

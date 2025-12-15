@@ -158,7 +158,7 @@ const MonitoringPage = () => {
   return (
     <div className="monitoring-page">
       <div className="page-header">
-        <h1>🔍 Flow Monitoring</h1>
+        <h1>Flow Monitoring</h1>
         <p className="page-description">
           Real-time monitoring and alerting for data flows and system health
         </p>
@@ -190,13 +190,13 @@ const MonitoringPage = () => {
           className={`tab ${activeTab === 'flows' ? 'active' : ''}`}
           onClick={() => setActiveTab('flows')}
         >
-          🌊 Flow Status
+          ∿ Flow Status
         </button>
         <button 
           className={`tab ${activeTab === 'alerts' ? 'active' : ''}`}
           onClick={() => setActiveTab('alerts')}
         >
-          🚨 Alerts ({alerts.length})
+          ! Alerts ({alerts.length})
         </button>
         <button 
           className={`tab ${activeTab === 'performance' ? 'active' : ''}`}
@@ -308,7 +308,7 @@ const MonitoringPage = () => {
                       ▦ View Details
                     </button>
                     <button className="btn btn-outline btn-sm">
-                      ⚙ Configure
+                      Configure
                     </button>
                   </div>
                 </div>
@@ -323,7 +323,7 @@ const MonitoringPage = () => {
             <div className="section-header">
               <h2>System Alerts</h2>
               <button className="btn btn-outline">
-                ⚙ Alert Settings
+                Alert Settings
               </button>
             </div>
 
@@ -331,7 +331,7 @@ const MonitoringPage = () => {
               {alerts.map(alert => (
                 <div key={alert.id} className={`alert-item ${alert.level}`}>
                   <div className="alert-icon">
-                    {alert.level === 'warning' ? '⚠' : alert.level === 'error' ? '✗' : 'ⓘ'}
+                    {alert.level === 'warning' ? '!' : alert.level === 'error' ? '✗' : 'ⓘ'}
                   </div>
                   <div className="alert-content">
                     <div className="alert-message">{alert.message}</div>

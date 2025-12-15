@@ -1,5 +1,5 @@
 """
-⚡ Multi-Modal Data Understanding Service
+ Multi-Modal Data Understanding Service
 =========================================
 
 Parse and extract data from multiple file formats:

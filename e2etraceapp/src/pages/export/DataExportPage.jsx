@@ -62,7 +62,7 @@ const DataExportPage = () => {
 
   const loadExportHistory = async () => {
     try {
-      const response = await fetch('/api/export/history');
+      const response = await fetch(API_CONFIG.ENDPOINTS.EXPORT_HISTORY || 'http://localhost:8000/api/export/history');
       if (response.ok) {
         const history = await response.json();
         setExportHistory(history);

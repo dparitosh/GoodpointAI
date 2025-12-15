@@ -76,7 +76,7 @@ async def upload_blob(
         from azure.storage.blob import BlobServiceClient
         
         if not azure_config.storage_connection_string:
-            raise HTTPException(status_code=500, message="Azure Storage not configured")
+            raise HTTPException(status_code=500, detail="Azure Storage not configured")
         
         blob_service_client = BlobServiceClient.from_connection_string(
             azure_config.storage_connection_string

@@ -1,1 +1,8 @@
 __pycache__/
+
+# Generated test artifacts
+e2etraceapp/test-results/junit.xml
+e2etraceapp/test-results/test-results.json
+
+# Local archive artifacts
+python_backend.7z

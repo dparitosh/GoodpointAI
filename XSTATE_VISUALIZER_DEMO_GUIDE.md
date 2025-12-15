@@ -1,6 +1,6 @@
-# 🎮 XSTATE VISUALIZER - VISUAL DEMONSTRATION GUIDE
+#  XSTATE VISUALIZER - VISUAL DEMONSTRATION GUIDE
 
-## 🚀 How to Experience the World-Class Transformation
+##  How to Experience the World-Class Transformation
 
 ### Step 1: Navigate to the Visualizer
 1. Open your browser to: **http://localhost:5174**
@@ -9,12 +9,12 @@
 
 ---
 
-## 🎨 VISUAL FEATURE TOUR
+##  VISUAL FEATURE TOUR
 
-### **HEADER SECTION** ⚡
+### **HEADER SECTION** 
 **What You'll See:**
 ```
-⚡ WORLD-CLASS XSTATE VISUALIZER
+ WORLD-CLASS XSTATE VISUALIZER
 Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 ```
 
@@ -27,7 +27,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-### **EXAMPLE SELECTOR** 🎛️
+### **EXAMPLE SELECTOR** 
 **Available State Machines:**
 1. **Migration State Machine** (7 states, 12 transitions)
 2. **Data Processing Pipeline** (6 states, 8 transitions)
@@ -46,7 +46,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-### **MAIN CANVAS** 🖼️ - The Living Circuit Board
+### **MAIN CANVAS**  - The Living Circuit Board
 
 **Visual Layers:**
 1. **Background**: Deep space (#0a0e27) with animated 30px grid
@@ -58,31 +58,31 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 | State Type | Color | Shape | Special Effect |
 |-----------|-------|-------|----------------|
-| **Initial** | 🟡 Gold (#FFD700) | Rounded Rectangle | Bright glow |
-| **Active** | 🟢 Neon Green (#00FF00) | Circle | Pulsing animation |
-| **Success** | 🔵 Cyan (#00FFFF) | Circle | Steady glow |
-| **Error** | 🔴 Red (#FF0040) | Octagon ⚠️ | Warning glow |
-| **Final** | 🟣 Purple (#9370DB) | Rounded Rectangle | Completion glow |
-| **Compound** | 🟠 Orange (#FF8C00) | Dashed Border | Transparent |
+| **Initial** |  Gold (#FFD700) | Rounded Rectangle | Bright glow |
+| **Active** |  Neon Green (#00FF00) | Circle | Pulsing animation |
+| **Success** |  Cyan (#00FFFF) | Circle | Steady glow |
+| **Error** |  Red (#FF0040) | Octagon ! | Warning glow |
+| **Final** |  Purple (#9370DB) | Rounded Rectangle | Completion glow |
+| **Compound** |  Orange (#FF8C00) | Dashed Border | Transparent |
 
 ---
 
-### **INTERACTIVE CONTROLS** 🎮
+### **INTERACTIVE CONTROLS** 
 
 **Toolbar Buttons (Top of Canvas):**
 
 ```
-[🔍 Fit View]  [📊 Hierarchical]  [⭕ Circle]  [🌐 Force]  [💾 Export PNG]
+[ Fit View]  [ Hierarchical]  [⭕ Circle]  [ Force]  [ Export PNG]
 ```
 
 **What Each Button Does:**
 
-1. **🔍 Fit View**
+1. ** Fit View**
    - Centers graph and scales to fit viewport
    - Smooth zoom animation
    - Hover: Neon cyan glow appears
 
-2. **📊 Hierarchical Layout**
+2. ** Hierarchical Layout**
    - Top-down state flow (breadthfirst algorithm)
    - Shows clear progression from initial → final
    - Animated transition (500ms)
@@ -92,19 +92,19 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
    - Equal spacing around circle
    - Good for cyclic state machines
 
-4. **🌐 Force Layout**
+4. ** Force Layout**
    - Physics-based positioning (COSE algorithm)
    - Nodes repel/attract based on connections
    - Natural organic arrangement
 
-5. **💾 Export PNG**
+5. ** Export PNG**
    - Downloads current graph as high-res image
    - 2x scale for retina displays
    - Includes neon glow effects
 
 ---
 
-### **CONTEXT INSPECTOR HUD** 🖥️ (Top Right)
+### **CONTEXT INSPECTOR HUD**  (Top Right)
 
 **Activation:**
 - Click any **node** (state) in the graph
@@ -113,14 +113,14 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 **What Appears:**
 ```
 ┌─────────────────────────────────┐
-│ 🔮 STATE DATA                   │
+│  STATE DATA                   │
 ├─────────────────────────────────┤
 │ ID:       migrating             │
 │ Label:    Migrating             │
 │ Type:     active                │
 │ Metadata: { phase: "migration" }│
 ├─────────────────────────────────┤
-│ [❌ Close]                       │
+│ [✗ Close]                       │
 └─────────────────────────────────┘
 ```
 
@@ -135,28 +135,28 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 **For Transitions (Edges):**
 ```
 ┌─────────────────────────────────┐
-│ ⚡ TRANSITION DATA               │
+│  TRANSITION DATA               │
 ├─────────────────────────────────┤
 │ ID:       edge-3                │
 │ Label:    VALIDATED             │
 │ From:     validating            │
 │ To:       migrating             │
 ├─────────────────────────────────┤
-│ [❌ Close]                       │
+│ [✗ Close]                       │
 └─────────────────────────────────┘
 ```
 
 ---
 
-### **LEGEND SECTION** 📋
+### **LEGEND SECTION** 
 
 **Visual Layout:**
 6 color-coded boxes showing state semantics:
 
 ```
-[🟡] Initial State       [🟢] Active/Current State
-[🔵] Success State       [🔴] Error State
-[🟣] Final State         [🟠] Compound State
+[] Initial State       [] Active/Current State
+[] Success State       [] Error State
+[] Final State         [] Compound State
 ```
 
 **Features:**
@@ -167,7 +167,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-### **FEATURES LIST** 🎮
+### **FEATURES LIST** 
 
 **10 Game-Like Features Displayed:**
 
@@ -192,7 +192,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🎭 INTERACTION DEMONSTRATIONS
+##  INTERACTION DEMONSTRATIONS
 
 ### **Demo 1: Node Selection Flow**
 1. Click **"Migration State Machine"** button
@@ -208,7 +208,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 2. Watch arrow thicken from 3px → 5px
 3. Color intensifies to bright cyan
 4. Click the arrow
-5. Context HUD shows **⚡ TRANSITION DATA**
+5. Context HUD shows ** TRANSITION DATA**
 6. See From/To states displayed
 
 ### **Demo 3: Layout Switching**
@@ -240,7 +240,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 📱 MOBILE EXPERIENCE (< 768px)
+##  MOBILE EXPERIENCE (< 768px)
 
 **Responsive Transformations:**
 
@@ -255,7 +255,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🎨 ANIMATION SHOWCASE
+##  ANIMATION SHOWCASE
 
 ### **Always-On Animations:**
 1. **Circuit Grid**: Flows diagonally (20s cycle)
@@ -273,7 +273,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🔊 VISUAL FEEDBACK SYSTEM
+##  VISUAL FEEDBACK SYSTEM
 
 ### **Hover States:**
 - **Buttons**: Glow + lift + scan effect
@@ -293,7 +293,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🌟 HIGHLIGHT MOMENTS
+##  HIGHLIGHT MOMENTS
 
 ### **Top 5 "Wow" Moments:**
 
@@ -325,7 +325,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🎯 KEY VISUAL DIFFERENTIATORS
+##  KEY VISUAL DIFFERENTIATORS
 
 **From Standard Tool → World-Class Experience:**
 
@@ -342,22 +342,22 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 📸 SCREENSHOT CHECKLIST
+##  SCREENSHOT CHECKLIST
 
 **For Documentation/Presentation:**
 
-1. ✅ Full page view showing header + canvas + legend
-2. ✅ Hierarchical layout with migration state machine
-3. ✅ Context HUD open showing node details
-4. ✅ Circle layout with GraphQL lifecycle
-5. ✅ Close-up of node glow effects
-6. ✅ Edge hover state with thickness change
-7. ✅ Mobile view with bottom sheet HUD
-8. ✅ Legend section with color boxes
+1. ✓ Full page view showing header + canvas + legend
+2. ✓ Hierarchical layout with migration state machine
+3. ✓ Context HUD open showing node details
+4. ✓ Circle layout with GraphQL lifecycle
+5. ✓ Close-up of node glow effects
+6. ✓ Edge hover state with thickness change
+7. ✓ Mobile view with bottom sheet HUD
+8. ✓ Legend section with color boxes
 
 ---
 
-## 🏆 QUALITY ASSURANCE CHECKS
+##  QUALITY ASSURANCE CHECKS
 
 **Verify These Elements:**
 
@@ -374,7 +374,7 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🚀 PERFORMANCE NOTES
+##  PERFORMANCE NOTES
 
 **Smooth 60 FPS Achieved Through:**
 - Hardware-accelerated CSS transforms
@@ -386,19 +386,19 @@ Graph-as-UI Experience • Living Circuit Board • Semantic Zoom Canvas
 
 ---
 
-## 🎓 TECHNICAL EXCELLENCE
+##  TECHNICAL EXCELLENCE
 
 **Code Quality:**
-- ✅ 580+ lines of world-class CSS
-- ✅ 10 distinct keyframe animations
-- ✅ Responsive breakpoints
-- ✅ Semantic HTML structure
-- ✅ Accessible color contrasts
-- ✅ Clean React component architecture
-- ✅ TypeScript-ready prop structure
+- ✓ 580+ lines of world-class CSS
+- ✓ 10 distinct keyframe animations
+- ✓ Responsive breakpoints
+- ✓ Semantic HTML structure
+- ✓ Accessible color contrasts
+- ✓ Clean React component architecture
+- ✓ TypeScript-ready prop structure
 
 ---
 
-**Enjoy the World-Class Experience! 🎮✨**
+**Enjoy the World-Class Experience! **
 
 **Pro Tip**: Try switching between state machines while zoomed in to see smooth transitions at different scales!

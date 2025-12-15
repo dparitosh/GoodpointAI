@@ -1,11 +1,11 @@
 # Logical and Functional Bugs Analysis Report
 **Date:** December 9, 2025  
 **System:** GraphTrace Workflow Manager  
-**Severity Levels:** 🔴 Critical | 🟠 High | 🟡 Medium | 🟢 Low
+**Severity Levels:**  Critical |  High |  Medium |  Low
 
 ---
 
-## 🔴 CRITICAL BUGS (Blocks Core Functionality)
+##  CRITICAL BUGS (Blocks Core Functionality)
 
 ### 1. **Navigation After Workflow Creation Fails**
 **Location:** `WorkflowManagerPage.jsx:218`  
@@ -60,7 +60,7 @@ useEffect(() => {
     }
   }, 5000);
   return () => clearInterval(interval);
-}, [workflowId]);  // ❌ Missing 'workflow' dependency
+}, [workflowId]);  // ✗ Missing 'workflow' dependency
 ```
 
 **Fix Required:**
@@ -76,7 +76,7 @@ useEffect(() => {
     }, 5000);
     return () => clearInterval(interval);
   }
-}, [workflow?.status]);  // ✅ Separate effect with correct dependencies
+}, [workflow?.status]);  // ✓ Separate effect with correct dependencies
 ```
 
 ---
@@ -105,7 +105,7 @@ navigate(`/workflow/${newWorkflow.id}`);  // No timeout needed
 
 ---
 
-## 🟠 HIGH PRIORITY BUGS
+##  HIGH PRIORITY BUGS
 
 ### 4. **Missing Error Boundary**
 **Location:** Throughout application  
@@ -164,13 +164,13 @@ try {
 } catch (error) {
   // Error handling
 } finally {
-  setIsLoading(false);  // ✅ Good, but fetch can fail before try
+  setIsLoading(false);  // ✓ Good, but fetch can fail before try
 }
 ```
 
 ---
 
-## 🟡 MEDIUM PRIORITY BUGS
+##  MEDIUM PRIORITY BUGS
 
 ### 8. **Hard-coded Mock Data in Production Code**
 **Location:** `workflow_manager_router.py:173-220`  
@@ -260,7 +260,7 @@ workflow_id = f"wf_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
 
 ---
 
-## 🟢 LOW PRIORITY BUGS
+##  LOW PRIORITY BUGS
 
 ### 15. **Console.log Statements in Production**
 **Location:** Multiple files  
@@ -272,7 +272,7 @@ workflow_id = f"wf_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
 ### 16. **Inconsistent Button Emoji Usage**
 **Location:** WorkflowDetailPage.jsx:135-158  
 **Impact:** Accessibility issues for screen readers  
-**Evidence:** Using emoji in button text (▶️, ⏸️, ⏹️)  
+**Evidence:** Using emoji in button text (▶, ⏸, ⏹)  
 **Fix:** Use aria-label and CSS icons
 
 ---
@@ -310,19 +310,19 @@ fetch(`${API_BASE_URL}/api/workflows/`);
 
 ---
 
-## 📊 SUMMARY
+##  SUMMARY
 
 | Severity | Count | Percentage |
 |----------|-------|------------|
-| 🔴 Critical | 3 | 15% |
-| 🟠 High | 4 | 20% |
-| 🟡 Medium | 8 | 40% |
-| 🟢 Low | 5 | 25% |
+|  Critical | 3 | 15% |
+|  High | 4 | 20% |
+|  Medium | 8 | 40% |
+|  Low | 5 | 25% |
 | **Total** | **20** | **100%** |
 
 ---
 
-## 🎯 RECOMMENDED FIX PRIORITY
+##  RECOMMENDED FIX PRIORITY
 
 ### Phase 1 (Immediate - Week 1)
 1. Fix workflow persistence (Bug #1 + #5)
@@ -345,7 +345,7 @@ fetch(`${API_BASE_URL}/api/workflows/`);
 
 ---
 
-## 🔧 TECHNICAL DEBT ITEMS
+##  TECHNICAL DEBT ITEMS
 
 1. **Database Integration**: Replace TODO comments with actual implementation
 2. **State Management**: Consider Redux/Zustand for complex state
@@ -356,7 +356,7 @@ fetch(`${API_BASE_URL}/api/workflows/`);
 
 ---
 
-## 📝 TESTING GAPS
+##  TESTING GAPS
 
 - No unit tests for workflow creation flow
 - No integration tests for API endpoints

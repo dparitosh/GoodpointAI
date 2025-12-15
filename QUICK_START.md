@@ -1,6 +1,6 @@
 # GraphTrace - Quick Reference
 
-## 🚀 Quick Start (3 commands)
+##  Quick Start (3 commands)
 ```bash
 ./diagnostics.sh    # 1. Check system
 ./install.sh        # 2. Install dependencies  
@@ -9,7 +9,7 @@
 
 Then open: http://localhost:5173
 
-## 📋 Available Scripts
+##  Available Scripts
 
 | Script | Purpose | Usage |
 |--------|---------|-------|
@@ -18,7 +18,7 @@ Then open: http://localhost:5173
 | `start-all.sh` | Start services | `./start-all.sh` |
 | `stop-all.sh` | Stop services | `./stop-all.sh` |
 
-## 🔧 Individual Service Control
+##  Individual Service Control
 
 ### Backend Only
 ```bash
@@ -33,7 +33,7 @@ cd e2etraceapp
 npm run dev
 ```
 
-## 📊 Access Points
+##  Access Points
 
 | Service | URL |
 |---------|-----|
@@ -42,14 +42,14 @@ npm run dev
 | API Docs | http://localhost:8000/docs |
 | Redoc | http://localhost:8000/redoc |
 
-## 📝 Configuration Files
+##  Configuration Files
 
 | File | Purpose |
 |------|---------|
 | `python_backend/.env` | Backend config (Neo4j) |
 | `e2etraceapp/.env` | Frontend config (optional) |
 
-## 🐛 Quick Troubleshooting
+##  Quick Troubleshooting
 
 ### Port Already in Use
 ```bash
@@ -78,7 +78,7 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-## 📁 Project Structure
+##  Project Structure
 ```
 graphTrace/
 ├── python_backend/      # FastAPI backend
@@ -90,7 +90,7 @@ graphTrace/
 └── stop-all.sh          # Stop services
 ```
 
-## 🔍 View Logs
+##  View Logs
 ```bash
 # Backend
 tail -f logs/backend.log
@@ -99,12 +99,12 @@ tail -f logs/backend.log
 tail -f logs/frontend.log
 ```
 
-## 📖 Full Documentation
+##  Full Documentation
 - Installation Guide: `INSTALLATION.md`
 - Validation Report: `INSTALLATION_VALIDATION_REPORT.md`
 - Bug Analysis: `BUGS_ANALYSIS_REPORT.md`
 
-## ⚡ Development Workflow
+##  Development Workflow
 ```bash
 # 1. Make changes to code
 # 2. Services auto-reload (HMR/--reload enabled)
@@ -116,7 +116,7 @@ tail -f logs/frontend.log
 ./start-all.sh
 ```
 
-## 🧪 Testing
+##  Testing
 ```bash
 # Backend tests
 cd python_backend && pytest
@@ -125,7 +125,7 @@ cd python_backend && pytest
 cd e2etraceapp && npm test
 ```
 
-## 🛑 Stop Everything
+##  Stop Everything
 ```bash
 ./stop-all.sh
 # OR manually:
@@ -133,7 +133,7 @@ pkill -f "python.*main.py"
 pkill -f "vite"
 ```
 
-## ✅ Health Check
+## ✓ Health Check
 ```bash
 # Backend alive?
 curl http://localhost:8000/docs
@@ -142,7 +142,7 @@ curl http://localhost:8000/docs
 curl http://localhost:5173
 ```
 
-## 🔐 Required Environment Variables
+##  Required Environment Variables
 
 ### Backend `.env`
 ```env
@@ -152,14 +152,14 @@ NEO4J_PASSWORD=your-password
 NEO4J_DATABASE=neo4j
 ```
 
-## 💡 Pro Tips
+##  Pro Tips
 1. Always run `diagnostics.sh` before starting
 2. Check logs first when debugging
 3. Use `./stop-all.sh` before system shutdown
 4. Keep .env files secure (never commit!)
 5. Run `install.sh` after pulling new changes
 
-## 🆘 Help
+##  Help
 1. Run diagnostics: `./diagnostics.sh`
 2. Check logs: `tail -f logs/*.log`  
 3. Read docs: `INSTALLATION.md`

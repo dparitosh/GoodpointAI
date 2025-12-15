@@ -166,7 +166,7 @@ const WorkflowDetailPage = () => {
               className="btn-action btn-start"
               onClick={() => handleWorkflowAction('start')}
             >
-              ▶️ Start Workflow
+              ▶ Start Workflow
             </button>
           ) : null}
           
@@ -176,13 +176,13 @@ const WorkflowDetailPage = () => {
                 className="btn-action btn-pause"
                 onClick={() => handleWorkflowAction('pause')}
               >
-                ⏸️ Pause
+                ‖ Pause
               </button>
               <button 
                 className="btn-action btn-stop"
                 onClick={() => handleWorkflowAction('stop')}
               >
-                ⏹️ Stop
+                ■ Stop
               </button>
             </>
           ) : null}
@@ -228,7 +228,7 @@ const WorkflowDetailPage = () => {
       {/* Configuration Cards */}
       <div className="config-section">
         <div className="config-card">
-          <h3>📥 Source Configuration</h3>
+          <h3>Source Configuration</h3>
           <div className="config-details">
             <div className="config-row">
               <span className="config-label">System:</span>
@@ -248,7 +248,7 @@ const WorkflowDetailPage = () => {
         </div>
 
         <div className="config-card">
-          <h3>📤 Target Configuration</h3>
+          <h3>Target Configuration</h3>
           <div className="config-details">
             <div className="config-row">
               <span className="config-label">System:</span>
@@ -269,7 +269,7 @@ const WorkflowDetailPage = () => {
 
         {workflow.ai_agents_enabled && workflow.ai_agents_enabled.length > 0 && (
           <div className="config-card">
-            <h3>🤖 AI Agents</h3>
+            <h3>AI Agents</h3>
             <div className="ai-agents-list">
               {workflow.ai_agents_enabled.map((agent) => (
                 <div key={agent} className="ai-agent-badge">
@@ -284,7 +284,7 @@ const WorkflowDetailPage = () => {
       {/* Workflow Visualizer */}
       {graphData && (
         <div className="workflow-visualizer-section">
-          <h2>📊 Workflow Pipeline Visualization</h2>
+          <h2>◳ Workflow Pipeline Visualization</h2>
           <div className="visualizer-container">
             <XStateVisualizer
               graphData={graphData}
@@ -298,7 +298,7 @@ const WorkflowDetailPage = () => {
       {/* Execution Metadata */}
       {workflow.execution_metadata && (
         <div className="execution-metadata-section">
-          <h3>⚙️ Execution Details</h3>
+          <h3>Execution Details</h3>
           <pre className="metadata-json">
             {JSON.stringify(workflow.execution_metadata, null, 2)}
           </pre>

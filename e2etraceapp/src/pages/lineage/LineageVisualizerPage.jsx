@@ -1,5 +1,5 @@
 /**
- * 🧬 Data Lineage Visualizer
+ * Data Lineage Visualizer
  * ===========================
  * 
  * Interactive data lineage visualization with:
@@ -30,12 +30,12 @@ import 'reactflow/dist/style.css';
 import './LineageVisualizerPage.css';
 
 const nodeTypes = {
-  SOURCE_SYSTEM: { color: '#3b82f6', icon: '🗄️' },
-  TARGET_SYSTEM: { color: '#10b981', icon: '🎯' },
-  TRANSFORMATION: { color: '#f59e0b', icon: '⚙️' },
+  SOURCE_SYSTEM: { color: '#3b82f6', icon: '▦' },
+  TARGET_SYSTEM: { color: '#10b981', icon: '◎' },
+  TRANSFORMATION: { color: '#f59e0b', icon: '⚙' },
   VALIDATION: { color: '#8b5cf6', icon: '✓' },
-  AGENT: { color: '#ef4444', icon: '🤖' },
-  DATA_RECORD: { color: '#6366f1', icon: '📄' }
+  AGENT: { color: '#ef4444', icon: '✧' },
+  DATA_RECORD: { color: '#6366f1', icon: '◳' }
 };
 
 const LineageVisualizerPage = () => {
@@ -60,7 +60,7 @@ const LineageVisualizerPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/lineage/workflows/${workflowId}/lineage-graph`);
+      const response = await fetch(`/api/lineage/workflows/${workflowId}/lineage-graph`);
       const data = await response.json();
 
       if (data.nodes && data.nodes.length > 0) {
@@ -87,7 +87,7 @@ const LineageVisualizerPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/lineage/trace', {
+      const response = await fetch('/api/lineage/trace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,8 +178,8 @@ const LineageVisualizerPage = () => {
               <div style={{ fontSize: '24px' }}>{config.icon}</div>
               <div style={{ fontWeight: 'bold' }}>{node.name}</div>
               <div style={{ fontSize: '12px', color: '#666' }}>{nodeType}</div>
-              {isUpstream && <div style={{ fontSize: '10px' }}>⬆️ Upstream</div>}
-              {isDownstream && <div style={{ fontSize: '10px' }}>⬇️ Downstream</div>}
+              {isUpstream && <div style={{ fontSize: '10px' }}>↑ Upstream</div>}
+              {isDownstream && <div style={{ fontSize: '10px' }}>↓ Downstream</div>}
             </div>
           )
         },
@@ -216,7 +216,7 @@ const LineageVisualizerPage = () => {
   const runImpactAnalysis = async (nodeId, changeType) => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/lineage/impact-analysis', {
+      const response = await fetch('/api/lineage/impact-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -244,7 +244,7 @@ const LineageVisualizerPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/lineage/audit-trail', {
+      const response = await fetch('/api/lineage/audit-trail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -287,7 +287,7 @@ const LineageVisualizerPage = () => {
   return (
     <div className="lineage-visualizer-page">
       <div className="lineage-header">
-        <h1>🧬 Data Lineage Visualizer</h1>
+        <h1>Data Lineage Visualizer</h1>
         <p>Track data flow, analyze impact, and maintain compliance</p>
       </div>
 

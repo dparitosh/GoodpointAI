@@ -316,7 +316,7 @@ const XStateVisualizer = ({ stateData, onNodeClick }) => {
 
       {selectedNode && (
         <div className="context-hud node-details-panel">
-          <h4>{selectedNode.isEdge ? '⚡ TRANSITION DATA' : '🔮 STATE DATA'}</h4>
+          <h4>{selectedNode.isEdge ? '⇢ TRANSITION DATA' : '◆ STATE DATA'}</h4>
           <div className="context-variable detail-item">
             <span className="context-key">ID:</span>
             <span className="context-value">{selectedNode.id}</span>

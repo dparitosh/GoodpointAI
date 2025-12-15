@@ -163,7 +163,7 @@ export function E2ETraceDataTable({ tableElements, onRowClick, initialSortKey = 
               style={{ marginLeft: "8px", cursor: "help" }} 
               title="Keyboard shortcuts: Ctrl+PageUp/PageDown (navigate pages), Ctrl+Home/End (first/last page)"
             >
-              ⌨️
+              ⓘ
             </span>
           </span>
         </div>

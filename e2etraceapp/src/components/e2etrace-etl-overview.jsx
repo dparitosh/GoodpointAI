@@ -470,21 +470,21 @@ const ETLOverview = ({
                   onClick={handlePerformanceHighlight}
                   title="Highlight performance bottlenecks"
                 >
-                  📊 Find Bottlenecks
+                  ◳ Find Bottlenecks
                 </button>
                 <button 
                   className="analysis-btn secondary"
                   onClick={clearAllFilters}
                   title="Clear all filters and highlights"
                 >
-                  🔄 Reset View
+                  ↻ Reset View
                 </button>
                 <button 
                   className="analysis-btn secondary"
                   onClick={() => handleMetricClick('error', 1)}
                   title="Highlight nodes with errors"
                 >
-                  ⚠ Find Errors
+                  ! Find Errors
                 </button>
               </div>
             </div>
@@ -508,7 +508,7 @@ const ETLOverview = ({
 
         {loadingError && (
           <div className="etl-error">
-            <div className="error-icon">⚠</div>
+            <div className="error-icon">!</div>
             <div className="error-content">
               <strong>Pipeline Error:</strong> {loadingError}
             </div>

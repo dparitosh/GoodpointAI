@@ -94,11 +94,11 @@ The frontend will be available at:
 
 ### Automated Setup
 All scripts automatically:
-- ✅ Check for required software (Python/Node.js)
-- ✅ Create Python virtual environment (backend)
-- ✅ Install/update dependencies
-- ✅ Create default `.env` files if missing
-- ✅ Start development servers with hot reload
+- ✓ Check for required software (Python/Node.js)
+- ✓ Create Python virtual environment (backend)
+- ✓ Install/update dependencies
+- ✓ Create default `.env` files if missing
+- ✓ Start development servers with hot reload
 
 ### Virtual Environment
 The backend scripts create and use a Python virtual environment (`venv`) to isolate dependencies. This is created automatically on first run.

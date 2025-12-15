@@ -1,5 +1,5 @@
 """
-🏭 PLM Data Migration AI Factory Workflow Router
+ PLM Data Migration AI Factory Workflow Router
 
 Provides PLM-specific workflow data including:
 - PLM source systems (Teamcenter, Windchill, CAD systems)

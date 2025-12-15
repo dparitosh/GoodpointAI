@@ -2,7 +2,7 @@ import { createMachine, interpret, assign } from 'xstate';
 import { API_CONFIG } from '../config/api-config.js';
 
 /**
- * 🧠 AGENTIC ORCHESTRATOR - Central Multi-Agent Coordination Service
+ * AGENTIC ORCHESTRATOR - Central Multi-Agent Coordination Service
  * 
  * Implements Modular Cognition Pattern (MCP) with FSM-based agent workflows
  * Following AGENTIC_REFACTORING_GUIDE.md principles
@@ -11,7 +11,7 @@ import { API_CONFIG } from '../config/api-config.js';
 
 
 
-// 🧩 MODULAR COGNITION PATTERN - Agent Definitions
+// MODULAR COGNITION PATTERN - Agent Definitions
 export const AGENT_TYPES = {
   DATA_ANALYST: 'data_analyst',
   ETL_ORCHESTRATOR: 'etl_orchestrator', 
@@ -21,7 +21,7 @@ export const AGENT_TYPES = {
   CHAT_COORDINATOR: 'chat_coordinator'
 };
 
-// ⚛️ XSTATE FSM - Multi-Agent Workflow State Machine
+// XSTATE FSM - Multi-Agent Workflow State Machine
 const agenticWorkflowMachine = createMachine({
   id: 'agenticWorkflow',
   initial: 'idle',
@@ -192,7 +192,7 @@ const agenticWorkflowMachine = createMachine({
   }
 });
 
-// 🧠 AGENT CAPABILITY DEFINITIONS
+// AGENT CAPABILITY DEFINITIONS
 function getAgentCapabilities(agentType) {
   const capabilities = {
     [AGENT_TYPES.DATA_ANALYST]: [
@@ -236,7 +236,7 @@ function getAgentCapabilities(agentType) {
   return capabilities[agentType] || [];
 }
 
-// 🎯 INTELLIGENT AGENT ROUTING
+// INTELLIGENT AGENT ROUTING
 function findBestAgent(agents, task) {
   const requiredCapabilities = task.requiredCapabilities || [];
   
@@ -258,7 +258,7 @@ function calculateAgentScore(agent, requiredCapabilities) {
   return matchingCapabilities.length / requiredCapabilities.length;
 }
 
-// 🚀 TASK EXECUTION WITH AGENT COLLABORATION
+// TASK EXECUTION WITH AGENT COLLABORATION
 async function executeTaskWithAgent(task) {
   const { type, payload, assignedAgent } = task;
   
@@ -285,7 +285,7 @@ async function executeTaskWithAgent(task) {
   }
 }
 
-// 🔧 AGENT TASK EXECUTION HELPERS
+// AGENT TASK EXECUTION HELPERS
 async function executeGraphQuery(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Executing graph query:`, payload);
   // Mock implementation - replace with actual graph query logic
@@ -354,7 +354,7 @@ async function processChatWithAgent(payload, assignedAgent) {
   };
 }
 
-// 📊 OBSERVABILITY WIDGETS - Real-time Agent Monitoring
+// OBSERVABILITY WIDGETS - Real-time Agent Monitoring
 export class AgenticObservabilityService {
   constructor() {
     this.metrics = {
@@ -371,7 +371,7 @@ export class AgenticObservabilityService {
     this.paretoThreshold = 0.8; // 80/20 principle
   }
   
-  // 🎯 PARETO OPTIMIZATION METRICS
+  // PARETO OPTIMIZATION METRICS
   calculateParetoEfficiency(taskResults) {
     if (!taskResults || taskResults.length === 0) return 0;
     
@@ -394,7 +394,7 @@ export class AgenticObservabilityService {
     return totalValue > 0 ? (topTasksValue / totalValue) : 0;
   }
   
-  // 🧠 ADVANCED AGENT METRICS
+  // ADVANCED AGENT METRICS
   getComprehensiveMetrics() {
     const uptime = Date.now() - this.startTime;
     
@@ -547,7 +547,7 @@ export class AgenticObservabilityService {
     return alerts;
   }
   
-  // 🎯 PARETO ANALYSIS METHODS
+  // PARETO ANALYSIS METHODS
   updateParetoMetrics(taskResults) {
     this.metrics.paretoEfficiency = this.calculateParetoEfficiency(taskResults);
     this.metrics.criticalTaskRatio = this.calculateCriticalTaskRatio(taskResults);
@@ -578,7 +578,7 @@ export class AgenticObservabilityService {
   }
 }
 
-// 🎮 AGENTIC ORCHESTRATOR - Main Service Class
+// AGENTIC ORCHESTRATOR - Main Service Class
 export class AgenticOrchestrator {
   constructor() {
     this.machine = agenticWorkflowMachine;
@@ -606,7 +606,7 @@ export class AgenticOrchestrator {
       }, 30000); // Every 30 seconds
       
       this.initialized = true;
-      console.log('🧠 Agentic Orchestrator initialized successfully');
+      console.log('Agentic Orchestrator initialized successfully');
       
       return { success: true, agents: this.getActiveAgents() };
     } catch (error) {
@@ -621,7 +621,7 @@ export class AgenticOrchestrator {
     return new Promise((resolve, reject) => {
       const taskId = `task_${Date.now()}`;
       
-      // 🎯 Apply Pareto optimization to task
+      // Apply Pareto optimization to task
       const optimizedTask = this.applyParetoOptimization(taskDefinition);
       
       this.service.send({ 
@@ -665,7 +665,7 @@ export class AgenticOrchestrator {
     });
   }
   
-  // 🎯 PARETO OPTIMIZATION FOR TASKS
+  // PARETO OPTIMIZATION FOR TASKS
   applyParetoOptimization(taskDefinition) {
     const optimized = { ...taskDefinition };
     
@@ -730,7 +730,7 @@ export class AgenticOrchestrator {
       type: 'CHAT_REQUEST',
       message,
       sender: _context.sender || 'user',
-      sessionId: context.sessionId,
+      sessionId: _context.sessionId,
       timestamp: new Date()
     });
   }
@@ -784,7 +784,7 @@ export class AgenticOrchestrator {
         this.service.stop();
       }
       this.initialized = false;
-      console.log('🧠 Agentic Orchestrator shut down gracefully');
+      console.log('Agentic Orchestrator shut down gracefully');
     } catch (error) {
       console.error("Error:", error);
     }
@@ -832,7 +832,7 @@ export class AgenticOrchestrator {
   }
 }
 
-// 🔄 COLLABORATION ORCHESTRATION
+// COLLABORATION ORCHESTRATION
 async function orchestrateCollaboration(_context, event) {
   const { task, involvedAgents } = event;
   
@@ -887,11 +887,11 @@ function aggregateCollaborationResults(results, collaboration, _context = {}) {
 // Export singleton instance
 export const agenticOrchestrator = new AgenticOrchestrator();
 
-// 🏗️ MODULE INITIALIZATION
+// MODULE INITIALIZATION
 export async function initializeAgenticSystem(_context = {}) {
   try {
     await agenticOrchestrator.initialize();
-    console.log('✅ Agentic System fully initialized');
+    console.log('Agentic System fully initialized');
     return agenticOrchestrator;
   } catch (error) {
 

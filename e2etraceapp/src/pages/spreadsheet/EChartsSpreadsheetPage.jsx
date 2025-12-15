@@ -763,7 +763,7 @@ const EChartsSpreadsheetPage = () => {
     <div className="echarts-spreadsheet-page">
       {/* Header */}
       <div className="spreadsheet-header">
-        <h1>📊 ECharts Data Spreadsheet</h1>
+        <h1>◳ ECharts Data Spreadsheet</h1>
         <div className="header-actions">
           <input
             type="file"
@@ -777,7 +777,7 @@ const EChartsSpreadsheetPage = () => {
             className="btn btn-primary"
             disabled={isLoading}
           >
-            📁 Import File
+            ◻ Import File
           </button>
           
           <div className="export-dropdown">
@@ -785,20 +785,20 @@ const EChartsSpreadsheetPage = () => {
               className="btn btn-secondary dropdown-toggle"
               disabled={!spreadsheetData.length}
             >
-              💾 Export
+              ◻ Export
             </button>
             <div className="dropdown-menu">
               <button onClick={() => handleAdvancedExport('excel')} className="dropdown-item">
-                📊 Excel (.xlsx)
+                ◳ Excel (.xlsx)
               </button>
               <button onClick={() => handleAdvancedExport('csv')} className="dropdown-item">
-                📄 CSV (.csv)
+                ◳ CSV (.csv)
               </button>
               <button onClick={() => handleAdvancedExport('json')} className="dropdown-item">
-                🗂️ JSON (.json)
+                ◰ JSON (.json)
               </button>
               <button onClick={() => handleAdvancedExport('xml')} className="dropdown-item">
-                📋 XML (.xml)
+                ◻ XML (.xml)
               </button>
             </div>
           </div>
@@ -808,7 +808,7 @@ const EChartsSpreadsheetPage = () => {
             className="btn btn-success"
             disabled={isLoading}
           >
-            🔗 Import from NiFi
+            ↦ Import from NiFi
           </button>
           
           <button 
@@ -816,7 +816,7 @@ const EChartsSpreadsheetPage = () => {
             className="btn btn-info"
             disabled={isLoading}
           >
-            🔗 Import from Neo4j
+            ↦ Import from Neo4j
           </button>
         </div>
       </div>
@@ -827,19 +827,19 @@ const EChartsSpreadsheetPage = () => {
           className={`tab ${activeTab === 'data' ? 'active' : ''}`}
           onClick={() => setActiveTab('data')}
         >
-          📋 Data
+          ◻ Data
         </button>
         <button 
           className={`tab ${activeTab === 'convert' ? 'active' : ''}`}
           onClick={() => setActiveTab('convert')}
         >
-          🔄 Convert
+          ↻ Convert
         </button>
         <button 
           className={`tab ${activeTab === 'mapping' ? 'active' : ''}`}
           onClick={() => setActiveTab('mapping')}
         >
-          🗺️ Mapping
+          ◳ Mapping
         </button>
         <button 
           className={`tab ${activeTab === 'validation' ? 'active' : ''}`}
@@ -851,19 +851,19 @@ const EChartsSpreadsheetPage = () => {
           className={`tab ${activeTab === 'templates' ? 'active' : ''}`}
           onClick={() => setActiveTab('templates')}
         >
-          📝 Templates
+          ✎ Templates
         </button>
         <button 
           className={`tab ${activeTab === 'chart' ? 'active' : ''}`}
           onClick={() => setActiveTab('chart')}
         >
-          📊 Chart
+          ◳ Chart
         </button>
         <button 
           className={`tab ${activeTab === 'config' ? 'active' : ''}`}
           onClick={() => setActiveTab('config')}
         >
-          ⚙ Config
+          ▦ Config
         </button>
       </div>
 
@@ -922,7 +922,7 @@ const EChartsSpreadsheetPage = () => {
                       <option value="nifi">NiFi Flow</option>
                     </select>
                   </div>
-                  <div className="conversion-arrow">➡️</div>
+                  <div className="conversion-arrow">→</div>
                   <div className="format-group">
                     <label>Target Format:</label>
                     <select
@@ -942,7 +942,7 @@ const EChartsSpreadsheetPage = () => {
                   className="btn btn-primary conversion-btn"
                   disabled={isLoading || !rawData.trim()}
                 >
-                  🔄 Convert Data
+                  ↻ Convert Data
                 </button>
               </div>
 
@@ -1101,7 +1101,7 @@ const EChartsSpreadsheetPage = () => {
                         onClick={() => removeMappingRule(rule.id)}
                         className="btn btn-danger remove-rule-btn"
                       >
-                        🗑️
+                        ✗
                       </button>
                     </div>
 
@@ -1203,7 +1203,7 @@ Validation Complete:
                 className="btn btn-primary"
                 disabled={!spreadsheetData.length || isLoading}
               >
-                🔍 Run Validation
+                Run Validation
               </button>
             </div>
 
@@ -1281,7 +1281,7 @@ Validation Complete:
                   className="btn btn-primary"
                   disabled={!mappingRules.length}
                 >
-                  💾 Save Current Rules
+                  ◻ Save Current Rules
                 </button>
               </div>
             </div>
@@ -1311,13 +1311,13 @@ Validation Complete:
                         onClick={() => loadMappingTemplate(template)}
                         className="btn btn-secondary btn-sm"
                       >
-                        📥 Load
+                        Load
                       </button>
                       <button 
                         onClick={() => deleteMappingTemplate(template.id)}
                         className="btn btn-danger btn-sm"
                       >
-                        🗑️ Delete
+                        ✗ Delete
                       </button>
                     </div>
                   </div>
@@ -1342,7 +1342,7 @@ Validation Complete:
                     }}
                     className="btn btn-success btn-sm"
                   >
-                    📥 Load Template
+                    Load Template
                   </button>
                 </div>
                 
@@ -1360,7 +1360,7 @@ Validation Complete:
                     }}
                     className="btn btn-success btn-sm"
                   >
-                    📥 Load Template
+                    Load Template
                   </button>
                 </div>
               </div>

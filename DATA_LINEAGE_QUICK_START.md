@@ -1,4 +1,4 @@
-# 🧬 Data Lineage Quick Start Guide
+#  Data Lineage Quick Start Guide
 
 ## Overview
 The Data Lineage Visualizer tracks data flow from source systems through transformations to target systems, providing impact analysis and compliance-ready audit trails.
@@ -7,7 +7,7 @@ The Data Lineage Visualizer tracks data flow from source systems through transfo
 
 1. **Navigate to Data Lineage:**
    - Open the application at `http://localhost:5173`
-   - Click **"🧬 Data Lineage"** in the left sidebar under "Data Operations"
+   - Click **" Data Lineage"** in the left sidebar under "Data Operations"
 
 ## Key Features
 
@@ -48,12 +48,12 @@ Max Depth: 5
 **Use Case:** Focus on specific types of nodes in the lineage graph
 
 **Available Filters:**
-- 🗄️ **Source System** - External data sources
-- 🎯 **Target System** - Destination systems
-- ⚙️ **Transformation** - Data transformation steps
+-  **Source System** - External data sources
+-  **Target System** - Destination systems
+- ⚙ **Transformation** - Data transformation steps
 - ✓ **Validation** - Data quality checks
-- 🤖 **Agent** - AI agents processing data
-- 📄 **Data Record** - Individual data records
+-  **Agent** - AI agents processing data
+-  **Data Record** - Individual data records
 
 **Steps:**
 1. Click any filter button to show only that type
@@ -113,7 +113,7 @@ Recommendation: "Run data validation tests before deployment"
 
 ### Node Information
 - **Color**: Indicates node type (see legend)
-- **Icon**: Visual identifier (🗄️, 🎯, ⚙️, etc.)
+- **Icon**: Visual identifier (, , ⚙, etc.)
 - **Label**: Node name and type
 - **Border**: Yellow border = current record (in trace mode)
 
@@ -199,12 +199,12 @@ GET http://localhost:8000/api/lineage/workflows/wf_12345/lineage-graph
 
 | Type | Icon | Color | Purpose |
 |------|------|-------|---------|
-| SOURCE_SYSTEM | 🗄️ | Blue | External data sources (databases, APIs) |
-| TARGET_SYSTEM | 🎯 | Green | Destination systems (warehouses, apps) |
-| TRANSFORMATION | ⚙️ | Orange | Data transformation logic |
+| SOURCE_SYSTEM |  | Blue | External data sources (databases, APIs) |
+| TARGET_SYSTEM |  | Green | Destination systems (warehouses, apps) |
+| TRANSFORMATION | ⚙ | Orange | Data transformation logic |
 | VALIDATION | ✓ | Purple | Quality checks and validations |
-| AGENT | 🤖 | Red | AI agents processing data |
-| DATA_RECORD | 📄 | Indigo | Individual data records |
+| AGENT |  | Red | AI agents processing data |
+| DATA_RECORD |  | Indigo | Individual data records |
 
 ## Relationship Types Reference
 
@@ -379,9 +379,9 @@ query {
 
 ## Next Steps
 
-1. ✅ **Completed**: Data Lineage Tracking (Task 1)
-2. ⏭️ **Next**: Semantic Schema Mapping (Task 4)
-3. ⏭️ **Future**: Real-Time Collaboration with GraphQL Subscriptions (Task 7)
+1. ✓ **Completed**: Data Lineage Tracking (Task 1)
+2. -> **Next**: Semantic Schema Mapping (Task 4)
+3. -> **Future**: Real-Time Collaboration with GraphQL Subscriptions (Task 7)
 
 ---
 

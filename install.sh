@@ -79,7 +79,7 @@ fi
 # Check for .env file
 if [ ! -f ".env" ]; then
     echo ""
-    echo -e "${YELLOW}⚠ Warning: .env file not found${NC}"
+    echo -e "${YELLOW}! Warning: .env file not found${NC}"
     echo "Creating template .env file..."
     cat > .env << 'EOF'
 # Neo4j Configuration
@@ -97,7 +97,7 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
 OPENAI_API_KEY=your-openai-key-here
 EOF
     echo -e "${GREEN}✓ Template .env file created${NC}"
-    echo -e "${YELLOW}⚠ Please edit python_backend/.env with your actual Neo4j credentials${NC}"
+    echo -e "${YELLOW}! Please edit python_backend/.env with your actual Neo4j credentials${NC}"
 else
     echo -e "${GREEN}✓ .env file exists${NC}"
 fi

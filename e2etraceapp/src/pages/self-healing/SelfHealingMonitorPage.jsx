@@ -1,5 +1,5 @@
 /**
- * 🔄 Self-Healing Orchestration Monitor
+ * Self-Healing Orchestration Monitor
  * ======================================
  * 
  * Real-time monitoring dashboard for self-healing orchestration with:
@@ -47,8 +47,7 @@ const SelfHealingMonitorPage = () => {
       const ws = new WebSocket('ws://localhost:8000/api/self-healing/ws/monitor');
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
-        setWsConnected(true);
+
       };
 
       ws.onmessage = (event) => {
@@ -83,7 +82,7 @@ const SelfHealingMonitorPage = () => {
   // Load circuit breakers
   const loadCircuitBreakers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/self-healing/circuit-breakers');
+      const response = await fetch('/api/self-healing/circuit-breakers');
       const data = await response.json();
       setCircuitBreakers(data);
     } catch (error) {
@@ -94,7 +93,7 @@ const SelfHealingMonitorPage = () => {
   // Load DLQ messages
   const loadDLQ = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/self-healing/dead-letter-queue');
+      const response = await fetch('/api/self-healing/dead-letter-queue');
       const data = await response.json();
       setDlqMessages(data);
     } catch (error) {
@@ -112,7 +111,7 @@ const SelfHealingMonitorPage = () => {
         route: {
           id: 'primary_route',
           name: 'Primary Database',
-          endpoint: 'http://localhost:8000/api/data',
+          endpoint: '/api/data',
           successRate: 0.9,
           averageLatency: 100,
           priority: 1
@@ -144,7 +143,7 @@ const SelfHealingMonitorPage = () => {
       };
 
       const response = await fetch(
-        `http://localhost:8000/api/self-healing/execute?simulate_failure=${simulateFailure}`,
+        `/api/self-healing/execute?simulate_failure=${simulateFailure}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -169,7 +168,7 @@ const SelfHealingMonitorPage = () => {
   // Retry DLQ message
   const retryDLQMessage = async (taskId) => {
     try {
-      await fetch(`http://localhost:8000/api/self-healing/dead-letter-queue/${taskId}/retry`, {
+      await fetch(`/api/self-healing/dead-letter-queue/${taskId}/retry`, {
         method: 'POST'
       });
       await loadDLQ();
@@ -187,7 +186,7 @@ const SelfHealingMonitorPage = () => {
     }
 
     try {
-      await fetch(`http://localhost:8000/api/self-healing/dead-letter-queue/${taskId}`, {
+      await fetch(`/api/self-healing/dead-letter-queue/${taskId}`, {
         method: 'DELETE'
       });
       await loadDLQ();
@@ -290,7 +289,7 @@ const SelfHealingMonitorPage = () => {
             disabled={loading}
             className="btn-warning"
           >
-            ⚠ Execute Failing Task (Test Retry)
+            ! Execute Failing Task (Test Retry)
           </button>
           <button 
             onClick={loadCircuitBreakers}

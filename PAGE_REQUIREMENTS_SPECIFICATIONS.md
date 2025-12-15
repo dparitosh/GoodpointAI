@@ -5,7 +5,7 @@
 - **Version**: 7.0 (Consolidated from multiple source documents on Nov 22–23, 2025).  
 - **Owner**: Platform Engineering / Product Management  
 - **Related Docs**: `ETL_Architecture_Summary.md`, `MODERNIZATION_TRACKER.md`, `HOW_TO_VIEW_UI.md`  
-- **Status Legend**: ✅ Done | 🔄 In Progress | ⚙️ Hardening/Debugging | ❌ Blocked | 📝 Planned
+- **Status Legend**: ✓ Done |  In Progress | ⚙ Hardening/Debugging | ✗ Blocked |  Planned
 
 ---
 
@@ -20,46 +20,46 @@
 
 ## 3. Capabilities (C-*)
 ### 3.1 PLM XML Processing (C-PLM)
-- ✅ **Upload** up to 150 MB XML batch, validation, store metadata.  
-- ✅ **Parsing** with schema constraints, extract Product, Part, relationships.  
-- ✅ **Transform** relational to Neo4j Cypher patterns.  
-- 🔄 **Index** vector embeddings in OpenSearch for semantic search.
+- ✓ **Upload** up to 150 MB XML batch, validation, store metadata.  
+- ✓ **Parsing** with schema constraints, extract Product, Part, relationships.  
+- ✓ **Transform** relational to Neo4j Cypher patterns.  
+-  **Index** vector embeddings in OpenSearch for semantic search.
 
 ### 3.2 OpenSearch Integration (C-OPEN)
-- ✅ **Configuration** CRUD via React form (protocol, host, port, credentials).  
-- ✅ **Health** monitoring: cluster status + response time every 30 s.  
-- ✅ **Index Management**: list, create, delete operations.  
-- ✅ **Vector Search**: k-NN similarity with text or embedding payloads.  
-- 📝 **Analytics Indexing** (future) for aggregated logs.
+- ✓ **Configuration** CRUD via React form (protocol, host, port, credentials).  
+- ✓ **Health** monitoring: cluster status + response time every 30 s.  
+- ✓ **Index Management**: list, create, delete operations.  
+- ✓ **Vector Search**: k-NN similarity with text or embedding payloads.  
+-  **Analytics Indexing** (future) for aggregated logs.
 
 ### 3.3 Migration Engine & Visualizer (C-MIGRATE + C-VIS)
-- ✅ **Job Orchestration**: Expose REST API to launch multi-source migration with strategies.  
-- ✅ **Real-time State Streaming**: WebSocket endpoint broadcasting stage, progress, quality, errors.  
-- ✅ **XState Visualization UI**: Clickable statechart with Fluent theme, keyboard accessible.  
-- ✅ **Control Events**: Pause, resume, retry, cancel; backend acknowledgment before UI unlock.  
-- ✅ **History Export**: Download CSV audit trail of transitions.  
-- ✅ **Session Persistence**: Store job metadata in `migration_sessions` PostgreSQL table.
+- ✓ **Job Orchestration**: Expose REST API to launch multi-source migration with strategies.  
+- ✓ **Real-time State Streaming**: WebSocket endpoint broadcasting stage, progress, quality, errors.  
+- ✓ **XState Visualization UI**: Clickable statechart with Fluent theme, keyboard accessible.  
+- ✓ **Control Events**: Pause, resume, retry, cancel; backend acknowledgment before UI unlock.  
+- ✓ **History Export**: Download CSV audit trail of transitions.  
+- ✓ **Session Persistence**: Store job metadata in `migration_sessions` PostgreSQL table.
 
 ### 3.4 Operational Instrumentation (C-OPS)
-- ✅ **Health Endpoints**: `/api/status/{service}` for each microservice with structured response.  
-- ✅ **Consolidated Status UI**: Header badge aggregating service health across platform.  
-- ⚙️ **Threshold Monitoring**: `monitoring_thresholds.json` defines alert bands; analytics service logs breaches.  
-- ✅ **Error Envelopes**: All HTTP errors use `{status, message, timestamp}` format.  
-- ✅ **Correlation IDs**: `X-Trace-Id` headers propagate across services.
+- ✓ **Health Endpoints**: `/api/status/{service}` for each microservice with structured response.  
+- ✓ **Consolidated Status UI**: Header badge aggregating service health across platform.  
+- ⚙ **Threshold Monitoring**: `monitoring_thresholds.json` defines alert bands; analytics service logs breaches.  
+- ✓ **Error Envelopes**: All HTTP errors use `{status, message, timestamp}` format.  
+- ✓ **Correlation IDs**: `X-Trace-Id` headers propagate across services.
 
 ### 3.5 Analytics Storage & Dashboard (C-ANALYTICS)
-- ✅ **Metrics Ingestion**: Collate upload counts, latencies, error rates from gateway and PLM service.  
-- ✅ **API for Dashboards**: `/api/analytics/uploads` returns time-series for governance views.  
-- ✅ **Migration Quality Metrics**: Track row mismatches, schema drift detection, quality scores.
+- ✓ **Metrics Ingestion**: Collate upload counts, latencies, error rates from gateway and PLM service.  
+- ✓ **API for Dashboards**: `/api/analytics/uploads` returns time-series for governance views.  
+- ✓ **Migration Quality Metrics**: Track row mismatches, schema drift detection, quality scores.
 
 ### 3.6 Graph Features - ETL/XState/OpenSearch Centerpiece (C-GRAPH)
-- ✅ **GraphQL Toolkit**: Schema introspection (XML/JSON), data transforms, query execution, persisted catalogue for ETL data mapping.  
-- ✅ **Neo4j GraphRAG**: Hybrid semantic search combining graph relationships with vector similarity; bridges graph data to OpenSearch.  
-- 🔄 **Graph Explorer UI**: Interactive visualization of Neo4j data, Cypher query execution, migration state history rendering.  
-- ✅ **ETL Integration**: GraphQL transforms power migration DATA_MIGRATION phase; schema discovery in DISCOVERING phase.  
-- ✅ **XState Integration**: Neo4j stores migration state transitions; Graph Explorer visualizes as interactive state graph.  
-- ✅ **OpenSearch Bridge**: GraphRAG enables hybrid search (Neo4j context + OpenSearch vectors) for semantic queries.  
-- 📝 **Data Lineage**: Track data flows from source → transform → target as Neo4j relationships (future).
+- ✓ **GraphQL Toolkit**: Schema introspection (XML/JSON), data transforms, query execution, persisted catalogue for ETL data mapping.  
+- ✓ **Neo4j GraphRAG**: Hybrid semantic search combining graph relationships with vector similarity; bridges graph data to OpenSearch.  
+-  **Graph Explorer UI**: Interactive visualization of Neo4j data, Cypher query execution, migration state history rendering.  
+- ✓ **ETL Integration**: GraphQL transforms power migration DATA_MIGRATION phase; schema discovery in DISCOVERING phase.  
+- ✓ **XState Integration**: Neo4j stores migration state transitions; Graph Explorer visualizes as interactive state graph.  
+- ✓ **OpenSearch Bridge**: GraphRAG enables hybrid search (Neo4j context + OpenSearch vectors) for semantic queries.  
+-  **Data Lineage**: Track data flows from source → transform → target as Neo4j relationships (future).
 
 _See `GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md` for detailed implementation specifications._
 
@@ -128,15 +128,15 @@ _See `GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md` for detailed implementation spec
 ## 6. API & Service Reference (Essentials Only)
 | Service | Endpoint | Method | Purpose | Timeout | Status |
 |---------|----------|--------|---------|---------|--------|
-| Backend Gateway (8003) | `/api/plm-xml/uploads` | POST | Receive uploads, hand off to PLM service. | 30 s | ✅ |
-| PLM XML Service (8005) | `/internal/plm-xml/process` | POST | Parse XML, persist data. | 60 s | ✅ |
-| Migration Engine (8007) | `/api/migration/advanced/start` | POST | Launch migration job. | 45 s | ✅ |
-| Migration Engine (8007) | `/api/migration/advanced/{id}/events` | POST | Control events (PAUSE/RESUME/RETRY/CANCEL). | 15 s | ✅ |
-| Migration Engine (8007) | `/api/migration/advanced/{id}/history` | GET | Transition history export. | 15 s | ✅ |
-| OpenSearch Router (8003) | `/api/opensearch/health` | GET | Cluster health & latency. | 5 s | ✅ |
-| OpenSearch Router (8003) | `/api/opensearch/indexes` | GET/POST/DELETE | Index management. | 15 s | ✅ |
-| OpenSearch Router (8003) | `/api/opensearch/search` | POST | Vector similarity query. | 15 s | ✅ |
-| Analytics Storage (8006) | `/api/analytics/uploads` | GET | Metrics for governance dashboard. | 10 s | ✅ |
+| Backend Gateway (8003) | `/api/plm-xml/uploads` | POST | Receive uploads, hand off to PLM service. | 30 s | ✓ |
+| PLM XML Service (8005) | `/internal/plm-xml/process` | POST | Parse XML, persist data. | 60 s | ✓ |
+| Migration Engine (8007) | `/api/migration/advanced/start` | POST | Launch migration job. | 45 s | ✓ |
+| Migration Engine (8007) | `/api/migration/advanced/{id}/events` | POST | Control events (PAUSE/RESUME/RETRY/CANCEL). | 15 s | ✓ |
+| Migration Engine (8007) | `/api/migration/advanced/{id}/history` | GET | Transition history export. | 15 s | ✓ |
+| OpenSearch Router (8003) | `/api/opensearch/health` | GET | Cluster health & latency. | 5 s | ✓ |
+| OpenSearch Router (8003) | `/api/opensearch/indexes` | GET/POST/DELETE | Index management. | 15 s | ✓ |
+| OpenSearch Router (8003) | `/api/opensearch/search` | POST | Vector similarity query. | 15 s | ✓ |
+| Analytics Storage (8006) | `/api/analytics/uploads` | GET | Metrics for governance dashboard. | 10 s | ✓ |
 
 All services log responses using common schema `{status, message, data?, timestamp}` and propagate correlation IDs via `X-Trace-Id` header.
 
@@ -156,11 +156,11 @@ All services log responses using common schema `{status, message, data?, timesta
 ## 8. Delivery Tracker & Status
 | Task ID | Work Item | Owner | Linked Artifacts | Status | Evidence |
 |---------|-----------|-------|------------------|--------|----------|
-| T-01 | Consolidate markdown specs into this single file and remove duplicates. | Docs Team | `scripts/merge_markdown.ps1`, `scripts/delete_markdown.ps1` | ✅ Done | Git history `docs cleanup` (Nov 22). |
-| T-02 | Reformat requirements grouped by needs/capabilities/features/functions. | Platform PM | This document v7.0 | ✅ Done | Peer review pending (Nov 23). |
-| T-03 | Implement migration control REST endpoints + WebSocket streaming. | Backend | `services/advanced_migration_engine.py`, `migration_router.py` | ✅ Done | Tests in `tests/test_advanced_migration_features.py` (11 tests). |
-| T-04 | Build PLM Migration Visualizer UI with XState + accessibility. | Frontend | `PLMMigrationVisualizerPage.jsx`, `XStateGraphVisualizer.jsx` | ✅ Done | Implemented in commit 0376bfa. |
-| T-05 | Harden Analytics Storage metrics ingestion + dashboard API. | Data Ops | `services.analytics_storage_service:app`, `analytics_router.py` | ✅ Done | Tests in `tests/test_analytics_storage.py` (10 tests). |
+| T-01 | Consolidate markdown specs into this single file and remove duplicates. | Docs Team | `scripts/merge_markdown.ps1`, `scripts/delete_markdown.ps1` | ✓ Done | Git history `docs cleanup` (Nov 22). |
+| T-02 | Reformat requirements grouped by needs/capabilities/features/functions. | Platform PM | This document v7.0 | ✓ Done | Peer review pending (Nov 23). |
+| T-03 | Implement migration control REST endpoints + WebSocket streaming. | Backend | `services/advanced_migration_engine.py`, `migration_router.py` | ✓ Done | Tests in `tests/test_advanced_migration_features.py` (11 tests). |
+| T-04 | Build PLM Migration Visualizer UI with XState + accessibility. | Frontend | `PLMMigrationVisualizerPage.jsx`, `XStateGraphVisualizer.jsx` | ✓ Done | Implemented in commit 0376bfa. |
+| T-05 | Harden Analytics Storage metrics ingestion + dashboard API. | Data Ops | `services.analytics_storage_service:app`, `analytics_router.py` | ✓ Done | Tests in `tests/test_analytics_storage.py` (10 tests). |
 
 Status Legend matches Section 3.
 

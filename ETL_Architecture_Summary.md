@@ -94,23 +94,23 @@ Data → Validation Rules → Quality Report
 
 ## Application Navigation Structure
 
-### 📊 Data Configuration
+###  Data Configuration
 - **Data Sources & Schema**: Neo4j connection, schema management
-- **📋 Data Spreadsheet**: Enhanced spreadsheet with ETL integration
-- **📈 Analytics & Quality**: Data analysis and quality metrics
+- ** Data Spreadsheet**: Enhanced spreadsheet with ETL integration
+- ** Analytics & Quality**: Data analysis and quality metrics
 
-### 🔄 Data Pipelines  
-- **🏭 Processing Hub**: Central ETL workflow management (NEW)
+###  Data Pipelines  
+- ** Processing Hub**: Central ETL workflow management (NEW)
 - **NiFi Pipelines**: Apache NiFi flow management
 - **ETL Processes**: Traditional ETL monitoring
 - **Data Mapping**: Field mapping and transformation rules
 
-### 🌊 Data Flow
+###  Data Flow
 - **Flow Visualization**: Graph-based data flow visualization
 - **Graph Explorer**: Interactive graph exploration
 - **Flow Monitoring**: Real-time flow monitoring
 
-### 📋 Reporting
+###  Reporting
 - **Reports & Dashboards**: Analytics and reporting
 - **Data Export**: Multi-format data export
 

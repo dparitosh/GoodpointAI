@@ -1,5 +1,5 @@
 /**
- * 🧠 AGENTIC CHAT PANEL - Styling for Multi-Agent Interface
+ * AGENTIC CHAT PANEL - Styling for Multi-Agent Interface
  */
 
 .agentic-chat-panel {
@@ -14,7 +14,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
-/* 🎨 HEADER SECTION */
+/* HEADER SECTION */
 .chat-header {
   display: flex;
   justify-content: space-between;
@@ -67,7 +67,7 @@
   margin-left: 4px;
 }
 
-/* 💬 MESSAGES SECTION */
+/* MESSAGES SECTION */
 .messages-container {
   flex: 1;
   overflow-y: auto;
@@ -95,7 +95,7 @@
   background: #a0aec0;
 }
 
-/* 📝 MESSAGE STYLING */
+/* MESSAGE STYLING */
 .message {
   display: flex;
   flex-direction: column;
@@ -187,7 +187,7 @@
   color: #c53030;
 }
 
-/* 📊 MESSAGE DATA SECTION */
+/* MESSAGE DATA SECTION */
 .message-data {
   margin-top: 8px;
   font-size: 12px;
@@ -233,7 +233,7 @@
   transform: translateX(2px);
 }
 
-/* 💭 TYPING INDICATOR */
+/* TYPING INDICATOR */
 .typing-indicator {
   display: flex;
   align-items: center;
@@ -269,7 +269,7 @@
 .dots span:nth-child(2) { animation-delay: 0.2s; }
 .dots span:nth-child(3) { animation-delay: 0.4s; }
 
-/* 💡 SUGGESTED PROMPTS */
+/* SUGGESTED PROMPTS */
 .suggested-prompts {
   display: flex;
   flex-wrap: wrap;
@@ -302,7 +302,7 @@
   cursor: not-allowed;
 }
 
-/* ⌨️ INPUT SECTION */
+/* INPUT SECTION */
 .chat-input-container {
   padding: 16px;
   border-top: 1px solid #e2e8f0;
@@ -393,7 +393,7 @@
   transform: none;
 }
 
-/* 🎭 ANIMATIONS */
+/* ANIMATIONS */
 @keyframes messageSlideIn {
   from {
     opacity: 0;
@@ -423,7 +423,7 @@
   }
 }
 
-/* 📱 RESPONSIVE DESIGN */
+/* RESPONSIVE DESIGN */
 @media (max-width: 768px) {
   .agentic-chat-panel {
     border-radius: 0;
@@ -458,7 +458,7 @@
   }
 }
 
-/* 🌙 DARK MODE SUPPORT */
+/* DARK MODE SUPPORT */
 @media (prefers-color-scheme: dark) {
   .agentic-chat-panel {
     background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);

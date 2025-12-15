@@ -329,7 +329,7 @@ All components reference:
 ## 5. Next Steps & Action Items
 
 ### 5.1 Immediate (Pre-Release)
-1. **Graph Explorer Route Fix** ⚠️ CRITICAL
+1. **Graph Explorer Route Fix** ! CRITICAL
    - [ ] Restore the missing `GraphExplorerContent` module or relocate component
    - [ ] Add `/graph-explorer` route to `e2etraceapp/src/routes/index.jsx`
    - [ ] Update navigation in `e2etrace-root-layout.jsx`
@@ -337,14 +337,14 @@ All components reference:
    - **Owner**: Frontend team
    - **Estimated effort**: 2-4 hours
 
-2. **Integration Testing** ⚠️ HIGH PRIORITY
+2. **Integration Testing** ! HIGH PRIORITY
    - [ ] Add `python_backend/tests/test_neo4j_graphrag.py` with 5+ scenarios
    - [ ] Add GraphQL integration tests to `test_advanced_migration_features.py`
    - [ ] Add Playwright test for Graph Explorer once route restored
    - **Owner**: QA + Backend team
    - **Estimated effort**: 1-2 days
 
-3. **Documentation Linking** 📝
+3. **Documentation Linking** 
    - [ ] Link this document from `PAGE_REQUIREMENTS_SPECIFICATIONS.md` Section 10
    - [ ] Update API reference table with GraphQL and GraphRAG endpoints
    - [ ] Add sequence diagrams for ETL → Graph → Search flow
@@ -352,21 +352,21 @@ All components reference:
    - **Estimated effort**: 4 hours
 
 ### 5.2 Short-Term (Next Sprint)
-4. **Security Hardening** 🔒
+4. **Security Hardening** 
    - [ ] Add auth guards to `/api/neo4j-graphrag` endpoints
    - [ ] Add rate limiting to GraphQL transform endpoint (prevent abuse)
    - [ ] Audit GraphQL query endpoint for injection risks
    - **Owner**: Security + Backend team
    - **Estimated effort**: 2-3 days
 
-5. **Performance Optimization** ⚡
+5. **Performance Optimization** 
    - [ ] Implement GraphQL schema cache with TTL
    - [ ] Add connection pooling for Neo4j in GraphRAG service
    - [ ] Lazy-load GraphRAG service at startup instead of per-request
    - **Owner**: Backend team
    - **Estimated effort**: 3-4 days
 
-6. **Observability Enhancement** 📊
+6. **Observability Enhancement** 
    - [ ] Add Prometheus metrics for GraphQL transform throughput
    - [ ] Add tracing spans for GraphRAG query pipeline
    - [ ] Link analytics dashboard to GraphQL catalogue usage
@@ -374,14 +374,14 @@ All components reference:
    - **Estimated effort**: 2 days
 
 ### 5.3 Medium-Term (Next Quarter)
-7. **Feature Enhancements** ✨
+7. **Feature Enhancements** 
    - [ ] Implement GraphQL subscription support for real-time transforms
    - [ ] Add GraphRAG tool registration API for dynamic ETL agents
    - [ ] Build Graph Explorer plugins for custom visualizations
    - **Owner**: Product + Engineering
    - **Estimated effort**: 2-4 weeks
 
-8. **Migration Consolidation** 🔄
+8. **Migration Consolidation** 
    - [ ] Deprecate `GraphExplorerMigrated.jsx` after feature parity verified
    - [ ] Migrate all Cypher queries to use GraphQL catalogue
    - [ ] Unify connection management across all graph-dependent components
@@ -389,7 +389,7 @@ All components reference:
    - **Estimated effort**: 1-2 weeks
 
 ### 5.4 Long-Term (Roadmap)
-9. **Advanced Capabilities** 🚀
+9. **Advanced Capabilities** 
    - [ ] Multi-graph federation (connect multiple Neo4j instances)
    - [ ] GraphQL federation with OpenSearch (unified query language)
    - [ ] AI-powered schema mapping suggestions via GraphRAG
@@ -401,28 +401,28 @@ All components reference:
 
 ## 6. Alignment Verification Checklist
 
-### 6.1 ETL Integration ✅
+### 6.1 ETL Integration ✓
 - [x] GraphQL toolkit documented as primary data mapping layer
 - [x] Transform endpoint linked to migration engine DATA_MIGRATION state
 - [x] Schema introspection integrated with DISCOVERING phase
 - [x] Query execution linked to VALIDATION phase
 - [x] Catalogue management enables repeatable ETL workflows
 
-### 6.2 XState Visualizer Integration ✅
+### 6.2 XState Visualizer Integration ✓
 - [x] Neo4j storage for migration state transitions specified
 - [x] Graph Explorer visualization of state history described
 - [x] PLMMigrationStatechartVisualizer.jsx integration documented
 - [x] WebSocket synchronization with migration_router explained
 - [x] CSV export feature leverages Neo4j query history
 
-### 6.3 OpenSearch Integration ✅
+### 6.3 OpenSearch Integration ✓
 - [x] GraphRAG hybrid search strategy defined
 - [x] Neo4j + OpenSearch result fusion architecture documented
 - [x] Analytics metrics indexing in both systems specified
 - [x] Semantic validation during ETL explained
 - [x] Configuration alignment across all services verified
 
-### 6.4 Data Mapping Simplification ✅
+### 6.4 Data Mapping Simplification ✓
 - [x] GraphQL transform engine as core mapping tool
 - [x] Visual schema mapping via Graph Explorer (future)
 - [x] Persisted mapping catalogue for reuse

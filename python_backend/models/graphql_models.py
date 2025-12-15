@@ -5,9 +5,7 @@ Supports persisted queries and schema cache storage.
 
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Index
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from core.database import Base
 
 
 class PersistedGraphQLQueryModel(Base):

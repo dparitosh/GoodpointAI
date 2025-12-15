@@ -413,7 +413,7 @@ export default function ReportingPage() {
             fontSize: '1.2rem',
             paddingTop: '3rem'
           }}>
-            📊 Configure your search parameters and generate a visualization
+            ◳ Configure your search parameters and generate a visualization
           </div>
         )}
       </div>
@@ -434,7 +434,7 @@ export default function ReportingPage() {
             fontSize: '1.1rem',
             fontWeight: 'bold'
           }}>
-            📈 Data Results ({result.length} records)
+            ↗ Data Results ({result.length} records)
           </div>
           <div style={{ maxHeight: 400, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -477,7 +477,7 @@ export default function ReportingPage() {
         borderRadius: '12px',
         color: 'white'
       }}>
-        <h3 style={{ margin: '0 0 1rem 0' }}>📊 Need Advanced Data Analysis?</h3>
+        <h3 style={{ margin: '0 0 1rem 0' }}>◳ Need Advanced Data Analysis?</h3>
         <p style={{ margin: '0 0 1.5rem 0', opacity: 0.9 }}>
           Use our dedicated ECharts Spreadsheet for Excel import/export, advanced charting, and data manipulation.
         </p>
@@ -503,7 +503,7 @@ export default function ReportingPage() {
             e.target.style.transform = 'translateY(0)';
           }}
         >
-          🚀 Open ECharts Spreadsheet
+          ➔ Open ECharts Spreadsheet
         </a>
       </div>
     </div>
