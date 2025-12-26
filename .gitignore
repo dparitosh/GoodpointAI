@@ -1,5 +1,10 @@
 __pycache__/
 
+*.pyc
+
+# Runtime data (SQLite default DB)
+python_backend/data/
+
 # Generated test artifacts
 e2etraceapp/test-results/junit.xml
 e2etraceapp/test-results/test-results.json

@@ -80,7 +80,7 @@ class SchemaCacheModel(Base):
             "schema_hash": self.schema_hash,
             "fields": self.fields,
             "types": self.types,
-            "metadata": self.metadata,
+            "metadata": self.schema_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "access_count": self.access_count,

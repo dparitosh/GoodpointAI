@@ -3,13 +3,14 @@ GraphQL Catalogue Router - CRUD operations for persisted queries and schema cach
 Manages query registry with unique name constraints.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query, Response
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 import logging
 
 from services.graphql_catalogue_service import GraphQLCatalogueService
+from core.db_session import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -49,54 +50,19 @@ class QueryResponse(BaseModel):
     tags: List[str]
 
 
-# Mock dependency - in production, use actual database session
-def get_db_session():
-    """
-    Get database session dependency.
-    In production, this should return SQLAlchemy session from connection pool.
-    """
-    # Mock session for now - replace with actual database integration
-    class MockSession:
-        def query(self, *args, **kwargs):
-            return MockQuery()
-        def add(self, *args, **kwargs):
-            pass
-        def commit(self):
-            pass
-        def rollback(self):
-            pass
-        def refresh(self, *args, **kwargs):
-            pass
-        def delete(self, *args, **kwargs):
-            pass
-    
-    class MockQuery:
-        def filter(self, *args, **kwargs):
-            return self
-        def order_by(self, *args, **kwargs):
-            return self
-        def limit(self, *args, **kwargs):
-            return self
-        def offset(self, *args, **kwargs):
-            return self
-        def first(self):
-            return None
-        def all(self):
-            return []
-    
-    return MockSession()
-
-
-def get_catalogue_service(db: Session = Depends(get_db_session)) -> GraphQLCatalogueService:
+def get_catalogue_service(db: Session = Depends(get_db)) -> GraphQLCatalogueService:
     """Dependency to get catalogue service instance."""
     return GraphQLCatalogueService(db)
 
 
 @router.get("/queries", response_model=List[QueryResponse])
 async def list_queries(
-    limit: int = 100,
-    offset: int = 0,
-    format: Optional[str] = None,
+    response: Response,
+    # Keep existing params for compatibility; also accept skip/limit.
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    skip: int = Query(0, ge=0),
+    query_format: Optional[str] = Query(None, alias="format"),
     service: GraphQLCatalogueService = Depends(get_catalogue_service)
 ):
     """
@@ -107,11 +73,17 @@ async def list_queries(
     - **format**: Optional filter by format ('xml' or 'json')
     """
     try:
-        queries = service.list_queries(limit=limit, offset=offset, format=format)
+        # Prefer skip if provided; keep offset for backward compatibility.
+        effective_offset = skip if skip else offset
+        queries = service.list_queries(limit=limit, offset=effective_offset, query_format=query_format)
+
+        # Service doesn't expose total counts yet; emit best-effort header.
+        response.headers["X-Total-Count"] = str(len(queries))
+
         return queries
     except Exception as e:
-        logger.error(f"List queries failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("List queries failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/queries/{query_id}", response_model=QueryResponse)
@@ -130,8 +102,8 @@ async def get_query(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get query failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Get query failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/queries/by-name/{name}", response_model=QueryResponse)
@@ -150,8 +122,8 @@ async def get_query_by_name(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get query by name failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Get query by name failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/queries", response_model=QueryResponse, status_code=201)
@@ -170,16 +142,16 @@ async def create_query(
             query=request.query,
             description=request.description,
             variables=request.variables,
-            format=request.format,
+            query_format=request.format,
             created_by=request.created_by,
             tags=request.tags
         )
         return query
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Create query failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Create query failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.patch("/queries/{query_id}", response_model=QueryResponse)
@@ -203,12 +175,12 @@ async def update_query(
             raise HTTPException(status_code=404, detail=f"Query with ID {query_id} not found")
         return query
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Update query failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Update query failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/queries/{query_id}", status_code=204)
@@ -229,25 +201,31 @@ async def delete_query(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Delete query failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Delete query failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/schemas")
 async def list_schemas(
-    limit: int = 100,
-    offset: int = 0,
+    response: Response,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    skip: int = Query(0, ge=0),
     service: GraphQLCatalogueService = Depends(get_catalogue_service)
 ):
     """
     List cached schemas ordered by updated_at descending.
     """
     try:
-        schemas = service.list_schemas(limit=limit, offset=offset)
+        effective_offset = skip if skip else offset
+        schemas = service.list_schemas(limit=limit, offset=effective_offset)
+
+        # Service doesn't expose total counts yet; emit best-effort header.
+        response.headers["X-Total-Count"] = str(len(schemas))
         return {"schemas": schemas}
     except Exception as e:
-        logger.error(f"List schemas failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("List schemas failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/schemas/{schema_id}", status_code=204)
@@ -266,5 +244,5 @@ async def delete_schema(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Delete schema failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Delete schema failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

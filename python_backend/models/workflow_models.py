@@ -6,14 +6,13 @@ with its own configuration, state, and execution history.
 """
 
 from sqlalchemy import Column, String, Integer, DateTime, JSON, Enum as SQLEnum, Text, Float, Boolean
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, validator
 
-Base = declarative_base()
+from core.database import Base
 
 
 class WorkflowStatus(str, Enum):
