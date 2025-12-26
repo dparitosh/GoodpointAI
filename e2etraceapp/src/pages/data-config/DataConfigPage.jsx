@@ -34,7 +34,7 @@ const DataConfigPage = () => {
     database: {
       name: 'Database (SQL)',
       fields: ['host', 'port', 'database', 'username', 'password'],
-      defaultPort: '5432'
+      defaultPort: '5433'
     },
     neo4j: {
       name: 'Neo4j Graph Database',
@@ -368,7 +368,7 @@ const DataConfigPage = () => {
   return (
     <div className="data-config-page">
       <div className="page-header">
-        <h1>▦ Data Configuration</h1>
+        <h1><i className="fas fa-database" aria-hidden="true" /> Data Configuration</h1>
         <p className="page-description">
           Configure and manage your data sources, schemas, and connections
         </p>
@@ -379,25 +379,25 @@ const DataConfigPage = () => {
           className={`tab ${activeTab === 'sources' ? 'active' : ''}`}
           onClick={() => setActiveTab('sources')}
         >
-          ⚭ Connected Sources
+          <i className="fas fa-plug" aria-hidden="true" /> Connected Sources
         </button>
         <button 
           className={`tab ${activeTab === 'manage' ? 'active' : ''}`}
           onClick={() => setActiveTab('manage')}
         >
-          ⚙ Manage Sources
+          <i className="fas fa-cog" aria-hidden="true" /> Manage Sources
         </button>
         <button 
           className={`tab ${activeTab === 'schema' ? 'active' : ''}`}
           onClick={() => setActiveTab('schema')}
         >
-          ▦ Schema & Structure
+          <i className="fas fa-sitemap" aria-hidden="true" /> Schema & Structure
         </button>
         <button 
           className={`tab ${activeTab === 'validation' ? 'active' : ''}`}
           onClick={() => setActiveTab('validation')}
         >
-          ✓ Data Validation
+          <i className="fas fa-check-circle" aria-hidden="true" /> Data Validation
         </button>
       </div>
 
@@ -412,7 +412,7 @@ const DataConfigPage = () => {
                 className="btn btn-primary"
                 disabled={isLoading}
               >
-                ↻ Refresh Connections
+                <i className="fas fa-sync-alt" aria-hidden="true" /> Refresh Connections
               </button>
             </div>
 
@@ -447,7 +447,7 @@ const DataConfigPage = () => {
                       className="btn btn-secondary"
                       disabled={isLoading}
                     >
-                      ✓ Test Connection
+                      <i className="fas fa-vial" aria-hidden="true" /> Test Connection
                     </button>
                     <button 
                       className="btn btn-outline"
@@ -457,7 +457,7 @@ const DataConfigPage = () => {
                         }
                       }}
                     >
-                      ⚙ Configure
+                      <i className="fas fa-cog" aria-hidden="true" /> Configure
                     </button>
                   </div>
                 </div>
@@ -475,7 +475,7 @@ const DataConfigPage = () => {
                 onClick={() => setShowCreateSourceModal(true)}
                 className="btn btn-primary"
               >
-                ➕ Add New Data Source
+                <i className="fas fa-plus" aria-hidden="true" /> Add New Data Source
               </button>
             </div>
 

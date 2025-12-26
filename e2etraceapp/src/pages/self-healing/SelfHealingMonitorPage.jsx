@@ -20,6 +20,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './SelfHealingMonitorPage.css';
 
+const normalizeArrayPayload = (data, candidates = []) => {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    for (const key of candidates) {
+      if (Array.isArray(data[key])) return data[key];
+    }
+  }
+  return [];
+};
+
 const SelfHealingMonitorPage = () => {
   const [metrics, setMetrics] = useState({
     total_tasks: 0,
@@ -40,14 +50,21 @@ const SelfHealingMonitorPage = () => {
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  const shouldReconnectRef = useRef(true);
 
   // Connect to WebSocket for real-time metrics
   useEffect(() => {
+    shouldReconnectRef.current = true;
+
     const connectWebSocket = () => {
-      const ws = new WebSocket('ws://localhost:8000/api/self-healing/ws/monitor');
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/api/self-healing/ws/monitor`;
+      const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
 
+        setWsConnected(true);
       };
 
       ws.onmessage = (event) => {
@@ -63,8 +80,14 @@ const SelfHealingMonitorPage = () => {
       ws.onclose = () => {
         console.log('WebSocket disconnected');
         setWsConnected(false);
-        // Reconnect after 5 seconds
-        setTimeout(connectWebSocket, 5000);
+
+        // Reconnect after 5 seconds (only if still mounted)
+        if (shouldReconnectRef.current) {
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+          }
+          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+        }
       };
 
       wsRef.current = ws;
@@ -73,7 +96,14 @@ const SelfHealingMonitorPage = () => {
     connectWebSocket();
 
     return () => {
+      shouldReconnectRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       if (wsRef.current) {
+        // Avoid scheduling reconnect from the close handler during cleanup
+        wsRef.current.onclose = null;
         wsRef.current.close();
       }
     };
@@ -84,9 +114,10 @@ const SelfHealingMonitorPage = () => {
     try {
       const response = await fetch('/api/self-healing/circuit-breakers');
       const data = await response.json();
-      setCircuitBreakers(data);
+      setCircuitBreakers(normalizeArrayPayload(data, ['circuit_breakers', 'circuitBreakers', 'items', 'data']));
     } catch (error) {
       console.error('Error loading circuit breakers:', error);
+      setCircuitBreakers([]);
     }
   };
 
@@ -95,9 +126,10 @@ const SelfHealingMonitorPage = () => {
     try {
       const response = await fetch('/api/self-healing/dead-letter-queue');
       const data = await response.json();
-      setDlqMessages(data);
+      setDlqMessages(normalizeArrayPayload(data, ['messages', 'dlq', 'items', 'data']));
     } catch (error) {
       console.error('Error loading DLQ:', error);
+      setDlqMessages([]);
     }
   };
 
@@ -120,7 +152,7 @@ const SelfHealingMonitorPage = () => {
           {
             id: 'backup_route_1',
             name: 'Backup Database 1',
-            endpoint: 'http://localhost:8001/api/data',
+            endpoint: '/api/data',
             successRate: 0.85,
             averageLatency: 150,
             priority: 2
@@ -128,7 +160,7 @@ const SelfHealingMonitorPage = () => {
           {
             id: 'backup_route_2',
             name: 'Backup Database 2',
-            endpoint: 'http://localhost:8002/api/data',
+            endpoint: '/api/data',
             successRate: 0.8,
             averageLatency: 200,
             priority: 3
@@ -214,7 +246,7 @@ const SelfHealingMonitorPage = () => {
   return (
     <div className="self-healing-monitor-page">
       <div className="monitor-header">
-        <h1>⟲ Self-Healing Orchestration Monitor</h1>
+        <h1><i className="fas fa-sync-alt" aria-hidden="true" /> Self-Healing Orchestration Monitor</h1>
         <div className="ws-status">
           <span className={`ws-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
             {wsConnected ? '● Live' : '● Disconnected'}
@@ -225,49 +257,49 @@ const SelfHealingMonitorPage = () => {
       {/* Metrics Dashboard */}
       <div className="metrics-dashboard">
         <div className="metric-card">
-          <div className="metric-icon">▣</div>
+          <div className="metric-icon"><i className="fas fa-tasks" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.total_tasks}</div>
           <div className="metric-label">Total Tasks</div>
         </div>
 
         <div className="metric-card success">
-          <div className="metric-icon">✓</div>
+          <div className="metric-icon"><i className="fas fa-check-circle" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.successful_tasks}</div>
           <div className="metric-label">Successful ({successRate}%)</div>
         </div>
 
         <div className="metric-card warning">
-          <div className="metric-icon">⟲</div>
+          <div className="metric-icon"><i className="fas fa-redo" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.retried_tasks}</div>
           <div className="metric-label">Retried ({retryRate}%)</div>
         </div>
 
         <div className="metric-card danger">
-          <div className="metric-icon">✗</div>
+          <div className="metric-icon"><i className="fas fa-times-circle" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.failed_tasks}</div>
           <div className="metric-label">Failed</div>
         </div>
 
         <div className="metric-card info">
-          <div className="metric-icon">⇄</div>
+          <div className="metric-icon"><i className="fas fa-random" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.alternative_routes_used}</div>
           <div className="metric-label">Alt Routes Used</div>
         </div>
 
         <div className="metric-card alert">
-          <div className="metric-icon">⊗</div>
+          <div className="metric-icon"><i className="fas fa-ban" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.circuit_breaker_trips}</div>
           <div className="metric-label">Circuit Breaker Trips</div>
         </div>
 
         <div className="metric-card">
-          <div className="metric-icon">⊞</div>
+          <div className="metric-icon"><i className="fas fa-inbox" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.dlq_size}</div>
           <div className="metric-label">DLQ Messages</div>
         </div>
 
         <div className="metric-card active">
-          <div className="metric-icon">⚙</div>
+          <div className="metric-icon"><i className="fas fa-cog" aria-hidden="true" /></div>
           <div className="metric-value">{metrics.active_tasks}</div>
           <div className="metric-label">Active Tasks</div>
         </div>
@@ -282,26 +314,26 @@ const SelfHealingMonitorPage = () => {
             disabled={loading}
             className="btn-success"
           >
-            ✓ Execute Success Task
+            <i className="fas fa-check" aria-hidden="true" /> Execute Success Task
           </button>
           <button 
             onClick={() => executeTestTask(true)} 
             disabled={loading}
             className="btn-warning"
           >
-            ! Execute Failing Task (Test Retry)
+            <i className="fas fa-exclamation-triangle" aria-hidden="true" /> Execute Failing Task (Test Retry)
           </button>
           <button 
             onClick={loadCircuitBreakers}
             className="btn-info"
           >
-            ⟲ Refresh Circuit Breakers
+            <i className="fas fa-sync-alt" aria-hidden="true" /> Refresh Circuit Breakers
           </button>
           <button 
             onClick={loadDLQ}
             className="btn-info"
           >
-            ⊞ Refresh DLQ
+            <i className="fas fa-inbox" aria-hidden="true" /> Refresh DLQ
           </button>
         </div>
       </div>

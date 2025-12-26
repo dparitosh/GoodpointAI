@@ -113,11 +113,6 @@ class WorkflowService {
     try {
       const operations = [
         {
-          name: 'Load NiFi Process Groups',
-          endpoint: API_CONFIG.ENDPOINTS.NIFI_PROCESS_GROUPS,
-          options: { method: 'GET' }
-        },
-        {
           name: 'Create Data Mappings',
           endpoint: API_CONFIG.ENDPOINTS.MAPPINGS,
           options: { method: 'POST', data: config.mappingRules }
@@ -133,7 +128,6 @@ class WorkflowService {
       
       if (results.success) {
         await this.completeStage(WORKFLOW_STAGES.DATA_PIPELINES, {
-          processGroups: results.results.find(r => r.operation.includes('NiFi'))?.data,
           mappings: results.results.find(r => r.operation.includes('Mappings'))?.data,
           migrationPlans: results.results.find(r => r.operation.includes('Migration'))?.data
         });

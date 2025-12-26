@@ -10,7 +10,7 @@ const isProduction = import.meta.env.PROD;
 // Default configuration
 const DEFAULT_CONFIG = {
   // Backend API Configuration
-  API_BASE_URL: isDevelopment ? '' : 'http://localhost:8000', // Use proxy in dev, direct URL in prod
+  API_BASE_URL: '', // Use Vite proxy in dev; same-origin in prod unless overridden via VITE_API_BASE_URL
   API_TIMEOUT: 30000, // 30 seconds
   API_RETRY_ATTEMPTS: 3,
   API_RETRY_DELAY: 1000, // 1 second
@@ -22,7 +22,7 @@ const DEFAULT_CONFIG = {
   // Endpoints
   ENDPOINTS: {
     // Health & Status
-    HEALTH: '/health',
+    HEALTH: '/api/health',
     STATUS: '/api/status',
     
     // Graph Data
@@ -75,15 +75,6 @@ const DEFAULT_CONFIG = {
     MAPPINGS: '/api/mappings',
     MAPPING_VALIDATE: (mappingId) => `/api/mappings/${mappingId}/validate`,
     MAPPING_TEMPLATES: '/api/mappings/templates',
-    
-    // NiFi Integration
-    NIFI_PROCESS_GROUPS: '/api/nifi/process-groups',
-    NIFI_PROCESSORS: '/api/nifi/processors',
-    NIFI_MAPPINGS: '/api/nifi/mappings',
-    NIFI_SYNC: '/api/nifi/sync',
-    NIFI_TEMPLATES: '/api/nifi/templates',
-    NIFI_METRICS: '/api/nifi/monitoring/metrics',
-    NIFI_CONNECTION_STATUS: '/api/nifi/connection/status',
     
     // Data Flow Monitoring
     FLOW_METRICS: '/api/monitoring/flow-metrics',
@@ -143,14 +134,14 @@ const ENVIRONMENT_CONFIG = {
   },
   
   testing: {
-    API_BASE_URL: 'http://localhost:8000',
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
     API_PORT: 8000,
     API_TIMEOUT: 5000,
     DEBUG: true,
   },
   
   production: {
-    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
     API_PORT: 8000,
     API_TIMEOUT: 30000,
     DEBUG: false,
@@ -192,7 +183,7 @@ export const getFullUrl = (endpoint, params = {}) => {
 // Connection health check
 export const checkApiHealth = async () => {
   try {
-    const healthEndpoint = `${API_CONFIG.API_BASE_URL}/health`;
+    const healthEndpoint = `${API_CONFIG.API_BASE_URL}${API_CONFIG.ENDPOINTS.HEALTH}`;
     const response = await fetch(healthEndpoint, {
       method: 'GET',
       timeout: 5000,
@@ -244,7 +235,6 @@ export const WORKFLOW_ENDPOINTS = {
   ],
   [WORKFLOW_STAGES.DATA_PIPELINES]: [
     API_CONFIG.ENDPOINTS.PIPELINES,
-    API_CONFIG.ENDPOINTS.NIFI_PROCESS_GROUPS,
     API_CONFIG.ENDPOINTS.MAPPINGS,
     API_CONFIG.ENDPOINTS.MIGRATION_PLANS
   ],

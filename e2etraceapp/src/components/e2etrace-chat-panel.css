@@ -2,7 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #fff;
+  background: var(--panel-bg);
+  color: var(--text-color);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(30,40,90,0.06);
   padding: 1rem;
@@ -23,6 +24,7 @@
   font-size: 1rem;
   line-height: 1.4;
   background: #f4f7fb;
+  color: #212121;
   display: flex;
   align-items: flex-end;
 }
@@ -50,6 +52,12 @@
   border-radius: 6px;
   border: 1px solid #c0c6d1;
   font-size: 1rem;
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+.e2etrace-chat-input-area input[type="text"]::placeholder {
+  color: var(--text-muted-color);
 }
 .e2etrace-chat-input-area button {
   padding: 0.5rem 1.2rem;

@@ -49,9 +49,9 @@ const WorkflowProgress = ({ currentPage, showDetails = true, showNavigation = tr
       [WORKFLOW_STAGES.DATA_PIPELINES]: {
         title: 'Data Pipelines',
         icon: '↻',
-        description: 'Configure NiFi pipelines, ETL processes, and mappings',
-        route: '/nifi',
-        pages: ['/nifi', '/etl', '/data-mapping']
+        description: 'Configure ETL processes and mappings',
+        route: '/etl',
+        pages: ['/etl', '/data-mapping']
       },
       [WORKFLOW_STAGES.DATA_FLOW]: {
         title: 'Data Flow',

@@ -191,7 +191,7 @@ const AgenticChatPanel = ({
       },
       [AGENT_TYPES.ETL_ORCHESTRATOR]: {
         type: 'PIPELINE_ORCHESTRATION',
-        requiredCapabilities: ['manage_data_pipelines', 'coordinate_nifi_flows'],
+        requiredCapabilities: ['manage_data_pipelines'],
         payload: { request: message, intent, mode: 'advisory' }
       },
       [AGENT_TYPES.QUERY_PLANNER]: {

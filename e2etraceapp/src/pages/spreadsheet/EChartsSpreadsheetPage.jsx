@@ -27,7 +27,6 @@ const EChartsSpreadsheetPage = () => {
   const [sourceFormat, setSourceFormat] = useState('json');
   const [targetFormat, setTargetFormat] = useState('csv');
   const [mappingRules, setMappingRules] = useState([]);
-  const [nifiProcessors, setNifiProcessors] = useState([]);
   const [conversionHistory, setConversionHistory] = useState([]);
   const [dataValidationResults, setDataValidationResults] = useState([]);
   const [savedMappingTemplates, setSavedMappingTemplates] = useState([]);
@@ -46,11 +45,6 @@ const EChartsSpreadsheetPage = () => {
 
   // Use graph data hook for Neo4j integration
   const { graphData, loading: graphLoading } = e2etraceUseGraphData();
-
-  // Load NiFi processors on mount
-  useEffect(() => {
-    loadNifiProcessors();
-  }, []);
 
   // Enhanced data conversion functions
   const convertJsonToCsv = useCallback((jsonData) => {
@@ -418,17 +412,6 @@ const EChartsSpreadsheetPage = () => {
     }
   }, [spreadsheetData.length]);
 
-  // Load NiFi processors
-  const loadNifiProcessors = async () => {
-    try {
-      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.NIFI_PROCESS_GROUPS);
-      const data = await response.json();
-      setNifiProcessors(data.processGroups || []);
-    } catch (error) {
-      console.error('Error loading NiFi processors:', error);
-    }
-  };
-
   // Handle data conversion with enhanced validation
   const handleDataConversion = useCallback(async () => {
     if (!rawData.trim()) {
@@ -508,54 +491,6 @@ const EChartsSpreadsheetPage = () => {
       setIsLoading(false);
     }
   }, [rawData, sourceFormat, targetFormat, mappingRules, convertJsonToCsv, convertXmlToCsv, applyMappingRules, validateData]);
-
-  // Handle NiFi data import with enhanced processing
-  const handleNifiImport = async () => {
-    setIsLoading(true);
-    try {
-      // Get NiFi process groups
-      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.NIFI_PROCESS_GROUPS);
-      const data = await response.json();
-      const processGroups = data.processGroups || [];
-      
-      if (processGroups.length === 0) {
-        alert('No NiFi process groups found');
-        return;
-      }
-
-      // Convert NiFi data to spreadsheet format with more details
-      const headers = ['Process Group', 'ID', 'Status', 'Processor Count', 'Input Ports', 'Output Ports', 'Last Modified'];
-      const rows = processGroups.map(group => [
-        group.component?.name || group.name || 'Unknown',
-        group.id || '',
-        group.status?.runStatus || group.component?.state || 'Unknown',
-        group.component?.processorCount || 0,
-        group.component?.inputPortCount || 0,
-        group.component?.outputPortCount || 0,
-        group.component?.lastModified || new Date().toISOString()
-      ]);
-
-      setSpreadsheetData([headers, ...rows]);
-      setSelectedData([]);
-      setActiveTab('data');
-
-      // Get additional NiFi metrics if available
-      try {
-        const metricsResponse = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.NIFI_METRICS);
-        const metrics = await metricsResponse.json();
-        console.log('NiFi Metrics:', metrics);
-      } catch (metricsError) {
-        console.warn('Could not fetch NiFi metrics:', metricsError);
-      }
-
-      alert(`Imported ${rows.length} NiFi process groups`);
-    } catch (error) {
-      console.error('NiFi import error:', error);
-      alert(`NiFi import failed: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Add mapping rule
   const addMappingRule = () => {
@@ -804,14 +739,6 @@ const EChartsSpreadsheetPage = () => {
           </div>
 
           <button 
-            onClick={handleNifiImport}
-            className="btn btn-success"
-            disabled={isLoading}
-          >
-            ↦ Import from NiFi
-          </button>
-          
-          <button 
             onClick={loadNeo4jData}
             className="btn btn-info"
             disabled={isLoading}
@@ -919,7 +846,6 @@ const EChartsSpreadsheetPage = () => {
                       <option value="json">JSON</option>
                       <option value="xml">XML</option>
                       <option value="csv">CSV</option>
-                      <option value="nifi">NiFi Flow</option>
                     </select>
                   </div>
                   <div className="conversion-arrow">→</div>
@@ -1001,16 +927,6 @@ const EChartsSpreadsheetPage = () => {
                       className="btn btn-secondary sample-btn"
                     >
                       Sample CSV (Employee Data)
-                    </button>
-                    <button 
-                      onClick={() => setRawData(JSON.stringify([
-                        {"processGroupId": "pg-001", "name": "Data Ingestion", "status": "Running", "processors": 5, "flowFiles": 1250},
-                        {"processGroupId": "pg-002", "name": "Data Transformation", "status": "Running", "processors": 8, "flowFiles": 980},
-                        {"processGroupId": "pg-003", "name": "Data Export", "status": "Stopped", "processors": 3, "flowFiles": 0}
-                      ], null, 2))}
-                      className="btn btn-success sample-btn"
-                    >
-                      Sample NiFi Data
                     </button>
                   </div>
                 </div>
@@ -1328,24 +1244,6 @@ Validation Complete:
             <div className="predefined-templates">
               <h4>Predefined Templates:</h4>
               <div className="predefined-grid">
-                <div className="template-card predefined">
-                  <h5>NiFi Process Data</h5>
-                  <p>Template for processing NiFi flow data with common transformations</p>
-                  <button 
-                    onClick={() => {
-                      const nifiRules = [
-                        { id: Date.now(), sourceColumn: 0, targetColumn: 0, transformation: 'trim', customFunction: 'return value;' },
-                        { id: Date.now() + 1, sourceColumn: 2, targetColumn: 2, transformation: 'uppercase', customFunction: 'return value;' }
-                      ];
-                      setMappingRules(nifiRules);
-                      alert('NiFi template loaded');
-                    }}
-                    className="btn btn-success btn-sm"
-                  >
-                    Load Template
-                  </button>
-                </div>
-                
                 <div className="template-card predefined">
                   <h5>Data Cleanup</h5>
                   <p>General data cleaning rules (trim, normalize case, remove special chars)</p>

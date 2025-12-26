@@ -200,6 +200,19 @@
   overflow-y: auto;
 }
 
+/* Full-bleed pages (e.g., Home hero, interactive state flow) */
+.e2etrace-content-area.full-bleed {
+  padding: 0;
+}
+
+.e2etrace-page-content-full {
+  background-color: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  min-height: calc(100vh - 90px);
+}
+
 .e2etrace-page-content {
   background-color: var(--color-surface);
   border-radius: var(--radius-md);

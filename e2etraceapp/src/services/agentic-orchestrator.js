@@ -203,7 +203,6 @@ function getAgentCapabilities(agentType) {
     ],
     [AGENT_TYPES.ETL_ORCHESTRATOR]: [
       'manage_data_pipelines',
-      'coordinate_nifi_flows',
       'handle_data_transformations',
       'monitor_pipeline_health'
     ],

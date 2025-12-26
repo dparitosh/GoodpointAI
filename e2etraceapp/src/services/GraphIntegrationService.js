@@ -3,7 +3,8 @@
  * Manages GraphQL introspection, Neo4j queries, and GraphRAG operations
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Prefer relative URLs so Vite proxy (dev) and same-origin deploys work by default.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 class GraphIntegrationService {
   // GraphQL Operations

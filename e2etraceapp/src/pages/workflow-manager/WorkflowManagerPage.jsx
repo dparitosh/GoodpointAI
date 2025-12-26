@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WorkflowManagerPage.css';
 import './WorkflowManagerPageWizard.css';
@@ -35,6 +35,8 @@ const WorkflowManagerPage = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const [showHelp, setShowHelp] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const loadAbortRef = useRef(null);
+  const loadSeqRef = useRef(0);
   const [workflowConfig, setWorkflowConfig] = useState({
     name: '',
     source: {
@@ -58,6 +60,17 @@ const WorkflowManagerPage = () => {
   }, [filter]);
 
   const loadWorkflowData = async () => {
+    const seq = ++loadSeqRef.current;
+    if (loadAbortRef.current) {
+      try {
+        loadAbortRef.current.abort();
+      } catch {
+        // ignore
+      }
+    }
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+
     try {
       setLoading(true);
       
@@ -79,24 +92,30 @@ const WorkflowManagerPage = () => {
       // Load workflows with filters
       const queryString = params.toString();
       const workflowsUrl = queryString ? `/api/workflows/?${queryString}` : '/api/workflows/';
-      const workflowsRes = await fetch(workflowsUrl);
+      const workflowsRes = await fetch(workflowsUrl, { signal: controller.signal });
       const workflowsData = await workflowsRes.ok ? await workflowsRes.json() : [];
       
       // Load statistics
-      const statsRes = await fetch('/api/workflows/statistics/summary');
+      const statsRes = await fetch('/api/workflows/statistics/summary', { signal: controller.signal });
       const statsData = await statsRes.ok ? await statsRes.json() : null;
       
       // Load templates
-      const templatesRes = await fetch('/api/workflows/templates/list');
+      const templatesRes = await fetch('/api/workflows/templates/list', { signal: controller.signal });
       const templatesData = await templatesRes.ok ? await templatesRes.json() : [];
-      
-      setWorkflows(workflowsData);
-      setStatistics(statsData);
-      setTemplates(templatesData);
+
+      // Ignore stale responses (e.g., slow request after filter changes)
+      if (seq === loadSeqRef.current) {
+        setWorkflows(workflowsData);
+        setStatistics(statsData);
+        setTemplates(templatesData);
+      }
     } catch (error) {
+      if (error?.name === 'AbortError') return;
       console.error('Error loading workflow data:', error);
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -104,7 +123,9 @@ const WorkflowManagerPage = () => {
     try {
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      // Starting a workflow may legitimately take longer than 30s; avoid false timeouts.
+      const timeoutMs = action === 'start' ? 5 * 60 * 1000 : 30000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',
@@ -303,25 +324,29 @@ const WorkflowManagerPage = () => {
 
   const getSourceIcon = (sourceType) => {
     const iconMap = {
-      teamcenter: '■',
-      windchill: '◆',
-      catia: '□',
-      nx: '⚙',
-      creo: '◇'
+      teamcenter: 'fa-cube',
+      windchill: 'fa-wind',
+      catia: 'fa-drafting-compass',
+      nx: 'fa-cog',
+      creo: 'fa-cogs'
     };
-    return iconMap[sourceType] || '▦';
+    return iconMap[sourceType] || 'fa-project-diagram';
   };
 
   const getTargetIcon = (targetType) => {
     const iconMap = {
-      neo4j: '◈',
-      cloud_plm: '☁',
-      opensearch: '◎',
-      warehouse: '▦',
-      datalake: '◉'
+      neo4j: 'fa-database',
+      cloud_plm: 'fa-cloud',
+      opensearch: 'fa-search',
+      warehouse: 'fa-warehouse',
+      datalake: 'fa-water'
     };
-    return iconMap[targetType] || '◆';
+    return iconMap[targetType] || 'fa-bullseye';
   };
+
+  const failedWorkflows = workflows.filter((w) => w.status === 'failed');
+  const pausedWorkflows = workflows.filter((w) => w.status === 'paused');
+  const actionableWorkflows = workflows.filter((w) => w.status === 'failed' || w.status === 'paused');
 
   if (loading) {
     return (
@@ -337,14 +362,14 @@ const WorkflowManagerPage = () => {
       {/* Header */}
       <div className="workflow-header">
         <div className="header-title">
-          <h1>▦ Workflow Instance Manager</h1>
+          <h1><i className="fas fa-project-diagram" aria-hidden="true" /> Workflow Instance Manager</h1>
           <p className="header-subtitle">PLM Data Migration AI Factory - Manage Multiple Pipelines</p>
         </div>
         <button 
           className="btn-create-workflow"
           onClick={() => setShowCreateModal(true)}
         >
-          ✚ Create Workflow
+          <i className="fas fa-plus" aria-hidden="true" /> Create Workflow
         </button>
       </div>
 
@@ -352,28 +377,28 @@ const WorkflowManagerPage = () => {
       {statistics && (
         <div className="workflow-statistics">
           <div className="stat-card">
-            <div className="stat-icon">▦</div>
+            <div className="stat-icon"><i className="fas fa-layer-group" aria-hidden="true" /></div>
             <div className="stat-content">
               <div className="stat-value">{statistics.total_workflows}</div>
               <div className="stat-label">Total Workflows</div>
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon">▶</div>
+            <div className="stat-icon"><i className="fas fa-play" aria-hidden="true" /></div>
             <div className="stat-content">
               <div className="stat-value">{statistics.active_executions}</div>
               <div className="stat-label">Active</div>
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon">▲</div>
+            <div className="stat-icon"><i className="fas fa-database" aria-hidden="true" /></div>
             <div className="stat-content">
               <div className="stat-value">{statistics.total_records_processed.toLocaleString()}</div>
               <div className="stat-label">Records Processed</div>
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon">✓</div>
+            <div className="stat-icon"><i className="fas fa-check-circle" aria-hidden="true" /></div>
             <div className="stat-content">
               <div className="stat-value">{statistics.average_quality_score?.toFixed(1)}%</div>
               <div className="stat-label">Avg Quality</div>
@@ -381,6 +406,68 @@ const WorkflowManagerPage = () => {
           </div>
         </div>
       )}
+
+      {/* Self-Healing Orchestration (Cards + Rows) */}
+      <div className="workflow-selfhealing">
+        <div className="selfhealing-header">
+          <h2><i className="fas fa-shield-alt" aria-hidden="true" /> Self-Healing Orchestration</h2>
+          <button className="btn-selfhealing" onClick={() => navigate('/self-healing')}>
+            <i className="fas fa-external-link-alt" aria-hidden="true" /> Open Monitor
+          </button>
+        </div>
+        <div className="selfhealing-cards">
+          <div className="selfhealing-card">
+            <div className="selfhealing-card-icon"><i className="fas fa-times-circle" aria-hidden="true" /></div>
+            <div className="selfhealing-card-value">{failedWorkflows.length}</div>
+            <div className="selfhealing-card-label">Failed</div>
+          </div>
+          <div className="selfhealing-card">
+            <div className="selfhealing-card-icon"><i className="fas fa-pause-circle" aria-hidden="true" /></div>
+            <div className="selfhealing-card-value">{pausedWorkflows.length}</div>
+            <div className="selfhealing-card-label">Paused</div>
+          </div>
+          <div className="selfhealing-card">
+            <div className="selfhealing-card-icon"><i className="fas fa-exclamation-triangle" aria-hidden="true" /></div>
+            <div className="selfhealing-card-value">{actionableWorkflows.length}</div>
+            <div className="selfhealing-card-label">Needs Attention</div>
+          </div>
+          <div className="selfhealing-card">
+            <div className="selfhealing-card-icon"><i className="fas fa-heartbeat" aria-hidden="true" /></div>
+            <div className="selfhealing-card-value">{Math.max(0, workflows.length - actionableWorkflows.length)}</div>
+            <div className="selfhealing-card-label">Healthy</div>
+          </div>
+        </div>
+
+        <div className="selfhealing-rows">
+          {actionableWorkflows.length === 0 ? (
+            <div className="selfhealing-empty">
+              <i className="fas fa-check" aria-hidden="true" /> No issues detected. Self-healing is idle.
+            </div>
+          ) : (
+            actionableWorkflows.slice(0, 6).map((workflow) => (
+              <div key={workflow.id} className="selfhealing-row">
+                <div className="selfhealing-row-main">
+                  <div className="selfhealing-row-title">{workflow.name}</div>
+                  <div className="selfhealing-row-meta">
+                    <span className={`status-badge ${getStatusBadgeClass(workflow.status)}`}>{workflow.status}</span>
+                    <span className="selfhealing-row-pipe">
+                      {workflow.source_type} <i className="fas fa-arrow-right" aria-hidden="true" /> {workflow.target_type}
+                    </span>
+                  </div>
+                </div>
+                <div className="selfhealing-row-actions">
+                  <button className="btn-action btn-view" onClick={() => handleViewWorkflow(workflow.id)}>
+                    <i className="fas fa-eye" aria-hidden="true" /> View
+                  </button>
+                  <button className="btn-action btn-start" onClick={() => navigate('/self-healing')}>
+                    <i className="fas fa-magic" aria-hidden="true" /> Heal
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
 
       {/* Filters */}
       <div className="workflow-filters">
@@ -458,13 +545,13 @@ const WorkflowManagerPage = () => {
               {/* Source → Target */}
               <div className="workflow-pipeline">
                 <div className="pipeline-node">
-                  <span className="node-icon">{getSourceIcon(workflow.source_type)}</span>
+                  <span className="node-icon"><i className={`fas ${getSourceIcon(workflow.source_type)}`} aria-hidden="true" /></span>
                   <span className="node-label">{workflow.source_name}</span>
                   <span className="node-type">{workflow.source_type}</span>
                 </div>
-                <div className="pipeline-arrow">→</div>
+                <div className="pipeline-arrow"><i className="fas fa-arrow-right" aria-hidden="true" /></div>
                 <div className="pipeline-node">
-                  <span className="node-icon">{getTargetIcon(workflow.target_type)}</span>
+                  <span className="node-icon"><i className={`fas ${getTargetIcon(workflow.target_type)}`} aria-hidden="true" /></span>
                   <span className="node-label">{workflow.target_name}</span>
                   <span className="node-type">{workflow.target_type}</span>
                 </div>
@@ -529,7 +616,7 @@ const WorkflowManagerPage = () => {
                   onClick={() => handleWorkflowAction(workflow.id, 'start')}
                   title="Start Workflow"
                 >
-                  ▶ Start
+                  <i className="fas fa-play" aria-hidden="true" /> Start
                 </button>
               ) : null}
               
@@ -540,14 +627,14 @@ const WorkflowManagerPage = () => {
                     onClick={() => handleWorkflowAction(workflow.id, 'pause')}
                     title="Pause Workflow"
                   >
-                    ‖ Pause
+                    <i className="fas fa-pause" aria-hidden="true" /> Pause
                   </button>
                   <button 
                     className="btn-action btn-stop"
                     onClick={() => handleWorkflowAction(workflow.id, 'stop')}
                     title="Stop Workflow"
                   >
-                    ■ Stop
+                    <i className="fas fa-stop" aria-hidden="true" /> Stop
                   </button>
                 </>
               ) : null}
@@ -558,7 +645,7 @@ const WorkflowManagerPage = () => {
                   onClick={() => handleDeleteWorkflow(workflow.id)}
                   title="Delete Workflow"
                 >
-                  ✗ Delete
+                  <i className="fas fa-trash" aria-hidden="true" /> Delete
                 </button>
               )}
             </div>
@@ -568,14 +655,14 @@ const WorkflowManagerPage = () => {
 
       {workflows.length === 0 && (
         <div className="empty-state">
-          <div className="empty-icon">◻</div>
+          <div className="empty-icon"><i className="fas fa-inbox" aria-hidden="true" /></div>
           <h3>No Workflows Found</h3>
           <p>Create your first workflow to start migrating PLM data</p>
           <button 
             className="btn-create-workflow"
             onClick={() => setShowCreateModal(true)}
           >
-            ✚ Create Workflow
+            <i className="fas fa-plus" aria-hidden="true" /> Create Workflow
           </button>
         </div>
       )}
@@ -598,8 +685,8 @@ const WorkflowManagerPage = () => {
                       <h4>{template.name}</h4>
                       <p>{template.description}</p>
                       <div className="template-meta">
-                        <span>⌚ {template.estimated_duration_hours}h</span>
-                        <span>▦ {template.complexity}</span>
+                        <span><i className="fas fa-clock" aria-hidden="true" /> {template.estimated_duration_hours}h</span>
+                        <span><i className="fas fa-layer-group" aria-hidden="true" /> {template.complexity}</span>
                       </div>
                       <button 
                         className="btn-use-template"
@@ -620,7 +707,7 @@ const WorkflowManagerPage = () => {
                 className="btn-custom-config"
                 onClick={handleCustomConfig}
               >
-                ✚ Custom Configuration
+                <i className="fas fa-plus" aria-hidden="true" /> Custom Configuration
               </button>
             </div>
           </div>
@@ -691,7 +778,7 @@ const WorkflowManagerPage = () => {
                         <div className="error-message">{validationErrors.name}</div>
                       )}
                       <button className="help-toggle" onClick={() => toggleHelp('name')}>
-                        {showHelp.name ? '▼' : '▶'} Help
+                        <i className={`fas ${showHelp.name ? 'fa-chevron-down' : 'fa-chevron-right'}`} aria-hidden="true" /> Help
                       </button>
                       {showHelp.name && (
                         <div className="help-text">
@@ -703,7 +790,7 @@ const WorkflowManagerPage = () => {
                     <div className="form-group readonly">
                       <label>Template</label>
                       <div className="readonly-field">
-                        <span className="field-icon">◈</span>
+                        <span className="field-icon"><i className="fas fa-layer-group" aria-hidden="true" /></span>
                         {selectedTemplate.name}
                       </div>
                       <div className="field-description">{selectedTemplate.description}</div>
@@ -814,7 +901,7 @@ const WorkflowManagerPage = () => {
                         <option value="SAML">SAML</option>
                       </select>
                       <button className="help-toggle" onClick={() => toggleHelp('sourceAuth')}>
-                        {showHelp.sourceAuth ? '▼' : '▶'} Authentication Guide
+                        <i className={`fas ${showHelp.sourceAuth ? 'fa-chevron-down' : 'fa-chevron-right'}`} aria-hidden="true" /> Authentication Guide
                       </button>
                       {showHelp.sourceAuth && (
                         <div className="help-text">
@@ -914,7 +1001,7 @@ const WorkflowManagerPage = () => {
                       </div>
                     </div>
                     <button className="help-toggle" onClick={() => toggleHelp('targetConnection')}>
-                      {showHelp.targetConnection ? '▼' : '▶'} Connection Help
+                      <i className={`fas ${showHelp.targetConnection ? 'fa-chevron-down' : 'fa-chevron-right'}`} aria-hidden="true" /> Connection Help
                     </button>
                     {showHelp.targetConnection && (
                       <div className="help-text">
@@ -1034,7 +1121,7 @@ const WorkflowManagerPage = () => {
                       className="button-secondary" 
                       onClick={handlePrevStep}
                     >
-                      ← Previous
+                      <i className="fas fa-arrow-left" aria-hidden="true" /> Previous
                     </button>
                   )}
                   {configStep < 4 ? (
@@ -1042,7 +1129,7 @@ const WorkflowManagerPage = () => {
                       className="button-primary" 
                       onClick={handleNextStep}
                     >
-                      Next →
+                      Next <i className="fas fa-arrow-right" aria-hidden="true" />
                     </button>
                   ) : (
                     <button 
@@ -1050,7 +1137,7 @@ const WorkflowManagerPage = () => {
                       onClick={handleCreateWorkflow}
                       disabled={isLoading}
                     >
-                      {isLoading ? 'Creating...' : '✓ Create Workflow'}
+                      {isLoading ? 'Creating...' : (<><i className="fas fa-check" aria-hidden="true" /> Create Workflow</>)}
                     </button>
                   )}
                 </div>

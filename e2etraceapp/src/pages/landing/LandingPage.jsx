@@ -1,44 +1,44 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import goodPointLogo from '../assets/goodpoint-logo.svg';
+import goodPointLogo from '../../assets/goodpoint-logo.svg';
 import './LandingPage.css';
 
 const LandingPage = () => {
   const features = [
     {
-      icon: 'fas fa-database',
-      title: 'Data Configuration',
-      description: 'Configure data sources, schemas, and connections with Neo4j, SQL, and more',
-      link: '/data-config',
-      color: '#0066CC'
-    },
-    {
-      icon: 'fas fa-cogs',
-      title: 'Data Processing',
-      description: 'ETL workflows, data transformation, and quality assessment',
-      link: '/processing',
-      color: '#6929C4'
-    },
-    {
       icon: 'fas fa-project-diagram',
       title: 'Graph Explorer',
       description: 'Visualize and explore graph relationships with interactive tools',
-      link: '/graph-explorer',
-      color: '#24A148'
+      link: '/graphexplorer',
+      color: 'var(--success-color)'
     },
     {
-      icon: 'fas fa-exchange-alt',
-      title: 'Migration Visualizer',
-      description: 'Track PLM migration progress with state machine visualization',
-      link: '/plm-migration-visualizer',
-      color: '#FF832B'
+      icon: 'fas fa-chart-bar',
+      title: 'Analytics',
+      description: 'Explore graph analytics and data quality metrics',
+      link: '/analytics',
+      color: 'var(--cy-selected-color)'
     },
     {
-      icon: 'fas fa-sitemap',
-      title: 'XState Visualizer',
-      description: 'Visualize state machines and workflows with interactive diagrams',
-      link: '/xstate-visualizer',
-      color: '#DA1E28'
+      icon: 'fas fa-route',
+      title: 'Interactive State Flow',
+      description: 'Visualize the agentic workflow and swimlanes end-to-end',
+      link: '/interactive-state-flow',
+      color: 'var(--critical-color)'
+    },
+    {
+      icon: 'fas fa-layer-group',
+      title: 'Workflow Manager',
+      description: 'Manage multiple pipeline instances and execution runs',
+      link: '/workflow-manager',
+      color: 'var(--accent-color)'
+    },
+    {
+      icon: 'fas fa-book',
+      title: 'API Docs',
+      description: 'Browse OpenAPI/Swagger documentation for all endpoints',
+      link: '/api-docs',
+      color: 'var(--warning-color-dark)'
     }
   ];
 
@@ -48,7 +48,7 @@ const LandingPage = () => {
       <section className="hero-section">
         <div className="hero-content">
           <div className="hero-badge">
-            <span className="badge-icon"><i className="fas fa-robot"></i></span>
+            <span className="badge-icon"><i className="fas fa-robot" aria-hidden="true" /></span>
             <span className="badge-text">AI-Powered Migration Platform</span>
           </div>
           <div className="hero-logo">
@@ -67,25 +67,25 @@ const LandingPage = () => {
           <div className="hero-actions">
             <Link to="/data-config" className="btn btn-primary">
               Get Started
-              <span className="btn-icon">→</span>
+              <span className="btn-icon"><i className="fas fa-arrow-right" aria-hidden="true" /></span>
             </Link>
-            <Link to="/graph-explorer" className="btn btn-secondary">
+            <Link to="/graphexplorer" className="btn btn-secondary">
               Explore Features
-              <span className="btn-icon"><i className="fas fa-search"></i></span>
+              <span className="btn-icon"><i className="fas fa-search" aria-hidden="true" /></span>
             </Link>
           </div>
         </div>
         <div className="hero-visual">
           <div className="floating-card card-1">
-            <div className="card-icon"><i className="fas fa-chart-bar"></i></div>
+            <div className="card-icon"><i className="fas fa-chart-bar" aria-hidden="true" /></div>
             <div className="card-label">Analytics</div>
           </div>
           <div className="floating-card card-2">
-            <div className="card-icon"><i className="fas fa-sync-alt"></i></div>
+            <div className="card-icon"><i className="fas fa-sync-alt" aria-hidden="true" /></div>
             <div className="card-label">ETL Pipeline</div>
           </div>
           <div className="floating-card card-3">
-            <div className="card-icon"><i className="fas fa-network-wired"></i></div>
+            <div className="card-icon"><i className="fas fa-network-wired" aria-hidden="true" /></div>
             <div className="card-label">Graph DB</div>
           </div>
         </div>
@@ -108,10 +108,10 @@ const LandingPage = () => {
               className="feature-card"
               style={{ '--accent-color': feature.color }}
             >
-              <div className="feature-icon"><i className={feature.icon}></i></div>
+              <div className="feature-icon"><i className={feature.icon} aria-hidden="true" /></div>
               <h3 className="feature-title">{feature.title}</h3>
               <p className="feature-description">{feature.description}</p>
-              <div className="feature-link-arrow">→</div>
+              <div className="feature-link-arrow"><i className="fas fa-arrow-right" aria-hidden="true" /></div>
             </Link>
           ))}
         </div>

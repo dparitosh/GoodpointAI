@@ -5,6 +5,32 @@ import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import './DataExportPage.css';
 
+const normalizeExportHistory = (raw) => {
+  const list = Array.isArray(raw)
+    ? raw
+    : (raw && typeof raw === 'object' && (raw.history || raw.items || raw.data))
+      ? (raw.history || raw.items || raw.data)
+      : [];
+
+  if (!Array.isArray(list)) return [];
+
+  return list.map((item) => {
+    const timestampValue = item?.timestamp;
+    const timestamp = timestampValue instanceof Date
+      ? timestampValue
+      : (timestampValue ? new Date(timestampValue) : new Date());
+
+    return {
+      id: item?.id ?? `${item?.format ?? 'export'}_${timestamp.getTime()}`,
+      timestamp,
+      format: item?.format ?? 'json',
+      datasets: Array.isArray(item?.datasets) ? item.datasets : [],
+      fileSize: item?.fileSize ?? item?.file_size ?? '—',
+      status: item?.status ?? 'completed',
+    };
+  });
+};
+
 const DataExportPage = () => {
   const [exportConfig, setExportConfig] = useState({
     format: 'excel',
@@ -62,13 +88,9 @@ const DataExportPage = () => {
 
   const loadExportHistory = async () => {
     try {
-      const response = await fetch(API_CONFIG.ENDPOINTS.EXPORT_HISTORY || 'http://localhost:8000/api/export/history');
-      if (response.ok) {
-        const history = await response.json();
-        setExportHistory(history);
-      } else {
-        setExportHistory([]);
-      }
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.EXPORT_HISTORY);
+      const history = await response.json();
+      setExportHistory(normalizeExportHistory(history));
     } catch (error) {
       console.error('Failed to load export history:', error);
       setExportHistory([]);
@@ -380,7 +402,9 @@ const DataExportPage = () => {
                 <div className="history-info">
                   <div className="history-header">
                     <span className="history-date">
-                      {exportItem.timestamp.toLocaleDateString()} {exportItem.timestamp.toLocaleTimeString()}
+                      {exportItem.timestamp instanceof Date
+                        ? `${exportItem.timestamp.toLocaleDateString()} ${exportItem.timestamp.toLocaleTimeString()}`
+                        : ''}
                     </span>
                     <span className={`history-status ${exportItem.status}`}>
                       {exportItem.status}

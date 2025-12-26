@@ -171,6 +171,7 @@
   border: 1px solid #e2e8f0;
   border-bottom-left-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  color: #1a1a1a;
 }
 
 .message.system .message-content {
@@ -211,6 +212,7 @@
   overflow-x: auto;
   font-size: 11px;
   border: 1px solid #e2e8f0;
+  color: #1a1a1a;
 }
 
 .message-visualizations {

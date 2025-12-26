@@ -11,6 +11,7 @@ import './XStateLandingPage.css';
 const XStateLandingPage = () => {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     loadETLWorkflowData();
@@ -21,12 +22,22 @@ const XStateLandingPage = () => {
       const response = await fetch('/api/plm/workflow');
       if (response.ok) {
         const data = await response.json();
-        setGraphData(data);
+        const normalized = {
+          ...(typeof data === 'object' && data !== null ? data : {}),
+          nodes: Array.isArray(data?.nodes) ? data.nodes : [],
+          edges: Array.isArray(data?.edges) ? data.edges : [],
+        };
+        setGraphData(normalized);
+        setLoadError(null);
       } else {
         console.error('Failed to load workflow data:', response.statusText);
+        setGraphData({ nodes: [], edges: [] });
+        setLoadError(response.statusText || 'Failed to load workflow data');
       }
     } catch (error) {
       console.error('Error loading workflow data:', error);
+      setGraphData({ nodes: [], edges: [] });
+      setLoadError(error?.message || 'Error loading workflow data');
     } finally {
       setLoading(false);
     }
@@ -46,6 +57,14 @@ const XStateLandingPage = () => {
     );
   }
 
+  const safeGraphData = graphData && typeof graphData === 'object'
+    ? {
+        ...graphData,
+        nodes: Array.isArray(graphData.nodes) ? graphData.nodes : [],
+        edges: Array.isArray(graphData.edges) ? graphData.edges : [],
+      }
+    : { nodes: [], edges: [] };
+
   return (
     <div className="xstate-landing-page">
       <div className="landing-header">
@@ -58,11 +77,11 @@ const XStateLandingPage = () => {
         </div>
         <div className="landing-stats">
           <div className="stat-badge">
-            <span className="stat-value">{graphData.nodes.length}</span>
+            <span className="stat-value">{safeGraphData.nodes.length}</span>
             <span className="stat-label">Nodes</span>
           </div>
           <div className="stat-badge">
-            <span className="stat-value">{graphData.edges.length}</span>
+            <span className="stat-value">{safeGraphData.edges.length}</span>
             <span className="stat-label">Connections</span>
           </div>
           <div className="stat-badge">
@@ -76,10 +95,17 @@ const XStateLandingPage = () => {
         </div>
       </div>
 
+      {loadError ? (
+        <div className="xstate-landing-loading">
+          <p>Unable to load workflow data. Showing empty diagram.</p>
+          <p style={{ opacity: 0.8, fontSize: 12 }}>{String(loadError)}</p>
+        </div>
+      ) : null}
+
 
 
       <XStateVisualizer
-        graphData={graphData}
+        graphData={safeGraphData}
         onNodeUpdate={handleNodeUpdate}
       />
     </div>

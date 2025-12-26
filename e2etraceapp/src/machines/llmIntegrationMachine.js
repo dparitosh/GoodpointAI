@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * LLM Integration State Machine
@@ -44,7 +45,7 @@ export const llmIntegrationMachine = createMachine({
       invoke: {
         id: 'checkLLMHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/llm/health');
+          const response = await fetch('/api/llm/health');
           if (!response.ok) throw new Error('LLM health check failed');
           return await response.json();
         },
@@ -68,12 +69,12 @@ export const llmIntegrationMachine = createMachine({
         id: 'sendChatMessage',
         src: async (context, event) => {
           const endpoint = context.provider === 'openai' 
-            ? 'http://localhost:8000/api/llm/openai/chat'
+            ? `${API_CONFIG.API_BASE_URL}/api/llm/openai/chat`
             : context.provider === 'anthropic'
-            ? 'http://localhost:8000/api/llm/anthropic/chat'
+            ? `${API_CONFIG.API_BASE_URL}/api/llm/anthropic/chat`
             : context.provider === 'ollama'
-            ? 'http://localhost:8000/api/llm/ollama/chat'
-            : `http://localhost:8000/api/llm/chat?provider=${context.provider}`;
+            ? `${API_CONFIG.API_BASE_URL}/api/llm/ollama/chat`
+            : `${API_CONFIG.API_BASE_URL}/api/llm/chat?provider=${encodeURIComponent(context.provider)}`;
           
           const messages = [
             ...context.conversation,
@@ -119,8 +120,8 @@ export const llmIntegrationMachine = createMachine({
         id: 'getEmbedding',
         src: async (context, event) => {
           const endpoint = context.provider === 'openai'
-            ? 'http://localhost:8000/api/llm/openai/embedding'
-            : 'http://localhost:8000/api/llm/ollama/embedding';
+            ? `${API_CONFIG.API_BASE_URL}/api/llm/openai/embedding`
+            : `${API_CONFIG.API_BASE_URL}/api/llm/ollama/embedding`;
           
           const response = await fetch(endpoint, {
             method: 'POST',
@@ -156,7 +157,7 @@ export const llmIntegrationMachine = createMachine({
       invoke: {
         id: 'listOllamaModels',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/llm/ollama/models');
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/llm/ollama/models`);
           if (!response.ok) throw new Error('Failed to list models');
           return await response.json();
         },

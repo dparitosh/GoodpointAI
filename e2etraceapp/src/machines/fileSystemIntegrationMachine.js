@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * File System Integration State Machine
@@ -43,7 +44,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'checkFileSystemHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/filesystem/health');
+          const response = await fetch('/api/filesystem/health');
           if (!response.ok) throw new Error('File system health check failed');
           return await response.json();
         },
@@ -61,7 +62,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'listDirectory',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/filesystem/list', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/list`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -99,7 +100,7 @@ export const fileSystemIntegrationMachine = createMachine({
             formData.append('destination_path', event.destinationPath);
           }
           
-          const response = await fetch('http://localhost:8000/api/filesystem/upload', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/upload`, {
             method: 'POST',
             body: formData
           });
@@ -132,7 +133,7 @@ export const fileSystemIntegrationMachine = createMachine({
           invoke: {
             id: 'parseXML',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/filesystem/xml/parse', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/xml/parse`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -165,7 +166,7 @@ export const fileSystemIntegrationMachine = createMachine({
             id: 'validateXML',
             src: async (context, event) => {
               const response = await fetch(
-                `http://localhost:8000/api/filesystem/xml/validate?file_path=${event.filePath}&schema_path=${event.schemaPath}`
+                `${API_CONFIG.API_BASE_URL}/api/filesystem/xml/validate?file_path=${event.filePath}&schema_path=${event.schemaPath}`
               );
               if (!response.ok) throw new Error('XML validation failed');
               return await response.json();
@@ -186,7 +187,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'parseJSON',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/filesystem/json/parse', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/json/parse`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -218,7 +219,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'parseCSV',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/filesystem/csv/parse', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/csv/parse`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -250,7 +251,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'batchOperation',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/filesystem/batch/operation', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/batch/operation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -281,7 +282,7 @@ export const fileSystemIntegrationMachine = createMachine({
       invoke: {
         id: 'startFolderMonitoring',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/filesystem/watch/start', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/filesystem/watch/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

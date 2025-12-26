@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * Azure Cloud Integration State Machine
@@ -40,7 +41,7 @@ export const azureIntegrationMachine = createMachine({
       invoke: {
         id: 'checkAzureHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/azure/health');
+          const response = await fetch('/api/azure/health');
           if (!response.ok) throw new Error('Azure connection failed');
           return await response.json();
         },
@@ -86,7 +87,7 @@ export const azureIntegrationMachine = createMachine({
               formData.append('file', event.file);
               formData.append('container_name', context.config.containerName);
               
-              const response = await fetch('http://localhost:8000/api/azure/blob/upload', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/azure/blob/upload`, {
                 method: 'POST',
                 body: formData
               });
@@ -116,7 +117,7 @@ export const azureIntegrationMachine = createMachine({
             id: 'listBlobs',
             src: async (context) => {
               const response = await fetch(
-                `http://localhost:8000/api/azure/blob/list/${context.config.containerName}`
+                `${API_CONFIG.API_BASE_URL}/api/azure/blob/list/${context.config.containerName}`
               );
               if (!response.ok) throw new Error('Failed to list blobs');
               return await response.json();
@@ -141,7 +142,7 @@ export const azureIntegrationMachine = createMachine({
             id: 'queryCosmos',
             src: async (context, event) => {
               const response = await fetch(
-                `http://localhost:8000/api/azure/cosmos/documents/${event.containerId}`,
+                `${API_CONFIG.API_BASE_URL}/api/azure/cosmos/documents/${event.containerId}`,
                 {
                   method: 'GET',
                   headers: { 'Content-Type': 'application/json' }
@@ -169,7 +170,7 @@ export const azureIntegrationMachine = createMachine({
           invoke: {
             id: 'sendServiceBusMessage',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/azure/servicebus/send', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/azure/servicebus/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -200,7 +201,7 @@ export const azureIntegrationMachine = createMachine({
           invoke: {
             id: 'sendEventHubEvent',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/azure/eventhub/send', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/azure/eventhub/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -4,10 +4,13 @@
  * Powered by GoodPoint AI - TCS UI/UX Compliant
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import connectionService from '../../services/connectionService';
 import graphIntegrationService from '../../services/GraphIntegrationService';
 import goodPointLogo from '../../assets/goodpoint-logo.svg';
+import { E2ETraceCytoscapeGraph } from '../dashboard/e2etrace-cytoscape-graph';
+import { cytoscapeStylesheet } from '../dashboard/e2etrace-cytoscape-stylesheet';
+import { e2etraceTransformDataForCytoscape } from '../../utils/e2etrace-graph';
 import './GraphExplorerPage.css';
 
 const GraphExplorerPage = () => {
@@ -47,6 +50,153 @@ const GraphExplorerPage = () => {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [selectedElement, setSelectedElement] = useState(null);
+
+  const cyRef = useRef(null);
+
+  const cyElements = useMemo(() => {
+    if (!connection.connected || graphData.nodes.length === 0) return [];
+    try {
+      return e2etraceTransformDataForCytoscape(
+        { nodes: graphData.nodes, edges: graphData.edges },
+        { colorScheme: 'default', autoGrouping: true }
+      );
+    } catch (e) {
+      console.error('Failed to transform graph data for Cytoscape:', e);
+      return [];
+    }
+  }, [connection.connected, graphData.nodes, graphData.edges]);
+
+  const cyLayout = useMemo(
+    () => ({
+      name: 'fcose',
+      animate: true,
+      randomize: true,
+      fit: true,
+      padding: 30,
+      nodeDimensionsIncludeLabels: true,
+    }),
+    []
+  );
+
+  const cyStylesheet = useMemo(
+    () => ([
+      ...cytoscapeStylesheet,
+      {
+        selector: '.dimmed',
+        style: {
+          'opacity': 0.15,
+          'text-opacity': 0.05,
+        }
+      },
+      {
+        selector: 'edge.dimmed',
+        style: {
+          'opacity': 0.12,
+          'text-opacity': 0,
+        }
+      },
+      {
+        selector: 'node.focus',
+        style: {
+          'border-width': 5,
+        }
+      },
+      {
+        selector: 'edge.focus',
+        style: {
+          'width': 8,
+        }
+      },
+      {
+        selector: 'node.neighbor',
+        style: {
+          'border-width': 3,
+        }
+      },
+      {
+        selector: 'edge.neighbor',
+        style: {
+          'width': 5,
+          'text-opacity': 0.6,
+        }
+      },
+    ]),
+    []
+  );
+
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    const clearFocusClasses = () => {
+      cy.batch(() => {
+        cy.elements().removeClass('dimmed neighbor focus');
+      });
+    };
+
+    const applyNodeFocus = (node) => {
+      cy.batch(() => {
+        cy.elements().addClass('dimmed').removeClass('neighbor focus');
+        node.removeClass('dimmed').addClass('focus');
+        node.neighborhood().removeClass('dimmed').addClass('neighbor');
+      });
+    };
+
+    const applyEdgeFocus = (edge) => {
+      cy.batch(() => {
+        cy.elements().addClass('dimmed').removeClass('neighbor focus');
+        edge.removeClass('dimmed').addClass('focus');
+        edge.connectedNodes().removeClass('dimmed').addClass('neighbor');
+        edge.connectedEdges().removeClass('dimmed').addClass('neighbor');
+      });
+    };
+
+    const handleBackgroundTap = (evt) => {
+      if (evt.target === cy) {
+        cy.elements().unselect();
+        clearFocusClasses();
+        setSelectedElement(null);
+      }
+    };
+
+    const handleNodeTap = (evt) => {
+      const node = evt.target;
+      cy.elements().unselect();
+      node.select();
+      applyNodeFocus(node);
+      cy.fit(node, 80);
+      setSelectedElement({
+        kind: 'node',
+        id: node.id(),
+        data: node.data(),
+      });
+    };
+
+    const handleEdgeTap = (evt) => {
+      const edge = evt.target;
+      cy.elements().unselect();
+      edge.select();
+      applyEdgeFocus(edge);
+      cy.fit(edge, 120);
+      setSelectedElement({
+        kind: 'edge',
+        id: edge.id(),
+        data: edge.data(),
+      });
+    };
+
+    cy.on('tap', handleBackgroundTap);
+    cy.on('tap', 'node', handleNodeTap);
+    cy.on('tap', 'edge', handleEdgeTap);
+
+    return () => {
+      cy.off('tap', handleBackgroundTap);
+      cy.off('tap', 'node', handleNodeTap);
+      cy.off('tap', 'edge', handleEdgeTap);
+    };
+  }, [cyElements]);
 
   useEffect(() => {
     // Setup event listeners
@@ -281,10 +431,55 @@ const GraphExplorerPage = () => {
             )}
           </div>
           <div className="graph-visualization">
-            <p className="placeholder-text">
-              Graph visualization will be rendered here using Cytoscape.js or D3.js
-            </p>
+            <E2ETraceCytoscapeGraph
+              elements={cyElements}
+              stylesheet={cyStylesheet}
+              layout={cyLayout}
+              cyRef={cyRef}
+            />
           </div>
+
+          {selectedElement && (
+            <div className="selection-panel" role="region" aria-label="Selected element details">
+              <div className="selection-header">
+                <h3>
+                  Selected {selectedElement.kind === 'node' ? 'Node' : 'Edge'}
+                </h3>
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={() => {
+                    const cy = cyRef.current;
+                    if (cy) {
+                      cy.elements().unselect();
+                      cy.elements().removeClass('dimmed neighbor focus');
+                    }
+                    setSelectedElement(null);
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+
+              <div className="selection-meta">
+                <div><strong>ID:</strong> {String(selectedElement.id)}</div>
+                {selectedElement.data?.label != null && (
+                  <div><strong>Label:</strong> {String(selectedElement.data.label)}</div>
+                )}
+                {selectedElement.data?.group != null && (
+                  <div><strong>Group:</strong> {String(selectedElement.data.group)}</div>
+                )}
+                {selectedElement.data?.type != null && (
+                  <div><strong>Type:</strong> {String(selectedElement.data.type)}</div>
+                )}
+              </div>
+
+              <details className="selection-details" open>
+                <summary>Raw Data</summary>
+                <pre>{JSON.stringify(selectedElement.data, null, 2)}</pre>
+              </details>
+            </div>
+          )}
         </div>
       )}
 

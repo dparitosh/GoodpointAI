@@ -70,7 +70,7 @@ const DataMappingPage = () => {
         name: 'New Mapping',
         description: 'Enter mapping description',
         source_system_id: 'neo4j',
-        target_system_id: 'nifi', 
+        target_system_id: 'neo4j',
         field_mappings: [],
         status: 'draft'
       };
@@ -465,7 +465,6 @@ const DataMappingPage = () => {
                           })}
                         >
                           <option value="Select Target">Select Target</option>
-                          <option value="Apache NiFi">Apache NiFi</option>
                           <option value="Neo4j Graph Database">Neo4j Graph Database</option>
                           <option value="Relational Database">Relational Database</option>
                           <option value="File Export">File Export</option>

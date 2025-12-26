@@ -297,11 +297,6 @@ class ETLWorkflowService {
           delimiter: config.delimiter
         });
       
-      case 'nifi':
-        return await etlEngine.extract('nifi', {
-          processGroupId: config.processGroupId || options.processGroupId
-        });
-      
       default:
         throw new Error(`Unsupported extraction source: ${extractorType}`);
     }
@@ -347,12 +342,6 @@ class ETLWorkflowService {
         const exportFormat = config.format || options.exportFormat || 'csv';
         return await etlEngine.load(exportFormat, data, {
           filename: config.filename || `export_${Date.now()}.${exportFormat}`
-        });
-      
-      case 'nifi':
-        return await etlEngine.load('nifi', data, {
-          processGroupId: config.processGroupId,
-          endpoint: config.endpoint
         });
       
       default:

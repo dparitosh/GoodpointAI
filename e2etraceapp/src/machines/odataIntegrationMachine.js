@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * OData Integration State Machine
@@ -42,7 +43,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'checkODataHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/odata/health');
+          const response = await fetch('/api/odata/health');
           if (!response.ok) throw new Error('OData health check failed');
           return await response.json();
         },
@@ -65,7 +66,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'connectToOData',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/connect', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/connect`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -114,7 +115,7 @@ export const odataIntegrationMachine = createMachine({
         id: 'fetchMetadata',
         src: async (context) => {
           const response = await fetch(
-            `http://localhost:8000/api/odata/metadata?service_url=${encodeURIComponent(context.config.serviceUrl)}`
+            `${API_CONFIG.API_BASE_URL}/api/odata/metadata?service_url=${encodeURIComponent(context.config.serviceUrl)}`
           );
           if (!response.ok) throw new Error('Failed to fetch OData metadata');
           return await response.json();
@@ -139,7 +140,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'queryEntities',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/query', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -178,7 +179,7 @@ export const odataIntegrationMachine = createMachine({
           const entitySet = event.entitySet || context.config.entitySet;
           const entityKey = event.entityKey;
           const response = await fetch(
-            `http://localhost:8000/api/odata/entity/${entitySet}/${entityKey}?service_url=${encodeURIComponent(context.config.serviceUrl)}`
+            `${API_CONFIG.API_BASE_URL}/api/odata/entity/${entitySet}/${entityKey}?service_url=${encodeURIComponent(context.config.serviceUrl)}`
           );
           if (!response.ok) throw new Error('Failed to fetch entity');
           return await response.json();
@@ -202,7 +203,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'createEntity',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/create', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -233,7 +234,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'updateEntity',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/update', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/update`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -260,7 +261,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'deleteEntity',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/delete', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/delete`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -286,7 +287,7 @@ export const odataIntegrationMachine = createMachine({
       invoke: {
         id: 'executeBatch',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/odata/batch', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/odata/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

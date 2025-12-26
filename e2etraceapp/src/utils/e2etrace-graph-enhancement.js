@@ -120,14 +120,6 @@ const detectNodeGroup = (nodeData) => {
         return 'API';
     }
 
-    // NiFi patterns
-    if (text.includes('nifi') || properties.nifiType) {
-        if (text.includes('processor')) return 'nifi-processor';
-        if (text.includes('input')) return 'nifi-inputport';
-        if (text.includes('output')) return 'nifi-outputport';
-        if (text.includes('group')) return 'nifi-processgroup';
-    }
-
     return 'Unknown';
 };
 
@@ -180,10 +172,6 @@ const getNodeColor = (group, scheme) => {
         'Service': '#8e44ad',
         'Endpoint': '#8e44ad',
         'DataQualityIssue': scheme.danger,
-        'nifi-processor': '#66bb6a',
-        'nifi-inputport': '#29b6f6',
-        'nifi-outputport': '#ff7043',
-        'nifi-processgroup': '#9ccc65',
         'Unknown': scheme.secondary
     };
 

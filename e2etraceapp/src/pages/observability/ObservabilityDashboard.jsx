@@ -28,16 +28,24 @@ export const ObservabilityDashboard = () => {
     try {
       // Fetch monitoring alerts
       const alertsResponse = await e2etraceFetchWithRetry('/api/monitoring/alerts');
-      setAlerts(alertsResponse || []);
+      const alertsPayload = await alertsResponse.json().catch(() => null);
+      const normalizedAlerts = Array.isArray(alertsPayload)
+        ? alertsPayload
+        : Array.isArray(alertsPayload?.alerts)
+          ? alertsPayload.alerts
+          : [];
+      setAlerts(normalizedAlerts);
 
       // Fetch data quality metrics
       const qualityResponse = await e2etraceFetchWithRetry('/api/monitoring/data-quality');
-      setQualityMetrics(qualityResponse);
+      const qualityPayload = await qualityResponse.json().catch(() => null);
+      setQualityMetrics(qualityPayload);
 
       // Fetch agentic system status
       try {
         const agenticResponse = await e2etraceFetchWithRetry('/api/agentic/system/status');
-        setAgenticStatus(agenticResponse);
+        const agenticPayload = await agenticResponse.json().catch(() => null);
+        setAgenticStatus(agenticPayload);
       } catch (err) {
         console.warn('Agentic system not available:', err);
       }

@@ -8,6 +8,25 @@ import { GraphFilterProvider } from './contexts/e2etrace-graph-filter-context.js
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import router from './routes';
 
+// Ensure refresh/direct navigation preserves the current page.
+// This app uses a hash router; if the browser URL is path-based (e.g. /workflow-manager)
+// with no hash, React Router will treat it as the index route. Convert such URLs to
+// their hash equivalents so refresh lands on the same page.
+(() => {
+  const { hash, pathname, search } = window.location;
+  if (hash && hash !== '#') return;
+
+  const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
+  const routePath = pathname.startsWith(baseUrl)
+    ? pathname.slice(baseUrl.length - 1)
+    : pathname;
+
+  if (routePath === '/' || routePath === '/index.html') return;
+  if (routePath.startsWith('/api')) return;
+
+  window.location.replace(`${baseUrl}#${routePath}${search || ''}`);
+})();
+
 // Stylesheets
 import './e2etrace-global.css';
 import './styles/xstate-design-system.css';

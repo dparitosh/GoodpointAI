@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { XStateVisualizer } from '../../components/xstate-visualizer/XStateVisualizer';
 import './WorkflowDetailPage.css';
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Workflow Detail Page
@@ -19,11 +21,26 @@ const WorkflowDetailPage = () => {
   const [workflow, setWorkflow] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const loadAbortRef = useRef(null);
+  const loadSeqRef = useRef(0);
 
   // Load workflow details on mount and when workflowId changes
   useEffect(() => {
     loadWorkflowDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowId]);
+
+  // Cancel any in-flight requests on unmount/workflowId changes
+  useEffect(() => {
+    return () => {
+      if (loadAbortRef.current) {
+        try {
+          loadAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+    };
   }, [workflowId]);
 
   // Auto-refresh when workflow is running (separate effect)
@@ -50,27 +67,52 @@ const WorkflowDetailPage = () => {
   }, [workflow?.status]);
 
   const loadWorkflowDetails = async () => {
+    const seq = ++loadSeqRef.current;
+    if (loadAbortRef.current) {
+      try {
+        loadAbortRef.current.abort();
+      } catch {
+        // ignore
+      }
+    }
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+
     try {
       setLoading(true);
       
       // Load workflow details
-      const workflowRes = await fetch(`/api/workflows/${workflowId}`);
+      // Transient 404s can happen right after creation due to async-ish persistence/races.
+      // Retry briefly before declaring the workflow missing.
+      let workflowRes;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        workflowRes = await fetch(`/api/workflows/${workflowId}`, { signal: controller.signal });
+        if (workflowRes.ok) break;
+        if (workflowRes.status === 404 && attempt < 2) {
+          await sleep(250 * (attempt + 1));
+          continue;
+        }
+        break;
+      }
       if (workflowRes.ok) {
         const workflowData = await workflowRes.json();
+        if (seq !== loadSeqRef.current) return;
         setWorkflow(workflowData);
         
         // Load workflow-specific graph
         try {
-          const graphRes = await fetch(`/api/workflows/${workflowId}/graph`);
+          const graphRes = await fetch(`/api/workflows/${workflowId}/graph`, { signal: controller.signal });
           if (graphRes.ok) {
             const graphData = await graphRes.json();
+            if (seq !== loadSeqRef.current) return;
             setGraphData(graphData);
           }
         } catch {
           // Fallback to default PLM workflow if custom graph not available
-          const fallbackRes = await fetch('/api/plm/workflow');
+          const fallbackRes = await fetch('/api/plm/workflow', { signal: controller.signal });
           if (fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
+            if (seq !== loadSeqRef.current) return;
             setGraphData(fallbackData);
           }
         }
@@ -81,11 +123,16 @@ const WorkflowDetailPage = () => {
         });
       }
     } catch (error) {
+      if (error?.name === 'AbortError') return;
       console.error('Error loading workflow details:', error);
       // Don't navigate on network errors, just show error state
-      setWorkflow(null);
+      if (seq === loadSeqRef.current) {
+        setWorkflow(null);
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -93,7 +140,9 @@ const WorkflowDetailPage = () => {
     try {
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      // Starting a workflow may legitimately take longer than 30s; avoid false timeouts.
+      const timeoutMs = action === 'start' ? 5 * 60 * 1000 : 30000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       
       const response = await fetch(`/api/workflows/${workflowId}/execute`, {
         method: 'POST',

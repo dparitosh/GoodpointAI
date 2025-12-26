@@ -4,7 +4,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: #fff;
+  background: var(--panel-bg);
+  color: var(--text-color);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -22,7 +23,8 @@
 .e2etrace-data-table-container table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--panel-bg);
+  color: var(--text-color);
   font-size: 0.9rem;
   min-width: 600px; /* Ensure horizontal scrolling for narrow containers */
 }
@@ -37,7 +39,7 @@
 }
 
 .e2etrace-data-table-container th {
-  background: #f4f7fb;
+  background: var(--button-bg);
   font-weight: 600;
   position: sticky;
   top: 0;
@@ -46,11 +48,11 @@
 }
 
 .e2etrace-data-table-container tr:nth-child(even) td {
-  background: #f8fafc;
+  background: var(--background-color);
 }
 
 .e2etrace-data-table-container tr:nth-child(odd) td {
-  background: #fff;
+  background: var(--panel-bg);
 }
 
 .e2etrace-data-table-container tr.clickable:hover td {
@@ -59,7 +61,8 @@
 }
 
 .e2etrace-data-table-container input[type="text"] {
-  background: #f8fafc;
+  background: var(--input-bg);
+  color: var(--text-color);
   border: 1px solid #dee2e6;
   border-radius: 3px;
   padding: 0.3rem 0.5rem;

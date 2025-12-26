@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * API Gateway State Machine
@@ -17,7 +18,7 @@ export const apiGatewayMachine = createMachine({
     transformations: [],
     errors: [],
     config: {
-      baseUrl: 'http://localhost:8000',
+      baseUrl: API_CONFIG.API_BASE_URL,
       timeout: 30,
       retries: 3,
       rateLimitEnabled: true
@@ -42,7 +43,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'checkGatewayHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/gateway/health');
+          const response = await fetch('/api/gateway/health');
           if (!response.ok) throw new Error('API Gateway health check failed');
           return await response.json();
         },
@@ -60,7 +61,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'listRoutes',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/gateway/routes');
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/routes`);
           if (!response.ok) throw new Error('Failed to list routes');
           return await response.json();
         },
@@ -83,7 +84,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'registerRoute',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/gateway/routes', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/routes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -117,7 +118,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'proxyRequest',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/gateway/proxy', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/proxy`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -151,7 +152,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'getRateLimits',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/gateway/rate-limits');
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/rate-limits`);
           if (!response.ok) throw new Error('Failed to fetch rate limits');
           return await response.json();
         },
@@ -174,7 +175,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'setRateLimit',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/gateway/rate-limit', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/rate-limit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -208,7 +209,7 @@ export const apiGatewayMachine = createMachine({
       invoke: {
         id: 'addTransformation',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/gateway/transformation', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/transformation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -240,9 +241,7 @@ export const apiGatewayMachine = createMachine({
         id: 'getMetrics',
         src: async (context, event) => {
           const timeRange = event.timeRange || '1h';
-          const response = await fetch(
-            `http://localhost:8000/api/gateway/metrics?time_range=${timeRange}`
-          );
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/gateway/metrics?time_range=${timeRange}`);
           if (!response.ok) throw new Error('Failed to fetch metrics');
           return await response.json();
         },

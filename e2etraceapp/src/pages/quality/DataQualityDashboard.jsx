@@ -166,7 +166,7 @@ export const DataQualityDashboard = () => {
           className="btn-primary btn-scan"
           onClick={() => setIsModalOpen(true)}
         >
-          ▶ Run Quality Scan
+          <i className="fas fa-play" aria-hidden="true" /> Run Quality Scan
         </button>
       </div>
 
@@ -176,19 +176,19 @@ export const DataQualityDashboard = () => {
           className={`quality-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          ▦ Dashboard
+          <i className="fas fa-tachometer-alt" aria-hidden="true" /> Dashboard
         </button>
         <button 
           className={`quality-tab ${activeTab === 'reports' ? 'active' : ''}`}
           onClick={() => setActiveTab('reports')}
         >
-          ◻ Reports
+          <i className="fas fa-file-alt" aria-hidden="true" /> Reports
         </button>
         <button 
           className={`quality-tab ${activeTab === 'rules' ? 'active' : ''}`}
           onClick={() => setActiveTab('rules')}
         >
-          ▦ Rules
+          <i className="fas fa-list-check" aria-hidden="true" /> Rules
         </button>
       </div>
 
@@ -204,7 +204,7 @@ export const DataQualityDashboard = () => {
           {/* Summary Cards */}
           <div className="quality-summary-cards">
             <div className="quality-card summary-card">
-              <div className="card-icon">▦</div>
+              <div className="card-icon"><i className="fas fa-table" aria-hidden="true" /></div>
               <div className="card-content">
                 <h3>{dashboardData.summary.total_tables_scanned}</h3>
                 <p>Tables Scanned</p>
@@ -213,7 +213,10 @@ export const DataQualityDashboard = () => {
 
             <div className="quality-card summary-card">
               <div className="card-icon" style={{ color: getScoreColor(dashboardData.summary.average_quality_score / 100) }}>
-                {dashboardData.summary.average_quality_score >= 90 ? '✓' : '!'}
+                <i
+                  className={`fas ${dashboardData.summary.average_quality_score >= 90 ? 'fa-check-circle' : 'fa-exclamation-triangle'}`}
+                  aria-hidden="true"
+                />
               </div>
               <div className="card-content">
                 <h3 style={{ color: getScoreColor(dashboardData.summary.average_quality_score / 100) }}>
@@ -225,7 +228,7 @@ export const DataQualityDashboard = () => {
 
             <div className="quality-card summary-card">
               <div className="card-icon" style={{ color: dashboardData.summary.critical_issues > 0 ? '#dc3545' : '#6c757d' }}>
-                !
+                <i className="fas fa-exclamation-circle" aria-hidden="true" />
               </div>
               <div className="card-content">
                 <h3 style={{ color: dashboardData.summary.critical_issues > 0 ? '#dc3545' : '#6c757d' }}>
@@ -236,7 +239,7 @@ export const DataQualityDashboard = () => {
             </div>
 
             <div className="quality-card summary-card">
-              <div className="card-icon">⚙</div>
+              <div className="card-icon"><i className="fas fa-cog" aria-hidden="true" /></div>
               <div className="card-content">
                 <h3>{dashboardData.summary.active_rules}</h3>
                 <p>Active Rules</p>

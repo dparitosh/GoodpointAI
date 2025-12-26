@@ -110,7 +110,7 @@ class ErrorBoundary extends React.Component {
               Try Again
             </button>
             <button 
-              onClick={() => window.location.href = '/'}
+              onClick={() => window.location.replace('/#/')}
               style={{
                 padding: '12px 24px',
                 fontSize: '16px',

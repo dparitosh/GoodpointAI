@@ -60,7 +60,7 @@ function generateSampleGraphData() {
       backgroundColor: '#48a4ff',
       properties: {
         host: 'tc-prod-01',
-        port: '5432',
+        port: '5433',
         status: 'Connected',
         recordCount: '1.2M records'
       },

@@ -73,29 +73,6 @@ class Neo4jDataService {
     return this.apiCall(buildEndpoint(this.config.ENDPOINTS.MIGRATION_STATUS, planId));
   }
 
-  // NiFi Integration
-  async getNiFiProcessGroups() {
-    return this.apiCall(this.config.ENDPOINTS.NIFI_PROCESS_GROUPS);
-  }
-
-  async getNiFiProcessors() {
-    return this.apiCall(this.config.ENDPOINTS.NIFI_PROCESSORS);
-  }
-
-  async createNiFiMapping(mappingData) {
-    return this.apiCall(this.config.ENDPOINTS.NIFI_MAPPINGS, {
-      method: 'POST',
-      body: JSON.stringify(mappingData),
-    });
-  }
-
-  async syncWithNiFi(syncConfig) {
-    return this.apiCall(this.config.ENDPOINTS.NIFI_SYNC, {
-      method: 'POST',
-      body: JSON.stringify(syncConfig),
-    });
-  }
-
   // Data Mapping Operations
   async getDataMappings(sourceSystem = null, targetSystem = null) {
     const params = new URLSearchParams();

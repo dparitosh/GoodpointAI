@@ -4,7 +4,8 @@
    ================================================================= */
 
 .modal-wizard {
-  background: white;
+  background: var(--panel-bg);
+  color: var(--text-color);
   border-radius: 16px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.24);
   width: 90%;
@@ -30,8 +31,8 @@
 /* Modal Header */
 .modal-wizard .modal-header {
   padding: 32px 40px 24px;
-  border-bottom: 2px solid #E3F2FD;
-  background: linear-gradient(135deg, #0033A0 0%, #00539B 100%);
+  border-bottom: 2px solid var(--border-color);
+  background: var(--accent-color);
   color: white;
 }
 
@@ -77,8 +78,8 @@
   display: flex;
   align-items: center;
   padding: 32px 40px;
-  background: #F8FBFF;
-  border-bottom: 1px solid #E3F2FD;
+  background: var(--background-color-offset);
+  border-bottom: 1px solid var(--border-color);
   position: relative;
 }
 
@@ -95,14 +96,14 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 3px solid #BBDEFB;
-  background: white;
+  border: 3px solid var(--border-color-strong);
+  background: var(--panel-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
   font-weight: 600;
-  color: #90A4AE;
+  color: var(--text-muted-color);
   transition: all 0.3s ease;
   position: relative;
 }
@@ -111,43 +112,37 @@
   margin-top: 12px;
   font-size: 13px;
   font-weight: 500;
-  color: #78909C;
+  color: var(--text-muted-color);
   text-align: center;
   transition: all 0.3s ease;
 }
 
 .wizard-stepper .step.active .step-number {
-  background: #0033A0;
-  border-color: #0033A0;
+  background: var(--accent-color);
+  border-color: var(--accent-color);
   color: white;
   box-shadow: 0 4px 12px rgba(0, 51, 160, 0.3);
   transform: scale(1.1);
 }
 
 .wizard-stepper .step.active .step-label {
-  color: #0033A0;
+  color: var(--accent-color);
   font-weight: 600;
 }
 
 .wizard-stepper .step.completed .step-number {
-  background: #4CAF50;
-  border-color: #4CAF50;
+  background: var(--success-color);
+  border-color: var(--success-color);
   color: white;
 }
 
-.wizard-stepper .step.completed .step-number::after {
-  content: '✓';
-  position: absolute;
-  font-size: 20px;
-}
-
 .wizard-stepper .step.completed .step-label {
-  color: #4CAF50;
+  color: var(--success-color);
 }
 
 .wizard-stepper .step-connector {
   height: 3px;
-  background: #BBDEFB;
+  background: var(--border-color-strong);
   flex: 1;
   margin: 0 -20px;
   margin-top: -36px;
@@ -156,7 +151,7 @@
 }
 
 .wizard-stepper .step.completed ~ .step-connector {
-  background: #4CAF50;
+  background: var(--success-color);
 }
 
 /* Modal Body with Scroll */
@@ -164,7 +159,7 @@
   padding: 40px;
   overflow-y: auto;
   flex: 1;
-  background: white;
+  background: var(--panel-bg);
 }
 
 /* Wizard Step Container */
@@ -186,20 +181,20 @@
 .step-header {
   margin-bottom: 32px;
   padding-bottom: 24px;
-  border-bottom: 2px solid #E3F2FD;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .step-header h3 {
   margin: 0 0 8px 0;
   font-size: 22px;
   font-weight: 600;
-  color: #0033A0;
+  color: var(--accent-color);
 }
 
 .step-description {
   margin: 0;
   font-size: 15px;
-  color: #546E7A;
+  color: var(--text-muted-color);
   line-height: 1.5;
 }
 
@@ -224,36 +219,36 @@
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #263238;
+  color: var(--text-color);
   margin-bottom: 8px;
   letter-spacing: 0.3px;
 }
 
 .wizard-step .form-group .required {
-  color: #E53935;
+  color: var(--critical-color);
   font-weight: 700;
 }
 
 .wizard-step .form-control {
   width: 100%;
   padding: 14px 16px;
-  border: 2px solid #CFD8DC;
+  border: 2px solid var(--border-color-strong);
   border-radius: 8px;
   font-size: 15px;
   font-family: inherit;
-  color: #263238;
+  color: var(--text-color);
   transition: all 0.2s ease;
-  background: white;
+  background: var(--input-bg);
   box-sizing: border-box;
 }
 
 .wizard-step .form-control:hover {
-  border-color: #90A4AE;
+  border-color: var(--border-color-strong);
 }
 
 .wizard-step .form-control:focus {
   outline: none;
-  border-color: #0033A0;
+  border-color: var(--accent-color);
   box-shadow: 0 0 0 4px rgba(0, 51, 160, 0.1);
 }
 
@@ -465,8 +460,8 @@
   display: flex;
   gap: 16px;
   padding: 20px;
-  background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
-  border: 2px solid #90CAF9;
+  background: var(--background-color-offset);
+  border: 2px solid var(--border-color);
   border-radius: 12px;
   margin-top: 32px;
 }
@@ -475,7 +470,7 @@
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  background: #0033A0;
+  background: var(--accent-color);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -489,14 +484,14 @@
   flex: 1;
   font-size: 14px;
   line-height: 1.6;
-  color: #1A237E;
+  color: var(--text-color);
 }
 
 .banner-content strong {
   display: block;
   margin-bottom: 8px;
   font-size: 15px;
-  color: #0033A0;
+  color: var(--accent-color);
 }
 
 .banner-content ul {
@@ -510,9 +505,9 @@
 
 /* Wizard Footer - Clear Action Path */
 .wizard-footer {
-  border-top: 2px solid #E3F2FD;
+  border-top: 2px solid var(--border-color);
   padding: 24px 40px;
-  background: #FAFAFA;
+  background: var(--background-color-offset);
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
 }
 
@@ -657,7 +652,7 @@
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: rgba(255, 255, 255, 0.2);
   animation: loading 1.5s infinite;
 }
 
@@ -671,7 +666,7 @@
 .wizard-step input:focus,
 .wizard-step select:focus,
 .wizard-step button:focus {
-  outline: 3px solid rgba(0, 51, 160, 0.3);
+  outline: 3px solid var(--accent-color);
   outline-offset: 2px;
 }
 

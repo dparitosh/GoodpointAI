@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * AWS Integration State Machine
@@ -51,7 +52,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'checkAWSHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/aws/health');
+          const response = await fetch('/api/aws/health');
           if (!response.ok) throw new Error('AWS health check failed');
           return await response.json();
         },
@@ -74,7 +75,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'connectToAWS',
         src: async (context) => {
-          const response = await fetch('http://localhost:8000/api/aws/connect', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/connect`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -124,7 +125,7 @@ export const awsIntegrationMachine = createMachine({
             formData.append('key', event.key);
           }
           
-          const response = await fetch('http://localhost:8000/api/aws/s3/upload', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/s3/upload`, {
             method: 'POST',
             body: formData
           });
@@ -156,7 +157,7 @@ export const awsIntegrationMachine = createMachine({
           const bucket = event.bucket || context.config.bucket;
           const prefix = event.prefix || '';
           const response = await fetch(
-            `http://localhost:8000/api/aws/s3/list/${bucket}?prefix=${prefix}`
+            `${API_CONFIG.API_BASE_URL}/api/aws/s3/list/${bucket}?prefix=${prefix}`
           );
           if (!response.ok) throw new Error('Failed to list S3 objects');
           return await response.json();
@@ -180,7 +181,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'downloadFromS3',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/aws/s3/download', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/s3/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -205,7 +206,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'putToDynamo',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/aws/dynamodb/put', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/dynamodb/put`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -235,7 +236,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'queryDynamo',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/aws/dynamodb/query', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/dynamodb/query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -266,7 +267,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'sendToSQS',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/aws/sqs/send', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/sqs/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -295,7 +296,7 @@ export const awsIntegrationMachine = createMachine({
           const queueUrl = event.queueUrl || context.config.queueUrl;
           const maxMessages = event.maxMessages || 10;
           const response = await fetch(
-            `http://localhost:8000/api/aws/sqs/receive/${encodeURIComponent(queueUrl)}?max_messages=${maxMessages}`
+            `${API_CONFIG.API_BASE_URL}/api/aws/sqs/receive/${encodeURIComponent(queueUrl)}?max_messages=${maxMessages}`
           );
           if (!response.ok) throw new Error('SQS receive failed');
           return await response.json();
@@ -319,7 +320,7 @@ export const awsIntegrationMachine = createMachine({
       invoke: {
         id: 'invokeLambda',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/aws/lambda/invoke', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/aws/lambda/invoke`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

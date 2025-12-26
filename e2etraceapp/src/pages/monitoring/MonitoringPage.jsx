@@ -24,27 +24,26 @@ const MonitoringPage = () => {
     setIsLoading(true);
     try {
       // Load real monitoring data from Neo4j backend
-      const [metricsResponse, flowResponse, alertsResponse] = await Promise.all([
-        e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.NIFI_METRICS),
+      const [flowResponse, alertsResponse] = await Promise.all([
         e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.FLOW_STATUS),
         e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.FLOW_ALERTS)
       ]);
 
-      const metricsData = await metricsResponse.json();
       const flowData = await flowResponse.json();
       const alertsData = await alertsResponse.json();
 
-      setMetrics({
-        totalFlowFiles: metricsData.totalFlowFiles || 0,
-        bytesRead: metricsData.totalBytesRead || 0,
-        bytesWritten: metricsData.totalBytesWritten || 0,
-        activeThreads: metricsData.activeThreads || 0,
-        queuedFlowFiles: metricsData.queuedFlowFiles || 0,
-        systemLoad: metricsData.systemLoad || 0,
-        memoryUsed: metricsData.jvmMemoryUsed || '0MB',
-        memoryMax: metricsData.jvmMemoryMax || '0MB',
-        timestamp: metricsData.timestamp || new Date().toISOString()
-      });
+      // Keep basic metric placeholders.
+      setMetrics(prev => ({
+        totalFlowFiles: prev.totalFlowFiles || 0,
+        bytesRead: prev.bytesRead || 0,
+        bytesWritten: prev.bytesWritten || 0,
+        activeThreads: prev.activeThreads || 0,
+        queuedFlowFiles: prev.queuedFlowFiles || 0,
+        systemLoad: prev.systemLoad || 0,
+        memoryUsed: prev.memoryUsed || '0MB',
+        memoryMax: prev.memoryMax || '2GB',
+        timestamp: new Date().toISOString()
+      }));
 
       // Set real flow status data
       setFlowStatus(flowData);
@@ -174,7 +173,7 @@ const MonitoringPage = () => {
             <option value={300}>5 minutes</option>
           </select>
           <button onClick={loadMonitoringData} className="btn btn-primary btn-sm">
-            ↻ Refresh Now
+            <i className="fas fa-sync-alt" aria-hidden="true" /> Refresh Now
           </button>
         </div>
       </div>
@@ -184,25 +183,25 @@ const MonitoringPage = () => {
           className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          ▦ Overview
+          <i className="fas fa-tachometer-alt" aria-hidden="true" /> Overview
         </button>
         <button 
           className={`tab ${activeTab === 'flows' ? 'active' : ''}`}
           onClick={() => setActiveTab('flows')}
         >
-          ∿ Flow Status
+          <i className="fas fa-stream" aria-hidden="true" /> Flow Status
         </button>
         <button 
           className={`tab ${activeTab === 'alerts' ? 'active' : ''}`}
           onClick={() => setActiveTab('alerts')}
         >
-          ! Alerts ({alerts.length})
+          <i className="fas fa-exclamation-triangle" aria-hidden="true" /> Alerts ({alerts.length})
         </button>
         <button 
           className={`tab ${activeTab === 'performance' ? 'active' : ''}`}
           onClick={() => setActiveTab('performance')}
         >
-          ▲ Performance
+          <i className="fas fa-chart-line" aria-hidden="true" /> Performance
         </button>
       </div>
 

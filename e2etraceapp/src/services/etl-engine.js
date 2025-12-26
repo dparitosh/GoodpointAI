@@ -26,7 +26,6 @@ class ETLEngine {
     this.registerExtractor('csv', (config) => this.extractFromCSV(config));
     this.registerExtractor('json', (config) => this.extractFromJSON(config));
     this.registerExtractor('xml', (config) => this.extractFromXML(config));
-    this.registerExtractor('nifi', (config) => this.extractFromNiFi(config));
 
     // Initialize default transformers
     this.registerTransformer('mapping', (data, config) => this.applyDataMapping(data, config));
@@ -275,18 +274,6 @@ class ETLEngine {
       data: records,
       recordCount: records.length,
       metadata: { format: 'xml', rootElement }
-    };
-  }
-
-  async extractFromNiFi(config) {
-    const { processGroupId } = config;
-    const response = await e2etraceFetchWithRetry(`/api/nifi/flow/${processGroupId}`);
-    const nifiData = await response.json();
-    
-    return {
-      data: nifiData.processGroupFlow || {},
-      recordCount: 1,
-      metadata: { source: 'nifi', processGroupId }
     };
   }
 

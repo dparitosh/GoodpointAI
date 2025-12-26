@@ -45,8 +45,8 @@
   --border-color-strong: #B0B0B0; /* Stronger border for inputs */
 
   /* Accent & Status Colors - TCS Brand */
-  --accent-color: #0066CC;
-  --accent-hover-color: #0052A3;
+  --accent-color: #0033A0;
+  --accent-hover-color: #002B8A;
   --success-color: #24A148;
   --success-color-light: #E8F5E9;
   --success-color-dark: #1B7D34;
@@ -77,21 +77,6 @@
   --cy-node-text-on-dark-bg: white;
   --cy-node-text-on-light-bg: black;
 
-  /* NiFi Cytoscape Colors */
-  --cy-nifi-processor-color: #66BB6A;
-  --cy-nifi-processor-outline: #388E3C;
-  --cy-nifi-processor-stopped-color: #EF5350;
-  --cy-nifi-processor-stopped-outline: #C62828;
-  --cy-nifi-processor-disabled-color: #BDBDBD;
-  --cy-nifi-processor-disabled-outline: #757575;
-  --cy-nifi-input-port-color: #29B6F6;
-  --cy-nifi-input-port-outline: #0288D1;
-  --cy-nifi-output-port-color: #FF7043;
-  --cy-nifi-output-port-outline: #E64A19;
-  --cy-nifi-process-group-color: #9CCC65;
-  --cy-nifi-process-group-outline: #689F38;
-  --cy-nifi-connection-color: #757575;
-
   /* Sidebar Colors */
   --sidebar-width: 240px;
   --sidebar-background-color: #FFFFFF;
@@ -100,7 +85,7 @@
   --sidebar-hover-background-color: #F5F5F5;
   --sidebar-hover-text-color: #212121;
   --sidebar-active-background-color: #E0E0E0;
-  --sidebar-active-text-color: #007ACC;
+  --sidebar-active-text-color: var(--accent-color);
 }
 
 [data-theme='dark'] {
@@ -119,8 +104,8 @@
   --border-color-strong: #55585d; /* Stronger border for inputs */
 
   /* Accent & Status Colors */
-  --accent-color: #8fe3e8; /* Light blue accent */
-  --accent-hover-color: #6fd0d5;
+  --accent-color: #4DA3FF;
+  --accent-hover-color: #2E86E6;
   --success-color: #28a745;
   --success-color-light: #1E88E5; /* Example: a blue for success in dark mode */
   --success-color-dark: #1565C0;
@@ -150,21 +135,6 @@
   --cy-parent-border: #6f757e;
   --cy-node-text-on-dark-bg: white;
   --cy-node-text-on-light-bg: black;
-
-  /* NiFi Cytoscape Colors */
-  --cy-nifi-processor-color: #66BB6A;
-  --cy-nifi-processor-outline: #388E3C;
-  --cy-nifi-processor-stopped-color: #EF5350;
-  --cy-nifi-processor-stopped-outline: #C62828;
-  --cy-nifi-processor-disabled-color: #BDBDBD;
-  --cy-nifi-processor-disabled-outline: #757575;
-  --cy-nifi-input-port-color: #29B6F6;
-  --cy-nifi-input-port-outline: #0288D1;
-  --cy-nifi-output-port-color: #FF7043;
-  --cy-nifi-output-port-outline: #E64A19;
-  --cy-nifi-process-group-color: #9CCC65;
-  --cy-nifi-process-group-outline: #689F38;
-  --cy-nifi-connection-color: #757575;
 
   /* Sidebar Colors */
   --sidebar-width: 240px;

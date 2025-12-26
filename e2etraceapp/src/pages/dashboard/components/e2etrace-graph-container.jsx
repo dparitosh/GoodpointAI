@@ -85,11 +85,8 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
         autounselectify: false,
         headless: false,
         styleEnabled: true,
-        hideEdgesOnViewport: false,
-        textureOnViewport: false,
-        motionBlur: false,
         motionBlurOpacity: 0.2,
-        pixelRatio: 'auto'
+        // pixelRatio/motionBlur/textureOnViewport/hideEdgesOnViewport are already set above
       });
 
       // Enhanced interaction handling

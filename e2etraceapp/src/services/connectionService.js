@@ -73,12 +73,9 @@ class ConnectionService {
   // Graph data operations
   async loadGraphData(filters) {
     try {
-      // Call backend API to fetch graph data
-      const response = await fetch('/api/graph/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(filters)
-      });
+      // Backend exposes GET /api/graph for default graph payload.
+      // Filters are currently ignored (kept for API compatibility).
+      const response = await fetch('/api/graph');
       
       if (!response.ok) {
         throw new Error('Failed to load graph data');
@@ -101,7 +98,7 @@ class ConnectionService {
   async executeQuery(query) {
     try {
       // Execute Cypher query via backend
-      const response = await fetch('/api/graph/query', {
+      const response = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })

@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * PLM Systems Integration State Machine
@@ -44,7 +45,7 @@ export const plmSystemsIntegrationMachine = createMachine({
       invoke: {
         id: 'checkPLMHealth',
         src: async () => {
-          const response = await fetch('http://localhost:8000/api/plm/systems/health');
+          const response = await fetch('/api/plm/systems/health');
           if (!response.ok) throw new Error('PLM health check failed');
           return await response.json();
         },
@@ -80,7 +81,7 @@ export const plmSystemsIntegrationMachine = createMachine({
           invoke: {
             id: 'queryTeamcenter',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/plm/teamcenter/query', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/plm/teamcenter/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -109,7 +110,7 @@ export const plmSystemsIntegrationMachine = createMachine({
           invoke: {
             id: 'queryWindchill',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/plm/windchill/query', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/plm/windchill/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -138,7 +139,7 @@ export const plmSystemsIntegrationMachine = createMachine({
           invoke: {
             id: 'queryEnovia',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/plm/enovia/query', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/plm/enovia/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -167,7 +168,7 @@ export const plmSystemsIntegrationMachine = createMachine({
           invoke: {
             id: 'queryAras',
             src: async (context, event) => {
-              const response = await fetch('http://localhost:8000/api/plm/aras/query', {
+              const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/plm/aras/query`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -197,7 +198,7 @@ export const plmSystemsIntegrationMachine = createMachine({
         id: 'getBOM',
         src: async (context, event) => {
           const response = await fetch(
-            `http://localhost:8000/api/plm/teamcenter/bom/${event.partId}?levels=${event.levels || -1}`
+            `${API_CONFIG.API_BASE_URL}/api/plm/teamcenter/bom/${event.partId}?levels=${event.levels || -1}`
           );
           if (!response.ok) throw new Error('BOM fetch failed');
           return await response.json();
@@ -221,7 +222,7 @@ export const plmSystemsIntegrationMachine = createMachine({
       invoke: {
         id: 'exportPLMData',
         src: async (context, event) => {
-          const response = await fetch('http://localhost:8000/api/plm/export', {
+          const response = await fetch(`${API_CONFIG.API_BASE_URL}/api/plm/export`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
