@@ -3,14 +3,19 @@ AWS Cloud Services Integration Router
 Handles S3, DynamoDB, SQS, Lambda, API Gateway
 """
 import logging
-from typing import List, Dict, Optional, Any
+from typing import Dict, Optional, Any, cast
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File
 from pydantic import BaseModel, Field
+import importlib
 import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/aws", tags=["AWS Integration"])
+
+
+def _import_boto3() -> Any:
+    return cast(Any, importlib.import_module("boto3"))
 
 
 # ============================================================================
@@ -59,7 +64,7 @@ async def upload_to_s3(
     """Upload file to S3"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         s3_client = boto3.client(
             's3',
@@ -80,7 +85,7 @@ async def upload_to_s3(
             ContentType=file.content_type
         )
         
-        logger.info(f"Uploaded to S3: {bucket}/{object_key}")
+        logger.info("Uploaded to S3: %s/%s", bucket, object_key)
         
         return {
             "status": "success",
@@ -92,16 +97,22 @@ async def upload_to_s3(
         }
         
     except Exception as e:
-        logger.error(f"Error uploading to S3: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error uploading to S3: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/s3/list/{bucket_name}")
-async def list_s3_objects(bucket_name: str, prefix: Optional[str] = None):
+async def list_s3_objects(
+    bucket_name: str,
+    http_response: Response,
+    prefix: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List objects in S3 bucket"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         s3_client = boto3.client(
             's3',
@@ -114,29 +125,33 @@ async def list_s3_objects(bucket_name: str, prefix: Optional[str] = None):
         if prefix:
             params['Prefix'] = prefix
         
-        response = s3_client.list_objects_v2(**params)
+        s3_response = cast(Dict[str, Any], s3_client.list_objects_v2(**params))
         
         objects = []
-        if 'Contents' in response:
-            for obj in response['Contents']:
+        if "Contents" in s3_response:
+            for obj in s3_response["Contents"]:
                 objects.append({
-                    "key": obj['Key'],
-                    "size": obj['Size'],
-                    "last_modified": obj['LastModified'].isoformat(),
-                    "etag": obj['ETag']
+                    "key": obj["Key"],
+                    "size": obj["Size"],
+                    "last_modified": obj["LastModified"].isoformat(),
+                    "etag": obj["ETag"],
                 })
         
+        total_count = len(objects)
+        http_response.headers["X-Total-Count"] = str(total_count)
+        objects_page = objects[skip : skip + limit]
+
         return {
             "status": "success",
             "bucket": bucket_name,
             "prefix": prefix,
-            "count": len(objects),
-            "objects": objects
+            "count": len(objects_page),
+            "objects": objects_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing S3 objects: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing S3 objects: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/s3/download/{bucket_name}/{key:path}")
@@ -144,7 +159,7 @@ async def download_from_s3(bucket_name: str, key: str):
     """Download file from S3"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         from fastapi.responses import StreamingResponse
         import io
         
@@ -167,8 +182,8 @@ async def download_from_s3(bucket_name: str, key: str):
         )
         
     except Exception as e:
-        logger.error(f"Error downloading from S3: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error downloading from S3: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/s3/delete/{bucket_name}/{key:path}")
@@ -176,7 +191,7 @@ async def delete_from_s3(bucket_name: str, key: str):
     """Delete object from S3"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         s3_client = boto3.client(
             's3',
@@ -195,8 +210,8 @@ async def delete_from_s3(bucket_name: str, key: str):
         }
         
     except Exception as e:
-        logger.error(f"Error deleting from S3: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting from S3: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -208,7 +223,7 @@ async def put_dynamodb_item(request: DynamoDBPutRequest):
     """Put item into DynamoDB table"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
             'dynamodb',
@@ -229,8 +244,8 @@ async def put_dynamodb_item(request: DynamoDBPutRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error putting DynamoDB item: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error putting DynamoDB item: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/dynamodb/query")
@@ -238,7 +253,7 @@ async def query_dynamodb(request: DynamoDBQueryRequest):
     """Query DynamoDB table"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
             'dynamodb',
@@ -262,8 +277,8 @@ async def query_dynamodb(request: DynamoDBQueryRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error querying DynamoDB: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying DynamoDB: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/dynamodb/scan/{table_name}")
@@ -271,7 +286,7 @@ async def scan_dynamodb_table(table_name: str, limit: int = 100):
     """Scan DynamoDB table"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
             'dynamodb',
@@ -292,8 +307,8 @@ async def scan_dynamodb_table(table_name: str, limit: int = 100):
         }
         
     except Exception as e:
-        logger.error(f"Error scanning DynamoDB: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error scanning DynamoDB: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -305,7 +320,7 @@ async def send_sqs_message(request: SQSMessageRequest):
     """Send message to SQS queue"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         sqs = boto3.client(
             'sqs',
@@ -328,8 +343,8 @@ async def send_sqs_message(request: SQSMessageRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error sending SQS message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error sending SQS message: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/sqs/receive/{queue_url:path}")
@@ -337,7 +352,7 @@ async def receive_sqs_messages(queue_url: str, max_messages: int = 10):
     """Receive messages from SQS queue"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         sqs = boto3.client(
             'sqs',
@@ -362,8 +377,8 @@ async def receive_sqs_messages(queue_url: str, max_messages: int = 10):
         }
         
     except Exception as e:
-        logger.error(f"Error receiving SQS messages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error receiving SQS messages: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -375,7 +390,7 @@ async def invoke_lambda(request: LambdaInvokeRequest):
     """Invoke AWS Lambda function"""
     try:
         from core.external_config import aws_config
-        import boto3
+        boto3 = _import_boto3()
         
         lambda_client = boto3.client(
             'lambda',
@@ -403,8 +418,8 @@ async def invoke_lambda(request: LambdaInvokeRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error invoking Lambda: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error invoking Lambda: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

@@ -19,17 +19,19 @@ Integrations:
 - python-docx for Word files
 """
 
+# This router intentionally catches broad exceptions at integration boundaries
+# because many optional third-party libraries may be absent or partially installed.
+# pylint: disable=broad-except,unused-import
+
 import logging
-import os
 import base64
 import io
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Any, BinaryIO
+from typing import Dict, Optional, Any
 from enum import Enum
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
-import asyncio
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/multimodal", tags=["Multi-Modal Understanding"])
@@ -161,8 +163,8 @@ class MultiModalService:
                 "model": model,
                 "success": False
             }
-        except Exception as e:
-            logger.error(f"Error in vision LLM analysis: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error in vision LLM analysis: %s", e)
             return {
                 "description": f"Error: {str(e)}",
                 "model": model,
@@ -172,7 +174,7 @@ class MultiModalService:
     async def extract_text_from_pdf(self, file_content: bytes) -> Dict[str, Any]:
         """Extract text and images from PDF"""
         try:
-            import fitz  # PyMuPDF
+            import fitz  # type: ignore[import-untyped]  # PyMuPDF
             
             pdf_document = fitz.open(stream=file_content, filetype="pdf")
             
@@ -180,7 +182,6 @@ class MultiModalService:
             images = []
             metadata = {
                 "page_count": len(pdf_document),
-                "metadata": pdf_document.metadata
             }
             
             for page_num in range(len(pdf_document)):
@@ -220,8 +221,8 @@ class MultiModalService:
                 "success": False,
                 "error": "PyMuPDF not installed"
             }
-        except Exception as e:
-            logger.error(f"Error extracting PDF: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting PDF: %s", e)
             return {
                 "text": "",
                 "images": [],
@@ -233,7 +234,7 @@ class MultiModalService:
     async def ocr_image(self, image_data: bytes, language: str = "eng") -> str:
         """Perform OCR on image"""
         try:
-            import pytesseract
+            import pytesseract  # type: ignore[import-untyped]
             from PIL import Image
             
             image = Image.open(io.BytesIO(image_data))
@@ -244,14 +245,14 @@ class MultiModalService:
         except ImportError:
             logger.warning("pytesseract not installed")
             return ""
-        except Exception as e:
-            logger.error(f"Error in OCR: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error in OCR: %s", e)
             return ""
     
     async def extract_excel_data(self, file_content: bytes) -> Dict[str, Any]:
         """Extract data from Excel file"""
         try:
-            import openpyxl
+            import openpyxl  # type: ignore[import-untyped]
             
             workbook = openpyxl.load_workbook(io.BytesIO(file_content))
             
@@ -293,8 +294,8 @@ class MultiModalService:
                 "success": False,
                 "error": "openpyxl not installed"
             }
-        except Exception as e:
-            logger.error(f"Error extracting Excel: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting Excel: %s", e)
             return {
                 "sheets": {},
                 "metadata": {},
@@ -340,8 +341,8 @@ class MultiModalService:
                 "success": False,
                 "error": "python-docx not installed"
             }
-        except Exception as e:
-            logger.error(f"Error extracting Word: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting Word: %s", e)
             return {
                 "text": "",
                 "tables": [],
@@ -380,8 +381,10 @@ class MultiModalService:
                 pdf_data = await self.extract_text_from_pdf(file_content)
                 
                 if pdf_data["success"]:
-                    result.text_content = pdf_data["text"]
-                    result.metadata = pdf_data["metadata"]
+                    if extract_text:
+                        result.text_content = pdf_data["text"]
+                    if extract_metadata:
+                        result.metadata = pdf_data["metadata"]
                     
                     # Analyze images with vision LLM if requested
                     if extract_images and extraction_method in [ExtractionMethod.VISION_LLM, ExtractionMethod.HYBRID]:
@@ -408,7 +411,8 @@ class MultiModalService:
                     )
                     
                     if vision_result["success"]:
-                        result.text_content = vision_result["description"]
+                        if extract_text:
+                            result.text_content = vision_result["description"]
                         result.images_analyzed = 1
                 
                 if extraction_method in [ExtractionMethod.OCR, ExtractionMethod.HYBRID]:
@@ -422,7 +426,8 @@ class MultiModalService:
                 
                 if excel_data["success"]:
                     result.extracted_data = excel_data["sheets"]
-                    result.metadata = excel_data["metadata"]
+                    if extract_metadata:
+                        result.metadata = excel_data["metadata"]
                 else:
                     result.error = excel_data.get("error")
             
@@ -431,9 +436,11 @@ class MultiModalService:
                 word_data = await self.extract_word_data(file_content)
                 
                 if word_data["success"]:
-                    result.text_content = word_data["text"]
+                    if extract_text:
+                        result.text_content = word_data["text"]
                     result.extracted_data["tables"] = word_data["tables"]
-                    result.metadata = word_data["metadata"]
+                    if extract_metadata:
+                        result.metadata = word_data["metadata"]
                 else:
                     result.error = word_data.get("error")
             
@@ -446,8 +453,8 @@ class MultiModalService:
                 result.error = f"Unsupported file type: {file_type}"
                 result.success = False
             
-        except Exception as e:
-            logger.error(f"Error analyzing file {filename}: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error analyzing file %s: %s", filename, e)
             result.error = str(e)
             result.success = False
         
@@ -487,11 +494,13 @@ async def analyze_file(
     try:
         # Read file content
         file_content = await file.read()
+
+        filename = file.filename or "uploaded_file"
         
         # Analyze file
         result = await service.analyze_file(
             file_content=file_content,
-            filename=file.filename,
+            filename=filename,
             extraction_method=extraction_method,
             vision_model=vision_model,
             extract_metadata=extract_metadata,
@@ -502,9 +511,9 @@ async def analyze_file(
         
         return result
         
-    except Exception as e:
-        logger.error(f"Error in file analysis endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error("Error in file analysis endpoint: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/analyze-image", summary="Analyze Image with Vision LLM")
@@ -532,8 +541,8 @@ async def analyze_image(request: ImageAnalysisRequest):
         )
         
     except Exception as e:
-        logger.error(f"Error in image analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error in image analysis: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/supported-formats", summary="Get Supported File Formats")
@@ -573,7 +582,7 @@ async def get_vision_models():
             "error": "Ollama not installed"
         }
     except Exception as e:
-        logger.error(f"Error listing vision models: {e}")
+        logger.error("Error listing vision models: %s", e)
         return {
             "available_models": [],
             "recommended": "llava:latest",

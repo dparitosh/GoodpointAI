@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 from enum import Enum
-from fastapi import APIRouter, Depends, HTTPException, WebSocket
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 import neo4j
 import json
@@ -94,9 +94,9 @@ class LineageService:
     
     def __init__(self, driver: neo4j.AsyncDriver):
         self.driver = driver
-        self.lineage_cache = {}
+        self.lineage_cache: Dict[str, Any] = {}
     
-    async def create_lineage_node(self, node: LineageNode) -> Dict[str, Any]:
+    async def create_lineage_node(self, node: LineageNode) -> Optional[Dict[str, Any]]:
         """Create a lineage node in Neo4j"""
         query = """
         CREATE (n:LineageNode {
@@ -118,7 +118,7 @@ class LineageService:
                 name=node.name,
                 properties=json.dumps(node.properties),
                 created_at=node.created_at.isoformat(),
-                workflow_id=node.workflow_id
+                workflow_id=node.workflow_id,
             )
             record = await result.single()
             
@@ -126,7 +126,7 @@ class LineageService:
                 return dict(record["n"])
             return None
     
-    async def create_lineage_relationship(self, relationship: LineageRelationship) -> Dict[str, Any]:
+    async def create_lineage_relationship(self, relationship: LineageRelationship) -> Optional[Dict[str, Any]]:
         """Create a lineage relationship in Neo4j"""
         query = f"""
         MATCH (source:LineageNode {{id: $source_id}})
@@ -146,7 +146,7 @@ class LineageService:
                 target_id=relationship.target_id,
                 properties=json.dumps(relationship.properties),
                 timestamp=relationship.timestamp.isoformat(),
-                workflow_id=relationship.workflow_id
+                workflow_id=relationship.workflow_id,
             )
             record = await result.single()
             
@@ -155,22 +155,33 @@ class LineageService:
             return None
     
     async def trace_lineage(
-        self, 
-        record_id: str, 
-        direction: str = "both", 
-        max_depth: int = 5
+        self,
+        record_id: str,
+        direction: str = "both",
+        max_depth: int = 5,
     ) -> Dict[str, Any]:
         """Trace lineage for a specific record"""
-        
-        upstream_query = """
-        MATCH path = (n:LineageNode {id: $record_id})<-[*1..$max_depth]-(source)
+
+        depth = int(max_depth) if isinstance(max_depth, int) else 5
+        depth = max(1, min(depth, 20))
+
+        upstream_query = (
+            f"""
+        MATCH path = (n:LineageNode {{id: $record_id}})<-[*1..{depth}]-(source)
         RETURN path
-        """ if direction in ["upstream", "both"] else None
-        
-        downstream_query = """
-        MATCH path = (n:LineageNode {id: $record_id})-[*1..$max_depth]->(target)
+        """
+            if direction in ["upstream", "both"]
+            else None
+        )
+
+        downstream_query = (
+            f"""
+        MATCH path = (n:LineageNode {{id: $record_id}})-[*1..{depth}]->(target)
         RETURN path
-        """ if direction in ["downstream", "both"] else None
+        """
+            if direction in ["downstream", "both"]
+            else None
+        )
         
         lineage_paths = {
             "record_id": record_id,
@@ -183,14 +194,14 @@ class LineageService:
         async with self.driver.session(database="neo4j") as session:
             # Get upstream lineage
             if upstream_query:
-                result = await session.run(upstream_query, record_id=record_id, max_depth=max_depth)
+                result = await session.run(upstream_query, record_id=record_id)
                 async for record in result:
                     path = record["path"]
                     self._process_path(path, lineage_paths, "upstream")
             
             # Get downstream lineage
             if downstream_query:
-                result = await session.run(downstream_query, record_id=record_id, max_depth=max_depth)
+                result = await session.run(downstream_query, record_id=record_id)
                 async for record in result:
                     path = record["path"]
                     self._process_path(path, lineage_paths, "downstream")
@@ -258,8 +269,9 @@ class LineageService:
         else:  # data_quality
             return "medium" if distance <= 5 else "low"
     
-    def _assess_risk(self, affected_nodes: List[Dict], change_type: str) -> str:
+    def _assess_risk(self, affected_nodes: List[Dict], _change_type: str) -> str:
         """Assess overall risk level"""
+        _ = _change_type
         critical_count = sum(1 for n in affected_nodes if n["impact_level"] == "critical")
         high_count = sum(1 for n in affected_nodes if n["impact_level"] == "high")
         

@@ -1,12 +1,13 @@
 import neo4j
 from typing import List, Dict, Set, Any
 from .models import NodeModel, EdgeModel
+from .neo4j_json import sanitize_properties
 
 def _add_node_from_neo4j_node(node_obj: neo4j.graph.Node, nodes_map: Dict[str, NodeModel]):
     if node_obj and node_obj.element_id and not nodes_map.get(node_obj.element_id):
         node_id = node_obj.element_id
         labels = list(node_obj.labels)
-        properties = dict(node_obj) # Corrected: Node object itself is a mapping
+        properties = sanitize_properties(dict(node_obj)) # Ensure JSON-serializable
         
         default_label_text = labels[0] if labels else (properties.get("name") or f"Node ({node_id[:6]}...)")
         group_text = labels[0] if labels else properties.get("group", "Unknown")
@@ -33,7 +34,7 @@ def _process_neo4j_relationship(rel_obj: neo4j.graph.Relationship, nodes_map: Di
         start_node_id = rel_obj.start_node.element_id
         end_node_id = rel_obj.end_node.element_id
         rel_type = rel_obj.type
-        properties = dict(rel_obj) # Corrected: Relationship object itself is a mapping
+        properties = sanitize_properties(dict(rel_obj)) # Ensure JSON-serializable
 
         if start_node_id not in nodes_map:
             _add_node_from_neo4j_node(rel_obj.start_node, nodes_map)

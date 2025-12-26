@@ -10,8 +10,9 @@ Provides PLM-specific workflow data including:
 
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
+from fastapi import Query, Response
+from typing import List, Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -555,12 +556,16 @@ async def get_plm_workflow():
         return PLMWorkflowResponse(**workflow_data)
         
     except Exception as e:
-        logger.error(f"Error generating PLM workflow: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate PLM workflow: {str(e)}")
+        logger.error("Error generating PLM workflow: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate PLM workflow: {str(e)}") from e
 
 
 @router.get("/sources", response_model=List[PLMSourceSystem])
-async def get_plm_sources():
+async def get_plm_sources(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get configured PLM source systems"""
     try:
         sources = [
@@ -601,15 +606,20 @@ async def get_plm_sources():
                 status="active"
             )
         ]
-        return sources
+        response.headers["X-Total-Count"] = str(len(sources))
+        return sources[skip:skip + limit]
         
     except Exception as e:
-        logger.error(f"Error fetching PLM sources: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching PLM sources: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/agents", response_model=List[AIAgentConfig])
-async def get_ai_agents():
+async def get_ai_agents(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get configured AI agents in the orchestration layer"""
     try:
         agents = [
@@ -682,11 +692,12 @@ async def get_ai_agents():
                 }
             )
         ]
-        return agents
+        response.headers["X-Total-Count"] = str(len(agents))
+        return agents[skip:skip + limit]
         
     except Exception as e:
-        logger.error(f"Error fetching AI agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching AI agents: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/health")

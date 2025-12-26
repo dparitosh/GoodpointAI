@@ -1,15 +1,14 @@
-"""
-Enhanced FastAPI endpoints for Neo4j Data Analysis, Migration, and NiFi Integration
-"""
+"""Enhanced FastAPI endpoints for Neo4j Data Analysis and Migration."""
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from typing import List, Dict, Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import asyncio
 from datetime import datetime
 
+from neo4j.exceptions import Neo4jError
+
 from .dependencies import get_driver
-from .models import QueryRequest, QueryResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Data Analysis & Migration"])
@@ -39,11 +38,6 @@ class ScrubConfig(BaseModel):
     rules: List[Dict[str, Any]]
     dryRun: bool = True
 
-class NiFiSyncConfig(BaseModel):
-    processGroupId: str
-    dataMapping: List[List[str]]
-    flowConfiguration: Dict[str, Any]
-
 # Data Analytics Endpoints
 @router.get("/analytics", response_model=DataAnalyticsResponse)
 async def get_data_analytics(
@@ -52,6 +46,9 @@ async def get_data_analytics(
 ):
     """Get comprehensive data analytics from Neo4j"""
     try:
+        if filters:
+            logger.debug("Analytics filters provided but currently unused: %s", filters)
+
         # Node distribution query
         node_dist_query = """
         MATCH (n)
@@ -78,7 +75,7 @@ async def get_data_analytics(
                 })
         
         # Mock data quality metrics (you can implement actual calculations)
-        quality_metrics = [95, 87, 92, 89, 96]  # Completeness, Accuracy, Consistency, Validity, Uniqueness
+        quality_metrics: List[float] = [95.0, 87.0, 92.0, 89.0, 96.0]
         
         # Summary statistics
         summary = {
@@ -95,9 +92,9 @@ async def get_data_analytics(
             summary=summary
         )
         
-    except Exception as e:
-        logger.error(f"Error getting analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error getting analytics: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 async def get_relationship_count(driver_instance):
     """Helper function to get relationship count"""
@@ -107,7 +104,7 @@ async def get_relationship_count(driver_instance):
             database_="neo4j", routing_="r"
         )
         return result.records[0]["count"] if result.records else 0
-    except:
+    except (Neo4jError, IndexError, KeyError, TypeError, RuntimeError):
         return 0
 
 @router.get("/analytics/nodes/{node_type}")
@@ -140,17 +137,22 @@ async def get_node_statistics(
         
         return {"nodeType": node_type, "total": 0}
         
-    except Exception as e:
-        logger.error(f"Error getting node statistics for {node_type}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error getting node statistics for %s: %s", node_type, e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # Migration Endpoints
-migration_plans_storage = []  # In-memory storage for demo (use database in production)
+migration_plans_storage: List[MigrationPlan] = []  # In-memory storage for demo (use database in production)
 
 @router.get("/migration/plans")
-async def get_migration_plans():
+async def get_migration_plans(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get all migration plans"""
-    return migration_plans_storage
+    response.headers["X-Total-Count"] = str(len(migration_plans_storage))
+    return migration_plans_storage[skip : skip + limit]
 
 @router.post("/migration/plans")
 async def create_migration_plan(plan: MigrationPlan):
@@ -176,7 +178,7 @@ async def execute_migration_plan(
     
     return {"message": f"Migration plan {plan_id} execution started", "status": "running"}
 
-async def run_migration_background(plan: MigrationPlan, driver_instance):
+async def run_migration_background(plan: MigrationPlan, _driver_instance):
     """Background task for migration execution"""
     try:
         # Update plan status
@@ -186,13 +188,13 @@ async def run_migration_background(plan: MigrationPlan, driver_instance):
         await asyncio.sleep(2)  # Simulate processing time
         
         # Here you would implement actual data migration logic
-        logger.info(f"Executing migration plan: {plan.name}")
+        logger.info("Executing migration plan: %s", plan.name)
         
         plan.status = "completed"
         
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         plan.status = "failed"
-        logger.error(f"Migration failed: {e}")
+        logger.error("Migration failed: %s", e)
 
 @router.get("/migration/plans/{plan_id}/status")
 async def get_migration_status(plan_id: str):
@@ -204,12 +206,15 @@ async def get_migration_status(plan_id: str):
     return {"id": plan.id, "status": plan.status, "name": plan.name}
 
 # Data Mapping Endpoints
-data_mappings_storage = []  # In-memory storage for demo
+data_mappings_storage: List[Dict[str, Any]] = []  # In-memory storage for demo
 
 @router.get("/mappings")
 async def get_data_mappings(
+    response: Response,
     source: Optional[str] = None,
-    target: Optional[str] = None
+    target: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
 ):
     """Get data mappings with optional filtering"""
     mappings = data_mappings_storage
@@ -218,8 +223,9 @@ async def get_data_mappings(
         mappings = [m for m in mappings if m.get("sourceSystem") == source]
     if target:
         mappings = [m for m in mappings if m.get("targetSystem") == target]
-    
-    return mappings
+
+    response.headers["X-Total-Count"] = str(len(mappings))
+    return mappings[skip : skip + limit]
 
 @router.post("/mappings")
 async def create_data_mapping(mapping_data: Dict[str, Any]):
@@ -249,15 +255,22 @@ async def validate_mapping(mapping_id: str):
 
 # Data Quality and Scrubbing Endpoints
 @router.get("/data-quality/rules")
-async def get_data_quality_rules():
+async def get_data_quality_rules(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get available data quality rules"""
-    return [
+    rules = [
         {"type": "remove_duplicates", "description": "Remove duplicate records based on specified fields"},
         {"type": "validate_format", "description": "Validate data format (JSON, email, phone, etc.)"},
         {"type": "normalize_text", "description": "Normalize text fields (trim, case, etc.)"},
         {"type": "check_completeness", "description": "Check for missing required fields"},
         {"type": "validate_relationships", "description": "Validate relationship integrity"}
     ]
+
+    response.headers["X-Total-Count"] = str(len(rules))
+    return rules[skip : skip + limit]
 
 @router.post("/data-quality/scrub")
 async def apply_data_scrubbing(
@@ -281,10 +294,10 @@ async def apply_data_scrubbing(
         background_tasks.add_task(run_data_scrubbing, scrub_config, driver_instance)
         return {"message": "Data scrubbing started", "status": "running"}
 
-async def run_data_scrubbing(scrub_config: ScrubConfig, driver_instance):
+async def run_data_scrubbing(scrub_config: ScrubConfig, _driver_instance):
     """Background task for data scrubbing"""
     try:
-        logger.info(f"Starting data scrubbing with {len(scrub_config.rules)} rules")
+        logger.info("Starting data scrubbing with %s rules", len(scrub_config.rules))
         
         # Implement actual scrubbing logic here
         for rule in scrub_config.rules:
@@ -299,8 +312,8 @@ async def run_data_scrubbing(scrub_config: ScrubConfig, driver_instance):
         
         logger.info("Data scrubbing completed")
         
-    except Exception as e:
-        logger.error(f"Data scrubbing failed: {e}")
+    except (RuntimeError, ValueError, OSError) as e:
+        logger.error("Data scrubbing failed: %s", e)
 
 @router.get("/data-quality/duplicates")
 async def get_duplicate_analysis(driver_instance = Depends(get_driver)):
@@ -335,9 +348,9 @@ async def get_duplicate_analysis(driver_instance = Depends(get_driver)):
             "analyzedAt": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Error analyzing duplicates: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error analyzing duplicates: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # Target Applications Endpoints
 target_applications = [
@@ -349,9 +362,14 @@ target_applications = [
 ]
 
 @router.get("/target-apps")
-async def get_target_applications():
+async def get_target_applications(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get available target applications"""
-    return target_applications
+    response.headers["X-Total-Count"] = str(len(target_applications))
+    return target_applications[skip : skip + limit]
 
 @router.post("/target-apps/{app_id}/sync")
 async def sync_to_target_app(
@@ -373,18 +391,18 @@ async def sync_to_target_app(
         "status": "running"
     }
 
-async def run_target_sync(app_id: str, sync_data: Dict[str, Any]):
+async def run_target_sync(app_id: str, _sync_data: Dict[str, Any]):
     """Background task for target application sync"""
     try:
-        logger.info(f"Starting sync to target app: {app_id}")
+        logger.info("Starting sync to target app: %s", app_id)
         
         # Implement actual synchronization logic
         await asyncio.sleep(3)  # Simulate sync time
         
-        logger.info(f"Sync to {app_id} completed successfully")
+        logger.info("Sync to %s completed successfully", app_id)
         
-    except Exception as e:
-        logger.error(f"Sync to {app_id} failed: {e}")
+    except (RuntimeError, ValueError, OSError) as e:
+        logger.error("Sync to %s failed: %s", app_id, e)
 
 # Bulk Operations Endpoints
 @router.post("/bulk/import")
@@ -409,10 +427,10 @@ async def bulk_import_data(
         "recordCount": len(data)
     }
 
-async def run_bulk_import(data: List[List[str]], config: Dict[str, Any], driver_instance):
+async def run_bulk_import(data: List[List[str]], _config: Dict[str, Any], _driver_instance):
     """Background task for bulk data import"""
     try:
-        logger.info(f"Starting bulk import of {len(data)} records")
+        logger.info("Starting bulk import of %s records", len(data))
         
         # Implement bulk import logic here
         # This would create nodes/relationships based on spreadsheet data
@@ -423,13 +441,13 @@ async def run_bulk_import(data: List[List[str]], config: Dict[str, Any], driver_
         for row in rows:
             # Create Cypher query to insert data
             # This is a simplified example
-            properties = dict(zip(headers, row))
+            _properties = dict(zip(headers, row))
             # Insert into Neo4j based on configuration
             
         logger.info("Bulk import completed successfully")
         
-    except Exception as e:
-        logger.error(f"Bulk import failed: {e}")
+    except (RuntimeError, ValueError, OSError) as e:
+        logger.error("Bulk import failed: %s", e)
 
 @router.post("/bulk/export")
 async def bulk_export_data(
@@ -459,9 +477,9 @@ async def bulk_export_data(
                 for header in headers:
                     value = record[header]
                     # Convert complex objects to strings
-                    if hasattr(value, '_properties'):
-                        row.append(str(dict(value._properties)))
-                    else:
+                    try:
+                        row.append(str(dict(value)))
+                    except TypeError:
                         row.append(str(value))
                 export_data.append(row)
         
@@ -471,9 +489,33 @@ async def bulk_export_data(
             "exportedAt": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Bulk export failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Bulk export failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/export/formats")
+async def get_export_formats():
+    """Return supported export formats (UI convenience endpoint)."""
+    return {
+        "formats": ["excel", "csv", "json"],
+        "default": "excel",
+    }
+
+
+@router.get("/export/history")
+async def get_export_history(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """Return export history.
+
+    The current UI can render an empty list; this endpoint prevents 404s.
+    """
+    items: List[Dict[str, Any]] = []
+    response.headers["X-Total-Count"] = str(len(items))
+    return items[skip : skip + limit]
 
 # Schema Information Endpoints
 @router.get("/schema")
@@ -505,9 +547,9 @@ async def get_database_schema(driver_instance = Depends(get_driver)):
             "retrievedAt": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Error retrieving schema: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error retrieving schema: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/schema/labels")
 async def get_node_labels(driver_instance = Depends(get_driver)):
@@ -529,9 +571,9 @@ async def get_node_labels(driver_instance = Depends(get_driver)):
             "labels": labels,
             "count": total_count
         }
-    except Exception as e:
-        logger.error(f"Error getting node labels: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error getting node labels: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/schema/relationships")
 async def get_relationship_types(driver_instance = Depends(get_driver)):
@@ -553,21 +595,28 @@ async def get_relationship_types(driver_instance = Depends(get_driver)):
             "types": types,
             "count": total_count
         }
-    except Exception as e:
-        logger.error(f"Error getting relationship types: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Neo4jError as e:
+        logger.error("Error getting relationship types: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/schema/properties")
-async def get_property_keys(driver_instance = Depends(get_driver)):
+async def get_property_keys(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    driver_instance = Depends(get_driver),
+):
     """Get all property keys"""
     try:
         result = await driver_instance.execute_query(
             "CALL db.propertyKeys()", database_="neo4j", routing_="r"
         )
-        return [record["propertyKey"] for record in result.records]
-    except Exception as e:
-        logger.error(f"Error getting property keys: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        keys = [record["propertyKey"] for record in result.records]
+        response.headers["X-Total-Count"] = str(len(keys))
+        return keys[skip : skip + limit]
+    except Neo4jError as e:
+        logger.error("Error getting property keys: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 # Data Conversion Endpoints for Spreadsheet Tool
 
@@ -575,7 +624,7 @@ class DataConversionRequest(BaseModel):
     sourceData: str
     sourceFormat: str  # json, xml, csv
     targetFormat: str  # csv, json, xml
-    mappingRules: Optional[List[Dict[str, Any]]] = []
+    mappingRules: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 class DataConversionResponse(BaseModel):
     success: bool
@@ -616,8 +665,8 @@ async def convert_data(request: DataConversionRequest):
             message=f"Conversion from {request.sourceFormat} to {request.targetFormat} not yet implemented"
         )
         
-    except Exception as e:
-        logger.error(f"Data conversion failed: {e}")
+    except (ValueError, TypeError) as e:
+        logger.error("Data conversion failed: %s", e)
         return DataConversionResponse(
             success=False,
             convertedData=[],
@@ -627,7 +676,7 @@ async def convert_data(request: DataConversionRequest):
 # Data Validation Endpoints
 class DataValidationRequest(BaseModel):
     data: List[List[str]]
-    validationRules: Optional[List[Dict[str, Any]]] = []
+    validationRules: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 class DataValidationResponse(BaseModel):
     results: List[Dict[str, Any]]
@@ -643,7 +692,7 @@ async def validate_data(request: DataValidationRequest):
         
         headers = request.data[0]
         rows = request.data[1:]
-        results = []
+        results: List[Dict[str, Any]] = []
         
         for col_index, header in enumerate(headers):
             column_data = [row[col_index] if col_index < len(row) else '' for row in rows]
@@ -675,7 +724,10 @@ async def validate_data(request: DataValidationRequest):
                 'issues': []
             })
         
-        overall_score = sum(float(r['completeness']) for r in results) / len(results) if results else 0
+        completeness_scores: List[float] = [
+            float(str(r.get("completeness", 0.0))) for r in results
+        ]
+        overall_score = (sum(completeness_scores) / len(completeness_scores)) if completeness_scores else 0.0
         
         return DataValidationResponse(
             results=results,
@@ -683,6 +735,6 @@ async def validate_data(request: DataValidationRequest):
             issues=[]
         )
         
-    except Exception as e:
-        logger.error(f"Data validation failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    except (ValueError, TypeError) as e:
+        logger.error("Data validation failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e)) from e

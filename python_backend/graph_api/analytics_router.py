@@ -73,15 +73,13 @@ async def record_upload_metric(request: UploadMetricRequest):
         return result
         
     except Exception as e:
-        logger.error(f"Error recording upload metric: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error recording upload metric: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.post("/service-health")
@@ -113,15 +111,13 @@ async def record_service_health(request: ServiceHealthRequest):
         return result
         
     except Exception as e:
-        logger.error(f"Error recording service health: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error recording service health: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.post("/migration-quality")
@@ -151,15 +147,13 @@ async def record_migration_quality(request: MigrationQualityRequest):
         return result
         
     except Exception as e:
-        logger.error(f"Error recording migration quality: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error recording migration quality: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.get("/uploads")
@@ -189,15 +183,13 @@ async def get_upload_metrics(
         return result
         
     except Exception as e:
-        logger.error(f"Error retrieving upload metrics: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error retrieving upload metrics: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.get("/service-health")
@@ -224,15 +216,13 @@ async def get_service_health_metrics(
         return result
         
     except Exception as e:
-        logger.error(f"Error retrieving service health metrics: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error retrieving service health metrics: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.get("/migration-quality")
@@ -259,15 +249,13 @@ async def get_migration_quality_metrics(
         return result
         
     except Exception as e:
-        logger.error(f"Error retrieving migration quality metrics: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Error retrieving migration quality metrics: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e
 
 
 @router.get("/health")
@@ -280,8 +268,8 @@ async def analytics_health_check():
     """
     try:
         # Get basic stats
-        upload_result = await analytics_service.get_upload_metrics(limit=1)
-        health_result = await analytics_service.get_service_health_metrics(limit=1)
+        await analytics_service.get_upload_metrics(limit=1)
+        await analytics_service.get_service_health_metrics(limit=1)
         
         return {
             "status": "success",
@@ -297,12 +285,10 @@ async def analytics_health_check():
         }
         
     except Exception as e:
-        logger.error(f"Analytics health check failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": str(e),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        )
+        logger.error("Analytics health check failed: %s", e)
+        detail = {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        raise HTTPException(status_code=500, detail=detail) from e

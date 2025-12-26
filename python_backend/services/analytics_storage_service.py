@@ -3,7 +3,6 @@ Analytics Storage Service
 Handles metrics ingestion, storage, and retrieval for governance dashboards.
 """
 import logging
-import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -90,7 +89,7 @@ class AnalyticsStorageService:
         }
         
         self.metrics_store["upload_metrics"].append(metric)
-        logger.info(f"Recorded upload metric: {file_name} - {status}")
+        logger.info("Recorded upload metric: %s - %s", file_name, status)
         
         return {
             "status": "success",
@@ -134,7 +133,7 @@ class AnalyticsStorageService:
         
         self.metrics_store["service_health"] = existing_records + service_records
         
-        logger.debug(f"Recorded health metric for {service_name}")
+        logger.debug("Recorded health metric for %s", service_name)
         
         return {
             "status": "success",
@@ -162,7 +161,7 @@ class AnalyticsStorageService:
         }
         
         self.metrics_store["migration_quality"].append(metric)
-        logger.info(f"Recorded migration quality for session {session_id}")
+        logger.info("Recorded migration quality for session %s", session_id)
         
         return {
             "status": "success",

@@ -6,17 +6,14 @@ Following AGENTIC_REFACTORING_GUIDE.md principles
 """
 
 import logging
-import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from enum import Enum
-from dataclasses import dataclass, asdict
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from pydantic import BaseModel, Field
 import neo4j
 
 from .dependencies import get_driver
-from .models import QueryRequest, QueryResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agentic", tags=["Agentic Orchestration"])
@@ -125,7 +122,6 @@ class AgenticOrchestrator:
                 "name": "ETL Orchestration Agent", 
                 "capabilities": [
                     AgentCapability(name="manage_data_pipelines", description="Manage ETL pipelines"),
-                    AgentCapability(name="coordinate_nifi_flows", description="Coordinate NiFi workflows"),
                     AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
                     AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health")
                 ]
@@ -238,12 +234,20 @@ class AgenticOrchestrator:
                 execution_time=execution_time
             )
             
-        except Exception as e:
+        except (
+            neo4j.exceptions.Neo4jError,
+            HTTPException,
+            OSError,
+            RuntimeError,
+            ValueError,
+            TypeError,
+            KeyError,
+        ) as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             self.system_metrics["tasks_failed"] += 1
             self._update_performance_metrics(agent_id, execution_time, False)
             
-            logger.error(f"Task execution failed for agent {agent_id}: {e}")
+            logger.error("Task execution failed for agent %s: %s", agent_id, e)
             
             return AgenticTaskResult(
                 task_id=task.id,
@@ -277,8 +281,6 @@ class AgenticOrchestrator:
 
     async def _execute_data_analysis_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute data analysis task"""
-        payload = task.payload
-        
         if task.type == TaskType.DATA_ANALYSIS:
             # Analyze graph patterns
             query = """
@@ -307,9 +309,9 @@ class AgenticOrchestrator:
                 ]
             }
         
-        return {"message": "Data analysis completed", "agent": agent.type.value}
+        return {"message": "Data analysis completed", "agent": AgentType.DATA_ANALYST.value}
 
-    async def _execute_query_planning_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_query_planning_task(self, task: AgenticTask, _driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute query planning task"""
         payload = task.payload
         
@@ -333,7 +335,7 @@ class AgenticOrchestrator:
         
         return {"message": "Query planning completed", "optimized": True}
 
-    async def _execute_visualization_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_visualization_task(self, task: AgenticTask, _driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute visualization task"""
         payload = task.payload
         
@@ -364,7 +366,7 @@ class AgenticOrchestrator:
         
         return {"message": "Visualization configuration generated"}
 
-    async def _execute_etl_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_etl_task(self, _task: AgenticTask, _driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute ETL orchestration task"""
         return {
             "pipeline_status": "healthy",
@@ -376,7 +378,7 @@ class AgenticOrchestrator:
             "next_steps": ["Schedule regular data sync", "Set up monitoring alerts"]
         }
 
-    async def _execute_quality_monitoring_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_quality_monitoring_task(self, _task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute quality monitoring task"""
         # Check data quality metrics
         quality_query = """
@@ -407,7 +409,7 @@ class AgenticOrchestrator:
             ]
         }
 
-    async def _execute_chat_coordination_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_chat_coordination_task(self, task: AgenticTask, _driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute chat coordination task"""
         payload = task.payload
         message = payload.get("message", "")
@@ -524,7 +526,7 @@ orchestrator = AgenticOrchestrator()
 @router.post("/task", response_model=AgenticTaskResult)
 async def process_agentic_task(
     task: AgenticTask,
-    background_tasks: BackgroundTasks,
+    _background_tasks: BackgroundTasks,
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
     """Process a task with intelligent agent routing"""
@@ -532,8 +534,8 @@ async def process_agentic_task(
         result = await orchestrator.execute_task(task, driver_instance)
         return result
     except Exception as e:
-        logger.error(f"Task processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Task processing failed: {str(e)}")
+        logger.error("Task processing failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Task processing failed: {str(e)}") from e
 
 @router.post("/chat", response_model=ChatResponse)
 async def process_chat_message(
@@ -573,8 +575,8 @@ async def process_chat_message(
             )
     
     except Exception as e:
-        logger.error(f"Chat processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}")
+        logger.error("Chat processing failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
 
 @router.get("/status", response_model=SystemStatus)
 async def get_system_status():
@@ -582,9 +584,15 @@ async def get_system_status():
     return orchestrator.get_system_status()
 
 @router.get("/agents", response_model=List[AgentDefinition])
-async def get_active_agents():
-    """Get list of active agents"""
-    return list(orchestrator.agents.values())
+async def get_orchestrator_agents(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """Get list of configured agents (paged)."""
+    agents = list(orchestrator.agents.values())
+    response.headers["X-Total-Count"] = str(len(agents))
+    return agents[skip : skip + limit]
 
 @router.post("/agents/{agent_id}/reset")
 async def reset_agent(agent_id: str):
@@ -636,71 +644,77 @@ async def get_agentic_system_status():
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"Error getting agentic system status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting agentic system status: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/agents/active")
-async def get_active_agents():
+async def get_active_agents_list(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get list of currently active agents"""
     try:
+        active_agents = [
+            {
+                "id": "data_analyst_001",
+                "type": "data_analyst",
+                "status": "active",
+                "current_task": "analyzing graph patterns",
+                "load": 0.65,
+                "uptime": "2h 15m"
+            },
+            {
+                "id": "etl_orchestrator_001",
+                "type": "etl_orchestrator", 
+                "status": "active",
+                "current_task": "monitoring pipeline health",
+                "load": 0.43,
+                "uptime": "5h 42m"
+            },
+            {
+                "id": "query_planner_001",
+                "type": "query_planner",
+                "status": "active", 
+                "current_task": "optimizing cypher queries",
+                "load": 0.72,
+                "uptime": "1h 33m"
+            },
+            {
+                "id": "visualization_agent_001",
+                "type": "visualization_agent",
+                "status": "active",
+                "current_task": "generating chart configurations",
+                "load": 0.51,
+                "uptime": "3h 18m"
+            },
+            {
+                "id": "quality_monitor_001", 
+                "type": "quality_monitor",
+                "status": "active",
+                "current_task": "data quality assessment",
+                "load": 0.38,
+                "uptime": "4h 27m"
+            },
+            {
+                "id": "chat_coordinator_001",
+                "type": "chat_coordinator",
+                "status": "active",
+                "current_task": "processing user queries",
+                "load": 0.29,
+                "uptime": "6h 51m"
+            }
+        ]
+        response.headers["X-Total-Count"] = str(len(active_agents))
         return {
             "status": "success",
-            "active_agents": [
-                {
-                    "id": "data_analyst_001",
-                    "type": "data_analyst",
-                    "status": "active",
-                    "current_task": "analyzing graph patterns",
-                    "load": 0.65,
-                    "uptime": "2h 15m"
-                },
-                {
-                    "id": "etl_orchestrator_001",
-                    "type": "etl_orchestrator", 
-                    "status": "active",
-                    "current_task": "monitoring pipeline health",
-                    "load": 0.43,
-                    "uptime": "5h 42m"
-                },
-                {
-                    "id": "query_planner_001",
-                    "type": "query_planner",
-                    "status": "active", 
-                    "current_task": "optimizing cypher queries",
-                    "load": 0.72,
-                    "uptime": "1h 33m"
-                },
-                {
-                    "id": "visualization_agent_001",
-                    "type": "visualization_agent",
-                    "status": "active",
-                    "current_task": "generating chart configurations",
-                    "load": 0.51,
-                    "uptime": "3h 18m"
-                },
-                {
-                    "id": "quality_monitor_001", 
-                    "type": "quality_monitor",
-                    "status": "active",
-                    "current_task": "data quality assessment",
-                    "load": 0.38,
-                    "uptime": "4h 27m"
-                },
-                {
-                    "id": "chat_coordinator_001",
-                    "type": "chat_coordinator",
-                    "status": "active",
-                    "current_task": "processing user queries",
-                    "load": 0.29,
-                    "uptime": "6h 51m"
-                }
-            ],
-            "total_count": 6,
+            "active_agents": active_agents[skip : skip + limit],
+            "total_count": len(active_agents),
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"Error getting active agents: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting active agents: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 @router.get("/agents/metrics")
 async def get_agent_metrics():
@@ -731,5 +745,5 @@ async def get_agent_metrics():
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
-        logger.error(f"Error getting agent metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting agent metrics: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e

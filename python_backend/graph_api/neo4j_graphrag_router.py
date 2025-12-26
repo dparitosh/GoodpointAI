@@ -3,30 +3,33 @@ Neo4j GraphRAG Router - REST API for hybrid search and semantic queries.
 Bridges Neo4j graph context with OpenSearch vector similarity.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
+from functools import lru_cache
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/neo4j-graphrag", tags=["neo4j-graphrag"])
 
-# Lazy-loaded service instance
-_service_instance = None
+
+@lru_cache(maxsize=1)
+def _get_service_cached() -> Any:
+    from services.neo4j_graphrag_service import Neo4jGraphRAGService
+
+    return Neo4jGraphRAGService()
 
 
-def get_service():
+def get_service() -> Any:
     """Get or create Neo4j GraphRAG service instance."""
-    global _service_instance
-    if _service_instance is None:
-        try:
-            from services.neo4j_graphrag_service import Neo4jGraphRAGService
-            _service_instance = Neo4jGraphRAGService()
-        except Exception as e:
-            logger.error(f"Failed to initialize Neo4j GraphRAG service: {str(e)}")
-            raise HTTPException(status_code=500, detail="Service initialization failed")
-    return _service_instance
+    try:
+        return _get_service_cached()
+    except ImportError:
+        raise
+    except Exception as e:
+        logger.error("Failed to initialize Neo4j GraphRAG service: %s", e)
+        raise HTTPException(status_code=500, detail="Service initialization failed") from e
 
 
 # Pydantic Models
@@ -70,7 +73,7 @@ async def health_check():
         return health_data
     
     except ImportError as e:
-        logger.warning(f"Neo4j driver import error: {str(e)}")
+        logger.warning("Neo4j driver import error: %s", e)
         return {
             "status": "degraded",
             "neo4j_connected": False,
@@ -80,8 +83,8 @@ async def health_check():
         }
     
     except Exception as e:
-        logger.error(f"Health check error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Health check error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/query", response_model=GraphRAGQueryResponse)
@@ -119,23 +122,27 @@ async def execute_graphrag_query(request: GraphRAGQueryRequest):
         return result
     
     except Exception as e:
-        logger.error(f"GraphRAG query execution failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("GraphRAG query execution failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/tools")
-async def list_tools():
+async def list_tools(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """
     List available tools for GraphRAG queries.
-    
+
     Returns metadata about available post-processing tools
     that can be invoked via the tools[] parameter in queries.
     """
     try:
         service = get_service()
         tools = service.list_tools()
-        return {"tools": tools}
-    
+        response.headers["X-Total-Count"] = str(len(tools))
+        return {"tools": tools[skip : skip + limit]}
     except Exception as e:
-        logger.error(f"List tools failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("List tools failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

@@ -3,11 +3,11 @@ LLM Integration Router
 Handles OpenAI, Anthropic Claude, Azure OpenAI, Ollama
 """
 import logging
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional, cast
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-import json
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/llm", tags=["LLM Integration"])
@@ -60,12 +60,16 @@ async def openai_chat_completion(request: LLMChatRequest):
         
         model = request.model or llm_config.openai_model
         
+        messages: Any = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+
         response = client.chat.completions.create(
             model=model,
-            messages=[{"role": msg.role, "content": msg.content} for msg in request.messages],
+            messages=messages,
             temperature=request.temperature,
             max_tokens=request.max_tokens
         )
+
+        usage = response.usage
         
         return {
             "status": "success",
@@ -73,15 +77,15 @@ async def openai_chat_completion(request: LLMChatRequest):
             "model": model,
             "response": response.choices[0].message.content,
             "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "prompt_tokens": usage.prompt_tokens if usage is not None else None,
+                "completion_tokens": usage.completion_tokens if usage is not None else None,
+                "total_tokens": usage.total_tokens if usage is not None else None,
             }
         }
         
     except Exception as e:
-        logger.error(f"Error with OpenAI chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with OpenAI chat: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/openai/embedding")
@@ -103,6 +107,8 @@ async def openai_embedding(request: LLMEmbeddingRequest):
             input=request.text
         )
         
+        usage = response.usage
+
         return {
             "status": "success",
             "provider": "openai",
@@ -110,14 +116,14 @@ async def openai_embedding(request: LLMEmbeddingRequest):
             "embedding": response.data[0].embedding,
             "dimensions": len(response.data[0].embedding),
             "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "total_tokens": response.usage.total_tokens
+                "prompt_tokens": usage.prompt_tokens if usage is not None else None,
+                "total_tokens": usage.total_tokens if usage is not None else None,
             }
         }
         
     except Exception as e:
-        logger.error(f"Error with OpenAI embedding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with OpenAI embedding: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -147,7 +153,7 @@ async def anthropic_chat_completion(request: LLMChatRequest):
             else:
                 messages.append({"role": msg.role, "content": msg.content})
         
-        kwargs = {
+        kwargs: Dict[str, Any] = {
             "model": model,
             "messages": messages,
             "temperature": request.temperature,
@@ -157,7 +163,7 @@ async def anthropic_chat_completion(request: LLMChatRequest):
         if system_message:
             kwargs["system"] = system_message
         
-        response = client.messages.create(**kwargs)
+        response = client.messages.create(**cast(Any, kwargs))
         
         return {
             "status": "success",
@@ -171,8 +177,8 @@ async def anthropic_chat_completion(request: LLMChatRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error with Anthropic chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with Anthropic chat: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -197,12 +203,16 @@ async def azure_openai_chat_completion(request: LLMChatRequest):
         
         deployment = request.model or llm_config.azure_openai_deployment
         
+        messages: Any = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+
         response = client.chat.completions.create(
             model=deployment,
-            messages=[{"role": msg.role, "content": msg.content} for msg in request.messages],
+            messages=messages,
             temperature=request.temperature,
             max_tokens=request.max_tokens
         )
+
+        usage = response.usage
         
         return {
             "status": "success",
@@ -210,15 +220,15 @@ async def azure_openai_chat_completion(request: LLMChatRequest):
             "deployment": deployment,
             "response": response.choices[0].message.content,
             "usage": {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "prompt_tokens": usage.prompt_tokens if usage is not None else None,
+                "completion_tokens": usage.completion_tokens if usage is not None else None,
+                "total_tokens": usage.total_tokens if usage is not None else None,
             }
         }
         
     except Exception as e:
-        logger.error(f"Error with Azure OpenAI chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with Azure OpenAI chat: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -258,8 +268,8 @@ async def ollama_chat_completion(request: LLMChatRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error with Ollama chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with Ollama chat: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/ollama/generate")
@@ -288,20 +298,24 @@ async def ollama_generate(request: LLMCompletionRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error with Ollama generate: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with Ollama generate: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/ollama/models")
-async def list_ollama_models():
+async def list_ollama_models(
+    http_response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List available Ollama models"""
     try:
         import ollama
         
-        response = ollama.list()
+        ollama_resp = cast(Dict[str, Any], ollama.list())
         
         models = []
-        for model in response.get('models', []):
+        for model in ollama_resp.get('models', []):
             models.append({
                 "name": model.get('name'),
                 "size": model.get('size'),
@@ -309,16 +323,20 @@ async def list_ollama_models():
                 "digest": model.get('digest')
             })
         
+        total_count = len(models)
+        http_response.headers["X-Total-Count"] = str(total_count)
+        models_page = models[skip : skip + limit]
+
         return {
             "status": "success",
             "provider": "ollama",
-            "count": len(models),
-            "models": models
+            "count": len(models_page),
+            "models": models_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing Ollama models: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing Ollama models: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/ollama/embedding")
@@ -344,8 +362,8 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error with Ollama embedding: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with Ollama embedding: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -371,8 +389,8 @@ async def unified_chat_completion(
             raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
             
     except Exception as e:
-        logger.error(f"Error with unified chat: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error with unified chat: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

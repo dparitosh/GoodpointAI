@@ -5,11 +5,10 @@ Handles Kong, Apigee, and generic API Gateway management
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
-import requests
-from requests.auth import HTTPBasicAuth
-import json
+from fastapi import APIRouter, HTTPException, Query, Response
+from pydantic import BaseModel
+import requests  # type: ignore[import-untyped]
+from requests.auth import HTTPBasicAuth  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/gateway", tags=["API Gateway"])
@@ -70,8 +69,8 @@ async def create_kong_service(name: str, url: str):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Kong service: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Kong service: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/kong/routes")
@@ -104,33 +103,41 @@ async def create_kong_route(route: APIRoute):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Kong route: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Kong route: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/kong/services")
-async def list_kong_services():
+async def list_kong_services(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List all Kong services"""
     try:
         from core.external_config import api_gateway_config
         
-        response = requests.get(
+        kong_resp = requests.get(
             f"{api_gateway_config.kong_admin_url}/services",
             timeout=30
         )
-        response.raise_for_status()
+        kong_resp.raise_for_status()
         
-        data = response.json()
+        data = kong_resp.json()
+        services = data.get("data", [])
+        total_count = len(services)
+        response.headers["X-Total-Count"] = str(total_count)
+        services_page = services[skip : skip + limit]
         
         return {
             "status": "success",
-            "count": len(data.get("data", [])),
-            "services": data.get("data", [])
+            "count": len(services_page),
+            "services": services_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing Kong services: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing Kong services: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/kong/plugins/rate-limiting")
@@ -163,8 +170,8 @@ async def add_kong_rate_limiting(service_name: str, config: RateLimitConfig):
         }
         
     except Exception as e:
-        logger.error(f"Error adding Kong rate limiting: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error adding Kong rate limiting: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/kong/consumers")
@@ -193,8 +200,8 @@ async def create_kong_consumer(consumer: APIConsumer):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Kong consumer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Kong consumer: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -252,19 +259,32 @@ async def create_apigee_proxy(name: str, base_path: str, target_url: str):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Apigee proxy: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Apigee proxy: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/apigee/proxies")
-async def list_apigee_proxies():
+async def list_apigee_proxies(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List Apigee API proxies"""
     try:
         from core.external_config import api_gateway_config
+
+        # If Apigee isn't configured, don't attempt any outbound calls.
+        if not api_gateway_config.apigee_org or not api_gateway_config.apigee_username or not api_gateway_config.apigee_password:
+            response.headers["X-Total-Count"] = "0"
+            return {
+                "status": "success",
+                "message": "Mock Apigee proxies - configure Apigee",
+                "proxies": [],
+            }
         
         apigee_url = f"https://api.enterprise.apigee.com/v1/organizations/{api_gateway_config.apigee_org}/apis"
         
-        response = requests.get(
+        apigee_resp = requests.get(
             apigee_url,
             auth=HTTPBasicAuth(
                 api_gateway_config.apigee_username,
@@ -273,23 +293,32 @@ async def list_apigee_proxies():
             timeout=30
         )
         
-        if response.status_code == 404:
+        if apigee_resp.status_code == 404:
+            response.headers["X-Total-Count"] = "0"
             return {
                 "status": "success",
                 "message": "Mock Apigee proxies - configure Apigee",
                 "proxies": []
             }
         
-        response.raise_for_status()
+        apigee_resp.raise_for_status()
+
+        proxies = apigee_resp.json()
+        if not isinstance(proxies, list):
+            proxies = []
+
+        total_count = len(proxies)
+        response.headers["X-Total-Count"] = str(total_count)
+        proxies_page = proxies[skip : skip + limit]
         
         return {
             "status": "success",
-            "proxies": response.json()
+            "proxies": proxies_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing Apigee proxies: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing Apigee proxies: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/apigee/products")
@@ -341,8 +370,8 @@ async def create_apigee_product(
         }
         
     except Exception as e:
-        logger.error(f"Error creating Apigee product: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Apigee product: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -381,8 +410,8 @@ async def register_api_endpoint(route: APIRoute):
         }
         
     except Exception as e:
-        logger.error(f"Error registering API endpoint: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error registering API endpoint: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -432,8 +461,8 @@ async def get_api_traffic_analytics(gateway: str = "kong", timeframe: str = "1h"
         }
         
     except Exception as e:
-        logger.error(f"Error getting analytics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting analytics: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

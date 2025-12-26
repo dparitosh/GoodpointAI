@@ -3,13 +3,12 @@ OData Integration Router
 Handles OData services (SAP, Dynamics, generic OData endpoints)
 """
 import logging
-from typing import List, Dict, Optional, Any
+from typing import Dict, Optional, Any
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-import requests
-from requests.auth import HTTPBasicAuth
-import json
+import requests  # type: ignore[import-untyped]
+from requests.auth import HTTPBasicAuth  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/odata", tags=["OData Integration"])
@@ -26,7 +25,7 @@ class ODataServiceConfig(BaseModel):
     password: Optional[str] = None
     api_key: Optional[str] = None
     token: Optional[str] = None
-    headers: Optional[Dict[str, str]] = {}
+    headers: Dict[str, str] = Field(default_factory=dict)
 
 
 class ODataQueryRequest(BaseModel):
@@ -60,6 +59,8 @@ class ODataUpdateRequest(BaseModel):
 def get_odata_auth(config: ODataServiceConfig):
     """Get authentication for OData request"""
     if config.auth_type == "basic":
+        if not config.username or not config.password:
+            return None
         return HTTPBasicAuth(config.username, config.password)
     elif config.auth_type == "apikey":
         return None  # Handled in headers
@@ -73,7 +74,7 @@ def get_odata_headers(config: ODataServiceConfig) -> Dict[str, str]:
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        **config.headers
+        **(config.headers or {})
     }
     
     if config.auth_type == "apikey" and config.api_key:
@@ -104,28 +105,33 @@ async def get_service_metadata(service_url: str):
             api_key=odata_config.odata_api_key
         )
         
-        response = requests.get(
+        odata_resp = requests.get(
             metadata_url,
             auth=get_odata_auth(config),
             headers=get_odata_headers(config),
             timeout=30
         )
-        response.raise_for_status()
+        odata_resp.raise_for_status()
         
         return {
             "status": "success",
             "service_url": service_url,
-            "metadata": response.text,
-            "content_type": response.headers.get('Content-Type')
+            "metadata": odata_resp.text,
+            "content_type": odata_resp.headers.get('Content-Type')
         }
         
     except Exception as e:
-        logger.error(f"Error fetching OData metadata: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching OData metadata: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/entities")
-async def list_entity_sets(service_url: str):
+async def list_entity_sets(
+    service_url: str,
+    http_response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List all entity sets in OData service"""
     try:
         from core.external_config import odata_config
@@ -138,15 +144,15 @@ async def list_entity_sets(service_url: str):
             api_key=odata_config.odata_api_key
         )
         
-        response = requests.get(
+        odata_resp = requests.get(
             service_url,
             auth=get_odata_auth(config),
             headers=get_odata_headers(config),
             timeout=30
         )
-        response.raise_for_status()
+        odata_resp.raise_for_status()
         
-        data = response.json()
+        data = odata_resp.json()
         entity_sets = []
         
         if 'value' in data:
@@ -159,16 +165,20 @@ async def list_entity_sets(service_url: str):
                 for item in data['value']
             ]
         
+        total_count = len(entity_sets)
+        http_response.headers["X-Total-Count"] = str(total_count)
+        entity_sets_page = entity_sets[skip : skip + limit]
+
         return {
             "status": "success",
             "service_url": service_url,
-            "count": len(entity_sets),
-            "entity_sets": entity_sets
+            "count": len(entity_sets_page),
+            "entity_sets": entity_sets_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing entity sets: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing entity sets: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -183,7 +193,7 @@ async def query_odata_entity(request: ODataQueryRequest):
         
         # Build query URL
         url = f"{request.service_url}/{request.entity_set}"
-        params = {}
+        params: Dict[str, Any] = {}
         
         if request.filter:
             params['$filter'] = request.filter
@@ -193,9 +203,9 @@ async def query_odata_entity(request: ODataQueryRequest):
             params['$expand'] = request.expand
         if request.orderby:
             params['$orderby'] = request.orderby
-        if request.top:
+        if request.top is not None:
             params['$top'] = request.top
-        if request.skip:
+        if request.skip is not None:
             params['$skip'] = request.skip
         
         config = ODataServiceConfig(
@@ -206,16 +216,16 @@ async def query_odata_entity(request: ODataQueryRequest):
             api_key=odata_config.odata_api_key
         )
         
-        response = requests.get(
+        odata_resp = requests.get(
             url,
             params=params,
             auth=get_odata_auth(config),
             headers=get_odata_headers(config),
             timeout=60
         )
-        response.raise_for_status()
+        odata_resp.raise_for_status()
         
-        data = response.json()
+        data = odata_resp.json()
         
         return {
             "status": "success",
@@ -226,8 +236,8 @@ async def query_odata_entity(request: ODataQueryRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error querying OData: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying OData: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/entity/{entity_set}/{key}")
@@ -266,8 +276,8 @@ async def get_odata_entity_by_key(
         }
         
     except Exception as e:
-        logger.error(f"Error getting OData entity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting OData entity: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -307,8 +317,8 @@ async def create_odata_entity(request: ODataCreateRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error creating OData entity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating OData entity: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/update")
@@ -344,8 +354,8 @@ async def update_odata_entity(request: ODataUpdateRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error updating OData entity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating OData entity: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/delete/{entity_set}/{key}")
@@ -384,8 +394,8 @@ async def delete_odata_entity(
         }
         
     except Exception as e:
-        logger.error(f"Error deleting OData entity: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting OData entity: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -393,7 +403,11 @@ async def delete_odata_entity(
 # ============================================================================
 
 @router.get("/sap/entity-sets")
-async def list_sap_entity_sets():
+async def list_sap_entity_sets(
+    http_response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List SAP OData entity sets"""
     try:
         from core.external_config import odata_config
@@ -409,26 +423,34 @@ async def list_sap_entity_sets():
             headers={"sap-client": odata_config.sap_client}
         )
         
-        response = requests.get(
+        sap_resp = requests.get(
             odata_config.sap_odata_url,
             auth=get_odata_auth(config),
             headers=get_odata_headers(config),
             timeout=30
         )
-        response.raise_for_status()
+        sap_resp.raise_for_status()
         
-        data = response.json()
+        data = sap_resp.json()
         
+        entity_sets = data.get('value', [])
+        if not isinstance(entity_sets, list):
+            entity_sets = []
+
+        total_count = len(entity_sets)
+        http_response.headers["X-Total-Count"] = str(total_count)
+        entity_sets_page = entity_sets[skip : skip + limit]
+
         return {
             "status": "success",
             "service": "SAP OData",
             "client": odata_config.sap_client,
-            "entity_sets": data.get('value', [])
+            "entity_sets": entity_sets_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing SAP entities: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing SAP entities: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

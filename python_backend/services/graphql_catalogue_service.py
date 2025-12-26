@@ -5,13 +5,13 @@ Provides CRUD operations for query registry with unique name constraints.
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import importlib
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from models.graphql_models import (
-    PersistedGraphQLQueryModel,
-    SchemaCacheModel
-)
+_graphql_models = importlib.import_module("models.graphql_models")
+PersistedGraphQLQueryModel: Any = getattr(_graphql_models, "PersistedGraphQLQueryModel")
+SchemaCacheModel: Any = getattr(_graphql_models, "SchemaCacheModel")
 
 
 class GraphQLCatalogueService:
@@ -31,22 +31,22 @@ class GraphQLCatalogueService:
     
     # Persisted Query Operations
     
-    def list_queries(self, limit: int = 100, offset: int = 0, format: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_queries(self, limit: int = 100, offset: int = 0, query_format: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         List persisted queries ordered by updated_at descending.
         
         Args:
             limit: Maximum number of queries to return
             offset: Number of queries to skip
-            format: Optional filter by format ('xml' or 'json')
+            query_format: Optional filter by format ('xml' or 'json')
             
         Returns:
             List of query dictionaries
         """
         query = self.db.query(PersistedGraphQLQueryModel)
         
-        if format:
-            query = query.filter(PersistedGraphQLQueryModel.format == format)
+        if query_format:
+            query = query.filter(PersistedGraphQLQueryModel.format == query_format)
         
         queries = query.order_by(PersistedGraphQLQueryModel.updated_at.desc()) \
                        .limit(limit) \
@@ -80,7 +80,7 @@ class GraphQLCatalogueService:
         return query.to_dict() if query else None
     
     def create_query(self, name: str, query: str, description: Optional[str] = None,
-                    variables: Optional[Dict] = None, format: str = "json",
+                    variables: Optional[Dict] = None, query_format: str = "json",
                     created_by: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Create a new persisted query.
@@ -90,7 +90,7 @@ class GraphQLCatalogueService:
             query: Query string
             description: Optional description
             variables: Optional query variables
-            format: Query format ('xml' or 'json')
+            query_format: Query format ('xml' or 'json')
             created_by: Optional creator identifier
             tags: Optional tags for categorization
             
@@ -106,7 +106,7 @@ class GraphQLCatalogueService:
                 query=query,
                 description=description,
                 variables=variables or {},
-                format=format,
+                format=query_format,
                 created_by=created_by,
                 tags=tags or []
             )
@@ -117,9 +117,9 @@ class GraphQLCatalogueService:
             
             return new_query.to_dict()
         
-        except IntegrityError:
+        except IntegrityError as exc:
             self.db.rollback()
-            raise ValueError(f"Query with name '{name}' already exists")
+            raise ValueError(f"Query with name '{name}' already exists") from exc
     
     def update_query(self, query_id: int, **updates) -> Optional[Dict[str, Any]]:
         """
@@ -150,9 +150,9 @@ class GraphQLCatalogueService:
             self.db.commit()
             self.db.refresh(query)
             return query.to_dict()
-        except IntegrityError:
+        except IntegrityError as exc:
             self.db.rollback()
-            raise ValueError(f"Update failed: duplicate name constraint")
+            raise ValueError("Update failed: duplicate name constraint") from exc
     
     def delete_query(self, query_id: int) -> bool:
         """
@@ -209,14 +209,14 @@ class GraphQLCatalogueService:
         
         return schema.to_dict() if schema else None
     
-    def cache_schema(self, name: str, format: str, schema_hash: str,
+    def cache_schema(self, name: str, schema_format: str, schema_hash: str,
                     fields: Dict, types: Dict, metadata: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Cache a schema introspection result.
         
         Args:
             name: Schema name
-            format: Schema format ('xml' or 'json')
+            schema_format: Schema format ('xml' or 'json')
             schema_hash: Content hash
             fields: Field definitions
             types: Type definitions
@@ -232,7 +232,7 @@ class GraphQLCatalogueService:
         
         if existing:
             # Update existing
-            existing.format = format
+            existing.format = schema_format
             existing.schema_hash = schema_hash
             existing.fields = fields
             existing.types = types
@@ -245,7 +245,7 @@ class GraphQLCatalogueService:
             # Create new
             new_schema = SchemaCacheModel(
                 name=name,
-                format=format,
+                format=schema_format,
                 schema_hash=schema_hash,
                 fields=fields,
                 types=types,

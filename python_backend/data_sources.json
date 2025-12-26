@@ -9,7 +9,7 @@
       "database": "neo4j",
       "username": "neo4j",
       "password": "tcs12345",
-      "uri": "neo4j+s://2cccd05b.databases.neo4j.io",
+      "uri": "neo4j://127.0.0.1:7687",
       "api_key": null,
       "endpoint": null,
       "file_path": null,

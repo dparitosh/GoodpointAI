@@ -3,8 +3,7 @@ Tests for Analytics Storage Service
 """
 import pytest
 from services.analytics_storage_service import (
-    AnalyticsStorageService,
-    MetricType
+    AnalyticsStorageService
 )
 
 

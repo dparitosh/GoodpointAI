@@ -1,13 +1,27 @@
 import logging
+from datetime import datetime
+from typing import Any, cast
+from time import perf_counter
+
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 from core.lifespan import lifespan_manager
+from core.error_handlers import (
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
 from graph_api.router import router as graph_router
 from graph_api.data_analysis_router import router as data_analysis_router
 from graph_api.monitoring_router import router as monitoring_router
 from graph_api.config_router import router as config_router
 from graph_api.data_sources_router import router as data_sources_router
+from graph_api.data_sources_alias_router import router as data_sources_alias_router
 from graph_api.data_mapping_router import router as data_mapping_router
 from graph_api.migration_router import router as migration_router
 from graph_api.analytics_router import router as analytics_router
@@ -31,6 +45,7 @@ from graph_api.api_gateway_router import router as api_gateway_router
 from graph_api.lineage_router import router as lineage_router
 from graph_api.self_healing_router import router as self_healing_router
 from graph_api.multimodal_router import router as multimodal_router
+from graph_api.compat_router import router as compat_router
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -42,6 +57,37 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan_manager
 )
+
+
+@app.middleware("http")
+async def request_timing_middleware(request: Request, call_next):
+    start = perf_counter()
+    response = await call_next(request)
+    duration_ms = (perf_counter() - start) * 1000.0
+    logger.info(
+        "HTTP %s %s -> %s (%.2fms)",
+        request.method,
+        request.url.path,
+        getattr(response, "status_code", "?"),
+        duration_ms,
+    )
+    return response
+
+async def _http_exception_handler(request: Request, exc: Exception) -> Response:
+    return await cast(Any, http_exception_handler)(request, exc)
+
+
+async def _validation_exception_handler(request: Request, exc: Exception) -> Response:
+    return await cast(Any, validation_exception_handler)(request, exc)
+
+
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response:
+    return await cast(Any, unhandled_exception_handler)(request, exc)
+
+
+app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
+app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+app.add_exception_handler(Exception, _unhandled_exception_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,6 +110,7 @@ app.include_router(data_analysis_router)
 app.include_router(monitoring_router)
 app.include_router(config_router)
 app.include_router(data_sources_router)
+app.include_router(data_sources_alias_router)
 app.include_router(data_mapping_router)
 app.include_router(migration_router)
 app.include_router(analytics_router)
@@ -87,6 +134,17 @@ app.include_router(api_gateway_router)
 app.include_router(lineage_router)
 app.include_router(self_healing_router)
 app.include_router(multimodal_router)
+app.include_router(compat_router)
+
+
+@app.get("/health", tags=["Health"], summary="Health check endpoint")
+async def root_health_check():
+    # Keep a simple top-level health alias for clients that expect /health.
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "service": "GoodPoint AgenticAI API",
+    }
 
 if __name__ == "__main__":
     import uvicorn

@@ -19,14 +19,17 @@ class Neo4jGraphRAGService:
     
     def __init__(self):
         """Initialize GraphRAG service with configuration from environment."""
-        self.neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.neo4j_uri = os.getenv("NEO4J_URI", "neo4j://127.0.0.1:7687")
         self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "password")
+        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "tcs12345")
         self.embed_dimension = int(os.getenv("GRAPH_RAG_EMBED_DIMENSION", "1536"))
         self.driver = None
         self.connected = False
-        
-        logger.info(f"Neo4j GraphRAG Service initialized with embedding dimension: {self.embed_dimension}")
+
+        logger.info(
+            "Neo4j GraphRAG Service initialized with embedding dimension: %s",
+            self.embed_dimension,
+        )
     
     def _connect(self):
         """Establish Neo4j connection (lazy initialization)."""
@@ -35,7 +38,7 @@ class Neo4jGraphRAGService:
         
         try:
             # Lazy import to avoid dependency issues
-            from neo4j import GraphDatabase
+            from neo4j import GraphDatabase, exceptions as neo4j_exceptions
             
             self.driver = GraphDatabase.driver(
                 self.neo4j_uri,
@@ -52,8 +55,8 @@ class Neo4jGraphRAGService:
         except ImportError:
             logger.warning("Neo4j driver not installed. Install with: pip install neo4j")
             self.connected = False
-        except Exception as e:
-            logger.error(f"Failed to connect to Neo4j: {str(e)}")
+        except (neo4j_exceptions.Neo4jError, neo4j_exceptions.DriverError, OSError, ValueError, RuntimeError) as e:
+            logger.error("Failed to connect to Neo4j: %s", e)
             self.connected = False
     
     def health_check(self) -> Dict[str, Any]:
@@ -138,7 +141,7 @@ class Neo4jGraphRAGService:
             }
             
         except Exception as e:
-            logger.error(f"GraphRAG query error: {str(e)}")
+            logger.error("GraphRAG query error: %s", e)
             raise
     
     def _generate_embedding(self, text: str) -> List[float]:
@@ -168,11 +171,13 @@ class Neo4jGraphRAGService:
         2. Full-text search (textual summaries)
         3. Optionally includes graph paths
         """
+        _ = embedding, include_paths
+
         if not self.connected or not self.driver:
             return []
         
         try:
-            with self.driver.session() as session:
+            with self.driver.session():
                 # Mock query - in production, use actual vector index query
                 # Example Cypher for vector search:
                 # CALL db.index.vector.queryNodes('vectorIndex', $top_k, $embedding)
@@ -192,8 +197,8 @@ class Neo4jGraphRAGService:
                 
                 return results
                 
-        except Exception as e:
-            logger.error(f"Hybrid search error: {str(e)}")
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.error("Hybrid search error: %s", e)
             return []
     
     def _invoke_tools(self, tools: List[str], results: List[Dict]) -> List[Dict[str, Any]]:

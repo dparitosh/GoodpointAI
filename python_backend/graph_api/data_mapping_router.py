@@ -1,9 +1,10 @@
 import logging
 import json
 import os
-from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from json import JSONDecodeError
+from typing import List, Dict, Optional
+from fastapi import APIRouter, HTTPException, Query, Response
+from pydantic import BaseModel
 from datetime import datetime
 import uuid
 
@@ -66,41 +67,41 @@ def load_mapping_rules() -> List[Dict]:
     """Load mapping rules from JSON file"""
     try:
         if os.path.exists(MAPPING_RULES_FILE):
-            with open(MAPPING_RULES_FILE, 'r') as f:
+            with open(MAPPING_RULES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return []
-    except Exception as e:
-        logger.error(f"Error loading mapping rules: {e}")
+    except (OSError, JSONDecodeError) as exc:
+        logger.error("Error loading mapping rules: %s", exc)
         return []
 
 def save_mapping_rules(rules: List[Dict]):
     """Save mapping rules to JSON file"""
     try:
-        with open(MAPPING_RULES_FILE, 'w') as f:
+        with open(MAPPING_RULES_FILE, 'w', encoding='utf-8') as f:
             json.dump(rules, f, indent=2, default=str)
-    except Exception as e:
-        logger.error(f"Error saving mapping rules: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save mapping rules")
+    except (OSError, TypeError, ValueError) as exc:
+        logger.error("Error saving mapping rules: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save mapping rules") from exc
 
 def load_mapping_templates() -> List[Dict]:
     """Load mapping templates from JSON file"""
     try:
         if os.path.exists(MAPPING_TEMPLATES_FILE):
-            with open(MAPPING_TEMPLATES_FILE, 'r') as f:
+            with open(MAPPING_TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return []
-    except Exception as e:
-        logger.error(f"Error loading mapping templates: {e}")
+    except (OSError, JSONDecodeError) as exc:
+        logger.error("Error loading mapping templates: %s", exc)
         return []
 
 def save_mapping_templates(templates: List[Dict]):
     """Save mapping templates to JSON file"""
     try:
-        with open(MAPPING_TEMPLATES_FILE, 'w') as f:
+        with open(MAPPING_TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(templates, f, indent=2, default=str)
-    except Exception as e:
-        logger.error(f"Error saving mapping templates: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save mapping templates")
+    except (OSError, TypeError, ValueError) as exc:
+        logger.error("Error saving mapping templates: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save mapping templates") from exc
 
 # Mapping Rules Endpoints
 
@@ -110,14 +111,15 @@ def save_mapping_templates(templates: List[Dict]):
     summary="Get All Mapping Rules",
     description="Retrieve all data mapping rules."
 )
-async def get_mapping_rules():
+async def get_mapping_rules(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get all mapping rules"""
-    try:
-        rules = load_mapping_rules()
-        return rules
-    except Exception as e:
-        logger.error(f"Error fetching mapping rules: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch mapping rules")
+    rules = load_mapping_rules()
+    response.headers["X-Total-Count"] = str(len(rules))
+    return rules[skip : skip + limit]
 
 @router.get(
     "/rules/{rule_id}",
@@ -127,17 +129,11 @@ async def get_mapping_rules():
 )
 async def get_mapping_rule(rule_id: str):
     """Get a specific mapping rule by ID"""
-    try:
-        rules = load_mapping_rules()
-        rule = next((r for r in rules if r.get('id') == rule_id), None)
-        if not rule:
-            raise HTTPException(status_code=404, detail="Mapping rule not found")
-        return rule
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching mapping rule {rule_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch mapping rule")
+    rules = load_mapping_rules()
+    rule = next((r for r in rules if r.get('id') == rule_id), None)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Mapping rule not found")
+    return rule
 
 @router.post(
     "/rules",
@@ -147,34 +143,28 @@ async def get_mapping_rule(rule_id: str):
 )
 async def create_mapping_rule(rule: MappingRule):
     """Create a new mapping rule"""
-    try:
-        rules = load_mapping_rules()
-        
-        # Generate ID if not provided
-        if not rule.id:
-            rule.id = str(uuid.uuid4())
-        
-        # Check if ID already exists
-        if any(r.get('id') == rule.id for r in rules):
-            raise HTTPException(status_code=400, detail="Mapping rule ID already exists")
-        
-        # Set timestamps
-        rule.created_at = datetime.now().isoformat()
-        rule.updated_at = datetime.now().isoformat()
-        
-        # Convert to dict and add to rules
-        rule_dict = rule.dict()
-        rules.append(rule_dict)
-        
-        # Save to file
-        save_mapping_rules(rules)
-        
-        return rule_dict
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating mapping rule: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create mapping rule")
+    rules = load_mapping_rules()
+
+    # Generate ID if not provided
+    if not rule.id:
+        rule.id = str(uuid.uuid4())
+
+    # Check if ID already exists
+    if any(r.get('id') == rule.id for r in rules):
+        raise HTTPException(status_code=400, detail="Mapping rule ID already exists")
+
+    # Set timestamps
+    rule.created_at = datetime.now().isoformat()
+    rule.updated_at = datetime.now().isoformat()
+
+    # Convert to dict and add to rules
+    rule_dict = rule.dict()
+    rules.append(rule_dict)
+
+    # Save to file
+    save_mapping_rules(rules)
+
+    return rule_dict
 
 @router.put(
     "/rules/{rule_id}",
@@ -184,32 +174,26 @@ async def create_mapping_rule(rule: MappingRule):
 )
 async def update_mapping_rule(rule_id: str, rule: MappingRule):
     """Update an existing mapping rule"""
-    try:
-        rules = load_mapping_rules()
-        
-        # Find the rule to update
-        rule_index = next((i for i, r in enumerate(rules) if r.get('id') == rule_id), None)
-        if rule_index is None:
-            raise HTTPException(status_code=404, detail="Mapping rule not found")
-        
-        # Update the rule
-        rule.id = rule_id
-        rule.updated_at = datetime.now().isoformat()
-        # Preserve created_at if it exists
-        if 'created_at' in rules[rule_index]:
-            rule.created_at = rules[rule_index]['created_at']
-        
-        rules[rule_index] = rule.dict()
-        
-        # Save to file
-        save_mapping_rules(rules)
-        
-        return rules[rule_index]
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating mapping rule {rule_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update mapping rule")
+    rules = load_mapping_rules()
+
+    # Find the rule to update
+    rule_index = next((i for i, r in enumerate(rules) if r.get('id') == rule_id), None)
+    if rule_index is None:
+        raise HTTPException(status_code=404, detail="Mapping rule not found")
+
+    # Update the rule
+    rule.id = rule_id
+    rule.updated_at = datetime.now().isoformat()
+    # Preserve created_at if it exists
+    if 'created_at' in rules[rule_index]:
+        rule.created_at = rules[rule_index]['created_at']
+
+    rules[rule_index] = rule.dict()
+
+    # Save to file
+    save_mapping_rules(rules)
+
+    return rules[rule_index]
 
 @router.delete(
     "/rules/{rule_id}",
@@ -218,25 +202,19 @@ async def update_mapping_rule(rule_id: str, rule: MappingRule):
 )
 async def delete_mapping_rule(rule_id: str):
     """Delete a mapping rule"""
-    try:
-        rules = load_mapping_rules()
-        
-        # Find and remove the rule
-        original_count = len(rules)
-        rules = [r for r in rules if r.get('id') != rule_id]
-        
-        if len(rules) == original_count:
-            raise HTTPException(status_code=404, detail="Mapping rule not found")
-        
-        # Save updated rules
-        save_mapping_rules(rules)
-        
-        return {"status": "success", "message": "Mapping rule deleted successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting mapping rule {rule_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete mapping rule")
+    rules = load_mapping_rules()
+
+    # Find and remove the rule
+    original_count = len(rules)
+    rules = [r for r in rules if r.get('id') != rule_id]
+
+    if len(rules) == original_count:
+        raise HTTPException(status_code=404, detail="Mapping rule not found")
+
+    # Save updated rules
+    save_mapping_rules(rules)
+
+    return {"status": "success", "message": "Mapping rule deleted successfully"}
 
 # Mapping Templates Endpoints
 
@@ -246,14 +224,15 @@ async def delete_mapping_rule(rule_id: str):
     summary="Get All Mapping Templates",
     description="Retrieve all mapping templates."
 )
-async def get_mapping_templates():
+async def get_mapping_templates(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """Get all mapping templates"""
-    try:
-        templates = load_mapping_templates()
-        return templates
-    except Exception as e:
-        logger.error(f"Error fetching mapping templates: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch mapping templates")
+    templates = load_mapping_templates()
+    response.headers["X-Total-Count"] = str(len(templates))
+    return templates[skip : skip + limit]
 
 @router.post(
     "/templates",
@@ -263,33 +242,27 @@ async def get_mapping_templates():
 )
 async def create_mapping_template(template: MappingTemplate):
     """Create a new mapping template"""
-    try:
-        templates = load_mapping_templates()
-        
-        # Generate ID if not provided
-        if not template.id:
-            template.id = str(uuid.uuid4())
-        
-        # Check if ID already exists
-        if any(t.get('id') == template.id for t in templates):
-            raise HTTPException(status_code=400, detail="Template ID already exists")
-        
-        # Set timestamp
-        template.created_at = datetime.now().isoformat()
-        
-        # Convert to dict and add to templates
-        template_dict = template.dict()
-        templates.append(template_dict)
-        
-        # Save to file
-        save_mapping_templates(templates)
-        
-        return template_dict
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating mapping template: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create mapping template")
+    templates = load_mapping_templates()
+
+    # Generate ID if not provided
+    if not template.id:
+        template.id = str(uuid.uuid4())
+
+    # Check if ID already exists
+    if any(t.get('id') == template.id for t in templates):
+        raise HTTPException(status_code=400, detail="Template ID already exists")
+
+    # Set timestamp
+    template.created_at = datetime.now().isoformat()
+
+    # Convert to dict and add to templates
+    template_dict = template.dict()
+    templates.append(template_dict)
+
+    # Save to file
+    save_mapping_templates(templates)
+
+    return template_dict
 
 @router.post(
     "/templates/{template_id}/apply",
@@ -299,30 +272,24 @@ async def create_mapping_template(template: MappingTemplate):
 )
 async def apply_mapping_template(template_id: str, source_system_id: str, target_system_id: str, rule_name: str):
     """Apply a mapping template to create a new rule"""
-    try:
-        templates = load_mapping_templates()
-        template = next((t for t in templates if t.get('id') == template_id), None)
-        
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
-        
-        # Create new rule from template
-        new_rule = MappingRule(
-            name=rule_name,
-            description=f"Created from template: {template['name']}",
-            source_system_id=source_system_id,
-            target_system_id=target_system_id,
-            field_mappings=template['field_mappings'],
-            status="draft"
-        )
-        
-        # Use the create_mapping_rule function
-        return await create_mapping_rule(new_rule)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error applying template {template_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to apply template")
+    templates = load_mapping_templates()
+    template = next((t for t in templates if t.get('id') == template_id), None)
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Create new rule from template
+    new_rule = MappingRule(
+        name=rule_name,
+        description=f"Created from template: {template['name']}",
+        source_system_id=source_system_id,
+        target_system_id=target_system_id,
+        field_mappings=template['field_mappings'],
+        status="draft"
+    )
+
+    # Use the create_mapping_rule function
+    return await create_mapping_rule(new_rule)
 
 # Mapping Execution Endpoints
 
@@ -334,22 +301,14 @@ async def apply_mapping_template(template_id: str, source_system_id: str, target
 )
 async def execute_mapping_rule(rule_id: str, execution: MappingExecution):
     """Execute a mapping rule"""
-    try:
-        rules = load_mapping_rules()
-        rule = next((r for r in rules if r.get('id') == rule_id), None)
-        
-        if not rule:
-            raise HTTPException(status_code=404, detail="Mapping rule not found")
-        
-        # Simulate mapping execution
-        result = await _execute_mapping(rule, execution)
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error executing mapping rule {rule_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to execute mapping rule")
+    rules = load_mapping_rules()
+    rule = next((r for r in rules if r.get('id') == rule_id), None)
+
+    if not rule:
+        raise HTTPException(status_code=404, detail="Mapping rule not found")
+
+    # Simulate mapping execution
+    return await _execute_mapping(rule, execution)
 
 @router.post(
     "/rules/{rule_id}/validate",
@@ -359,97 +318,75 @@ async def execute_mapping_rule(rule_id: str, execution: MappingExecution):
 )
 async def validate_mapping_rule(rule_id: str):
     """Validate a mapping rule"""
-    try:
-        rules = load_mapping_rules()
-        rule = next((r for r in rules if r.get('id') == rule_id), None)
-        
-        if not rule:
-            raise HTTPException(status_code=404, detail="Mapping rule not found")
-        
-        # Validate the mapping rule
-        validation_result = await _validate_mapping(rule)
-        
-        return validation_result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error validating mapping rule {rule_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to validate mapping rule")
+    rules = load_mapping_rules()
+    rule = next((r for r in rules if r.get('id') == rule_id), None)
+
+    if not rule:
+        raise HTTPException(status_code=404, detail="Mapping rule not found")
+
+    # Validate the mapping rule
+    return await _validate_mapping(rule)
 
 # Helper Functions
 
 async def _execute_mapping(rule: Dict, execution: MappingExecution) -> MappingResult:
     """Execute mapping transformation"""
-    try:
-        # This is a simulation - in a real implementation, you would:
-        # 1. Connect to source system
-        # 2. Extract data according to mapping rules
-        # 3. Apply transformations
-        # 4. Validate results
-        # 5. Load to target system
-        
-        start_time = datetime.now()
-        
-        # Simulate processing
-        import asyncio
-        await asyncio.sleep(0.1)  # Simulate processing time
-        
-        end_time = datetime.now()
-        execution_time = (end_time - start_time).total_seconds()
-        
-        return MappingResult(
-            success=True,
-            message="Mapping executed successfully (simulated)",
-            records_processed=1000,
-            records_success=980,
-            records_failed=20,
-            warnings=["Some records had validation warnings"],
-            execution_time=execution_time
-        )
-        
-    except Exception as e:
-        return MappingResult(
-            success=False,
-            message=f"Mapping execution failed: {str(e)}",
-            errors=[str(e)]
-        )
+    _ = rule, execution
+
+    # This is a simulation - in a real implementation, you would:
+    # 1. Connect to source system
+    # 2. Extract data according to mapping rules
+    # 3. Apply transformations
+    # 4. Validate results
+    # 5. Load to target system
+
+    start_time = datetime.now()
+
+    # Simulate processing
+    import asyncio
+    await asyncio.sleep(0.1)  # Simulate processing time
+
+    end_time = datetime.now()
+    execution_time = (end_time - start_time).total_seconds()
+
+    return MappingResult(
+        success=True,
+        message="Mapping executed successfully (simulated)",
+        records_processed=1000,
+        records_success=980,
+        records_failed=20,
+        warnings=["Some records had validation warnings"],
+        execution_time=execution_time
+    )
 
 async def _validate_mapping(rule: Dict) -> MappingResult:
     """Validate mapping rule"""
-    try:
-        errors = []
-        warnings = []
-        
-        # Validate required fields
-        if not rule.get('source_system_id'):
-            errors.append("Source system ID is required")
-        if not rule.get('target_system_id'):
-            errors.append("Target system ID is required")
-        if not rule.get('field_mappings'):
-            warnings.append("No field mappings defined")
-        
-        # Validate field mappings
-        for mapping in rule.get('field_mappings', []):
-            if not mapping.get('source_field'):
-                errors.append("Source field is required for all mappings")
-            if not mapping.get('target_field'):
-                errors.append("Target field is required for all mappings")
-        
-        success = len(errors) == 0
-        
-        return MappingResult(
-            success=success,
-            message="Validation completed" if success else "Validation failed",
-            errors=errors,
-            warnings=warnings
-        )
-        
-    except Exception as e:
-        return MappingResult(
-            success=False,
-            message=f"Validation failed: {str(e)}",
-            errors=[str(e)]
-        )
+    errors: List[str] = []
+    warnings: List[str] = []
+
+    # Validate required fields
+    if not rule.get('source_system_id'):
+        errors.append("Source system ID is required")
+    if not rule.get('target_system_id'):
+        errors.append("Target system ID is required")
+    if not rule.get('field_mappings'):
+        warnings.append("No field mappings defined")
+
+    # Validate field mappings
+    for mapping in rule.get('field_mappings', []):
+        if not mapping.get('source_field'):
+            errors.append("Source field is required for all mappings")
+        if not mapping.get('target_field'):
+            errors.append("Target field is required for all mappings")
+
+    success = len(errors) == 0
+
+    return MappingResult(
+        success=success,
+        message="Validation completed" if success else "Validation failed",
+        errors=errors,
+        warnings=warnings
+    )
 
 @router.get(
     "/field-suggestions/{source_system_id}",
@@ -458,33 +395,29 @@ async def _validate_mapping(rule: Dict) -> MappingResult:
 )
 async def get_field_suggestions(source_system_id: str):
     """Get field suggestions for mapping"""
-    try:
-        # This would typically analyze the source system schema
-        # For now, return some common field suggestions
-        suggestions = {
-            "common_fields": [
-                {"name": "id", "type": "string", "description": "Unique identifier"},
-                {"name": "name", "type": "string", "description": "Name field"},
-                {"name": "email", "type": "string", "description": "Email address"},
-                {"name": "created_at", "type": "datetime", "description": "Creation timestamp"},
-                {"name": "updated_at", "type": "datetime", "description": "Last update timestamp"},
-                {"name": "status", "type": "string", "description": "Status field"}
-            ],
-            "transformations": [
-                {"name": "uppercase", "description": "Convert to uppercase"},
-                {"name": "lowercase", "description": "Convert to lowercase"},
-                {"name": "trim", "description": "Remove leading/trailing spaces"},
-                {"name": "date_format", "description": "Format date/time"},
-                {"name": "concat", "description": "Concatenate multiple fields"},
-                {"name": "substring", "description": "Extract substring"},
-                {"name": "default_value", "description": "Use default if null/empty"}
-            ]
-        }
-        
-        return suggestions
-    except Exception as e:
-        logger.error(f"Error getting field suggestions: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get field suggestions")
+    _ = source_system_id
+
+    # This would typically analyze the source system schema.
+    # For now, return some common field suggestions.
+    return {
+        "common_fields": [
+            {"name": "id", "type": "string", "description": "Unique identifier"},
+            {"name": "name", "type": "string", "description": "Name field"},
+            {"name": "email", "type": "string", "description": "Email address"},
+            {"name": "created_at", "type": "datetime", "description": "Creation timestamp"},
+            {"name": "updated_at", "type": "datetime", "description": "Last update timestamp"},
+            {"name": "status", "type": "string", "description": "Status field"}
+        ],
+        "transformations": [
+            {"name": "uppercase", "description": "Convert to uppercase"},
+            {"name": "lowercase", "description": "Convert to lowercase"},
+            {"name": "trim", "description": "Remove leading/trailing spaces"},
+            {"name": "date_format", "description": "Format date/time"},
+            {"name": "concat", "description": "Concatenate multiple fields"},
+            {"name": "substring", "description": "Extract substring"},
+            {"name": "default_value", "description": "Use default if null/empty"}
+        ]
+    }
 
 @router.get(
     "/mapping-analytics",
@@ -493,42 +426,36 @@ async def get_field_suggestions(source_system_id: str):
 )
 async def get_mapping_analytics():
     """Get mapping analytics"""
-    try:
-        rules = load_mapping_rules()
-        templates = load_mapping_templates()
-        
-        # Calculate analytics
-        total_rules = len(rules)
-        active_rules = len([r for r in rules if r.get('status') == 'active'])
-        draft_rules = len([r for r in rules if r.get('status') == 'draft'])
-        
-        # Count field mappings
-        total_field_mappings = sum(len(r.get('field_mappings', [])) for r in rules)
-        
-        analytics = {
-            "summary": {
-                "total_rules": total_rules,
-                "active_rules": active_rules,
-                "draft_rules": draft_rules,
-                "total_templates": len(templates),
-                "total_field_mappings": total_field_mappings
-            },
-            "status_distribution": {
-                "active": active_rules,
-                "draft": draft_rules,
-                "inactive": total_rules - active_rules - draft_rules
-            },
-            "recent_activity": [
-                {
-                    "rule_name": rule.get('name'),
-                    "status": rule.get('status'),
-                    "updated_at": rule.get('updated_at')
-                }
-                for rule in sorted(rules, key=lambda x: x.get('updated_at', ''), reverse=True)[:5]
-            ]
-        }
-        
-        return analytics
-    except Exception as e:
-        logger.error(f"Error getting mapping analytics: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get mapping analytics")
+    rules = load_mapping_rules()
+    templates = load_mapping_templates()
+
+    # Calculate analytics
+    total_rules = len(rules)
+    active_rules = len([r for r in rules if r.get('status') == 'active'])
+    draft_rules = len([r for r in rules if r.get('status') == 'draft'])
+
+    # Count field mappings
+    total_field_mappings = sum(len(r.get('field_mappings', [])) for r in rules)
+
+    return {
+        "summary": {
+            "total_rules": total_rules,
+            "active_rules": active_rules,
+            "draft_rules": draft_rules,
+            "total_templates": len(templates),
+            "total_field_mappings": total_field_mappings
+        },
+        "status_distribution": {
+            "active": active_rules,
+            "draft": draft_rules,
+            "inactive": total_rules - active_rules - draft_rules
+        },
+        "recent_activity": [
+            {
+                "rule_name": rule.get('name'),
+                "status": rule.get('status'),
+                "updated_at": rule.get('updated_at')
+            }
+            for rule in sorted(rules, key=lambda x: x.get('updated_at', ''), reverse=True)[:5]
+        ]
+    }

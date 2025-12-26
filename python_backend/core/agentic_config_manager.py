@@ -17,15 +17,11 @@ import json
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 from pydantic import BaseModel, ValidationError, Field
-from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
-import jsonschema
-import subprocess
-import os
-from contextlib import asynccontextmanager
+from fastapi import WebSocket, HTTPException, BackgroundTasks
+import jsonschema  # type: ignore[import-untyped]  # pyright: ignore[reportMissingTypeStubs]
 
 from graph_api.database_adapters import DatabaseAdapterFactory
 
@@ -71,7 +67,7 @@ class E2ETraceConfiguration(BaseModel):
     metadata: ConfigurationMetadata
     deployment: DeploymentConfig
     data_sources: List[Dict[str, Any]] = Field(default_factory=list)
-    agentic_orchestration: AgenticOrchestrationConfig = Field(default_factory=AgenticOrchestrationConfig)
+    agentic_orchestration: AgenticOrchestrationConfig = Field(default_factory=lambda: AgenticOrchestrationConfig(orchestration_mode="intelligent"))
     security: Optional[Dict[str, Any]] = None
 
 class AgenticConfigurationManager:
@@ -81,8 +77,13 @@ class AgenticConfigurationManager:
     """
     
     def __init__(self, config_file: str = "agentic_config.json", schema_file: str = "config_schema.json"):
-        self.config_file = Path(config_file)
-        self.schema_file = Path(schema_file)
+        backend_root = Path(__file__).resolve().parents[1]
+
+        config_path = Path(config_file)
+        schema_path = Path(schema_file)
+
+        self.config_file = config_path if config_path.is_absolute() else (backend_root / config_path)
+        self.schema_file = schema_path if schema_path.is_absolute() else (backend_root / schema_path)
         self.current_config: Optional[E2ETraceConfiguration] = None
         self.websocket_connections: List[WebSocket] = []
         self.deployment_status = DeploymentStatus()
@@ -101,20 +102,20 @@ class AgenticConfigurationManager:
     def _load_schema(self) -> Dict[str, Any]:
         """Load JSON schema for validation"""
         try:
-            with open(self.schema_file, 'r') as f:
+            with open(self.schema_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
-            logger.error(f"Schema file {self.schema_file} not found")
+            logger.warning("Schema file %s not found", self.schema_file)
             return {}
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in schema file: {e}")
+            logger.error("Invalid JSON in schema file: %s", e)
             return {}
     
     def _load_configuration(self) -> None:
         """Load existing configuration from file"""
         if self.config_file.exists():
             try:
-                with open(self.config_file, 'r') as f:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
                     
                 # Validate against schema
@@ -126,7 +127,7 @@ class AgenticConfigurationManager:
                 logger.info("Configuration loaded successfully")
                 
             except (json.JSONDecodeError, ValidationError, jsonschema.ValidationError) as e:
-                logger.error(f"Error loading configuration: {e}")
+                logger.error("Error loading configuration: %s", e)
                 self._create_default_configuration()
         else:
             self._create_default_configuration()
@@ -138,9 +139,21 @@ class AgenticConfigurationManager:
                 environment="development",
                 description="Default E2ETrace configuration"
             ),
-            deployment=DeploymentConfig(),
+            deployment=DeploymentConfig(
+                auto_deploy=True,
+                deployment_strategy="progressive",
+                install_types=["all"],
+                verification_level="comprehensive",
+                cache_dependencies=True,
+                enterprise_features=False
+            ),
             data_sources=[],
-            agentic_orchestration=AgenticOrchestrationConfig(),
+            agentic_orchestration=AgenticOrchestrationConfig(
+                enabled=True,
+                orchestration_mode="intelligent",
+                workflows=[],
+                intelligent_features={}
+            ),
             security={
                 "encryption": {
                     "encrypt_at_rest": False,
@@ -165,7 +178,6 @@ class AgenticConfigurationManager:
                 config_dict = {
                     "configuration": self.current_config.dict()
                 }
-                
                 # Convert datetime objects to ISO format strings
                 def convert_datetime(obj):
                     if isinstance(obj, datetime):
@@ -175,21 +187,16 @@ class AgenticConfigurationManager:
                     elif isinstance(obj, list):
                         return [convert_datetime(item) for item in obj]
                     return obj
-                
                 config_dict = convert_datetime(config_dict)
-                
                 # Validate before saving
                 if self.schema:
                     jsonschema.validate(config_dict, self.schema)
-                
-                with open(self.config_file, 'w') as f:
+                with open(self.config_file, 'w', encoding='utf-8') as f:
                     json.dump(config_dict, f, indent=2, default=str)
-                
                 logger.info("Configuration saved successfully")
-                
-            except (jsonschema.ValidationError, Exception) as e:
-                logger.error(f"Error saving configuration: {e}")
-                raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e}")
+            except (jsonschema.ValidationError, Exception) as e:  # pylint: disable=broad-exception-caught
+                logger.error("Error saving configuration: %s", e)
+                raise HTTPException(status_code=500, detail=f"Failed to save configuration: {e}") from e
     
     async def update_configuration(self, config_update: Dict[str, Any], 
                                  trigger_deployment: bool = True) -> Dict[str, Any]:
@@ -247,69 +254,82 @@ class AgenticConfigurationManager:
             }
             
         except ValidationError as e:
-            logger.error(f"Configuration validation error: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid configuration: {e}")
+            logger.error("Configuration validation error: %s", e)
+            raise HTTPException(status_code=400, detail=f"Invalid configuration: {e}") from e
         except jsonschema.ValidationError as e:
-            logger.error(f"JSON schema validation error: {e}")
-            raise HTTPException(status_code=400, detail=f"Schema validation failed: {e}")
-        except Exception as e:
-            logger.error(f"Error updating configuration: {e}")
-            raise HTTPException(status_code=500, detail=f"Configuration update failed: {e}")
+            logger.error("JSON schema validation error: %s", e)
+            raise HTTPException(status_code=400, detail=f"Schema validation failed: {e}") from e
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error updating configuration: %s", e)
+            raise HTTPException(status_code=500, detail=f"Configuration update failed: {e}") from e
     
     async def _analyze_configuration_changes(self, old_config: Optional[E2ETraceConfiguration], 
                                            new_config: E2ETraceConfiguration) -> Dict[str, Any]:
         """
         Agentic analysis of configuration changes to determine required actions
         """
-        analysis = {
-            "requires_deployment": False,
-            "requires_restart": False,
-            "new_data_sources": [],
-            "modified_data_sources": [],
-            "deployment_recommendations": [],
-            "optimization_suggestions": [],
-            "risk_assessment": "low"
-        }
+        new_data_sources: List[str] = []
+        modified_data_sources: List[str] = []
+        deployment_recommendations: List[str] = []
+        optimization_suggestions: List[str] = []
+        requires_deployment = False
+        requires_restart = False
+        risk_assessment = "low"
         
         if not old_config:
-            analysis["requires_deployment"] = True
-            analysis["deployment_recommendations"].append("Initial deployment required")
-            return analysis
+            requires_deployment = True
+            deployment_recommendations.append("Initial deployment required")
+            return {
+                "requires_deployment": requires_deployment,
+                "requires_restart": requires_restart,
+                "new_data_sources": new_data_sources,
+                "modified_data_sources": modified_data_sources,
+                "deployment_recommendations": deployment_recommendations,
+                "optimization_suggestions": optimization_suggestions,
+                "risk_assessment": risk_assessment,
+            }
         
         # Analyze deployment configuration changes
         if old_config.deployment != new_config.deployment:
-            analysis["requires_deployment"] = True
-            analysis["deployment_recommendations"].append("Deployment configuration changed")
+            requires_deployment = True
+            deployment_recommendations.append("Deployment configuration changed")
         
         # Analyze data source changes
-        old_sources = {ds["id"]: ds for ds in old_config.data_sources}
-        new_sources = {ds["id"]: ds for ds in new_config.data_sources}
+        old_sources = {ds["id"]: ds for ds in old_config.data_sources if isinstance(ds, dict) and "id" in ds}
+        new_sources = {ds["id"]: ds for ds in new_config.data_sources if isinstance(ds, dict) and "id" in ds}
         
         # Check for new data sources
         for ds_id, ds_config in new_sources.items():
             if ds_id not in old_sources:
-                analysis["new_data_sources"].append(ds_id)
-                analysis["requires_deployment"] = True
-                
+                new_data_sources.append(ds_id)
+                requires_deployment = True
                 # Check if new database type requires additional dependencies
-                db_type = ds_config["type"]
+                db_type = ds_config.get("type")
                 if db_type in ["oracle", "mssql"] and not self._check_database_driver_installed(db_type):
-                    analysis["deployment_recommendations"].append(
+                    deployment_recommendations.append(
                         f"Install {db_type} database drivers"
                     )
         
         # Check for modified data sources
         for ds_id, ds_config in new_sources.items():
             if ds_id in old_sources and old_sources[ds_id] != ds_config:
-                analysis["modified_data_sources"].append(ds_id)
+                modified_data_sources.append(ds_id)
         
         # Agentic optimization suggestions
-        analysis["optimization_suggestions"] = self._generate_optimization_suggestions(new_config)
+        optimization_suggestions = self._generate_optimization_suggestions(new_config)
         
         # Risk assessment
-        analysis["risk_assessment"] = self._assess_configuration_risk(new_config)
+        risk_assessment = self._assess_configuration_risk(new_config)
         
-        return analysis
+        return {
+            "requires_deployment": requires_deployment,
+            "requires_restart": requires_restart,
+            "new_data_sources": new_data_sources,
+            "modified_data_sources": modified_data_sources,
+            "deployment_recommendations": deployment_recommendations,
+            "optimization_suggestions": optimization_suggestions,
+            "risk_assessment": risk_assessment,
+        }
     
     def _check_database_driver_installed(self, db_type: str) -> bool:
         """Check if database driver is installed"""
@@ -327,7 +347,6 @@ class AgenticConfigurationManager:
             except ImportError:
                 return False
         return True
-    
     def _generate_optimization_suggestions(self, config: E2ETraceConfiguration) -> List[str]:
         """Generate agentic optimization suggestions"""
         suggestions = []
@@ -352,7 +371,6 @@ class AgenticConfigurationManager:
     def _assess_configuration_risk(self, config: E2ETraceConfiguration) -> str:
         """Assess configuration risk level"""
         risk_score = 0
-        
         # Check for production environment without security
         if config.metadata.environment == "production":
             if not config.security:
@@ -380,10 +398,12 @@ class AgenticConfigurationManager:
     async def _trigger_deployment(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger backend deployment based on configuration analysis"""
         try:
-            deployment_strategy = self.current_config.deployment.deployment_strategy
-            install_types = self.current_config.deployment.install_types
+            deployment_strategy = getattr(getattr(self.current_config, 'deployment', None), 'deployment_strategy', None)
+            install_types = getattr(getattr(self.current_config, 'deployment', None), 'install_types', None)
             
             # Determine deployment command based on strategy
+            if not isinstance(install_types, list):
+                install_types = ["all"]
             if deployment_strategy == "progressive":
                 cmd = self._build_progressive_deployment_command(install_types)
             elif deployment_strategy == "offline":
@@ -448,8 +468,8 @@ class AgenticConfigurationManager:
             
             return result
             
-        except Exception as e:
-            logger.error(f"Deployment failed: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Deployment failed: %s", e)
             self.deployment_status.status = "failed"
             self.deployment_status.completed_at = datetime.now()
             
@@ -498,7 +518,7 @@ class AgenticConfigurationManager:
             for websocket in self.websocket_connections:
                 try:
                     await websocket.send_text(message_str)
-                except Exception:
+                except Exception:  # pylint: disable=broad-exception-caught
                     disconnected.append(websocket)
             
             # Remove disconnected clients
@@ -545,10 +565,10 @@ class AgenticConfigurationManager:
         return self.deployment_status.dict()
     
     async def trigger_deployment(self, deployment_config: Dict[str, Any], 
-                               background_tasks: BackgroundTasks) -> Dict[str, Any]:
+                               _background_tasks: BackgroundTasks) -> Dict[str, Any]:
         """Trigger deployment with custom configuration"""
         # Update deployment config if provided
-        if deployment_config:
+        if deployment_config and self.current_config and hasattr(self.current_config, 'deployment') and self.current_config.deployment:
             for key, value in deployment_config.items():
                 if hasattr(self.current_config.deployment, key):
                     setattr(self.current_config.deployment, key, value)
@@ -565,51 +585,50 @@ class AgenticConfigurationManager:
     
     async def get_analytics(self) -> Dict[str, Any]:
         """Get configuration analytics and insights"""
-        if not self.current_config:
+        if not self.current_config or not hasattr(self.current_config, 'data_sources') or not isinstance(self.current_config.data_sources, list):
             return {}
-        
+        updated_at = getattr(getattr(self.current_config, 'metadata', None), 'updated_at', None)
+        last_updated = updated_at.isoformat() if isinstance(updated_at, datetime) else None
         analytics = {
             "total_data_sources": len(self.current_config.data_sources),
             "data_source_types": {},
-            "deployment_strategy": self.current_config.deployment.deployment_strategy,
-            "auto_deploy_enabled": self.current_config.deployment.auto_deploy,
-            "environment": self.current_config.metadata.environment,
-            "last_updated": self.current_config.metadata.updated_at.isoformat(),
+            "deployment_strategy": getattr(getattr(self.current_config, 'deployment', None), 'deployment_strategy', None),
+            "auto_deploy_enabled": getattr(getattr(self.current_config, 'deployment', None), 'auto_deploy', None),
+            "environment": getattr(getattr(self.current_config, 'metadata', None), 'environment', None),
+            "last_updated": last_updated,
             "agentic_features": {
-                "orchestration_enabled": self.current_config.agentic_orchestration.enabled,
-                "workflow_count": len(self.current_config.agentic_orchestration.workflows),
-                "orchestration_mode": self.current_config.agentic_orchestration.orchestration_mode
+                "orchestration_enabled": getattr(getattr(self.current_config, 'agentic_orchestration', None), 'enabled', None),
+                "workflow_count": len(getattr(getattr(self.current_config, 'agentic_orchestration', None), 'workflows', [])),
+                "orchestration_mode": getattr(getattr(self.current_config, 'agentic_orchestration', None), 'orchestration_mode', None)
             },
             "security_score": self._calculate_security_score(),
             "optimization_score": self._calculate_optimization_score(),
             "recommendations": self._generate_optimization_suggestions(self.current_config)
         }
-        
         # Count data source types
-        for ds in self.current_config.data_sources:
-            ds_type = ds.get("type", "unknown")
-            analytics["data_source_types"][ds_type] = analytics["data_source_types"].get(ds_type, 0) + 1
-        
+        if isinstance(analytics["data_source_types"], dict):
+            for ds in self.current_config.data_sources:
+                ds_type = ds.get("type", "unknown")
+                analytics["data_source_types"][ds_type] = analytics["data_source_types"].get(ds_type, 0) + 1
         return analytics
     
     def _calculate_security_score(self) -> int:
         """Calculate security score (0-100)"""
         score = 50  # Base score
         
-        if self.current_config.security:
+        if self.current_config and getattr(self.current_config, 'security', None):
             security = self.current_config.security
-            
-            # Encryption checks
-            if security.get("encryption", {}).get("encrypt_at_rest"):
-                score += 15
-            if security.get("encryption", {}).get("encrypt_in_transit"):
-                score += 15
-            
-            # Access control checks
-            if security.get("access_control", {}).get("enable_rbac"):
-                score += 10
-            if security.get("access_control", {}).get("enable_mfa"):
-                score += 10
+            if isinstance(security, dict):
+                # Encryption checks
+                if security.get("encryption", {}) and security.get("encryption", {}).get("encrypt_at_rest"):
+                    score += 15
+                if security.get("encryption", {}) and security.get("encryption", {}).get("encrypt_in_transit"):
+                    score += 15
+                # Access control checks
+                if security.get("access_control", {}) and security.get("access_control", {}).get("enable_rbac"):
+                    score += 10
+                if security.get("access_control", {}) and security.get("access_control", {}).get("enable_mfa"):
+                    score += 10
         
         return min(score, 100)
     
@@ -618,35 +637,31 @@ class AgenticConfigurationManager:
         score = 50  # Base score
         
         # Deployment optimizations
-        if self.current_config.deployment.cache_dependencies:
+        if self.current_config and getattr(self.current_config, 'deployment', None) and getattr(self.current_config.deployment, 'cache_dependencies', False):
             score += 10
-        
         # Connection pool optimizations
         optimized_pools = 0
-        for ds in self.current_config.data_sources:
+        data_sources = getattr(self.current_config, 'data_sources', []) if self.current_config else []
+        for ds in data_sources:
             if "advanced_config" in ds and "connection_pool" in ds["advanced_config"]:
                 pool_config = ds["advanced_config"]["connection_pool"]
                 # Check for reasonable pool sizes
                 if 1 <= pool_config.get("min_connections", 1) <= 10 and \
                    10 <= pool_config.get("max_connections", 20) <= 50:
                     optimized_pools += 1
-        
-        if self.current_config.data_sources:
-            pool_optimization_score = (optimized_pools / len(self.current_config.data_sources)) * 20
+        if data_sources:
+            pool_optimization_score = int((optimized_pools / len(data_sources)) * 20)
             score += pool_optimization_score
-        
         # Query optimization checks
         query_optimized = 0
-        for ds in self.current_config.data_sources:
+        for ds in data_sources:
             if "advanced_config" in ds and "query_optimization" in ds["advanced_config"]:
                 query_config = ds["advanced_config"]["query_optimization"]
                 if query_config.get("enable_query_cache") and query_config.get("enable_prepared_statements"):
                     query_optimized += 1
-        
-        if self.current_config.data_sources:
-            query_optimization_score = (query_optimized / len(self.current_config.data_sources)) * 20
+        if data_sources:
+            query_optimization_score = int((query_optimized / len(data_sources)) * 20)
             score += query_optimization_score
-        
         return min(score, 100)
     
     async def get_data_sources(self) -> List[Dict[str, Any]]:
@@ -663,8 +678,12 @@ class AgenticConfigurationManager:
                 data_source_config["id"] = f"ds_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
             # Add to configuration
-            self.current_config.data_sources.append(data_source_config)
-            self.current_config.metadata.updated_at = datetime.now()
+            if self.current_config and hasattr(self.current_config, 'data_sources'):
+                if not isinstance(self.current_config.data_sources, list):
+                    self.current_config.data_sources = []
+                self.current_config.data_sources.append(data_source_config)
+            if self.current_config and getattr(self.current_config, 'metadata', None) is not None:
+                self.current_config.metadata.updated_at = datetime.now()
             
             # Save configuration
             self._save_configuration()
@@ -678,109 +697,116 @@ class AgenticConfigurationManager:
             return {
                 "status": "success",
                 "message": "Data source added successfully",
-                "data": {"config": self.current_config.dict()}
+                "data": {"config": self.current_config.dict() if self.current_config else {}}
             }
             
-        except Exception as e:
-            logger.error(f"Error adding data source: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error adding data source: %s", e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
     
     async def update_data_source(self, source_id: str, data_source_config: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing data source"""
         try:
             # Find and update data source
-            for i, ds in enumerate(self.current_config.data_sources):
-                if ds.get("id") == source_id:
-                    # Preserve ID
-                    data_source_config["id"] = source_id
-                    self.current_config.data_sources[i] = data_source_config
-                    self.current_config.metadata.updated_at = datetime.now()
-                    
-                    # Save configuration
-                    self._save_configuration()
-                    
-                    # Notify WebSocket clients
-                    await self._notify_websocket_clients({
-                        "type": "data_source_updated",
-                        "data": {"data_source": data_source_config}
-                    })
-                    
-                    return {
-                        "status": "success",
-                        "message": "Data source updated successfully",
-                        "data": {"config": self.current_config.dict()}
-                    }
+            if self.current_config and hasattr(self.current_config, 'data_sources'):
+                if not isinstance(self.current_config.data_sources, list):
+                    self.current_config.data_sources = []
+                for i, ds in enumerate(self.current_config.data_sources):
+                    if ds.get("id") == source_id:
+                        # Preserve ID
+                        data_source_config["id"] = source_id
+                        self.current_config.data_sources[i] = data_source_config
+                        if hasattr(self.current_config, 'metadata') and self.current_config.metadata:
+                            self.current_config.metadata.updated_at = datetime.now()
+                        # Save configuration
+                        self._save_configuration()
+                        # Notify WebSocket clients
+                        await self._notify_websocket_clients({
+                            "type": "data_source_updated",
+                            "data": {"data_source": data_source_config}
+                        })
+                        return {
+                            "status": "success",
+                            "message": "Data source updated successfully",
+                            "data": {"config": self.current_config.dict()}
+                        }
             
             raise HTTPException(status_code=404, detail=f"Data source {source_id} not found")
             
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error(f"Error updating data source: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error updating data source: %s", e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
     
     async def delete_data_source(self, source_id: str) -> Dict[str, Any]:
         """Delete a data source"""
         try:
             # Find and remove data source
-            for i, ds in enumerate(self.current_config.data_sources):
-                if ds.get("id") == source_id:
-                    removed_ds = self.current_config.data_sources.pop(i)
-                    self.current_config.metadata.updated_at = datetime.now()
-                    
-                    # Save configuration
-                    self._save_configuration()
-                    
-                    # Notify WebSocket clients
-                    await self._notify_websocket_clients({
-                        "type": "data_source_deleted",
-                        "data": {"data_source_id": source_id}
-                    })
-                    
-                    return {
-                        "status": "success",
-                        "message": "Data source deleted successfully",
-                        "data": {"config": self.current_config.dict()}
-                    }
+            if self.current_config and hasattr(self.current_config, 'data_sources'):
+                if not isinstance(self.current_config.data_sources, list):
+                    self.current_config.data_sources = []
+                for i, ds in enumerate(self.current_config.data_sources):
+                    if ds.get("id") == source_id:
+                        self.current_config.data_sources.pop(i)
+                        if hasattr(self.current_config, 'metadata') and self.current_config.metadata:
+                            self.current_config.metadata.updated_at = datetime.now()
+                        # Save configuration
+                        self._save_configuration()
+                        # Notify WebSocket clients
+                        await self._notify_websocket_clients({
+                            "type": "data_source_deleted",
+                            "data": {"data_source_id": source_id}
+                        })
+                        return {
+                            "status": "success",
+                            "message": "Data source deleted successfully",
+                            "data": {"config": self.current_config.dict()}
+                        }
             
             raise HTTPException(status_code=404, detail=f"Data source {source_id} not found")
             
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error(f"Error deleting data source: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error deleting data source: %s", e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
     
     async def test_data_source_connection(self, source_id: str) -> Dict[str, Any]:
         """Test connection for a specific data source"""
         try:
             # Find data source
             data_source = None
-            for ds in self.current_config.data_sources:
-                if ds.get("id") == source_id:
-                    data_source = ds
-                    break
+            if self.current_config and hasattr(self.current_config, 'data_sources'):
+                if not isinstance(self.current_config.data_sources, list):
+                    self.current_config.data_sources = []
+                for ds in self.current_config.data_sources:
+                    if ds.get("id") == source_id:
+                        data_source = ds
+                        break
             
             if not data_source:
                 raise HTTPException(status_code=404, detail=f"Data source {source_id} not found")
             
             # Test connection using adapter factory
-            adapter = self.adapter_factory.get_adapter(data_source["type"])
+            adapter = self.adapter_factory.create_adapter(data_source["type"], data_source.get("connection", {}))
             if adapter:
-                test_result = await adapter.test_connection(data_source["connection"])
+                test_result = await adapter.test_connection()
+                success = bool(test_result.get("success")) if isinstance(test_result, dict) else bool(test_result)
                 
                 # Update data source status
-                for ds in self.current_config.data_sources:
-                    if ds.get("id") == source_id:
-                        ds["status"] = "active" if test_result["success"] else "error"
-                        break
+                if self.current_config and hasattr(self.current_config, 'data_sources') and isinstance(self.current_config.data_sources, list):
+                    for ds in self.current_config.data_sources:
+                        if ds.get("id") == source_id:
+                            ds["status"] = "active" if success else "error"
+                            break
                 
                 self._save_configuration()
                 
                 return {
-                    "status": "success" if test_result["success"] else "error",
-                    "message": test_result.get("message", "Connection test completed"),
-                    "data": test_result
+                    "status": "success" if success else "error",
+                    "message": test_result.get("message", "Connection test completed") if isinstance(test_result, dict) else "Connection test completed",
+                    "data": test_result if isinstance(test_result, dict) else {"success": success}
                 }
             else:
                 return {
@@ -790,8 +816,8 @@ class AgenticConfigurationManager:
                 
         except HTTPException:
             raise
-        except Exception as e:
-            logger.error(f"Error testing data source connection: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error testing data source connection: %s", e)
             return {
                 "status": "error",
                 "message": str(e)
@@ -836,70 +862,77 @@ class AgenticConfigurationManager:
             }
             
         except ValidationError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid configuration format: {e}")
-        except Exception as e:
-            logger.error(f"Error importing configuration: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=400, detail=f"Invalid configuration format: {e}") from e
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error importing configuration: %s", e)
+            raise HTTPException(status_code=500, detail=str(e)) from e
     
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check"""
-        health_status = {
+        checks: Dict[str, Any] = {}
+        health_status: Dict[str, Any] = {
             "service": "agentic_configuration_manager",
             "status": "healthy",
-            "checks": {},
+            "checks": checks,
             "timestamp": datetime.now().isoformat()
         }
         
         # Check configuration file access
         try:
-            health_status["checks"]["config_file"] = {
+            checks["config_file"] = {
                 "status": "ok" if self.config_file.exists() else "warning",
                 "message": "Configuration file accessible" if self.config_file.exists() else "Configuration file not found"
             }
-        except Exception as e:
-            health_status["checks"]["config_file"] = {
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            checks["config_file"] = {
                 "status": "error",
                 "message": str(e)
             }
         
         # Check schema file access
         try:
-            health_status["checks"]["schema_file"] = {
+            checks["schema_file"] = {
                 "status": "ok" if self.schema_file.exists() else "warning",
                 "message": "Schema file accessible" if self.schema_file.exists() else "Schema file not found"
             }
-        except Exception as e:
-            health_status["checks"]["schema_file"] = {
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            checks["schema_file"] = {
                 "status": "error",
                 "message": str(e)
             }
         
         # Check current configuration
-        health_status["checks"]["current_config"] = {
+        checks["current_config"] = {
             "status": "ok" if self.current_config else "warning",
             "message": "Configuration loaded" if self.current_config else "No configuration loaded"
         }
         
         # Check database adapters
         try:
-            health_status["checks"]["database_adapters"] = {
+            checks["database_adapters"] = {
                 "status": "ok",
-                "message": f"Adapter factory initialized with {len(self.adapter_factory._adapters) if hasattr(self.adapter_factory, '_adapters') else 0} adapters"
+                "message": "Adapter factory initialized"
             }
-        except Exception as e:
-            health_status["checks"]["database_adapters"] = {
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            checks["database_adapters"] = {
                 "status": "error",
                 "message": str(e)
             }
         
         # Overall status
-        error_checks = [check for check in health_status["checks"].values() if check["status"] == "error"]
+        error_checks = [check for check in checks.values() if check.get("status") == "error"]
         if error_checks:
             health_status["status"] = "unhealthy"
-        elif any(check["status"] == "warning" for check in health_status["checks"].values()):
+        elif any(check.get("status") == "warning" for check in checks.values()):
             health_status["status"] = "degraded"
         
         return health_status
+
+# Utility function to ensure all expected list fields in analysis are lists.
+def coerce_analysis_lists(analysis: Dict[str, Any]) -> None:
+    for key in ["new_data_sources", "modified_data_sources", "deployment_recommendations", "optimization_suggestions"]:
+        if key in analysis and not isinstance(analysis[key], list):
+            analysis[key] = []
 
 # ============= SINGLETON INSTANCE =============
 

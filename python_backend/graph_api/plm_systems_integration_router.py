@@ -2,15 +2,16 @@
 PLM Systems Integration Router
 Handles Teamcenter, Windchill, ENOVIA, Aras Innovator, CATIA, NX, Creo
 """
+
+# pyright: reportMissingTypeStubs=false
+
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-import requests
-from requests.auth import HTTPBasicAuth
-import json
-import xmltodict
+import requests  # pyright: ignore[reportMissingTypeStubs]
+from requests.auth import HTTPBasicAuth  # pyright: ignore[reportMissingTypeStubs]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/plm", tags=["PLM Integration"])
@@ -25,14 +26,14 @@ class PLMConnection(BaseModel):
     url: str
     username: str
     password: str
-    additional_config: Optional[Dict[str, Any]] = {}
+    additional_config: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class PLMQueryRequest(BaseModel):
     system_type: str
     object_type: str = Field(..., description="Part, Document, BOM, etc.")
-    query_criteria: Optional[Dict[str, Any]] = {}
-    properties: Optional[List[str]] = []
+    query_criteria: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    properties: Optional[List[str]] = Field(default_factory=list)
     limit: int = 100
 
 
@@ -72,17 +73,17 @@ async def query_teamcenter_objects(request: PLMQueryRequest):
             plm_config.teamcenter_password
         )
         transport = Transport(session=session)
-        client = Client(plm_config.teamcenter_soap_url, transport=transport)
+        _client = Client(plm_config.teamcenter_soap_url, transport=transport)
         
         # Build query based on object type
-        query_input = {
+        _query_input = {
             "type": request.object_type,
             "criteria": request.query_criteria,
             "properties": request.properties or ["object_name", "object_desc", "item_id"],
             "maxResults": request.limit
         }
-        
-        # TODO: Implement actual Teamcenter API call
+
+        # Note: SOAP/REST execution is intentionally not implemented yet.
         # response = client.service.query(query_input)
         # results = parse_teamcenter_response(response)
         
@@ -93,8 +94,8 @@ async def query_teamcenter_objects(request: PLMQueryRequest):
         )
         
     except Exception as e:
-        logger.error(f"Error querying Teamcenter: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying Teamcenter: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/teamcenter/bom/{part_id}")
@@ -129,10 +130,12 @@ async def get_teamcenter_bom(part_id: str, levels: int = -1):
         }
         
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail=f"Part {part_id} not found in Teamcenter")
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        status_code = e.response.status_code if e.response is not None else 502
+        if status_code == 404:
+            raise HTTPException(status_code=404, detail=f"Part {part_id} not found in Teamcenter") from e
+        raise HTTPException(status_code=status_code, detail=str(e)) from e
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 # ============================================================================
@@ -155,7 +158,7 @@ async def query_windchill_objects(request: PLMQueryRequest):
         entity_set = request.object_type + "s"  # e.g., Parts, Documents
         url = f"{api_url}/{entity_set}"
         
-        params = {}
+        params: Dict[str, Any] = {}
         if request.query_criteria:
             filter_parts = []
             for key, value in request.query_criteria.items():
@@ -165,8 +168,8 @@ async def query_windchill_objects(request: PLMQueryRequest):
         
         if request.properties:
             params["$select"] = ",".join(request.properties)
-        
-        params["$top"] = request.limit
+
+        params["$top"] = str(request.limit)
         
         response = requests.get(
             url,
@@ -202,8 +205,8 @@ async def query_windchill_objects(request: PLMQueryRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error querying Windchill: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying Windchill: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/windchill/part/{part_number}")
@@ -252,8 +255,8 @@ async def get_windchill_part(part_number: str):
         }
         
     except Exception as e:
-        logger.error(f"Error getting Windchill part: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting Windchill part: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -318,8 +321,8 @@ async def query_enovia_objects(request: PLMQueryRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error querying ENOVIA: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying ENOVIA: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -390,6 +393,14 @@ async def query_aras_objects(request: PLMQueryRequest):
         response.raise_for_status()
         
         # Parse XML response
+        try:
+            import xmltodict  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail="xmltodict is required to parse Aras SOAP responses",
+            ) from exc
+
         result_dict = xmltodict.parse(response.text)
         
         return {
@@ -401,8 +412,8 @@ async def query_aras_objects(request: PLMQueryRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error querying Aras: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying Aras: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -448,8 +459,8 @@ async def get_cad_metadata(system: str, file_id: str):
         }
         
     except Exception as e:
-        logger.error(f"Error extracting CAD metadata: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error extracting CAD metadata: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -461,23 +472,24 @@ async def export_plm_data(
     system_type: str,
     object_type: str,
     object_ids: List[str],
-    format: str = "json"
+    export_format: str = Query("json", alias="format")
 ):
     """Export PLM data in various formats"""
     try:
         # Collect data from PLM system
-        exported_data = {
+        exported_objects: List[Dict[str, Any]] = []
+        exported_data: Dict[str, Any] = {
             "export_id": f"export_{datetime.utcnow().timestamp()}",
             "system": system_type,
             "object_type": object_type,
-            "format": format,
+            "format": export_format,
             "object_count": len(object_ids),
-            "objects": []
+            "objects": exported_objects,
         }
         
         # In production, fetch actual data for each object_id
         for obj_id in object_ids:
-            exported_data["objects"].append({
+            exported_objects.append({
                 "id": obj_id,
                 "data": f"Mock data for {obj_id}"
             })
@@ -489,8 +501,8 @@ async def export_plm_data(
         }
         
     except Exception as e:
-        logger.error(f"Error exporting PLM data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error exporting PLM data: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

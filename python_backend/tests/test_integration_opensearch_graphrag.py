@@ -6,14 +6,17 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from unittest.mock import Mock
 import pytest
-from unittest.mock import Mock, patch
 from services.neo4j_graphrag_service import Neo4jGraphRAGService
 from services.analytics_storage_service import AnalyticsStorageService
 
 
 class TestOpenSearchGraphRAGIntegration:
     """Test OpenSearch integration with Neo4j GraphRAG and Analytics (T-05)."""
+
+    graphrag_service: Mock
+    analytics_service: AnalyticsStorageService
     
     def setup_method(self):
         """Setup test fixtures."""
@@ -24,7 +27,7 @@ class TestOpenSearchGraphRAGIntegration:
     def test_hybrid_search_combines_neo4j_and_opensearch(self):
         """Test hybrid search combines Neo4j graph context with OpenSearch vectors."""
         # User query
-        user_question = "Show me all failed migrations with schema drift"
+        _user_question = "Show me all failed migrations with schema drift"
         
         # Mock Neo4j graph search (relationship traversal)
         neo4j_results = [
@@ -94,7 +97,7 @@ class TestOpenSearchGraphRAGIntegration:
         }
         
         # Check for similar/duplicate entities using GraphRAG
-        similarity_query = {
+        _similarity_query = {
             "question": f"Find customers similar to {source_record['customer_name']}",
             "context": "customer database",
             "top_k": 5
@@ -133,7 +136,8 @@ class TestOpenSearchGraphRAGIntegration:
         
         # In production, this would prevent duplicate insertion during migration
     
-    def test_analytics_metrics_indexed_in_both_systems(self):
+    @pytest.mark.asyncio
+    async def test_analytics_metrics_indexed_in_both_systems(self):
         """Test analytics metrics are indexed in both Neo4j and OpenSearch (T-05)."""
         # Record migration quality metric
         quality_metric = {
@@ -147,8 +151,14 @@ class TestOpenSearchGraphRAGIntegration:
         }
         
         # Store in Analytics Service (T-05)
-        result = self.analytics_service.record_migration_quality(quality_metric)
-        assert result["success"] is True
+        result = await self.analytics_service.record_migration_quality(
+            session_id=quality_metric["session_id"],
+            quality_score=quality_metric["quality_score"],
+            rows_migrated=quality_metric["rows_migrated"],
+            rows_failed=quality_metric["rows_failed"],
+            schema_drift_issues=1 if quality_metric["schema_drift_detected"] else 0,
+        )
+        assert result["status"] == "success"
         
         # Mock Neo4j indexing (graph relationships)
         neo4j_metric_node = {
@@ -176,7 +186,7 @@ class TestOpenSearchGraphRAGIntegration:
         # Mock GraphIntegrationService API calls
         
         # 1. Query Analytics metrics (T-05)
-        analytics_request = {
+        _analytics_request = {
             "endpoint": "/api/analytics/migration-quality",
             "params": {"session_id": "test-session"}
         }
@@ -189,7 +199,7 @@ class TestOpenSearchGraphRAGIntegration:
         }
         
         # 2. Query Neo4j GraphRAG for context
-        graphrag_request = {
+        _graphrag_request = {
             "endpoint": "/api/neo4j-graphrag/query",
             "body": {
                 "question": "What caused quality score to drop?",
@@ -211,7 +221,7 @@ class TestOpenSearchGraphRAGIntegration:
         }
         
         # 3. Query GraphQL for migration history
-        graphql_request = {
+        _graphql_request = {
             "endpoint": "/api/graphql/query",
             "body": {
                 "query": "{ migrationHistory(sessionId: \"test-session\") { events { timestamp state } } }",
@@ -244,7 +254,7 @@ class TestOpenSearchGraphRAGIntegration:
     def test_opensearch_knn_with_neo4j_context(self):
         """Test OpenSearch k-NN search enhanced with Neo4j graph context."""
         # User query embedding
-        query_embedding = [0.5, 0.3, 0.8, 0.1, 0.6]  # Mock 5-dim vector
+        _query_embedding = [0.5, 0.3, 0.8, 0.1, 0.6]  # Mock 5-dim vector
         
         # Mock OpenSearch k-NN search
         opensearch_knn_results = [
@@ -329,18 +339,21 @@ class TestOpenSearchGraphRAGIntegration:
 
 class TestAnalyticsGraphRAGIntegration:
     """Test Analytics Service (T-05) integration with GraphRAG."""
+
+    analytics_service: AnalyticsStorageService
     
     def setup_method(self):
         """Setup test fixtures."""
         self.analytics_service = AnalyticsStorageService()
     
-    def test_analytics_dashboard_uses_graphrag_insights(self):
+    @pytest.mark.asyncio
+    async def test_analytics_dashboard_uses_graphrag_insights(self):
         """Test analytics dashboard queries GraphRAG for contextual insights."""
         # Get upload metrics from Analytics Service (T-05)
-        upload_metrics = self.analytics_service.get_upload_metrics()
+        upload_metrics = await self.analytics_service.get_upload_metrics()
         
         # Mock GraphRAG query for insights
-        graphrag_query = {
+        _graphrag_query = {
             "question": "Why are recent uploads slower than average?",
             "context": f"Upload metrics: {upload_metrics}",
             "tools": ["analytics_analyzer", "performance_profiler"]
@@ -369,7 +382,8 @@ class TestAnalyticsGraphRAGIntegration:
         assert len(mock_insights["answers"]) == 2
         assert len(mock_insights["recommendations"]) == 2
     
-    def test_service_health_monitoring_with_graphrag(self):
+    @pytest.mark.asyncio
+    async def test_service_health_monitoring_with_graphrag(self):
         """Test service health monitoring uses GraphRAG for anomaly detection."""
         # Record service health metrics (T-05)
         health_metric = {
@@ -381,11 +395,18 @@ class TestAnalyticsGraphRAGIntegration:
             "error_rate": 0.02
         }
         
-        result = self.analytics_service.record_service_health(health_metric)
-        assert result["success"] is True
+        result = await self.analytics_service.record_service_health(
+            service_name=health_metric["service_name"],
+            status="healthy",
+            cpu_percent=health_metric["cpu_percent"],
+            memory_percent=health_metric["memory_percent"],
+            response_time_ms=health_metric["response_time_ms"],
+            error_rate=health_metric["error_rate"],
+        )
+        assert result["status"] == "success"
         
         # Query GraphRAG for anomaly analysis
-        anomaly_query = {
+        _anomaly_query = {
             "question": "Is this CPU usage normal for migration_engine?",
             "context": f"Current metrics: {health_metric}",
             "top_k": 5

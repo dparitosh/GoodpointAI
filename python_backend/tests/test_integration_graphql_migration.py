@@ -6,8 +6,6 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch
 from services.graphql_service import GraphQLService
 from services.advanced_migration_engine import AdvancedMigrationEngine, MigrationState
 

@@ -1,12 +1,14 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, Query, Response
+from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import neo4j
 from pydantic import BaseModel
 
 from .dependencies import get_driver
 from core.config import NEO4J_DATABASE
+
+# pylint: disable=broad-exception-caught
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/monitoring", tags=["Monitoring & Data Quality"])
@@ -41,22 +43,41 @@ class DataQualityMetrics(BaseModel):
     description="Fetches current system alerts and notifications."
 )
 async def get_system_alerts(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
     """Get system alerts from Neo4j monitoring data"""
-    alerts = []
+    alerts: list[AlertModel] = []
     
     try:
+        count_query = """
+        MATCH (n)
+        WHERE n.status = 'error' OR n.health = 'warning'
+        RETURN COUNT(n) as total
+        """
+
         # Query for data quality issues
         quality_query = """
         MATCH (n)
         WHERE n.status = 'error' OR n.health = 'warning'
         RETURN n.id as component, n.status as status, n.lastUpdate as lastUpdate
-        LIMIT 10
+        SKIP $skip
+        LIMIT $limit
         """
+
+        count_results = await driver_instance.execute_query(
+            count_query, database_=NEO4J_DATABASE, routing_="r"
+        )
+        total_count = 0
+        if count_results.records:
+            total_count = int(count_results.records[0].get("total", 0) or 0)
+        response.headers["X-Total-Count"] = str(total_count)
         
         results = await driver_instance.execute_query(
             quality_query, database_=NEO4J_DATABASE, routing_="r"
+            , parameters_={"skip": skip, "limit": limit}
         )
         
         alert_id = 1
@@ -84,8 +105,8 @@ async def get_system_alerts(
             
             alert_id += 1
             
-    except Exception as e:
-        logger.error(f"Error fetching alerts: {e}")
+    except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
+        logger.error("Error fetching alerts: %s", e)
         # Return sample alerts if query fails
         alerts = [
             AlertModel(
@@ -96,6 +117,8 @@ async def get_system_alerts(
                 component="monitoring"
             )
         ]
+
+        response.headers["X-Total-Count"] = str(len(alerts))
     
     return alerts
 
@@ -106,12 +129,20 @@ async def get_system_alerts(
     description="Get status of data flows and pipelines."
 )
 async def get_flow_status(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
     """Get flow status from Neo4j data"""
-    flows = []
+    flows: list[FlowStatusModel] = []
     
     try:
+        count_query = """
+        MATCH (p:Pipeline)
+        RETURN COUNT(p) as total
+        """
+
         # Query for pipeline/flow information
         flow_query = """
         MATCH (p:Pipeline)
@@ -121,11 +152,21 @@ async def get_flow_status(
                p.throughput as throughput, p.lastActivity as lastActivity,
                p.health as health, nodeCount
         ORDER BY p.lastActivity DESC
-        LIMIT 20
+        SKIP $skip
+        LIMIT $limit
         """
+
+        count_results = await driver_instance.execute_query(
+            count_query, database_=NEO4J_DATABASE, routing_="r"
+        )
+        total_count = 0
+        if count_results.records:
+            total_count = int(count_results.records[0].get("total", 0) or 0)
+        response.headers["X-Total-Count"] = str(total_count)
         
         results = await driver_instance.execute_query(
             flow_query, database_=NEO4J_DATABASE, routing_="r"
+            , parameters_={"skip": skip, "limit": limit}
         )
         
         for record in results.records:
@@ -138,8 +179,8 @@ async def get_flow_status(
                 health=record.get("health", "healthy")
             ))
             
-    except Exception as e:
-        logger.error(f"Error fetching flow status: {e}")
+    except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
+        logger.error("Error fetching flow status: %s", e)
         # Return sample data if query fails
         flows = [
             FlowStatusModel(
@@ -159,6 +200,8 @@ async def get_flow_status(
                 health="healthy"
             )
         ]
+
+        response.headers["X-Total-Count"] = str(len(flows))
     
     return flows
 
@@ -230,8 +273,8 @@ async def get_data_quality_metrics(
                 issues=issues
             )
             
-    except Exception as e:
-        logger.error(f"Error fetching data quality metrics: {e}")
+    except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
+        logger.error("Error fetching data quality metrics: %s", e)
     
     # Return default metrics if query fails
     return DataQualityMetrics(
@@ -290,8 +333,8 @@ async def get_performance_metrics(
             }
         }
         
-    except Exception as e:
-        logger.error(f"Error fetching performance metrics: {e}")
+    except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
+        logger.error("Error fetching performance metrics: %s", e)
         
         # Return sample performance data
         now = datetime.now()
@@ -321,11 +364,19 @@ async def get_performance_metrics(
     description="Get available data mapping templates from Neo4j."
 )
 async def get_mapping_templates(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
     """Get data mapping templates from Neo4j"""
     
     try:
+        count_query = """
+        MATCH (t:Template)
+        RETURN COUNT(t) as total
+        """
+
         # Query for mapping templates
         template_query = """
         MATCH (t:Template)
@@ -334,10 +385,23 @@ async def get_mapping_templates(
         RETURN t.id as id, t.name as name, t.description as description,
                t.category as category, fields
         ORDER BY t.name
+        SKIP $skip
+        LIMIT $limit
         """
+
+        count_results = await driver_instance.execute_query(
+            count_query, database_=NEO4J_DATABASE, routing_="r"
+        )
+        total_count = 0
+        if count_results.records:
+            total_count = int(count_results.records[0].get("total", 0) or 0)
+        response.headers["X-Total-Count"] = str(total_count)
         
         results = await driver_instance.execute_query(
-            template_query, database_=NEO4J_DATABASE, routing_="r"
+            template_query,
+            database_=NEO4J_DATABASE,
+            routing_="r",
+            parameters_={"skip": skip, "limit": limit},
         )
         
         templates = []
@@ -352,11 +416,11 @@ async def get_mapping_templates(
             
         return templates
         
-    except Exception as e:
-        logger.error(f"Error fetching templates: {e}")
+    except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
+        logger.error("Error fetching templates: %s", e)
         
         # Return sample templates if query fails
-        return [
+        templates = [
             {
                 "id": "neo4j-001",
                 "name": "Neo4j Node Mapping",
@@ -379,3 +443,6 @@ async def get_mapping_templates(
                 "fields": ["metric_name", "value", "timestamp", "dimensions"]
             }
         ]
+
+        response.headers["X-Total-Count"] = str(len(templates))
+        return templates[skip:skip + limit]

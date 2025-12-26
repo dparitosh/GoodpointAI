@@ -1,13 +1,17 @@
 """
 Tests for Advanced Migration Features
 """
+
+# Pylint/linters can flag pytest fixture injection as redefined-outer-name.
+# We intentionally use pytest fixtures with the same names as parameters.
+# pylint: disable=redefined-outer-name
+
 import pytest
 import asyncio
 from services.advanced_migration_engine import (
     AdvancedMigrationEngine,
     MigrationState,
-    MigrationEvent,
-    MigrationSession
+    MigrationEvent
 )
 
 
@@ -24,7 +28,7 @@ def sample_sources():
         {
             "type": "postgresql",
             "host": "source-db.example.com",
-            "port": 5432,
+            "port": 5433,
             "database": "source_db"
         }
     ]
@@ -36,7 +40,7 @@ def sample_target():
     return {
         "type": "postgresql",
         "host": "target-db.example.com",
-        "port": 5432,
+        "port": 5433,
         "database": "target_db"
     }
 
@@ -75,6 +79,44 @@ async def test_start_migration(engine, sample_sources, sample_target):
     
     # Should have transitioned from IDLE
     assert session.state != MigrationState.IDLE
+
+
+@pytest.mark.asyncio
+async def test_concurrency_limit_rejects_start(monkeypatch, sample_sources, sample_target):
+    """Starting beyond max concurrent sessions should be rejected."""
+    monkeypatch.setenv("MIGRATION_MAX_CONCURRENT_SESSIONS", "1")
+
+    local_engine = AdvancedMigrationEngine()
+
+    session_1 = await local_engine.create_session(
+        sources=sample_sources,
+        target=sample_target,
+        strategy="incremental",
+    )
+    session_2 = await local_engine.create_session(
+        sources=sample_sources,
+        target=sample_target,
+        strategy="incremental",
+    )
+
+    started_1 = await local_engine.start_migration(session_1.session_id)
+    assert started_1 is True
+
+    # Give session_1 a moment to move out of IDLE.
+    await asyncio.sleep(0.2)
+
+    started_2 = await local_engine.start_migration(session_2.session_id)
+    assert started_2 is False
+    assert session_2.errors
+    assert "Concurrency limit" in session_2.errors[-1]
+
+    # Cleanup: cancel background task to avoid pending-task warnings.
+    if session_1.task is not None:
+        session_1.task.cancel()
+        try:
+            await session_1.task
+        except asyncio.CancelledError:
+            pass
 
 
 @pytest.mark.asyncio

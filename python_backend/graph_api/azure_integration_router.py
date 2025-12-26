@@ -3,13 +3,17 @@ Azure Cloud Services Integration Router
 Handles Azure Blob Storage, Data Lake, Cosmos DB, Service Bus, Event Hub
 """
 import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks
+from typing import List, Dict, Optional, Any, cast
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File
 from pydantic import BaseModel, Field
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/azure", tags=["Azure Integration"])
+
+
+ServiceBusAppPropertyValue = int | float | bytes | bool | str | UUID
 
 
 # ============================================================================
@@ -38,7 +42,7 @@ class CosmosDocumentRequest(BaseModel):
 class ServiceBusMessageRequest(BaseModel):
     queue_name: str = Field(..., description="Service Bus queue name")
     message_body: Dict[str, Any] = Field(..., description="Message payload")
-    properties: Optional[Dict[str, str]] = {}
+    properties: Optional[Dict[str | bytes, ServiceBusAppPropertyValue]] = None
 
 
 class EventHubEventRequest(BaseModel):
@@ -83,12 +87,15 @@ async def upload_blob(
         )
         
         # Use provided blob name or file filename
-        blob_name = blob_name or file.filename
+        resolved_blob_name = blob_name or file.filename
+        if not resolved_blob_name:
+            raise HTTPException(status_code=400, detail="blob_name is required")
+        resolved_blob_name = cast(str, resolved_blob_name)
         
         # Get blob client
         blob_client = blob_service_client.get_blob_client(
             container=container_name,
-            blob=blob_name
+            blob=resolved_blob_name
         )
         
         # Upload file
@@ -97,24 +104,30 @@ async def upload_blob(
             'content_type': file.content_type
         })
         
-        logger.info(f"Uploaded blob: {blob_name} to container: {container_name}")
+        logger.info("Uploaded blob: %s to container: %s", resolved_blob_name, container_name)
         
         return {
             "status": "success",
             "message": "File uploaded successfully",
-            "blob_name": blob_name,
+            "blob_name": resolved_blob_name,
             "container": container_name,
             "size": len(content),
             "url": blob_client.url
         }
         
     except Exception as e:
-        logger.error(f"Error uploading to Azure Blob: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error uploading to Azure Blob: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/blob/list/{container_name}")
-async def list_blobs(container_name: str, prefix: Optional[str] = None):
+async def list_blobs(
+    container_name: str,
+    response: Response,
+    prefix: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List all blobs in a container"""
     try:
         from core.external_config import azure_config
@@ -136,17 +149,21 @@ async def list_blobs(container_name: str, prefix: Optional[str] = None):
                 "etag": blob.etag
             })
         
+        total_count = len(blobs)
+        response.headers["X-Total-Count"] = str(total_count)
+        blobs_page = blobs[skip : skip + limit]
+
         return {
             "status": "success",
             "container": container_name,
             "prefix": prefix,
-            "count": len(blobs),
-            "blobs": blobs
+            "count": len(blobs_page),
+            "blobs": blobs_page,
         }
         
     except Exception as e:
-        logger.error(f"Error listing Azure blobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing Azure blobs: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/blob/download/{container_name}/{blob_name:path}")
@@ -177,8 +194,8 @@ async def download_blob(container_name: str, blob_name: str):
         )
         
     except Exception as e:
-        logger.error(f"Error downloading Azure blob: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error downloading Azure blob: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/blob/delete/{container_name}/{blob_name:path}")
@@ -207,8 +224,8 @@ async def delete_blob(container_name: str, blob_name: str):
         }
         
     except Exception as e:
-        logger.error(f"Error deleting Azure blob: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting Azure blob: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -234,8 +251,11 @@ async def upload_to_datalake(
         
         file_system_client = service_client.get_file_system_client(file_system)
         
-        file_name = file_name or file.filename
-        file_path = f"{directory_path}/{file_name}" if directory_path else file_name
+        resolved_file_name = file_name or file.filename
+        if not resolved_file_name:
+            raise HTTPException(status_code=400, detail="file_name is required")
+        resolved_file_name = cast(str, resolved_file_name)
+        file_path = f"{directory_path}/{resolved_file_name}" if directory_path else resolved_file_name
         
         file_client = file_system_client.get_file_client(file_path)
         
@@ -251,8 +271,8 @@ async def upload_to_datalake(
         }
         
     except Exception as e:
-        logger.error(f"Error uploading to Data Lake: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error uploading to Data Lake: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -284,15 +304,18 @@ async def create_cosmos_document(request: CosmosDocumentRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error creating Cosmos document: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating Cosmos document: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/cosmos/documents/{container_id}")
 async def query_cosmos_documents(
     container_id: str,
+    response: Response,
     query: Optional[str] = None,
-    partition_key: Optional[str] = None
+    partition_key: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
 ):
     """Query documents from Cosmos DB"""
     try:
@@ -310,17 +333,21 @@ async def query_cosmos_documents(
             query=query,
             enable_cross_partition_query=(partition_key is None)
         ))
+
+        total_count = len(items)
+        response.headers["X-Total-Count"] = str(total_count)
+        documents_page = items[skip : skip + limit]
         
         return {
             "status": "success",
             "container": container_id,
-            "count": len(items),
-            "documents": items
+            "count": len(documents_page),
+            "documents": documents_page,
         }
         
     except Exception as e:
-        logger.error(f"Error querying Cosmos DB: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error querying Cosmos DB: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -342,9 +369,10 @@ async def send_service_bus_message(request: ServiceBusMessageRequest):
         with client:
             sender = client.get_queue_sender(queue_name=request.queue_name)
             with sender:
+                application_properties = cast(Optional[Dict[str | bytes, Any]], request.properties)
                 message = ServiceBusMessage(
                     json.dumps(request.message_body),
-                    application_properties=request.properties
+                    application_properties=application_properties
                 )
                 sender.send_messages(message)
         
@@ -355,8 +383,8 @@ async def send_service_bus_message(request: ServiceBusMessageRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error sending to Service Bus: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error sending to Service Bus: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -392,8 +420,8 @@ async def send_event_hub_events(request: EventHubEventRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error sending to Event Hub: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error sending to Event Hub: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

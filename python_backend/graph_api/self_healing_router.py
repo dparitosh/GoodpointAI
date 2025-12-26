@@ -16,20 +16,23 @@ Integrations:
 - Ollama for error classification
 """
 
+# pyright: reportUnusedImport=false
+# pylint: disable=broad-exception-caught,broad-exception-raised,unused-argument,unused-import
+
 import logging
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from dataclasses import dataclass, field
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 import neo4j
 import random
 import json
 
-from .dependencies import get_driver
+from .dependencies import get_driver, get_ws_driver
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/self-healing", tags=["Self-Healing Orchestration"])
@@ -245,9 +248,9 @@ class SelfHealingService:
     async def execute_task(
         self,
         task_id: str,
-        workflow_id: str,
-        operation: str,
-        payload: Dict,
+        _workflow_id: str,
+        _operation: str,
+        _payload: Dict[str, Any],
         route: Route
     ) -> Dict[str, Any]:
         """Execute task on specified route (simulated for now)"""
@@ -256,7 +259,7 @@ class SelfHealingService:
         
         # Simulate occasional failures for testing
         if random.random() < 0.2:  # 20% failure rate
-            raise Exception(f"Network timeout connecting to {route.endpoint}")
+            raise TimeoutError(f"Network timeout connecting to {route.endpoint}")
         
         # Simulate successful execution
         return {
@@ -305,28 +308,33 @@ class SelfHealingService:
                 
                 if circuit_state["state"] == "open":
                     if self.can_attempt_half_open(current_route.id):
-                        logger.info(f"Circuit breaker for {current_route.id} transitioning to HALF-OPEN")
+                        logger.info("Circuit breaker for %s transitioning to HALF-OPEN", current_route.id)
                         circuit_state["state"] = "half_open"
                         circuit_state["half_open_attempts"] = 0
                     else:
-                        logger.warning(f"Circuit breaker OPEN for {current_route.id}, trying alternative route")
+                        logger.warning("Circuit breaker OPEN for %s, trying alternative route", current_route.id)
                         alternative_route = self.select_alternative_route(current_route.id, alternative_route_ids)
                         
                         if alternative_route:
                             current_route = alternative_route
                             retry_count = 0  # Reset retry count for new route
                         else:
-                            raise Exception("No alternative routes available and circuit is open")
+                            raise RuntimeError("No alternative routes available and circuit is open")
                 
                 # Execute task
-                logger.info(f"Executing task {task_id} on route {current_route.id} (attempt {retry_count + 1})")
+                logger.info(
+                    "Executing task %s on route %s (attempt %s)",
+                    task_id,
+                    current_route.id,
+                    retry_count + 1,
+                )
                 result = await self.execute_task(task_id, workflow_id, operation, payload, current_route)
                 
                 # Validate result
                 is_valid = await self.validate_result(result, validation_rules)
                 
                 if not is_valid:
-                    raise Exception("Validation failed: Result does not meet validation criteria")
+                    raise ValueError("Validation failed: Result does not meet validation criteria")
                 
                 # Success - update circuit breaker
                 circuit_state["consecutive_successes"] += 1
@@ -334,7 +342,7 @@ class SelfHealingService:
                 
                 if circuit_state["state"] == "half_open":
                     if circuit_state["consecutive_successes"] >= self.circuit_breaker_config.success_threshold:
-                        logger.info(f"Circuit breaker for {current_route.id} CLOSED (recovered)")
+                        logger.info("Circuit breaker for %s CLOSED (recovered)", current_route.id)
                         circuit_state["state"] = "closed"
                         circuit_state["open_time"] = None
                 
@@ -352,7 +360,7 @@ class SelfHealingService:
                     route_used=current_route.id
                 )
                 
-            except Exception as error:
+            except (TimeoutError, RuntimeError, ValueError, TypeError, OSError) as error:
                 retry_count += 1
                 classification = self.classify_error(error)
                 error_history.append({
@@ -369,31 +377,37 @@ class SelfHealingService:
                 
                 # Check if should trip circuit breaker
                 if self.should_trip_circuit_breaker(current_route.id):
-                    logger.error(f"Circuit breaker TRIPPED for {current_route.id}")
+                    logger.error("Circuit breaker TRIPPED for %s", current_route.id)
                     circuit_state["state"] = "open"
                     circuit_state["open_time"] = time.time()
                     
                     # Try alternative route
                     alternative_route = self.select_alternative_route(current_route.id, alternative_route_ids)
                     if alternative_route:
-                        logger.info(f"Switching to alternative route: {alternative_route.id}")
+                        logger.info("Switching to alternative route: %s", alternative_route.id)
                         current_route = alternative_route
                         retry_count = 0  # Reset retry count for new route
                         continue
                 
                 # Check if error is retryable
                 if not classification.retryable:
-                    logger.error(f"Non-retryable error: {error}")
+                    logger.error("Non-retryable error: %s", error)
                     break
                 
                 # Check if retries exhausted
                 if retry_count >= self.retry_config.max_attempts:
-                    logger.error(f"Retry attempts exhausted for task {task_id}")
+                    logger.error("Retry attempts exhausted for task %s", task_id)
                     break
                 
                 # Calculate backoff and retry
                 backoff_delay = self.calculate_backoff(retry_count)
-                logger.info(f"Retrying task {task_id} after {backoff_delay:.2f}s (attempt {retry_count + 1}/{self.retry_config.max_attempts})")
+                logger.info(
+                    "Retrying task %s after %.2fs (attempt %s/%s)",
+                    task_id,
+                    backoff_delay,
+                    retry_count + 1,
+                    self.retry_config.max_attempts,
+                )
                 await asyncio.sleep(backoff_delay)
         
         # All retries failed - send to DLQ
@@ -408,7 +422,11 @@ class SelfHealingService:
         }
         self.dlq_messages.append(dlq_message)
         
-        logger.error(f"Task {task_id} moved to Dead Letter Queue after {retry_count} attempts")
+        logger.error(
+            "Task %s moved to Dead Letter Queue after %s attempts",
+            task_id,
+            retry_count,
+        )
         
         # Track lineage
         await self._create_lineage_node(task_id, workflow_id, current_route.id, "failed")
@@ -446,11 +464,53 @@ class SelfHealingService:
                     created_at=datetime.now(timezone.utc).isoformat(),
                     workflow_id=workflow_id
                 )
-        except Exception as e:
-            logger.warning(f"Failed to create lineage node: {e}")
+        except (neo4j.exceptions.Neo4jError, RuntimeError, ValueError, TypeError, OSError) as e:
+            logger.warning("Failed to create lineage node: %s", e)
 
 
 # ============= API ENDPOINTS =============
+
+
+@router.websocket("/ws/monitor")
+async def websocket_monitor(
+    websocket: WebSocket,
+    driver: neo4j.AsyncDriver = Depends(get_ws_driver),
+):
+    """WebSocket stream for the Self-Healing monitor UI.
+
+    Sends a small, UI-compatible metrics payload periodically.
+    """
+    await websocket.accept()
+    try:
+        while True:
+            service = SelfHealingService(driver)
+            payload = {
+                "total_tasks": 0,
+                "successful_tasks": 0,
+                "failed_tasks": 0,
+                "retried_tasks": 0,
+                "circuit_breaker_trips": 0,
+                "alternative_routes_used": 0,
+                "dlq_messages": len(service.dlq_messages),
+                "active_tasks": 0,
+                "dlq_size": len(service.dlq_messages),
+                "circuit_breakers": len(service.circuit_states),
+            }
+            await websocket.send_json(payload)
+            await asyncio.sleep(2)
+    except WebSocketDisconnect:
+        return
+    except (RuntimeError, ValueError, TypeError, OSError) as e:
+        logger.warning(
+            "Self-healing monitor websocket error: %s: %s",
+            type(e).__name__,
+            e,
+        )
+        try:
+            await websocket.close(code=1011)
+        except (RuntimeError, OSError):
+            pass
+        return
 
 @router.post("/execute", summary="Execute Task with Self-Healing")
 async def execute_task(
@@ -492,17 +552,58 @@ async def get_circuit_breaker_status(
     }
 
 
+@router.get("/circuit-breakers", summary="List Circuit Breakers (UI Alias)")
+async def list_circuit_breakers(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    driver: neo4j.AsyncDriver = Depends(get_driver),
+):
+    """UI-friendly alias that returns a list instead of requiring a route_id."""
+    service = SelfHealingService(driver)
+
+    breakers = []
+    for route_id, state in service.circuit_states.items():
+        breakers.append({
+            "route_id": route_id,
+            "state": state.get("state", "closed"),
+            "failure_count": state.get("consecutive_failures", 0),
+            "success_count": state.get("consecutive_successes", 0),
+            "last_failure": None,
+        })
+    response.headers["X-Total-Count"] = str(len(breakers))
+    return breakers[skip : skip + limit]
+
+
 @router.get("/dlq", summary="Get Dead Letter Queue Messages")
 async def get_dead_letter_queue(
-    driver: neo4j.AsyncDriver = Depends(get_driver)
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    driver: neo4j.AsyncDriver = Depends(get_driver),
 ):
     """Get all messages in the Dead Letter Queue"""
     service = SelfHealingService(driver)
-    
+
+    response.headers["X-Total-Count"] = str(len(service.dlq_messages))
+    messages = service.dlq_messages[skip : skip + limit]
     return {
-        "total_messages": len(service.dlq_messages),
-        "messages": service.dlq_messages
+        "total_messages": len(messages),
+        "messages": messages,
     }
+
+
+@router.get("/dead-letter-queue", summary="Get Dead Letter Queue Messages (UI Alias)")
+async def get_dead_letter_queue_alias(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    driver: neo4j.AsyncDriver = Depends(get_driver),
+):
+    """UI-friendly alias that returns the DLQ messages list directly."""
+    service = SelfHealingService(driver)
+    response.headers["X-Total-Count"] = str(len(service.dlq_messages))
+    return service.dlq_messages[skip : skip + limit]
 
 
 @router.post("/dlq/{task_id}/retry", summary="Retry DLQ Message")
@@ -526,6 +627,28 @@ async def retry_dlq_message(
         "message": f"Task {task_id} removed from DLQ and will be retried",
         "task_id": task_id
     }
+
+
+@router.post("/dead-letter-queue/{task_id}/retry", summary="Retry DLQ Message (UI Alias)")
+async def retry_dlq_message_alias(
+    task_id: str,
+    driver: neo4j.AsyncDriver = Depends(get_driver)
+):
+    return await retry_dlq_message(task_id=task_id, driver=driver)
+
+
+@router.delete("/dead-letter-queue/{task_id}", summary="Remove DLQ Message (UI Alias)")
+async def delete_dlq_message_alias(
+    task_id: str,
+    driver: neo4j.AsyncDriver = Depends(get_driver)
+):
+    """UI-friendly delete route to remove a DLQ message."""
+    service = SelfHealingService(driver)
+    message = next((msg for msg in service.dlq_messages if msg.get("task_id") == task_id), None)
+    if not message:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found in DLQ")
+    service.dlq_messages.remove(message)
+    return {"message": f"Task {task_id} removed from DLQ", "task_id": task_id}
 
 
 @router.get("/metrics", summary="Get Self-Healing Metrics")

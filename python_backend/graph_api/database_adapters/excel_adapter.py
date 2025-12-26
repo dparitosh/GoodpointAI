@@ -3,8 +3,8 @@ Excel and Power Query Database Adapter
 Provides connectivity to Excel files and Power Query integration
 """
 
-import pandas as pd
-import openpyxl
+import pandas as pd  # type: ignore[import-untyped]
+import openpyxl  # type: ignore[import-untyped]
 import logging
 from typing import Dict, List, Any, Optional
 from pathlib import Path
@@ -22,9 +22,16 @@ class ExcelAdapter(DatabaseAdapter):
     
     def __init__(self, connection_params: Dict[str, Any]):
         super().__init__(connection_params)
-        self.file_path = None
-        self.workbook = None
-        self.dataframes = {}
+        self.file_path: Optional[Path] = None
+        self.workbook: Any = None
+        self.dataframes: Dict[str, Any] = {}
+
+    async def _require_file_path(self) -> Path:
+        if self.file_path is None:
+            await self.connect()
+        if self.file_path is None:
+            raise DatabaseConnectionError("Excel file path is not initialized")
+        return self.file_path
     
     async def connect(self) -> bool:
         """Open and validate Excel file"""
@@ -53,17 +60,17 @@ class ExcelAdapter(DatabaseAdapter):
                         skiprows=self.connection_params.get('skip_rows', 0)
                     )
                     self.dataframes[sheet_name] = df
-                except Exception as e:
-                    logger.warning(f"Could not load sheet '{sheet_name}': {e}")
+                except Exception as e:  # pylint: disable=broad-except
+                    logger.warning("Could not load sheet '%s': %s", sheet_name, e)
             
             self.is_connected = True
-            logger.info(f"Connected to Excel file: {self.file_path}")
+            logger.info("Connected to Excel file: %s", self.file_path)
             return True
             
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self.is_connected = False
-            logger.error(f"Excel connection failed: {e}")
-            raise DatabaseConnectionError(f"Failed to connect to Excel file: {e}")
+            logger.error("Excel connection failed: %s", e)
+            raise DatabaseConnectionError(f"Failed to connect to Excel file: {e}") from e
     
     async def disconnect(self) -> None:
         """Close Excel file"""
@@ -79,8 +86,9 @@ class ExcelAdapter(DatabaseAdapter):
         try:
             if not self.is_connected:
                 await self.connect()
-            
-            file_stats = self.file_path.stat()
+
+            file_path = await self._require_file_path()
+            file_stats = file_path.stat()
             sheet_info = {}
             
             for sheet_name, df in self.dataframes.items():
@@ -94,13 +102,13 @@ class ExcelAdapter(DatabaseAdapter):
                 "success": True,
                 "message": "Excel file connection successful",
                 "details": {
-                    "file_path": str(self.file_path),
+                    "file_path": str(file_path),
                     "file_size": file_stats.st_size,
                     "sheets": sheet_info,
                     "total_sheets": len(self.dataframes)
                 }
             }
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             return {
                 "success": False,
                 "message": f"Excel connection failed: {str(e)}",
@@ -139,9 +147,9 @@ class ExcelAdapter(DatabaseAdapter):
             # Convert to list of dictionaries
             return df.to_dict('records')
                 
-        except Exception as e:
-            logger.error(f"Excel query error: {e}")
-            raise DatabaseQueryError(f"Query execution failed: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Excel query error: %s", e)
+            raise DatabaseQueryError(f"Query execution failed: {e}") from e
     
     async def get_tables(self) -> List[str]:
         """Get list of sheets (treated as tables)"""
@@ -149,15 +157,17 @@ class ExcelAdapter(DatabaseAdapter):
             if not self.is_connected:
                 await self.connect()
             return list(self.dataframes.keys())
-        except Exception as e:
-            logger.error(f"Error getting Excel sheets: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting Excel sheets: %s", e)
             return []
     
-    async def get_table_schema(self, sheet_name: str) -> Dict[str, Any]:
+    async def get_table_schema(self, table_name: str) -> Dict[str, Any]:
         """Get schema information for a specific sheet"""
         try:
             if not self.is_connected:
                 await self.connect()
+
+            sheet_name = table_name
             
             if sheet_name not in self.dataframes:
                 return {"sheet_name": sheet_name, "error": "Sheet not found"}
@@ -188,8 +198,8 @@ class ExcelAdapter(DatabaseAdapter):
                 "memory_usage": df.memory_usage(deep=True).sum()
             }
             
-        except Exception as e:
-            logger.error(f"Error getting Excel sheet schema for {sheet_name}: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting Excel sheet schema for %s: %s", sheet_name, e)
             return {
                 "sheet_name": sheet_name,
                 "columns": [],
@@ -201,16 +211,18 @@ class ExcelAdapter(DatabaseAdapter):
         try:
             if not self.is_connected:
                 await self.connect()
-            
-            file_stats = self.file_path.stat()
+
+            file_path = await self._require_file_path()
+            file_stats = file_path.stat()
             sheets = await self.get_tables()
-            
-            schema = {
-                "file_name": self.file_path.name,
-                "file_path": str(self.file_path),
+
+            sheets_schema: Dict[str, Any] = {}
+            schema: Dict[str, Any] = {
+                "file_name": file_path.name,
+                "file_path": str(file_path),
                 "file_size": file_stats.st_size,
                 "file_type": "Excel",
-                "sheets": {},
+                "sheets": sheets_schema,
                 "total_sheets": len(sheets),
                 "connection_info": await self.get_connection_info()
             }
@@ -218,13 +230,13 @@ class ExcelAdapter(DatabaseAdapter):
             # Get detailed sheet schemas
             for sheet in sheets:
                 sheet_schema = await self.get_table_schema(sheet)
-                schema["sheets"][sheet] = sheet_schema
+                sheets_schema[sheet] = sheet_schema
             
             return schema
             
-        except Exception as e:
-            logger.error(f"Error getting Excel schema: {e}")
-            raise DatabaseQueryError(f"Schema retrieval failed: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting Excel schema: %s", e)
+            raise DatabaseQueryError(f"Schema retrieval failed: {e}") from e
 
 class PowerQueryAdapter(DatabaseAdapter):
     """Power Query adapter (placeholder for future implementation)"""
@@ -234,9 +246,6 @@ class PowerQueryAdapter(DatabaseAdapter):
     DEFAULT_PORT = None
     DESCRIPTION = "Microsoft Power Query integration (requires Power BI/Excel installation)"
     
-    def __init__(self, connection_params: Dict[str, Any]):
-        super().__init__(connection_params)
-    
     async def connect(self) -> bool:
         """Connect to Power Query data source"""
         # This would require Power BI/Excel COM objects or REST API
@@ -244,7 +253,7 @@ class PowerQueryAdapter(DatabaseAdapter):
     
     async def disconnect(self) -> None:
         """Disconnect from Power Query"""
-        pass
+        return None
     
     async def test_connection(self) -> Dict[str, Any]:
         """Test Power Query connection"""
@@ -273,6 +282,6 @@ class PowerQueryAdapter(DatabaseAdapter):
         return {"error": "Power Query integration not yet implemented"}
 
 # Register the adapters
-from ..database_adapters import DatabaseAdapterFactory
+from ..database_adapters import DatabaseAdapterFactory  # noqa: E402
 DatabaseAdapterFactory.register_adapter('excel', ExcelAdapter)
 DatabaseAdapterFactory.register_adapter('powerquery', PowerQueryAdapter)

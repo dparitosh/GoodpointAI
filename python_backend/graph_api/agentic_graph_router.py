@@ -6,18 +6,15 @@ Integrates multi-agent orchestration for intelligent graph processing
 
 import logging
 import asyncio
-from typing import Dict, List, Any, Optional, Set
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from typing import Dict, List, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 import neo4j
 from datetime import datetime
-import json
 import uuid
 
 from .dependencies import get_driver
 from core.config import NEO4J_DATABASE
-from .models import GraphDataResponse, QueryRequest, QueryResponse
-from .helpers import _add_node_from_neo4j_node, _process_neo4j_relationship
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agentic-graph", tags=["Agentic Graph Operations"])
@@ -51,12 +48,12 @@ class MultiAgentOrchestrationRequest(BaseModel):
 class GraphAnalysisAgent:
     """Base class for specialized graph analysis agents"""
     
-    def __init__(self, agent_type: str, config: Dict[str, Any] = None):
+    def __init__(self, agent_type: str, config: Optional[Dict[str, Any]] = None):
         self.agent_type = agent_type
         self.config = config or {}
         self.status = "idle"
-        self.metrics = {}
-        self.results = {}
+        self.metrics: Dict[str, Any] = {}
+        self.results: Dict[str, Any] = {}
     
     async def execute(self, task: Dict[str, Any], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute agent task with error handling and metrics"""
@@ -86,8 +83,11 @@ class GraphAnalysisAgent:
                 "success_rate": 0.0
             }
             
-            logger.error(f"Agent {self.agent_type} failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Agent {self.agent_type} execution failed: {str(e)}")
+            logger.error("Agent %s failed: %s", self.agent_type, e)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Agent {self.agent_type} execution failed: {str(e)}",
+            ) from e
     
     async def _execute_task(self, task: Dict[str, Any], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Override in subclasses"""
@@ -215,7 +215,7 @@ class ClusteringAnalysisAgent(GraphAnalysisAgent):
         )
         
         clustering_data = []
-        relationship_clusters = {}
+        relationship_clusters: Dict[str, List[Dict[str, Any]]] = {}
         
         for record in results.records:
             node_data = {
@@ -342,7 +342,7 @@ class InsightGenerationAgent(GraphAnalysisAgent):
         
         # Extract Pareto efficiencies from different analyses
         efficiencies = []
-        for analysis_type, data in analysis_results.items():
+        for _analysis_type, data in analysis_results.items():
             if isinstance(data, dict) and "pareto_efficiency" in data:
                 efficiencies.append(data["pareto_efficiency"])
         
@@ -358,7 +358,7 @@ class InsightGenerationAgent(GraphAnalysisAgent):
     def _calculate_pareto_efficiency(self, analysis_results: Dict[str, Any]) -> float:
         """Calculate overall Pareto efficiency across all analyses"""
         efficiencies = []
-        for analysis_type, data in analysis_results.items():
+        for _analysis_type, data in analysis_results.items():
             if isinstance(data, dict) and "pareto_efficiency" in data:
                 efficiencies.append(data["pareto_efficiency"])
         
@@ -441,7 +441,7 @@ class AgenticGraphOrchestrator:
                 tasks.append((request.agent_type, task))
         
         # Execute all tasks in parallel
-        results = {}
+        results: Dict[str, Any] = {}
         completed_tasks = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
         
         for i, (agent_type, _) in enumerate(tasks):
@@ -455,8 +455,8 @@ class AgenticGraphOrchestrator:
     
     async def _execute_sequential(self, agent_requests: List[AgentTaskRequest], driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
         """Execute agents sequentially, passing results between them"""
-        results = {}
-        context = {}
+        results: Dict[str, Any] = {}
+        context: Dict[str, Any] = {}
         
         for request in agent_requests:
             if request.agent_type in self.agents:
@@ -481,8 +481,8 @@ class AgenticGraphOrchestrator:
         coordination_rules: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute agents based on conditional logic"""
-        results = {}
-        context = {}
+        results: Dict[str, Any] = {}
+        context: Dict[str, Any] = {}
         
         for request in agent_requests:
             # Check if agent should execute based on conditions
@@ -525,7 +525,7 @@ class AgenticGraphOrchestrator:
         return True
 
 #  AGENT FACTORY
-def create_agent(agent_type: str, config: Dict[str, Any] = None) -> GraphAnalysisAgent:
+def create_agent(agent_type: str, config: Optional[Dict[str, Any]] = None) -> GraphAnalysisAgent:
     """Factory function to create agents"""
     agent_classes = {
         "connectivity": ConnectivityAnalysisAgent,
@@ -628,8 +628,8 @@ async def execute_graph_analysis(
         )
         
     except Exception as e:
-        logger.error(f"Graph analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Graph analysis failed: {str(e)}")
+        logger.error("Graph analysis failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Graph analysis failed: {str(e)}") from e
 
 @router.post("/orchestrate")
 async def execute_multi_agent_orchestration(
@@ -644,8 +644,8 @@ async def execute_multi_agent_orchestration(
         return result
         
     except Exception as e:
-        logger.error(f"Multi-agent orchestration failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Orchestration failed: {str(e)}")
+        logger.error("Multi-agent orchestration failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Orchestration failed: {str(e)}") from e
 
 @router.post("/agent/execute")
 async def execute_single_agent(
@@ -666,8 +666,8 @@ async def execute_single_agent(
         }
         
     except Exception as e:
-        logger.error(f"Single agent execution failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}")
+        logger.error("Single agent execution failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}") from e
 
 @router.get("/agents/status")
 async def get_agent_status():

@@ -2,11 +2,12 @@ import logging
 import json
 import os
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from datetime import datetime
 import neo4j
-import asyncio
+
+# pylint: disable=broad-exception-caught
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/data-sources", tags=["Data Sources"])
@@ -52,21 +53,21 @@ def load_data_sources() -> List[Dict]:
     """Load data sources from JSON file"""
     try:
         if os.path.exists(DATA_SOURCES_FILE):
-            with open(DATA_SOURCES_FILE, 'r') as f:
+            with open(DATA_SOURCES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return []
-    except Exception as e:
-        logger.error(f"Error loading data sources: {e}")
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error("Error loading data sources: %s", e)
         return []
 
 def save_data_sources(sources: List[Dict]):
     """Save data sources to JSON file"""
     try:
-        with open(DATA_SOURCES_FILE, 'w') as f:
+        with open(DATA_SOURCES_FILE, 'w', encoding='utf-8') as f:
             json.dump(sources, f, indent=2, default=str)
-    except Exception as e:
-        logger.error(f"Error saving data sources: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save data sources")
+    except OSError as e:
+        logger.error("Error saving data sources: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to save data sources") from e
 
 @router.get(
     "/",
@@ -74,14 +75,20 @@ def save_data_sources(sources: List[Dict]):
     summary="Get All Data Sources",
     description="Retrieve all configured data sources."
 )
-async def get_data_sources():
-    """Get all data sources"""
+async def get_data_sources(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=5000),
+):
+    """Get all data sources (paged)."""
     try:
         sources = load_data_sources()
-        return sources
-    except Exception as e:
-        logger.error(f"Error fetching data sources: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch data sources")
+        total_count = len(sources)
+        response.headers["X-Total-Count"] = str(total_count)
+        return sources[skip:skip + limit]
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
+        logger.error("Error fetching data sources: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to fetch data sources") from e
 
 @router.get(
     "/{source_id}",
@@ -97,11 +104,9 @@ async def get_data_source(source_id: str):
         if not source:
             raise HTTPException(status_code=404, detail="Data source not found")
         return source
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching data source {source_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch data source")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
+        logger.error("Error fetching data source %s: %s", source_id, e)
+        raise HTTPException(status_code=500, detail="Failed to fetch data source") from e
 
 @router.post(
     "/",
@@ -127,7 +132,7 @@ async def create_data_source(source: DataSource):
         source.updated_at = datetime.now().isoformat()
         
         # Convert to dict and add to sources
-        source_dict = source.dict()
+        source_dict = source.model_dump() if hasattr(source, "model_dump") else source.dict()
         sources.append(source_dict)
         
         # Save to file
@@ -138,11 +143,9 @@ async def create_data_source(source: DataSource):
             message="Data source created successfully",
             data=source_dict
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating data source: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create data source")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
+        logger.error("Error creating data source: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create data source") from e
 
 @router.put(
     "/{source_id}",
@@ -167,7 +170,7 @@ async def update_data_source(source_id: str, source: DataSource):
         if 'created_at' in sources[source_index]:
             source.created_at = sources[source_index]['created_at']
         
-        sources[source_index] = source.dict()
+        sources[source_index] = source.model_dump() if hasattr(source, "model_dump") else source.dict()
         
         # Save to file
         save_data_sources(sources)
@@ -177,11 +180,9 @@ async def update_data_source(source_id: str, source: DataSource):
             message="Data source updated successfully",
             data=sources[source_index]
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating data source {source_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update data source")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
+        logger.error("Error updating data source %s: %s", source_id, e)
+        raise HTTPException(status_code=500, detail="Failed to update data source") from e
 
 @router.delete(
     "/{source_id}",
@@ -208,11 +209,9 @@ async def delete_data_source(source_id: str):
             status="success",
             message="Data source deleted successfully"
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting data source {source_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete data source")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
+        logger.error("Error deleting data source %s: %s", source_id, e)
+        raise HTTPException(status_code=500, detail="Failed to delete data source") from e
 
 @router.post(
     "/{source_id}/test",
@@ -223,19 +222,19 @@ async def delete_data_source(source_id: str):
 async def test_data_source_connection(source_id: str):
     """Test connection to a data source"""
     try:
-        logger.info(f"Testing connection for data source: {source_id}")
+        logger.info("Testing connection for data source: %s", source_id)
         sources = load_data_sources()
         source = next((s for s in sources if s.get('id') == source_id), None)
         
         if not source:
-            logger.error(f"Data source not found: {source_id}")
+            logger.error("Data source not found: %s", source_id)
             raise HTTPException(status_code=404, detail="Data source not found")
         
-        logger.info(f"Found data source: {source.get('name')}, type: {source.get('type')}")
+        logger.info("Found data source: %s, type: %s", source.get('name'), source.get('type'))
         
         # Test connection based on source type
         test_result = await _test_connection(source)
-        logger.info(f"Connection test result: {test_result.success}, message: {test_result.message}")
+        logger.info("Connection test result: %s, message: %s", test_result.success, test_result.message)
         
         # Update source with test results
         for i, s in enumerate(sources):
@@ -248,11 +247,9 @@ async def test_data_source_connection(source_id: str):
         save_data_sources(sources)
         
         return test_result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error testing data source {source_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to test data source connection: {str(e)}")
+    except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError, RuntimeError) as e:
+        logger.error("Error testing data source %s: %s", source_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to test data source connection: {str(e)}") from e
 
 async def _test_connection(source: Dict) -> TestConnectionResponse:
     """Test connection based on source type"""
@@ -275,7 +272,7 @@ async def _test_connection(source: Dict) -> TestConnectionResponse:
                 success=False,
                 message=f"Unsupported data source type: {source_type}"
             )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError, neo4j.exceptions.Neo4jError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"Connection test failed: {str(e)}"
@@ -284,7 +281,7 @@ async def _test_connection(source: Dict) -> TestConnectionResponse:
 async def _test_neo4j_connection(connection: Dict) -> TestConnectionResponse:
     """Test Neo4j connection"""
     try:
-        uri = connection.get('uri') or f"bolt://{connection.get('host', 'localhost')}:{connection.get('port', '7687')}"
+        uri = connection.get('uri') or f"neo4j://{connection.get('host', 'localhost')}:{connection.get('port', '7687')}"
         username = connection.get('username', 'neo4j')
         password = connection.get('password', '')
         database = connection.get('database', 'neo4j')
@@ -302,7 +299,7 @@ async def _test_neo4j_connection(connection: Dict) -> TestConnectionResponse:
             message="Neo4j connection successful",
             details={"database": database, "uri": uri}
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError, neo4j.exceptions.Neo4jError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"Neo4j connection failed: {str(e)}"
@@ -328,7 +325,7 @@ async def _test_database_connection(connection: Dict) -> TestConnectionResponse:
             message="Database configuration validated (connection test would require database driver)",
             details={"host": connection.get('host'), "database": connection.get('database')}
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"Database validation failed: {str(e)}"
@@ -351,7 +348,7 @@ async def _test_mongodb_connection(connection: Dict) -> TestConnectionResponse:
             message="MongoDB configuration validated (connection test would require MongoDB driver)",
             details={"host": connection.get('host'), "database": connection.get('database')}
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"MongoDB validation failed: {str(e)}"
@@ -373,7 +370,7 @@ async def _test_api_connection(connection: Dict) -> TestConnectionResponse:
             message="API endpoint configuration validated (actual test would require HTTP client)",
             details={"endpoint": endpoint}
         )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"API validation failed: {str(e)}"
@@ -400,7 +397,7 @@ async def _test_file_connection(connection: Dict) -> TestConnectionResponse:
                 success=False,
                 message="File not found or not accessible"
             )
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, OSError) as e:
         return TestConnectionResponse(
             success=False,
             message=f"File validation failed: {str(e)}"
@@ -417,7 +414,7 @@ async def get_supported_types():
         "database": {
             "name": "SQL Database",
             "fields": ["host", "port", "database", "username", "password"],
-            "default_port": "5432",
+            "default_port": "5433",
             "description": "PostgreSQL, MySQL, SQL Server, etc."
         },
         "neo4j": {

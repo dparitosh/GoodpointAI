@@ -4,16 +4,16 @@ Handles local files, network shares, XML, JSON, CSV processing
 Includes folder monitoring and batch file operations
 """
 import logging
-from typing import List, Dict, Optional, Any
+from typing import Any, List, Dict, Optional
 from datetime import datetime
 from pathlib import Path
 import os
 import json
 import shutil
-from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, Query, Response
 from pydantic import BaseModel, Field
-import xmltodict
-import pandas as pd
+import xmltodict  # type: ignore[import-untyped]
+import pandas as pd  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/filesystem", tags=["File System Integration"])
@@ -83,7 +83,12 @@ class FolderMonitorConfig(BaseModel):
 # ============================================================================
 
 @router.post("/list")
-async def list_directory(request: DirectoryListRequest):
+async def list_directory(
+    request: DirectoryListRequest,
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
     """List files and directories"""
     try:
         from core.external_config import filesystem_config
@@ -123,16 +128,18 @@ async def list_directory(request: DirectoryListRequest):
                     "is_directory": path.is_dir()
                 })
         
+        response.headers["X-Total-Count"] = str(len(files))
+        paged_files = files[skip : skip + limit]
         return {
             "status": "success",
             "path": str(full_path),
-            "count": len(files),
-            "files": files
+            "count": len(paged_files),
+            "files": paged_files
         }
         
     except Exception as e:
-        logger.error(f"Error listing directory: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing directory: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/upload")
@@ -152,7 +159,11 @@ async def upload_file(
         
         dest_dir.mkdir(parents=True, exist_ok=True)
         
-        file_path = dest_dir / file.filename
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Missing upload filename")
+
+        filename = file.filename
+        file_path = dest_dir / filename
         
         # Check file size
         content = await file.read()
@@ -168,19 +179,19 @@ async def upload_file(
         with open(file_path, "wb") as f:
             f.write(content)
         
-        logger.info(f"Uploaded file: {file_path}")
+        logger.info("Uploaded file: %s", file_path)
         
         return {
             "status": "success",
             "message": "File uploaded successfully",
-            "file_name": file.filename,
+            "file_name": filename,
             "file_path": str(file_path),
             "size": len(content)
         }
         
     except Exception as e:
-        logger.error(f"Error uploading file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error uploading file: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/download/{file_path:path}")
@@ -204,8 +215,8 @@ async def download_file(file_path: str):
         )
         
     except Exception as e:
-        logger.error(f"Error downloading file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error downloading file: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/delete/{file_path:path}")
@@ -229,8 +240,8 @@ async def delete_file(file_path: str):
         }
         
     except Exception as e:
-        logger.error(f"Error deleting file: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting file: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -264,15 +275,15 @@ async def parse_xml_file(request: XMLParseRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error parsing XML: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error parsing XML: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e  # noqa: B904
 
 
 @router.post("/xml/validate")
 async def validate_xml_file(file_path: str, schema_path: Optional[str] = None):
     """Validate XML file against XSD schema"""
     try:
-        from lxml import etree
+        from lxml import etree  # type: ignore[import-untyped]
         
         xml_path = Path(file_path)
         if not xml_path.exists():
@@ -302,8 +313,8 @@ async def validate_xml_file(file_path: str, schema_path: Optional[str] = None):
         }
         
     except Exception as e:
-        logger.error(f"Error validating XML: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error validating XML: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -322,10 +333,10 @@ async def parse_json_file(request: JSONProcessRequest):
         with open(file_path, 'r', encoding='utf-8') as f:
             json_data = json.load(f)
         
-        validation_result = {"validated": False}
+        validation_result: Dict[str, Any] = {"validated": False, "errors": []}
         
         if request.schema_validate and request.json_schema:
-            from jsonschema import validate, ValidationError
+            from jsonschema import validate, ValidationError  # type: ignore[import-untyped]
             try:
                 validate(instance=json_data, schema=request.json_schema)
                 validation_result = {"validated": True, "errors": []}
@@ -340,10 +351,10 @@ async def parse_json_file(request: JSONProcessRequest):
         }
         
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}") from e
     except Exception as e:
-        logger.error(f"Error parsing JSON: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error parsing JSON: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/json/merge")
@@ -376,8 +387,8 @@ async def merge_json_files(file_paths: List[str], output_path: str):
         }
         
     except Exception as e:
-        logger.error(f"Error merging JSON files: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error merging JSON files: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -414,8 +425,8 @@ async def parse_csv_file(request: CSVProcessRequest):
         }
         
     except Exception as e:
-        logger.error(f"Error parsing CSV: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error parsing CSV: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/csv/to-json")
@@ -449,8 +460,8 @@ async def convert_csv_to_json(
         }
         
     except Exception as e:
-        logger.error(f"Error converting CSV to JSON: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error converting CSV to JSON: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e  # noqa: B904
 
 
 # ============================================================================
@@ -466,13 +477,14 @@ async def batch_file_operation(request: BatchFileOperation):
         # Find matching files
         files = glob(request.source_pattern, recursive=True)
         
-        results = {
+        file_results: List[Dict[str, Any]] = []
+        results: Dict[str, Any] = {
             "operation": request.operation,
             "pattern": request.source_pattern,
             "found_files": len(files),
             "processed": 0,
             "failed": 0,
-            "files": []
+            "files": file_results,
         }
         
         for file_path in files:
@@ -483,24 +495,24 @@ async def batch_file_operation(request: BatchFileOperation):
                     dest = Path(request.destination) / src.name
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dest)
-                    results["files"].append({"src": str(src), "dest": str(dest), "status": "copied"})
+                    file_results.append({"src": str(src), "dest": str(dest), "status": "copied"})
                     
                 elif request.operation == "move" and request.destination:
                     dest = Path(request.destination) / src.name
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(src, dest)
-                    results["files"].append({"src": str(src), "dest": str(dest), "status": "moved"})
+                    file_results.append({"src": str(src), "dest": str(dest), "status": "moved"})
                     
                 elif request.operation == "delete":
                     src.unlink()
-                    results["files"].append({"src": str(src), "status": "deleted"})
+                    file_results.append({"src": str(src), "status": "deleted"})
                 
                 results["processed"] += 1
                 
-            except Exception as e:
+            except (OSError, shutil.Error) as e:
                 results["failed"] += 1
-                results["files"].append({"src": str(src), "status": "failed", "error": str(e)})
-                logger.error(f"Error processing {src}: {e}")
+                file_results.append({"src": str(src), "status": "failed", "error": str(e)})
+                logger.error("Error processing %s: %s", src, e)
         
         return {
             "status": "success",
@@ -508,8 +520,8 @@ async def batch_file_operation(request: BatchFileOperation):
         }
         
     except Exception as e:
-        logger.error(f"Error in batch operation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error in batch operation: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================
@@ -517,7 +529,7 @@ async def batch_file_operation(request: BatchFileOperation):
 # ============================================================================
 
 @router.post("/watch/start")
-async def start_folder_monitoring(config: FolderMonitorConfig, background_tasks: BackgroundTasks):
+async def start_folder_monitoring(config: FolderMonitorConfig, _background_tasks: BackgroundTasks):
     """Start monitoring a folder for file changes"""
     try:
         watch_path = Path(config.watch_path)
@@ -544,8 +556,8 @@ async def start_folder_monitoring(config: FolderMonitorConfig, background_tasks:
         }
         
     except Exception as e:
-        logger.error(f"Error starting folder monitoring: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error starting folder monitoring: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ============================================================================

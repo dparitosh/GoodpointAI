@@ -3,7 +3,7 @@ Microsoft SQL Server Database Adapter
 Provides connectivity to SQL Server databases using pyodbc and pymssql
 """
 
-import pyodbc
+import pyodbc  # type: ignore[import-not-found]
 import logging
 from typing import Dict, List, Any, Optional
 from ..database_adapters import SQLDatabaseAdapter, DatabaseConnectionError, DatabaseQueryError
@@ -20,7 +20,14 @@ class SQLServerAdapter(SQLDatabaseAdapter):
     
     def __init__(self, connection_params: Dict[str, Any]):
         super().__init__(connection_params)
-        self.connection_string = None
+        self.connection_string: Optional[str] = None
+
+    async def _require_connection_string(self) -> str:
+        if not self.is_connected or self.connection_string is None:
+            await self.connect()
+        if self.connection_string is None:
+            raise DatabaseConnectionError("SQL Server connection string is not initialized")
+        return self.connection_string
     
     def _build_connection_string(self) -> str:
         """Build SQL Server connection string"""
@@ -52,13 +59,13 @@ class SQLServerAdapter(SQLDatabaseAdapter):
             conn.close()
             
             self.is_connected = True
-            logger.info(f"Connected to SQL Server: {self.connection_params['host']}")
+            logger.info("Connected to SQL Server: %s", self.connection_params["host"])
             return True
             
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self.is_connected = False
-            logger.error(f"SQL Server connection failed: {e}")
-            raise DatabaseConnectionError(f"Failed to connect to SQL Server: {e}")
+            logger.error("SQL Server connection failed: %s", e)
+            raise DatabaseConnectionError(f"Failed to connect to SQL Server: {e}") from e
     
     async def disconnect(self) -> None:
         """Close the database connection"""
@@ -68,10 +75,8 @@ class SQLServerAdapter(SQLDatabaseAdapter):
     async def test_connection(self) -> Dict[str, Any]:
         """Test SQL Server connection"""
         try:
-            if not self.is_connected:
-                await self.connect()
-            
-            conn = pyodbc.connect(self.connection_string)
+            conn_str = await self._require_connection_string()
+            conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             cursor.execute("SELECT @@VERSION as version, DB_NAME() as database")
             result = cursor.fetchone()
@@ -88,7 +93,7 @@ class SQLServerAdapter(SQLDatabaseAdapter):
                     "port": self.connection_params.get('port', self.DEFAULT_PORT)
                 }
             }
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             return {
                 "success": False,
                 "message": f"SQL Server connection failed: {str(e)}",
@@ -98,10 +103,8 @@ class SQLServerAdapter(SQLDatabaseAdapter):
     async def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """Execute a query and return results"""
         try:
-            if not self.is_connected:
-                await self.connect()
-            
-            conn = pyodbc.connect(self.connection_string)
+            conn_str = await self._require_connection_string()
+            conn = pyodbc.connect(conn_str)
             cursor = conn.cursor()
             
             if params:
@@ -128,9 +131,9 @@ class SQLServerAdapter(SQLDatabaseAdapter):
             
             return results
                 
-        except Exception as e:
-            logger.error(f"SQL Server query error: {e}")
-            raise DatabaseQueryError(f"Query execution failed: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("SQL Server query error: %s", e)
+            raise DatabaseQueryError(f"Query execution failed: {e}") from e
     
     async def get_tables(self) -> List[str]:
         """Get list of tables in the database"""
@@ -143,8 +146,8 @@ class SQLServerAdapter(SQLDatabaseAdapter):
         try:
             results = await self.execute_query(query)
             return [row['TABLE_NAME'] for row in results]
-        except Exception as e:
-            logger.error(f"Error getting SQL Server tables: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting SQL Server tables: %s", e)
             return []
     
     async def get_table_schema(self, table_name: str) -> Dict[str, Any]:
@@ -183,8 +186,8 @@ class SQLServerAdapter(SQLDatabaseAdapter):
                 "column_count": len(columns)
             }
             
-        except Exception as e:
-            logger.error(f"Error getting SQL Server table schema for {table_name}: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting SQL Server table schema for %s: %s", table_name, e)
             return {
                 "table_name": table_name,
                 "columns": [],
@@ -192,6 +195,6 @@ class SQLServerAdapter(SQLDatabaseAdapter):
             }
 
 # Register the adapter
-from ..database_adapters import DatabaseAdapterFactory
+from ..database_adapters import DatabaseAdapterFactory  # noqa: E402
 DatabaseAdapterFactory.register_adapter('mssql', SQLServerAdapter)
 DatabaseAdapterFactory.register_adapter('sqlserver', SQLServerAdapter)

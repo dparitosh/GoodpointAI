@@ -2,18 +2,19 @@
 Migration API Router
 Provides REST endpoints and WebSocket support for advanced migration operations.
 """
+import asyncio
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 import csv
 import io
 
 from services.advanced_migration_engine import (
     migration_engine,
     MigrationEvent,
-    MigrationState
 )
 
 logger = logging.getLogger(__name__)
@@ -68,10 +69,20 @@ async def start_migration(request: MigrationStartRequest):
                 "timestamp": session.created_at.isoformat()
             }
         else:
-            raise HTTPException(status_code=400, detail="Failed to start migration")
+            latest = None
+            refreshed = migration_engine.get_session(session.session_id)
+            if refreshed and getattr(refreshed, "errors", None):
+                latest = refreshed.errors[-1]
+            raise HTTPException(
+                status_code=429,
+                detail=latest or "Failed to start migration",
+            )
+
+    except HTTPException:
+        raise
             
     except Exception as e:
-        logger.error(f"Error starting migration: {e}")
+        logger.error("Error starting migration: %s", e)
         raise HTTPException(
             status_code=500,
             detail={
@@ -79,7 +90,7 @@ async def start_migration(request: MigrationStartRequest):
                 "message": str(e),
                 "timestamp": None
             }
-        )
+        ) from e
 
 
 @router.get("/{session_id}")
@@ -131,7 +142,7 @@ async def handle_migration_event(session_id: str, request: MigrationEventRequest
         # Validate event
         try:
             event = MigrationEvent(request.event.upper())
-        except ValueError:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -139,7 +150,7 @@ async def handle_migration_event(session_id: str, request: MigrationEventRequest
                     "message": f"Invalid event: {request.event}",
                     "timestamp": None
                 }
-            )
+            ) from exc
         
         # Handle event
         result = await migration_engine.handle_event(session_id, event)
@@ -160,10 +171,10 @@ async def handle_migration_event(session_id: str, request: MigrationEventRequest
             "timestamp": None
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error handling event: {e}")
+        if isinstance(e, HTTPException):
+            raise
+        logger.error("Error handling event: %s", e)
         raise HTTPException(
             status_code=500,
             detail={
@@ -171,11 +182,11 @@ async def handle_migration_event(session_id: str, request: MigrationEventRequest
                 "message": str(e),
                 "timestamp": None
             }
-        )
+        ) from e
 
 
 @router.get("/{session_id}/history")
-async def get_migration_history(session_id: str, format: str = "json"):
+async def get_migration_history(session_id: str, output_format: str = "json"):
     """
     Get transition history for a migration session
     
@@ -183,7 +194,7 @@ async def get_migration_history(session_id: str, format: str = "json"):
     - session_id: Migration session identifier
     
     **Query Parameters:**
-    - format: Response format (json or csv)
+    - output_format: Response format (json or csv)
     
     **Response:**
     - List of state transitions with timestamps
@@ -200,7 +211,7 @@ async def get_migration_history(session_id: str, format: str = "json"):
             }
         )
     
-    if format.lower() == "csv":
+    if output_format.lower() == "csv":
         # Generate CSV
         output = io.StringIO()
         writer = csv.DictWriter(
@@ -261,16 +272,26 @@ async def websocket_migration_updates(websocket: WebSocket, session_id: str):
         # Send initial state
         await websocket.send_json(session.to_dict())
         
-        # Keep connection alive and listen for client messages
+        # Keep connection alive and listen for client messages.
+        # Send periodic heartbeats so idle connections stay open.
         while True:
-            data = await websocket.receive_text()
-            # Echo back for heartbeat
-            await websocket.send_json({"type": "heartbeat", "timestamp": datetime.utcnow().isoformat()})
+            try:
+                # If the client sends something, we currently ignore it (future: commands).
+                await asyncio.wait_for(websocket.receive_text(), timeout=5)
+            except asyncio.TimeoutError:
+                pass
+
+            await websocket.send_json(
+                {
+                    "type": "heartbeat",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
             
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for session {session_id}")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.info("WebSocket disconnected for session %s", session_id)
+    except (RuntimeError, ValueError) as e:
+        logger.error("WebSocket error: %s", e)
     finally:
         # Unregister WebSocket
         migration_engine.unregister_websocket(session_id, websocket)

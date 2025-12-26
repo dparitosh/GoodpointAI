@@ -21,37 +21,37 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     async def connect(self) -> bool:
         """Establish connection to the database"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def disconnect(self) -> None:
         """Close the database connection"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def test_connection(self) -> Dict[str, Any]:
         """Test the database connection and return status"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """Execute a query and return results"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def get_schema(self) -> Dict[str, Any]:
         """Get database schema information"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def get_tables(self) -> List[str]:
         """Get list of tables/collections"""
-        pass
+        raise NotImplementedError
     
     @abstractmethod
     async def get_table_schema(self, table_name: str) -> Dict[str, Any]:
         """Get schema information for a specific table"""
-        pass
+        raise NotImplementedError
     
     async def get_connection_info(self) -> Dict[str, Any]:
         """Get connection information and status"""
@@ -65,7 +65,7 @@ class DatabaseAdapter(ABC):
 class DatabaseAdapterFactory:
     """Factory for creating database adapters"""
     
-    _adapters = {}
+    _adapters: Dict[str, Any] = {}
     
     @classmethod
     def register_adapter(cls, db_type: str, adapter_class):
@@ -87,7 +87,7 @@ class DatabaseAdapterFactory:
         return list(cls._adapters.keys())
     
     @classmethod
-    def get_adapter_info(cls, db_type: str) -> Dict[str, Any]:
+    def get_adapter_info(cls, db_type: str) -> Optional[Dict[str, Any]]:
         """Get information about a specific adapter type"""
         if db_type not in cls._adapters:
             return None
@@ -110,38 +110,36 @@ class SQLDatabaseAdapter(DatabaseAdapter):
         """Get database schema information"""
         try:
             tables = await self.get_tables()
-            schema = {
+            tables_schema: Dict[str, Any] = {}
+            schema: Dict[str, Any] = {
                 "database": self.connection_params.get('database'),
-                "tables": {},
+                "tables": tables_schema,
                 "total_tables": len(tables)
             }
             
             for table in tables:
                 table_schema = await self.get_table_schema(table)
-                schema["tables"][table] = table_schema
+                tables_schema[table] = table_schema
                 
             return schema
-        except Exception as e:
-            logger.error(f"Error getting schema: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting schema: %s", e)
             raise
     
     async def execute_simple_query(self, query: str) -> List[Dict[str, Any]]:
         """Execute a simple query with error handling"""
         try:
             return await self.execute_query(query)
-        except Exception as e:
-            logger.error(f"Error executing query: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error executing query: %s", e)
             return []
 
 # Exception classes
 class DatabaseConnectionError(Exception):
     """Raised when database connection fails"""
-    pass
 
 class DatabaseQueryError(Exception):
     """Raised when database query fails"""
-    pass
 
 class UnsupportedDatabaseError(Exception):
     """Raised when trying to use an unsupported database type"""
-    pass

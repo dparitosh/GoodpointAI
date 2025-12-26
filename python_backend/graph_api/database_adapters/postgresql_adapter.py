@@ -3,7 +3,7 @@ PostgreSQL Database Adapter
 Provides connectivity to PostgreSQL databases using asyncpg
 """
 
-import asyncpg
+import asyncpg  # type: ignore[import-untyped]
 import logging
 from typing import Dict, List, Any, Optional
 from ..database_adapters import SQLDatabaseAdapter, DatabaseConnectionError, DatabaseQueryError
@@ -15,12 +15,19 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
     
     REQUIRED_PARAMS = ['host', 'database', 'username', 'password']
     OPTIONAL_PARAMS = ['port', 'schema', 'ssl_mode']
-    DEFAULT_PORT = 5432
+    DEFAULT_PORT = 5433
     DESCRIPTION = "PostgreSQL relational database"
     
     def __init__(self, connection_params: Dict[str, Any]):
         super().__init__(connection_params)
-        self.pool = None
+        self.pool: Any = None
+
+    async def _require_pool(self) -> Any:
+        if not self.is_connected or self.pool is None:
+            await self.connect()
+        if self.pool is None:
+            raise DatabaseConnectionError("PostgreSQL connection pool is not initialized")
+        return self.pool
     
     async def connect(self) -> bool:
         """Establish connection pool to PostgreSQL"""
@@ -48,13 +55,13 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                 await conn.execute('SELECT 1')
             
             self.is_connected = True
-            logger.info(f"Connected to PostgreSQL: {host}:{port}/{database}")
+            logger.info("Connected to PostgreSQL: %s:%s/%s", host, port, database)
             return True
             
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self.is_connected = False
-            logger.error(f"PostgreSQL connection failed: {e}")
-            raise DatabaseConnectionError(f"Failed to connect to PostgreSQL: {e}")
+            logger.error("PostgreSQL connection failed: %s", e)
+            raise DatabaseConnectionError(f"Failed to connect to PostgreSQL: {e}") from e
     
     async def disconnect(self) -> None:
         """Close the connection pool"""
@@ -67,10 +74,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
     async def test_connection(self) -> Dict[str, Any]:
         """Test PostgreSQL connection"""
         try:
-            if not self.is_connected:
-                await self.connect()
-            
-            async with self.pool.acquire() as conn:
+            pool = await self._require_pool()
+            async with pool.acquire() as conn:
                 result = await conn.fetchrow('SELECT version() as version, current_database() as database')
                 
             return {
@@ -83,7 +88,7 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                     "port": self.connection_params.get('port', self.DEFAULT_PORT)
                 }
             }
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             return {
                 "success": False,
                 "message": f"PostgreSQL connection failed: {str(e)}",
@@ -93,10 +98,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
     async def execute_query(self, query: str, params: Optional[Dict] = None) -> List[Dict[str, Any]]:
         """Execute a query and return results"""
         try:
-            if not self.is_connected:
-                await self.connect()
-            
-            async with self.pool.acquire() as conn:
+            pool = await self._require_pool()
+            async with pool.acquire() as conn:
                 if params:
                     rows = await conn.fetch(query, *params.values())
                 else:
@@ -105,9 +108,9 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                 # Convert records to dictionaries
                 return [dict(row) for row in rows]
                 
-        except Exception as e:
-            logger.error(f"PostgreSQL query error: {e}")
-            raise DatabaseQueryError(f"Query execution failed: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("PostgreSQL query error: %s", e)
+            raise DatabaseQueryError(f"Query execution failed: {e}") from e
     
     async def get_tables(self) -> List[str]:
         """Get list of tables in the database"""
@@ -121,8 +124,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
         try:
             results = await self.execute_query(query)
             return [row['table_name'] for row in results]
-        except Exception as e:
-            logger.error(f"Error getting PostgreSQL tables: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting PostgreSQL tables: %s", e)
             return []
     
     async def get_table_schema(self, table_name: str) -> Dict[str, Any]:
@@ -142,7 +145,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
         ORDER BY ordinal_position
         """
         try:
-            async with self.pool.acquire() as conn:
+            pool = await self._require_pool()
+            async with pool.acquire() as conn:
                 rows = await conn.fetch(query, table_name)
             
             columns = []
@@ -163,7 +167,7 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                 pg_size_pretty(pg_total_relation_size($1)) as total_size,
                 pg_size_pretty(pg_relation_size($1)) as table_size
             """
-            async with self.pool.acquire() as conn:
+            async with pool.acquire() as conn:
                 size_result = await conn.fetchrow(size_query, table_name)
             
             return {
@@ -174,8 +178,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                 "table_size": size_result['table_size'] if size_result else 'Unknown'
             }
             
-        except Exception as e:
-            logger.error(f"Error getting PostgreSQL table schema for {table_name}: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting PostgreSQL table schema for %s: %s", table_name, e)
             return {
                 "table_name": table_name,
                 "columns": [],
@@ -192,7 +196,8 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
                 current_user as current_user,
                 version() as version
             """
-            async with self.pool.acquire() as conn:
+            pool = await self._require_pool()
+            async with pool.acquire() as conn:
                 db_info = await conn.fetchrow(info_query)
             
             # Get table information
@@ -218,10 +223,10 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
             
             return schema
             
-        except Exception as e:
-            logger.error(f"Error getting PostgreSQL schema: {e}")
-            raise DatabaseQueryError(f"Schema retrieval failed: {e}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error getting PostgreSQL schema: %s", e)
+            raise DatabaseQueryError(f"Schema retrieval failed: {e}") from e
 
 # Register the adapter
-from ..database_adapters import DatabaseAdapterFactory
+from ..database_adapters import DatabaseAdapterFactory  # noqa: E402
 DatabaseAdapterFactory.register_adapter('postgresql', PostgreSQLAdapter)

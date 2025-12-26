@@ -6,14 +6,17 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from unittest.mock import Mock
 import pytest
-from unittest.mock import Mock, patch
 from services.neo4j_graphrag_service import Neo4jGraphRAGService
 from services.advanced_migration_engine import AdvancedMigrationEngine, MigrationState, MigrationEvent
 
 
 class TestNeo4jXStateIntegration:
     """Test Neo4j storage integration with XState Migration Visualizer (T-04)."""
+
+    migration_engine: AdvancedMigrationEngine
+    neo4j_service: Mock
     
     def setup_method(self):
         """Setup test fixtures."""
@@ -21,26 +24,26 @@ class TestNeo4jXStateIntegration:
         # Mock Neo4j service (actual connection would require Neo4j instance)
         self.neo4j_service = Mock(spec=Neo4jGraphRAGService)
     
-    def test_migration_state_transitions_stored_as_graph(self):
+    @pytest.mark.asyncio
+    async def test_migration_state_transitions_stored_as_graph(self):
         """Test migration state transitions are stored as Neo4j graph relationships."""
-        session_id = "neo4j-test-001"
-        session = self.migration_engine.create_session(
-            session_id,
-            ["source_db"],
-            "target_db",
-            "full_migration"
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "source_db"}],
+            target={"name": "target_db"},
+            strategy="full_migration",
         )
+        session_id = session.session_id
         
         # Initial state
         assert session.state == MigrationState.IDLE
-        initial_state_node = {
+        _initial_state_node = {
             "session_id": session_id,
             "state": session.state.value,
-            "timestamp": session.history[0]["timestamp"]
+            "timestamp": session.created_at.isoformat(),
         }
         
         # Start migration (IDLE → INITIALIZING)
-        self.migration_engine.start_migration(session_id)
+        await self.migration_engine.start_migration(session_id)
         assert session.state == MigrationState.INITIALIZING
         
         # In production, create Neo4j relationship:
@@ -56,27 +59,32 @@ class TestNeo4jXStateIntegration:
         assert transition_relationship["to_state"] == "initializing"
         assert transition_relationship["event"] == "START"
     
-    def test_migration_history_queryable_via_cypher(self):
+    @pytest.mark.asyncio
+    async def test_migration_history_queryable_via_cypher(self):
         """Test migration history can be queried via Cypher for visualization."""
-        session_id = "neo4j-test-002"
-        session = self.migration_engine.create_session(session_id, ["src"], "tgt", "full")
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "src"}],
+            target={"name": "tgt"},
+            strategy="full",
+        )
+        session_id = session.session_id
         
         # Simulate multiple state transitions
-        self.migration_engine.start_migration(session_id)
+        await self.migration_engine.start_migration(session_id)
         assert session.state == MigrationState.INITIALIZING
         
         # Pause migration
-        self.migration_engine.handle_event(session_id, MigrationEvent.PAUSE)
+        await self.migration_engine.handle_event(session_id, MigrationEvent.PAUSE)
         assert session.state == MigrationState.PAUSED
         
         # Resume migration
-        self.migration_engine.handle_event(session_id, MigrationEvent.RESUME)
+        await self.migration_engine.handle_event(session_id, MigrationEvent.RESUME)
         
         # Complete migration
         session.state = MigrationState.COMPLETED
         
         # In production, Cypher query to retrieve full state graph:
-        cypher_query = """
+        _cypher_query = """
         MATCH path = (start:MigrationState {session_id: $session_id})
                      -[:TRANSITIONED_TO*]->
                      (end:MigrationState)
@@ -96,10 +104,15 @@ class TestNeo4jXStateIntegration:
         assert mock_path[0]["state"] == "idle"
         assert mock_path[-1]["state"] == "completed"
     
-    def test_xstate_visualizer_renders_neo4j_state_graph(self):
+    @pytest.mark.asyncio
+    async def test_xstate_visualizer_renders_neo4j_state_graph(self):
         """Test XState visualizer (T-04) can render state graph from Neo4j."""
-        session_id = "visualizer-test-001"
-        session = self.migration_engine.create_session(session_id, ["db1"], "db2", "full")
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "db1"}],
+            target={"name": "db2"},
+            strategy="full",
+        )
+        session_id = session.session_id
         
         # Simulate full migration workflow
         self.migration_engine.start_migration(session_id)
@@ -140,10 +153,15 @@ class TestNeo4jXStateIntegration:
         assert len(visualization_data["edges"]) == 7
         assert visualization_data["nodes"][-1]["status"] == "current"
     
-    def test_websocket_sync_with_neo4j_updates(self):
+    @pytest.mark.asyncio
+    async def test_websocket_sync_with_neo4j_updates(self):
         """Test WebSocket synchronization between migration engine and Neo4j."""
-        session_id = "websocket-test-001"
-        session = self.migration_engine.create_session(session_id, ["src"], "tgt", "full")
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "src"}],
+            target={"name": "tgt"},
+            strategy="full",
+        )
+        session_id = session.session_id
         
         # Simulate WebSocket listener
         websocket_updates = []
@@ -152,16 +170,16 @@ class TestNeo4jXStateIntegration:
             websocket_updates.append(update)
         
         # Start migration
-        self.migration_engine.start_migration(session_id)
+        await self.migration_engine.start_migration(session_id)
         
         # Mock WebSocket update payload
         ws_update = {
             "type": "state_change",
             "session_id": session_id,
             "state": session.state.value,
-            "progress": session.metadata.get("progress", 0),
-            "quality_score": session.calculate_quality_score(),
-            "timestamp": session.history[-1]["timestamp"] if session.history else None
+            "progress": session.progress,
+            "quality_score": session.quality_score,
+            "timestamp": session.history[-1]["timestamp"] if session.history else session.created_at.isoformat(),
         }
         mock_websocket_handler(ws_update)
         
@@ -173,18 +191,23 @@ class TestNeo4jXStateIntegration:
         # 2. PLMMigrationVisualizerPage state update (T-04)
         # 3. Graph Explorer refresh
     
-    def test_csv_export_from_neo4j_history(self):
+    @pytest.mark.asyncio
+    async def test_csv_export_from_neo4j_history(self):
         """Test CSV export functionality leverages Neo4j query history."""
-        session_id = "csv-export-001"
-        session = self.migration_engine.create_session(session_id, ["src"], "tgt", "full")
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "src"}],
+            target={"name": "tgt"},
+            strategy="full",
+        )
+        session_id = session.session_id
         
         # Simulate migration with multiple events
-        self.migration_engine.start_migration(session_id)
-        self.migration_engine.handle_event(session_id, MigrationEvent.PAUSE)
-        self.migration_engine.handle_event(session_id, MigrationEvent.RESUME)
+        await self.migration_engine.start_migration(session_id)
+        await self.migration_engine.handle_event(session_id, MigrationEvent.PAUSE)
+        await self.migration_engine.handle_event(session_id, MigrationEvent.RESUME)
         
         # Get history for CSV export
-        history = self.migration_engine.get_session_history(session_id)
+        history = self.migration_engine.get_history(session_id)
         
         # Mock CSV structure
         csv_rows = []
@@ -205,35 +228,41 @@ class TestNeo4jXStateIntegration:
         # In production, this CSV data comes from Neo4j Cypher query
         # and is exported via PLMMigrationVisualizerPage (T-04)
     
-    def test_neo4j_stores_migration_metadata(self):
+    @pytest.mark.asyncio
+    async def test_neo4j_stores_migration_metadata(self):
         """Test Neo4j stores rich migration metadata for analysis."""
-        session_id = "metadata-test-001"
-        session = self.migration_engine.create_session(
-            session_id,
-            ["legacy_db", "archive_db"],
-            "modern_db",
-            "consolidation_migration"
+        session = await self.migration_engine.create_session(
+            sources=[{"name": "legacy_db"}, {"name": "archive_db"}],
+            target={"name": "modern_db"},
+            strategy="consolidation_migration",
         )
+        session_id = session.session_id
         
         # Start and progress migration
-        self.migration_engine.start_migration(session_id)
+        await self.migration_engine.start_migration(session_id)
         session.state = MigrationState.DATA_MIGRATION
-        session.metadata["rows_migrated"] = 10000
-        session.metadata["rows_failed"] = 50
-        session.metadata["schema_drift_detected"] = True
+
+        metadata = {
+            "rows_migrated": 10000,
+            "rows_failed": 50,
+            "schema_drift_detected": True,
+        }
+
+        rows_total = metadata["rows_migrated"] + metadata["rows_failed"]
+        quality_score = 1.0 - (metadata["rows_failed"] / rows_total) if rows_total else 0.0
         
         # Neo4j node properties would include rich metadata
         neo4j_node_properties = {
-            "session_id": session.id,
+            "session_id": session.session_id,
             "state": session.state.value,
             "sources": session.sources,
             "target": session.target,
             "strategy": session.strategy,
-            "rows_migrated": session.metadata.get("rows_migrated", 0),
-            "rows_failed": session.metadata.get("rows_failed", 0),
-            "schema_drift": session.metadata.get("schema_drift_detected", False),
-            "quality_score": session.calculate_quality_score(),
-            "created_at": session.history[0]["timestamp"] if session.history else None
+            "rows_migrated": metadata.get("rows_migrated", 0),
+            "rows_failed": metadata.get("rows_failed", 0),
+            "schema_drift": metadata.get("schema_drift_detected", False),
+            "quality_score": quality_score,
+            "created_at": session.created_at.isoformat(),
         }
         
         assert neo4j_node_properties["rows_migrated"] == 10000
@@ -248,10 +277,10 @@ class TestGraphExplorerNeo4jIntegration:
     def test_graph_explorer_connection_service(self):
         """Test connectionService.js manages Neo4j connection lifecycle."""
         # Mock connection configuration
-        connection_config = {
-            "uri": "bolt://localhost:7687",
+        _connection_config = {
+            "uri": "neo4j://127.0.0.1:7687",
             "username": "neo4j",
-            "password": "test-password",
+            "password": "tcs12345",
             "database": "neo4j",
             "auto_connect": True
         }
@@ -281,7 +310,7 @@ class TestGraphExplorerNeo4jIntegration:
         }
         
         # Mock Cypher query based on filters
-        cypher_with_filters = f"""
+        _cypher_with_filters = f"""
         MATCH (n)
         WHERE n:MigrationState OR n:MigrationSession
         WITH n LIMIT {filters['limit']}
@@ -307,7 +336,7 @@ class TestGraphExplorerNeo4jIntegration:
     def test_cypher_query_execution_from_ui(self):
         """Test Graph Explorer executes Cypher queries from query panel."""
         # Mock user query
-        user_query = """
+        _user_query = """
         MATCH (session:MigrationSession {id: 'test-001'})
         -[:HAS_STATE]->(state:MigrationState)
         RETURN session, state

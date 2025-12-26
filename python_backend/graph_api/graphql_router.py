@@ -84,18 +84,18 @@ async def introspect_schema(
     try:
         result = service.introspect_schema(
             content=request.content,
-            format=request.format,
+            data_format=request.format,
             name=request.name
         )
         return result
     
     except ValueError as e:
-        logger.error(f"Schema introspection failed: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Schema introspection failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     
     except Exception as e:
-        logger.error(f"Unexpected error during introspection: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error("Unexpected error during introspection: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/upload-schema", response_model=SchemaIntrospectionResponse)
@@ -114,6 +114,9 @@ async def upload_schema(
     Rejects non-XML/JSON files with 400 error.
     """
     # Determine format from filename
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing uploaded filename")
+
     filename = file.filename.lower()
     
     if filename.endswith('.xml'):
@@ -137,21 +140,21 @@ async def upload_schema(
         # Introspect schema
         result = service.introspect_schema(
             content=content_str,
-            format=format_type,
+            data_format=format_type,
             name=schema_name
         )
         return result
-    
+
+    except UnicodeDecodeError as e:
+        raise HTTPException(status_code=400, detail="File encoding must be UTF-8") from e
+
     except ValueError as e:
-        logger.error(f"Schema upload failed: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
-    
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="File encoding must be UTF-8")
+        logger.error("Schema upload failed: %s", e)
+        raise HTTPException(status_code=400, detail=str(e)) from e
     
     except Exception as e:
-        logger.error(f"Unexpected error during upload: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error("Unexpected error during upload: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -179,8 +182,8 @@ async def execute_query(
         return result
     
     except Exception as e:
-        logger.error(f"Query execution error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error("Query execution error: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/transform", response_model=TransformResponse)
@@ -215,8 +218,8 @@ async def transform_data(
         return result
     
     except Exception as e:
-        logger.error(f"Transform error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error("Transform error: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/health")
