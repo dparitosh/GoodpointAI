@@ -21,7 +21,7 @@
   },
   "databases": {
     "postgresql": {
-      "main_port": 5432,
+      "main_port": 5433,
       "backup_port": 5433,
       "backup_schedule": "hourly"
     },

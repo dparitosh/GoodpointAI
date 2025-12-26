@@ -104,7 +104,7 @@ _See `GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md` for detailed implementation spec
 ### 5.1 PLM XML → Graph & Analytics Flow
 1. **Upload (Frontend)**: `gp_plm_data_management.jsx` gathers files, runs client validation, issues `FormData` POST to `/api/plm-xml/uploads`.  
 2. **Gateway (Port 8003)**: FastAPI router authenticates request, stores metadata, streams file to PLM XML microservice (Port 8005).  
-3. **Parsing (Port 8005)**: `plm_xml_service.py` uses `lxml` to validate schema, extract entities/relationships, writes to PostgreSQL (Port 5432).  
+3. **Parsing (Port 8005)**: `plm_xml_service.py` uses `lxml` to validate schema, extract entities/relationships, writes to PostgreSQL (Port 5433).  
 4. **ETL (Processing Hub)**: `gp_processing_hub.jsx` displays server-reported stage; backend orchestrator maps relational data to Neo4j (Port 7687) via Cypher templates.  
 5. **Indexing**: OpenSearch bulk indexing for text/vector search; embeddings computed via Sentence Transformers service.  
 6. **Analytics Logging**: `services.analytics_storage_service` (Port 8006) records metrics; dashboards read via `/api/analytics/uploads`.  
@@ -143,7 +143,7 @@ All services log responses using common schema `{status, message, data?, timesta
 ---
 
 ## 7. Data & Storage Requirements
-- **PostgreSQL Main (Ports 5432/5433)**: Stores PLM uploads, migration sessions, task tracker tables. Requires hourly backups via `pg_basebackup`.  
+- **PostgreSQL Main (Port 5433)**: Stores PLM uploads, migration sessions, task tracker tables. Requires hourly backups via `pg_basebackup`.  
 - **Neo4j (Ports 7687/7474)**: Hosts derived PLM graph; enforces unique constraints on `Product.id`, `Part.id`.  
 - **PostgreSQL Configuration Schema**: Configuration documents previously stored in MongoDB now live in schema `ui_config` (tables `data_sources`, `branding_tokens`, `feature_flags`) with JSONB columns; CRUD exposed only via backend services to preserve validation rules.  
 - **OpenSearch 2.x (Port 9200)**: Vector + keyword indexes; uses `graphtrace-vectors-*` naming.  

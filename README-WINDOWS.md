@@ -90,6 +90,23 @@ start-frontend.bat
 The frontend will be available at:
 - Application: `http://localhost:5173`
 
+## Quick Smoke Test (Windows)
+
+If you see `>>>` in your terminal, you're inside the Python REPL — exit with `exit()` before running PowerShell commands.
+
+From PowerShell, you can run a backend smoke test (health + workflow start) like this:
+
+```powershell
+cd .\python_backend
+.\smoke-backend.ps1
+```
+
+Optional parameters:
+
+```powershell
+.\smoke-backend.ps1 -BaseUrl http://127.0.0.1:8000 -WorkflowId wf_demo_001 -TimeoutSec 10
+```
+
 ## Script Features
 
 ### Automated Setup

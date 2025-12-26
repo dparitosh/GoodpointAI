@@ -301,7 +301,7 @@ GRAPH_RAG_TOOLS_CONFIG={}  # JSON
 REACT_APP_API_URL=http://localhost:8000
 
 # Database (for GraphQL Catalogue)
-DATABASE_URL=postgresql://user:pass@localhost:5432/graphtrace
+DATABASE_URL=postgresql://user:pass@localhost:5433/graphtrace
 ```
 
 ### Optional Variables
