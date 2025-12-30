@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { e2etraceProcessGraphDataForAnalytics } from './e2etrace-analytics-processor';
 import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
 import { EChartsReact } from '../../../components/e2etrace-echarts-react';
 import { e2etraceFetchWithRetry } from '../../../api/e2etrace-api';
-import { e2etraceUseTheme } from '../../../contexts/e2etrace-theme-context';
+import { useE2ETraceTheme } from '../../../contexts/e2etrace-theme-context';
 import {
     getLabelChartOption,
     getMappingCoverageGaugeOption,
@@ -35,9 +36,21 @@ const Widget = ({ title, children, className, style, subheader }) => (
 
 export function E2ETraceAnalyticsPage() {
     const [metrics, setMetrics] = useState(null);
-    const { theme } = e2etraceUseTheme();
+    const { theme } = useE2ETraceTheme();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    const [qualityReportsSummary, setQualityReportsSummary] = useState({
+        totalReports: 0,
+        avgOverallScorePct: null,
+        totalIssues: 0,
+        criticalIssues: 0,
+    });
+
+    const [plmRunReportsSummary, setPlmRunReportsSummary] = useState({
+        totalReports: 0,
+        blockedReports: 0,
+    });
 
     useEffect(() => {
         const fetchAndProcessData = async () => {
@@ -53,6 +66,54 @@ export function E2ETraceAnalyticsPage() {
             }
         };
         fetchAndProcessData();
+    }, []);
+
+    useEffect(() => {
+        let cancelled = False
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchQualityReports = async () => {
+            try {
+                const res = await fetch('/api/analytics/quality/reports');
+                if (!res.ok) throw new Error('Failed to fetch quality reports');
+                const data = await res.json();
+                if (cancelled) return;
+
+                const reports = Array.isArray(data) ? data : [];
+                const scores = reports
+                    .map((r) => Number(r?.overall_score))
+                    .filter((v) => Number.isFinite(v));
+                const avgScore = scores.length
+                    ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 1000) / 10
+                    : null;
+
+                const allIssues = reports.flatMap((r) => (Array.isArray(r?.issues) ? r.issues : []));
+                const criticalCount = allIssues.filter((i) => String(i?.severity || '').toLowerCase() === 'critical').length;
+
+                setQualityReportsSummary({
+                    totalReports: reports.length,
+                    avgOverallScorePct: avgScore,
+                    totalIssues: allIssues.length,
+                    criticalIssues: criticalCount,
+                });
+            } catch {
+                if (!cancelled) {
+                    setQualityReportsSummary({
+                        totalReports: 0,
+                        avgOverallScorePct: null,
+                        totalIssues: 0,
+                        criticalIssues: 0,
+                    });
+                }
+            }
+        };
+
+        fetchQualityReports();
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // Memoize chart options to prevent recalculation on every render
@@ -88,6 +149,21 @@ export function E2ETraceAnalyticsPage() {
                     {loading ? <p>Loading metrics...</p> : (
                         <>
                             <div className="e2etrace-metric-card">Total Data Quality Issues: <strong>{metrics.dataQualityIssues}</strong></div>
+                            <div className="e2etrace-metric-card">
+                                Quality Reports: <strong>{qualityReportsSummary.totalReports}</strong>
+                                {qualityReportsSummary.avgOverallScorePct != null ? (
+                                    <> · Avg Score: <strong>{qualityReportsSummary.avgOverallScorePct}%</strong></>
+                                ) : null}
+                            </div>
+                            <div className="e2etrace-metric-card">
+                                Quality Report Issues: <strong>{qualityReportsSummary.totalIssues}</strong>
+                                {qualityReportsSummary.criticalIssues > 0 ? (
+                                    <> · Critical: <strong>{qualityReportsSummary.criticalIssues}</strong></>
+                                ) : null}
+                                <span style={{ marginLeft: '0.5rem' }}>
+                                    <Link to="/reporting" style={{ textDecoration: 'underline' }}>View reports</Link>
+                                </span>
+                            </div>
                             <div className="e2etrace-metric-card">Orphan Target Nodes: <strong>{metrics.orphanTargetNodes.length}</strong></div>
                             {metrics.orphanTargetNodes.length > 0 && (
                                 <ul className="e2etrace-metric-list">

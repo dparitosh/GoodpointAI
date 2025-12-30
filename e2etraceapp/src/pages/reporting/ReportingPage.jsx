@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts'; // Add this import for gradients
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '../../config/api-config.js';
+import { saveAs } from 'file-saver';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const chartTypes = [
   { value: 'bar', label: 'Bar Chart' },
@@ -21,6 +23,9 @@ const aggregationTypes = [
 ];
 
 export default function ReportingPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [entities, setEntities] = useState([]);
   const [entity, setEntity] = useState(null);
   const [xProp, setXProp] = useState('');
@@ -33,6 +38,115 @@ export default function ReportingPage() {
   const [result, setResult] = useState([]);
   const [chartOption, setChartOption] = useState(null);
   const [limit, setLimit] = useState(50);
+
+  const [qualityReports, setQualityReports] = useState([]);
+  const [qualityReportsLoading, setQualityReportsLoading] = useState(false);
+  const [qualityReportsError, setQualityReportsError] = useState(null);
+  const [selectedQualityReport, setSelectedQualityReport] = useState(null);
+
+  const [plmRunReports, setPlmRunReports] = useState([]);
+  const [plmRunReportsLoading, setPlmRunReportsLoading] = useState(false);
+  const [plmRunReportsError, setPlmRunReportsError] = useState(null);
+  const [selectedPersistedReport, setSelectedPersistedReport] = useState(null);
+
+  const requestedReportId = useMemo(() => {
+    const raw = searchParams.get('reportId');
+    return raw ? String(raw) : '';
+  }, [searchParams]);
+
+  const requestedQualityTable = useMemo(() => {
+    const raw = searchParams.get('qualityTable');
+    return raw ? String(raw) : '';
+  }, [searchParams]);
+
+  const getScoreColor = (score) => {
+    const normalized = Number(score);
+    if (!Number.isFinite(normalized)) return '#6c757d';
+    if (normalized >= 0.9) return '#28a745';
+    if (normalized >= 0.7) return '#ffc107';
+    return '#dc3545';
+  };
+
+  const downloadJson = (filename, payload) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    saveAs(blob, filename);
+  };
+
+  const csvEscape = (value) => {
+    const s = value == null ? '' : String(value);
+    if (/[\n\r",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const downloadCsv = (filename, rows) => {
+    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    saveAs(blob, filename);
+  };
+
+  const exportQualityReportCsv = (report) => {
+    const header = [
+      'table_name',
+      'scan_id',
+      'scan_date',
+      'overall_score',
+      'completeness_score',
+      'accuracy_score',
+      'consistency_score',
+      'validity_score',
+      'row_count',
+      'column_count',
+      'issue_severity',
+      'issue_description',
+      'issue_affected_rows',
+      'issue_affected_columns',
+      'issue_suggestion',
+    ];
+
+    const issues = Array.isArray(report?.issues) ? report.issues : [];
+    const rows = issues.length
+      ? issues.map((issue) => [
+          report.table_name,
+          report.scan_id,
+          report.scan_date,
+          report.overall_score,
+          report.completeness_score,
+          report.accuracy_score,
+          report.consistency_score,
+          report.validity_score,
+          report.row_count,
+          report.column_count,
+          issue?.severity,
+          issue?.description,
+          issue?.affected_rows,
+          Array.isArray(issue?.affected_columns) ? issue.affected_columns.join('|') : '',
+          issue?.suggestion,
+        ])
+      : [
+          [
+            report.table_name,
+            report.scan_id,
+            report.scan_date,
+            report.overall_score,
+            report.completeness_score,
+            report.accuracy_score,
+            report.consistency_score,
+            report.validity_score,
+            report.row_count,
+            report.column_count,
+            '',
+            '',
+            '',
+            '',
+            '',
+          ],
+        ];
+
+    downloadCsv(
+      `quality_report_${String(report.table_name || 'unknown')}_${new Date().toISOString().split('T')[0]}.csv`,
+      [header, ...rows],
+    );
+  };
 
   // Fetch available entities and properties
   useEffect(() => {
@@ -54,6 +168,88 @@ export default function ReportingPage() {
       })
       .finally(() => setLoadingEntities(false));
   }, []);
+
+  // Fetch Quality Reports (centralized here; Data Quality page no longer owns reporting UI)
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setQualityReportsLoading(true);
+        setQualityReportsError(null);
+        const res = await fetch('/api/analytics/quality/reports');
+        if (!res.ok) throw new Error('Failed to fetch quality reports');
+        const data = await res.json();
+        if (cancelled) return;
+        setQualityReports(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (cancelled) return;
+        setQualityReports([]);
+        setQualityReportsError(error?.message || 'Failed to fetch quality reports');
+      } finally {
+        if (!cancelled) setQualityReportsLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fetch persisted PLM run reports
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setPlmRunReportsLoading(true);
+        setPlmRunReportsError(null);
+        const res = await fetch('/api/reports?report_type=plm_etl_run&limit=50');
+        if (!res.ok) throw new Error('Failed to fetch persisted run reports');
+        const data = await res.json();
+        if (cancelled) return;
+        setPlmRunReports(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (cancelled) return;
+        setPlmRunReports([]);
+        setPlmRunReportsError(error?.message || 'Failed to fetch persisted run reports');
+      } finally {
+        if (!cancelled) setPlmRunReportsLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Deep-link: load persisted report details (?reportId=...)
+  useEffect(() => {
+    if (!requestedReportId) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/reports/${encodeURIComponent(requestedReportId)}`);
+        if (!res.ok) throw new Error('Report not found');
+        const data = await res.json();
+        if (!cancelled) setSelectedPersistedReport(data);
+      } catch {
+        if (!cancelled) setSelectedPersistedReport(null);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedReportId]);
+
+  // Apply deep link selection (?qualityTable=...)
+  useEffect(() => {
+    if (!requestedQualityTable) return;
+    if (!Array.isArray(qualityReports) || qualityReports.length === 0) return;
+    const found = qualityReports.find((r) => r?.table_name === requestedQualityTable);
+    if (found) setSelectedQualityReport(found);
+  }, [qualityReports, requestedQualityTable]);
 
   // Generate chart options
   const generateChartOption = (records, chartType) => {
@@ -238,13 +434,328 @@ export default function ReportingPage() {
       <h2 style={{ textAlign: 'center', marginBottom: '2rem', color: '#2c3e50' }}>
         Advanced Reporting & Visualization
       </h2>
+
+      {/* Quality Reports (centralized) */}
+      <div style={{
+        background: 'var(--card-bg)',
+        borderRadius: 12,
+        padding: '1.25rem',
+        marginBottom: '1.5rem',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0 }}>Quality Reports</h3>
+          {selectedQualityReport ? (
+            <button
+              type="button"
+              onClick={() => setSelectedQualityReport(null)}
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: 8,
+                border: '1px solid var(--border-color)',
+                background: 'var(--card-bg)',
+                cursor: 'pointer'
+              }}
+            >
+              Back to list
+            </button>
+          ) : null}
+        </div>
+
+        {qualityReportsError ? (
+          <div style={{ color: 'var(--error-color)' }}>{qualityReportsError}</div>
+        ) : null}
+
+        {qualityReportsLoading ? (
+          <div>Loading quality reports…</div>
+        ) : null}
+
+        {!qualityReportsLoading && !qualityReportsError && !selectedQualityReport ? (
+          <>
+            {qualityReports.length === 0 ? (
+              <div>No quality reports yet. Run a scan to generate reports.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                {qualityReports.map((report, idx) => (
+                  <button
+                    key={`${report?.scan_id || report?.table_name || idx}`}
+                    type="button"
+                    onClick={() => setSelectedQualityReport(report)}
+                    style={{
+                      textAlign: 'left',
+                      padding: '1rem',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--card-bg)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                      <div style={{ fontWeight: 700 }}>{report.table_name}</div>
+                      <div style={{
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: 999,
+                        background: getScoreColor(report.overall_score),
+                        color: '#fff',
+                        fontWeight: 700
+                      }}>
+                        {Number.isFinite(Number(report.overall_score)) ? `${Math.round(Number(report.overall_score) * 100)}%` : 'N/A'}
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.25rem', opacity: 0.9 }}>
+                      <div>Issues: {Array.isArray(report.issues) ? report.issues.length : 0}</div>
+                      <div>Scanned: {report.scan_date ? new Date(report.scan_date).toLocaleDateString() : '—'}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {!qualityReportsLoading && !qualityReportsError && selectedQualityReport ? (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{selectedQualityReport.table_name}</div>
+                <div style={{ opacity: 0.85, marginTop: '0.25rem' }}>
+                  Scan ID: {selectedQualityReport.scan_id || '—'} · Date:{' '}
+                  {selectedQualityReport.scan_date ? new Date(selectedQualityReport.scan_date).toLocaleString() : '—'}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => downloadJson(
+                    `quality_report_${String(selectedQualityReport.table_name || 'unknown')}_${new Date().toISOString().split('T')[0]}.json`,
+                    selectedQualityReport,
+                  )}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download JSON
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => exportQualityReportCsv(selectedQualityReport)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigate('/spreadsheet')}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Open Spreadsheet
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+              <div style={{ padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)' }}>
+                <div style={{ opacity: 0.8 }}>Overall</div>
+                <div style={{ fontWeight: 800, color: getScoreColor(selectedQualityReport.overall_score) }}>
+                  {Number.isFinite(Number(selectedQualityReport.overall_score)) ? `${(Number(selectedQualityReport.overall_score) * 100).toFixed(1)}%` : 'N/A'}
+                </div>
+              </div>
+              <div style={{ padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)' }}>
+                <div style={{ opacity: 0.8 }}>Issues</div>
+                <div style={{ fontWeight: 800 }}>{Array.isArray(selectedQualityReport.issues) ? selectedQualityReport.issues.length : 0}</div>
+              </div>
+              <div style={{ padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)' }}>
+                <div style={{ opacity: 0.8 }}>Rows</div>
+                <div style={{ fontWeight: 800 }}>{selectedQualityReport.row_count != null ? Number(selectedQualityReport.row_count).toLocaleString() : '—'}</div>
+              </div>
+              <div style={{ padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: 12, background: 'var(--card-bg)' }}>
+                <div style={{ opacity: 0.8 }}>Columns</div>
+                <div style={{ fontWeight: 800 }}>{selectedQualityReport.column_count != null ? selectedQualityReport.column_count : '—'}</div>
+              </div>
+            </div>
+
+            {Array.isArray(selectedQualityReport.issues) && selectedQualityReport.issues.length > 0 ? (
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <div style={{ fontWeight: 700 }}>Issues</div>
+                {selectedQualityReport.issues.map((issue, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--card-bg)'
+                    }}
+                  >
+                    <div style={{ fontWeight: 700 }}>
+                      {issue?.severity ? String(issue.severity).toUpperCase() : 'ISSUE'}: {issue?.description || ''}
+                    </div>
+                    <div style={{ opacity: 0.85, marginTop: '0.25rem' }}>
+                      Affected rows: {issue?.affected_rows ?? '—'} · Columns:{' '}
+                      {Array.isArray(issue?.affected_columns) ? issue.affected_columns.join(', ') : '—'}
+                    </div>
+                    {issue?.suggestion ? (
+                      <div style={{ opacity: 0.9, marginTop: '0.25rem' }}>Suggestion: {issue.suggestion}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Persisted PLM ETL Run Reports */}
+      <div style={{
+        background: 'var(--card-bg)',
+        borderRadius: 12,
+        padding: '1.25rem',
+        marginBottom: '1.5rem',
+        border: '1px solid var(--border-color)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0 }}>PLM ETL Run Reports</h3>
+          {selectedPersistedReport ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPersistedReport(null);
+                navigate('/reporting');
+              }}
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: 8,
+                border: '1px solid var(--border-color)',
+                background: 'var(--card-bg)',
+                cursor: 'pointer'
+              }}
+            >
+              Back to list
+            </button>
+          ) : null}
+        </div>
+
+        {plmRunReportsError ? (
+          <div style={{ color: 'var(--error-color)' }}>{plmRunReportsError}</div>
+        ) : null}
+
+        {plmRunReportsLoading ? <div>Loading run reports…</div> : null}
+
+        {!plmRunReportsLoading && !selectedPersistedReport ? (
+          <>
+            {plmRunReports.length === 0 ? (
+              <div>No persisted run reports yet. Run PLM ETL to generate one.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                {plmRunReports.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => navigate(`/reporting?reportId=${encodeURIComponent(r.id)}`)}
+                    style={{
+                      textAlign: 'left',
+                      padding: '1rem',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--card-bg)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ fontWeight: 800 }}>{r.title || 'PLM ETL Run Report'}</div>
+                    <div style={{ opacity: 0.85, marginTop: '0.25rem' }}>
+                      Run ID: {r.run_id || '—'}
+                    </div>
+                    <div style={{ opacity: 0.8, marginTop: '0.25rem' }}>
+                      Created: {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {selectedPersistedReport ? (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 900 }}>{selectedPersistedReport.title || selectedPersistedReport.id}</div>
+                <div style={{ opacity: 0.85, marginTop: '0.25rem' }}>
+                  Type: {selectedPersistedReport.report_type} · Run ID: {selectedPersistedReport.run_id || '—'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => downloadJson(
+                    `report_${String(selectedPersistedReport.report_type || 'report')}_${new Date().toISOString().split('T')[0]}.json`,
+                    selectedPersistedReport.payload,
+                  )}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/spreadsheet?reportId=${encodeURIComponent(selectedPersistedReport.id)}`)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--card-bg)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Open Spreadsheet
+                </button>
+              </div>
+            </div>
+
+            <pre style={{
+              whiteSpace: 'pre-wrap',
+              background: 'var(--accent-color)',
+              color: 'white',
+              borderRadius: 12,
+              padding: '1rem',
+              overflowX: 'auto'
+            }}>
+              {JSON.stringify(selectedPersistedReport.payload, null, 2)}
+            </pre>
+          </div>
+        ) : null}
+      </div>
       
       {/* Enhanced Search Panel */}
       <div style={{
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
         gap: '1rem',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'var(--accent-color)',
         borderRadius: 12, 
         padding: '2rem', 
         marginBottom: '2rem', 
@@ -428,7 +939,7 @@ export default function ReportingPage() {
           marginBottom: '2rem'
         }}>
           <div style={{ 
-            background: 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)',
+            background: 'var(--accent-color)',
             color: 'white',
             padding: '1rem 2rem',
             fontSize: '1.1rem',
@@ -473,7 +984,7 @@ export default function ReportingPage() {
         marginTop: '3rem', 
         textAlign: 'center',
         padding: '2rem',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: 'var(--accent-color)',
         borderRadius: '12px',
         color: 'white'
       }}>

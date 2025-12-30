@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './DataQualityDashboard.css';
 
 /**
@@ -6,14 +7,12 @@ import './DataQualityDashboard.css';
  * Complete UI for data quality monitoring, scanning, and rule management
  */
 export const DataQualityDashboard = () => {
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, scans, rules, reports
+  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, rules
   const [dashboardData, setDashboardData] = useState(null);
-  const [qualityReports, setQualityReports] = useState([]);
   const [qualityRules, setQualityRules] = useState([]);
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedReport, setSelectedReport] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newScanForm, setNewScanForm] = useState({
     table_name: '',
@@ -21,34 +20,46 @@ export const DataQualityDashboard = () => {
     rules: []
   });
 
+  const navigate = useNavigate();
+
+  const dashboardFetchInFlightRef = useRef(false);
+  const dashboardAbortRef = useRef(null);
+
   // Fetch dashboard data
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async ({ silent = false } = {}) => {
+    if (dashboardFetchInFlightRef.current) {
+      return;
+    }
+    dashboardFetchInFlightRef.current = true;
+
+    if (dashboardAbortRef.current) {
+      try {
+        dashboardAbortRef.current.abort();
+      } catch {
+        // ignore
+      }
+    }
+    const controller = new AbortController();
+    dashboardAbortRef.current = controller;
+
     try {
-      setLoading(true);
-      const response = await fetch('/api/analytics/quality/dashboard');
+      if (!silent) setLoading(true);
+      const response = await fetch('/api/analytics/quality/dashboard', { signal: controller.signal });
       if (!response.ok) throw new Error('Failed to fetch dashboard data');
       const data = await response.json();
       setDashboardData(data);
       setError(null);
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        return;
+      }
       setError(err.message);
       console.error('Dashboard fetch error:', err);
     } finally {
-      setLoading(false);
+      dashboardFetchInFlightRef.current = false;
+      if (!silent) setLoading(false);
     }
-  };
-
-  // Fetch quality reports
-  const fetchReports = async () => {
-    try {
-      const response = await fetch('/api/analytics/quality/reports');
-      if (!response.ok) throw new Error('Failed to fetch reports');
-      const data = await response.json();
-      setQualityReports(data);
-    } catch (err) {
-      console.error('Reports fetch error:', err);
-    }
-  };
+  }, []);
 
   // Fetch quality rules
   const fetchRules = async () => {
@@ -87,7 +98,6 @@ export const DataQualityDashboard = () => {
       // Refresh data after a delay to show results
       setTimeout(() => {
         fetchDashboard();
-        fetchReports();
       }, 3000);
       
     } catch (err) {
@@ -113,17 +123,25 @@ export const DataQualityDashboard = () => {
   // Initial data load
   useEffect(() => {
     fetchDashboard();
-    fetchReports();
     fetchRules();
-  }, []);
+    return () => {
+      if (dashboardAbortRef.current) {
+        try {
+          dashboardAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [fetchDashboard]);
 
   // Auto-refresh dashboard
   useEffect(() => {
     if (activeTab === 'dashboard') {
-      const interval = setInterval(fetchDashboard, 30000); // 30 seconds
+      const interval = setInterval(() => fetchDashboard({ silent: true }), 60000); // 60 seconds
       return () => clearInterval(interval);
     }
-  }, [activeTab]);
+  }, [activeTab, fetchDashboard]);
 
   // Get quality score color
   const getScoreColor = (score) => {
@@ -177,12 +195,6 @@ export const DataQualityDashboard = () => {
           onClick={() => setActiveTab('dashboard')}
         >
           <i className="fas fa-tachometer-alt" aria-hidden="true" /> Dashboard
-        </button>
-        <button 
-          className={`quality-tab ${activeTab === 'reports' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reports')}
-        >
-          <i className="fas fa-file-alt" aria-hidden="true" /> Reports
         </button>
         <button 
           className={`quality-tab ${activeTab === 'rules' ? 'active' : ''}`}
@@ -280,11 +292,7 @@ export const DataQualityDashboard = () => {
                         <button 
                           className="btn-small btn-view"
                           onClick={() => {
-                            const report = qualityReports.find(r => r.table_name === scan.table_name);
-                            if (report) {
-                              setSelectedReport(report);
-                              setActiveTab('reports');
-                            }
+                            navigate(`/reporting?qualityTable=${encodeURIComponent(scan.table_name)}`);
                           }}
                         >
                           View Details
@@ -317,142 +325,6 @@ export const DataQualityDashboard = () => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Reports Tab */}
-      {activeTab === 'reports' && (
-        <div className="quality-content">
-          <div className="quality-section">
-            <h2 className="section-title">Quality Reports</h2>
-            
-            {selectedReport ? (
-              <div className="report-detail">
-                <button 
-                  className="btn-back"
-                  onClick={() => setSelectedReport(null)}
-                >
-                  ← Back to Reports
-                </button>
-                
-                <div className="report-header">
-                  <h3>{selectedReport.table_name}</h3>
-                  <div className="report-meta">
-                    <span>Scan ID: {selectedReport.scan_id}</span>
-                    <span>Date: {new Date(selectedReport.scan_date).toLocaleString()}</span>
-                    <span>Rows: {selectedReport.row_count.toLocaleString()}</span>
-                    <span>Columns: {selectedReport.column_count}</span>
-                  </div>
-                </div>
-
-                {/* Quality Scores */}
-                <div className="report-scores">
-                  <div className="score-card">
-                    <h4>Completeness</h4>
-                    <div className="score-circle" style={{ borderColor: getScoreColor(selectedReport.completeness_score) }}>
-                      {(selectedReport.completeness_score * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="score-card">
-                    <h4>Accuracy</h4>
-                    <div className="score-circle" style={{ borderColor: getScoreColor(selectedReport.accuracy_score) }}>
-                      {(selectedReport.accuracy_score * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="score-card">
-                    <h4>Consistency</h4>
-                    <div className="score-circle" style={{ borderColor: getScoreColor(selectedReport.consistency_score) }}>
-                      {(selectedReport.consistency_score * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="score-card">
-                    <h4>Validity</h4>
-                    <div className="score-circle" style={{ borderColor: getScoreColor(selectedReport.validity_score) }}>
-                      {(selectedReport.validity_score * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="score-card overall">
-                    <h4>Overall Score</h4>
-                    <div className="score-circle large" style={{ borderColor: getScoreColor(selectedReport.overall_score) }}>
-                      {(selectedReport.overall_score * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Issues */}
-                {selectedReport.issues.length > 0 && (
-                  <div className="report-issues">
-                    <h4>Quality Issues ({selectedReport.issues.length})</h4>
-                    {selectedReport.issues.map((issue, idx) => (
-                      <div key={idx} className="issue-card">
-                        <div className="issue-header">
-                          <span className={`severity-badge ${getSeverityClass(issue.severity)}`}>
-                            {issue.severity.toUpperCase()}
-                          </span>
-                          <span className="issue-description">{issue.description}</span>
-                        </div>
-                        <div className="issue-details">
-                          <span>Affected Rows: {issue.affected_rows}</span>
-                          <span>Columns: {issue.affected_columns.join(', ')}</span>
-                        </div>
-                        <div className="issue-suggestion">
-                          Suggestion: {issue.suggestion}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Recommendations */}
-                {selectedReport.recommendations.length > 0 && (
-                  <div className="report-recommendations">
-                    <h4>Recommendations</h4>
-                    <ul>
-                      {selectedReport.recommendations.map((rec, idx) => (
-                        <li key={idx}>{rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="reports-list">
-                {qualityReports.map((report, idx) => (
-                  <div 
-                    key={idx} 
-                    className="report-card"
-                    onClick={() => setSelectedReport(report)}
-                  >
-                    <div className="report-card-header">
-                      <h3>{report.table_name}</h3>
-                      <div className="report-score" style={{ backgroundColor: getScoreColor(report.overall_score) }}>
-                        {(report.overall_score * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                    <div className="report-card-body">
-                      <div className="report-stat">
-                        <span className="stat-label">Issues:</span>
-                        <span className="stat-value">{report.issues.length}</span>
-                      </div>
-                      <div className="report-stat">
-                        <span className="stat-label">Rows:</span>
-                        <span className="stat-value">{report.row_count.toLocaleString()}</span>
-                      </div>
-                      <div className="report-stat">
-                        <span className="stat-label">Scanned:</span>
-                        <span className="stat-value">{new Date(report.scan_date).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {qualityReports.length === 0 && (
-                  <div className="empty-state">
-                    <p>No quality reports yet. Run a scan to generate reports.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
