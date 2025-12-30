@@ -196,13 +196,23 @@ const DataMappingPage = () => {
         })
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          alert(`Mapping executed successfully! Processed ${result.records_processed} records.`);
-        } else {
-          alert(`Mapping execution failed: ${result.message}`);
-        }
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (_e) {
+        result = null;
+      }
+
+      if (!response.ok) {
+        const message = result?.message || result?.detail || `Mapping execution unavailable (HTTP ${response.status})`;
+        alert(message);
+        return;
+      }
+
+      if (result?.success) {
+        alert(`Mapping executed successfully! Processed ${result.records_processed} records.`);
+      } else {
+        alert(`Mapping execution failed: ${result?.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error executing mapping:', error);

@@ -3,7 +3,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
-import asyncio
 from datetime import datetime
 
 from neo4j.exceptions import Neo4jError
@@ -74,8 +73,76 @@ async def get_data_analytics(
                     "value": count
                 })
         
-        # Mock data quality metrics (you can implement actual calculations)
-        quality_metrics: List[float] = [95.0, 87.0, 92.0, 89.0, 96.0]
+        # Derive quality metrics from real graph statistics (no seeded placeholder values)
+        stats_query = """
+        MATCH (n)
+        RETURN
+            count(n) as total,
+            sum(CASE WHEN size(labels(n)) > 0 THEN 1 ELSE 0 END) as withLabels,
+            sum(CASE WHEN size(keys(n)) > 0 THEN 1 ELSE 0 END) as withProps,
+            avg(size(keys(n))) as avgProps,
+            max(size(keys(n))) as maxProps
+        """
+
+        rel_stats_query = """
+        MATCH (n)
+        OPTIONAL MATCH (n)-[r]-()
+        WITH n, count(r) as relCount
+        RETURN
+            count(n) as total,
+            sum(CASE WHEN relCount > 0 THEN 1 ELSE 0 END) as withRels,
+            avg(relCount) as avgRels,
+            max(relCount) as maxRels
+        """
+
+        stats_result = await driver_instance.execute_query(
+            stats_query, database_="neo4j", routing_="r"
+        )
+        rel_stats_result = await driver_instance.execute_query(
+            rel_stats_query, database_="neo4j", routing_="r"
+        )
+
+        total_nodes_for_quality = 0
+        with_labels = 0
+        with_props = 0
+        avg_props = 0.0
+        max_props = 0.0
+        if stats_result.records:
+            record = stats_result.records[0]
+            total_nodes_for_quality = int(record.get("total", 0) or 0)
+            with_labels = int(record.get("withLabels", 0) or 0)
+            with_props = int(record.get("withProps", 0) or 0)
+            avg_props = float(record.get("avgProps", 0) or 0)
+            max_props = float(record.get("maxProps", 0) or 0)
+
+        total_nodes_for_rels = 0
+        with_rels = 0
+        avg_rels = 0.0
+        max_rels = 0.0
+        if rel_stats_result.records:
+            record = rel_stats_result.records[0]
+            total_nodes_for_rels = int(record.get("total", 0) or 0)
+            with_rels = int(record.get("withRels", 0) or 0)
+            avg_rels = float(record.get("avgRels", 0) or 0)
+            max_rels = float(record.get("maxRels", 0) or 0)
+
+        denom_nodes = max(total_nodes_for_quality, 1)
+        denom_nodes_rels = max(total_nodes_for_rels, 1)
+
+        labels_pct = (with_labels / denom_nodes) * 100.0
+        props_pct = (with_props / denom_nodes) * 100.0
+        rels_pct = (with_rels / denom_nodes_rels) * 100.0
+
+        props_density_pct = (avg_props / max(max_props, 1.0)) * 100.0
+        rels_density_pct = (avg_rels / max(max_rels, 1.0)) * 100.0
+
+        quality_metrics: List[float] = [
+            round(props_pct, 2),
+            round(labels_pct, 2),
+            round(rels_pct, 2),
+            round(props_density_pct, 2),
+            round(rels_density_pct, 2),
+        ]
         
         # Summary statistics
         summary = {
@@ -142,7 +209,7 @@ async def get_node_statistics(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 # Migration Endpoints
-migration_plans_storage: List[MigrationPlan] = []  # In-memory storage for demo (use database in production)
+migration_plans_storage: List[MigrationPlan] = []  # Deprecated: demo-only storage retained for backward compatibility.
 
 @router.get("/migration/plans")
 async def get_migration_plans(
@@ -150,17 +217,25 @@ async def get_migration_plans(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    """Get all migration plans"""
-    response.headers["X-Total-Count"] = str(len(migration_plans_storage))
-    return migration_plans_storage[skip : skip + limit]
+    """Get all migration plans.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="Migration plans are not implemented in this service. Configure a real migration engine/integration.",
+    )
 
 @router.post("/migration/plans")
 async def create_migration_plan(plan: MigrationPlan):
-    """Create a new migration plan"""
-    plan.id = f"plan_{len(migration_plans_storage) + 1}"
-    plan.createdAt = datetime.now()
-    migration_plans_storage.append(plan)
-    return plan
+    """Create a new migration plan.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="Migration plan creation is not implemented in this service. Configure a real migration engine/integration.",
+    )
 
 @router.post("/migration/plans/{plan_id}/execute")
 async def execute_migration_plan(
@@ -168,45 +243,35 @@ async def execute_migration_plan(
     background_tasks: BackgroundTasks,
     driver_instance = Depends(get_driver)
 ):
-    """Execute a migration plan"""
-    plan = next((p for p in migration_plans_storage if p.id == plan_id), None)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Migration plan not found")
-    
-    # Add background task for migration execution
-    background_tasks.add_task(run_migration_background, plan, driver_instance)
-    
-    return {"message": f"Migration plan {plan_id} execution started", "status": "running"}
+    """Execute a migration plan.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    _ = plan_id, background_tasks, driver_instance
+    raise HTTPException(
+        status_code=501,
+        detail="Migration execution is not implemented in this service. Configure a real migration engine/integration.",
+    )
 
 async def run_migration_background(plan: MigrationPlan, _driver_instance):
-    """Background task for migration execution"""
-    try:
-        # Update plan status
-        plan.status = "running"
-        
-        # Simulate migration process (implement actual migration logic)
-        await asyncio.sleep(2)  # Simulate processing time
-        
-        # Here you would implement actual data migration logic
-        logger.info("Executing migration plan: %s", plan.name)
-        
-        plan.status = "completed"
-        
-    except (RuntimeError, ValueError, OSError) as e:
-        plan.status = "failed"
-        logger.error("Migration failed: %s", e)
+    """Deprecated demo hook kept to avoid import errors in older code paths."""
+    _ = plan, _driver_instance
+    return
 
 @router.get("/migration/plans/{plan_id}/status")
 async def get_migration_status(plan_id: str):
-    """Get migration plan status"""
-    plan = next((p for p in migration_plans_storage if p.id == plan_id), None)
-    if not plan:
-        raise HTTPException(status_code=404, detail="Migration plan not found")
-    
-    return {"id": plan.id, "status": plan.status, "name": plan.name}
+    """Get migration plan status.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    _ = plan_id
+    raise HTTPException(
+        status_code=501,
+        detail="Migration status is not implemented in this service. Configure a real migration engine/integration.",
+    )
 
 # Data Mapping Endpoints
-data_mappings_storage: List[Dict[str, Any]] = []  # In-memory storage for demo
+data_mappings_storage: List[Dict[str, Any]] = []  # Deprecated: demo-only storage retained for backward compatibility.
 
 @router.get("/mappings")
 async def get_data_mappings(
@@ -216,42 +281,39 @@ async def get_data_mappings(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    """Get data mappings with optional filtering"""
-    mappings = data_mappings_storage
-    
-    if source:
-        mappings = [m for m in mappings if m.get("sourceSystem") == source]
-    if target:
-        mappings = [m for m in mappings if m.get("targetSystem") == target]
+    """Get data mappings.
 
-    response.headers["X-Total-Count"] = str(len(mappings))
-    return mappings[skip : skip + limit]
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    _ = response, source, target, skip, limit
+    raise HTTPException(
+        status_code=501,
+        detail="Data mappings are not implemented in this service. Use /api/data-mapping/* for rule configuration.",
+    )
 
 @router.post("/mappings")
 async def create_data_mapping(mapping_data: Dict[str, Any]):
-    """Create a new data mapping"""
-    mapping_data["id"] = f"mapping_{len(data_mappings_storage) + 1}"
-    mapping_data["createdAt"] = datetime.now().isoformat()
-    data_mappings_storage.append(mapping_data)
-    return mapping_data
+    """Create a new data mapping.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    _ = mapping_data
+    raise HTTPException(
+        status_code=501,
+        detail="Data mapping creation is not implemented in this service. Use /api/data-mapping/* for rule configuration.",
+    )
 
 @router.post("/mappings/{mapping_id}/validate")
 async def validate_mapping(mapping_id: str):
-    """Validate a data mapping"""
-    mapping = next((m for m in data_mappings_storage if m.get("id") == mapping_id), None)
-    if not mapping:
-        raise HTTPException(status_code=404, detail="Mapping not found")
-    
-    # Implement validation logic
-    validation_result = {
-        "mappingId": mapping_id,
-        "isValid": True,
-        "errors": [],
-        "warnings": [],
-        "validatedAt": datetime.now().isoformat()
-    }
-    
-    return validation_result
+    """Validate a data mapping.
+
+    This feature is intentionally not implemented here (no mock/demo behavior).
+    """
+    _ = mapping_id
+    raise HTTPException(
+        status_code=501,
+        detail="Mapping validation is not implemented in this service. Use /api/data-mapping/rules/{id}/validate.",
+    )
 
 # Data Quality and Scrubbing Endpoints
 @router.get("/data-quality/rules")
@@ -260,17 +322,16 @@ async def get_data_quality_rules(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    """Get available data quality rules"""
-    rules = [
-        {"type": "remove_duplicates", "description": "Remove duplicate records based on specified fields"},
-        {"type": "validate_format", "description": "Validate data format (JSON, email, phone, etc.)"},
-        {"type": "normalize_text", "description": "Normalize text fields (trim, case, etc.)"},
-        {"type": "check_completeness", "description": "Check for missing required fields"},
-        {"type": "validate_relationships", "description": "Validate relationship integrity"}
-    ]
+    """Get available data quality rules.
 
-    response.headers["X-Total-Count"] = str(len(rules))
-    return rules[skip : skip + limit]
+    This legacy endpoint returned hard-coded rules; it is now disabled to avoid demo/mock behavior.
+    Use the real Postgres-backed rules under /api/analytics/quality/*.
+    """
+    _ = response, skip, limit
+    raise HTTPException(
+        status_code=501,
+        detail="Legacy data quality rules endpoint is disabled. Use /api/analytics/quality/rules.",
+    )
 
 @router.post("/data-quality/scrub")
 async def apply_data_scrubbing(
@@ -278,42 +339,20 @@ async def apply_data_scrubbing(
     background_tasks: BackgroundTasks,
     driver_instance = Depends(get_driver)
 ):
-    """Apply data scrubbing rules"""
-    if scrub_config.dryRun:
-        # Simulate dry run results
-        return {
-            "processedRecords": 1250,
-            "duplicatesFound": 45,
-            "invalidRecords": 12,
-            "cleanedRecords": 1193,
-            "dryRun": True,
-            "timestamp": datetime.now().isoformat()
-        }
-    else:
-        # Add background task for actual scrubbing
-        background_tasks.add_task(run_data_scrubbing, scrub_config, driver_instance)
-        return {"message": "Data scrubbing started", "status": "running"}
+    """Apply data scrubbing rules.
+
+    This legacy endpoint previously returned simulated results; it is now disabled.
+    """
+    _ = scrub_config, background_tasks, driver_instance
+    raise HTTPException(
+        status_code=501,
+        detail="Legacy data scrubbing endpoint is disabled. Implement scrubbing via real workflow execution.",
+    )
 
 async def run_data_scrubbing(scrub_config: ScrubConfig, _driver_instance):
-    """Background task for data scrubbing"""
-    try:
-        logger.info("Starting data scrubbing with %s rules", len(scrub_config.rules))
-        
-        # Implement actual scrubbing logic here
-        for rule in scrub_config.rules:
-            rule_type = rule.get("type")
-            if rule_type == "remove_duplicates":
-                # Implement duplicate removal
-                pass
-            elif rule_type == "validate_format":
-                # Implement format validation
-                pass
-            # Add more rule implementations
-        
-        logger.info("Data scrubbing completed")
-        
-    except (RuntimeError, ValueError, OSError) as e:
-        logger.error("Data scrubbing failed: %s", e)
+    """Deprecated demo hook kept to avoid import errors in older code paths."""
+    _ = scrub_config, _driver_instance
+    return
 
 @router.get("/data-quality/duplicates")
 async def get_duplicate_analysis(driver_instance = Depends(get_driver)):
@@ -353,13 +392,7 @@ async def get_duplicate_analysis(driver_instance = Depends(get_driver)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 # Target Applications Endpoints
-target_applications = [
-    {"id": "crm_system", "name": "CRM System", "type": "database", "status": "active"},
-    {"id": "erp_system", "name": "ERP System", "type": "api", "status": "active"},
-    {"id": "product_db", "name": "Product Database", "type": "database", "status": "active"},
-    {"id": "order_system", "name": "Order Management", "type": "api", "status": "maintenance"},
-    {"id": "geo_system", "name": "Geographic System", "type": "service", "status": "active"}
-]
+target_applications: List[Dict[str, Any]] = []
 
 @router.get("/target-apps")
 async def get_target_applications(
@@ -367,9 +400,15 @@ async def get_target_applications(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    """Get available target applications"""
-    response.headers["X-Total-Count"] = str(len(target_applications))
-    return target_applications[skip : skip + limit]
+    """Get available target applications.
+
+    This endpoint previously returned hard-coded sample apps; it is now disabled.
+    """
+    _ = response, skip, limit
+    raise HTTPException(
+        status_code=501,
+        detail="Target applications are not configured. Use external integrations to register real targets.",
+    )
 
 @router.post("/target-apps/{app_id}/sync")
 async def sync_to_target_app(
@@ -377,32 +416,20 @@ async def sync_to_target_app(
     sync_data: Dict[str, Any],
     background_tasks: BackgroundTasks
 ):
-    """Synchronize data to target application"""
-    app = next((a for a in target_applications if a["id"] == app_id), None)
-    if not app:
-        raise HTTPException(status_code=404, detail="Target application not found")
-    
-    # Add background task for synchronization
-    background_tasks.add_task(run_target_sync, app_id, sync_data)
-    
-    return {
-        "message": f"Synchronization to {app['name']} started",
-        "targetApp": app,
-        "status": "running"
-    }
+    """Synchronize data to target application.
+
+    Disabled (no mock/demo execution).
+    """
+    _ = app_id, sync_data, background_tasks
+    raise HTTPException(
+        status_code=501,
+        detail="Target synchronization is not implemented. Configure a real integration connector and workflow runner.",
+    )
 
 async def run_target_sync(app_id: str, _sync_data: Dict[str, Any]):
-    """Background task for target application sync"""
-    try:
-        logger.info("Starting sync to target app: %s", app_id)
-        
-        # Implement actual synchronization logic
-        await asyncio.sleep(3)  # Simulate sync time
-        
-        logger.info("Sync to %s completed successfully", app_id)
-        
-    except (RuntimeError, ValueError, OSError) as e:
-        logger.error("Sync to %s failed: %s", app_id, e)
+    """Deprecated demo hook kept to avoid import errors in older code paths."""
+    _ = app_id, _sync_data
+    return
 
 # Bulk Operations Endpoints
 @router.post("/bulk/import")
@@ -411,43 +438,20 @@ async def bulk_import_data(
     background_tasks: BackgroundTasks,
     driver_instance = Depends(get_driver)
 ):
-    """Bulk import data from spreadsheet"""
-    data = import_request.get("data", [])
-    config = import_request.get("config", {})
-    
-    if not data:
-        raise HTTPException(status_code=400, detail="No data provided for import")
-    
-    # Add background task for bulk import
-    background_tasks.add_task(run_bulk_import, data, config, driver_instance)
-    
-    return {
-        "message": f"Bulk import started for {len(data)} records",
-        "status": "running",
-        "recordCount": len(data)
-    }
+    """Bulk import data from spreadsheet.
+
+    Disabled: previously a stub/background task with no real execution.
+    """
+    _ = import_request, background_tasks, driver_instance
+    raise HTTPException(
+        status_code=501,
+        detail="Bulk import is not implemented. Use a real ingestion workflow and persist results to Postgres/Neo4j.",
+    )
 
 async def run_bulk_import(data: List[List[str]], _config: Dict[str, Any], _driver_instance):
-    """Background task for bulk data import"""
-    try:
-        logger.info("Starting bulk import of %s records", len(data))
-        
-        # Implement bulk import logic here
-        # This would create nodes/relationships based on spreadsheet data
-        
-        headers = data[0] if data else []
-        rows = data[1:] if len(data) > 1 else []
-        
-        for row in rows:
-            # Create Cypher query to insert data
-            # This is a simplified example
-            _properties = dict(zip(headers, row))
-            # Insert into Neo4j based on configuration
-            
-        logger.info("Bulk import completed successfully")
-        
-    except (RuntimeError, ValueError, OSError) as e:
-        logger.error("Bulk import failed: %s", e)
+    """Deprecated demo hook kept to avoid import errors in older code paths."""
+    _ = data, _config, _driver_instance
+    return
 
 @router.post("/bulk/export")
 async def bulk_export_data(
@@ -624,7 +628,7 @@ class DataConversionRequest(BaseModel):
     sourceData: str
     sourceFormat: str  # json, xml, csv
     targetFormat: str  # csv, json, xml
-    mappingRules: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    mappingRules: Optional[List[Dict[str, Any]]] = Field(default_factory=lambda: [])
 
 class DataConversionResponse(BaseModel):
     success: bool
@@ -676,7 +680,7 @@ async def convert_data(request: DataConversionRequest):
 # Data Validation Endpoints
 class DataValidationRequest(BaseModel):
     data: List[List[str]]
-    validationRules: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    validationRules: Optional[List[Dict[str, Any]]] = Field(default_factory=lambda: [])
 
 class DataValidationResponse(BaseModel):
     results: List[Dict[str, Any]]

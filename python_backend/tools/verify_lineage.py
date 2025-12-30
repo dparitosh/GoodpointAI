@@ -25,7 +25,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Verify lineage auto-capture by running a workflow and querying /api/lineage"
     )
-    parser.add_argument("--base", default="http://localhost:8000", help="FastAPI base URL")
+    parser.add_argument("--base", default="http://localhost:8011", help="FastAPI base URL")
     parser.add_argument(
         "--workflow-id",
         default=None,

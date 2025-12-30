@@ -3,7 +3,7 @@ import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
 import { API_CONFIG } from '../config/api-config.js';
 
-export function e2etraceUseGraphData(setTableElements) {
+export function useE2ETraceGraphData(setTableElements) {
   const [graphData, setGraphData] = useState({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(null);
@@ -51,3 +51,5 @@ export function e2etraceUseGraphData(setTableElements) {
 
   return { graphData, loading, loadingError, setGraphData };
 }
+
+export const e2etraceUseGraphData = useE2ETraceGraphData;

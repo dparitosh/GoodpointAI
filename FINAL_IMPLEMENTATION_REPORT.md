@@ -298,7 +298,7 @@ GRAPH_RAG_EMBED_DIMENSION=1536
 GRAPH_RAG_TOOLS_CONFIG={}  # JSON
 
 # Frontend Configuration
-REACT_APP_API_URL=http://localhost:8000
+REACT_APP_API_URL=http://localhost:8011
 
 # Database (for GraphQL Catalogue)
 DATABASE_URL=postgresql://user:pass@localhost:5433/graphtrace
@@ -320,7 +320,7 @@ METRICS_PORT=9090
 
 ### GraphQL Schema Introspection
 ```bash
-curl -X POST http://localhost:8000/api/graphql/introspect \
+curl -X POST http://localhost:8011/api/graphql/introspect \
   -H "Content-Type: application/json" \
   -d '{
     "content": "{\"type\": \"object\", \"properties\": {\"id\": {\"type\": \"integer\"}}}",
@@ -331,7 +331,7 @@ curl -X POST http://localhost:8000/api/graphql/introspect \
 
 ### GraphQL Data Transformation
 ```bash
-curl -X POST http://localhost:8000/api/graphql/transform \
+curl -X POST http://localhost:8011/api/graphql/transform \
   -H "Content-Type: application/json" \
   -d '{
     "source_data": {"user_id": "123", "user_name": "JOHN DOE"},
@@ -345,7 +345,7 @@ curl -X POST http://localhost:8000/api/graphql/transform \
 
 ### Neo4j GraphRAG Query
 ```bash
-curl -X POST http://localhost:8000/api/neo4j-graphrag/query \
+curl -X POST http://localhost:8011/api/neo4j-graphrag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Find all failed migrations with schema drift",

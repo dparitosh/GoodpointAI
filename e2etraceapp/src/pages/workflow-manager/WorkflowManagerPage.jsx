@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WorkflowManagerPage.css';
 import './WorkflowManagerPageWizard.css';
+import { getRuntimeConfig } from '../../config/runtime-config.js';
 
 /**
  * Workflow Manager Page
@@ -18,10 +19,33 @@ import './WorkflowManagerPageWizard.css';
  */
 const WorkflowManagerPage = () => {
   const navigate = useNavigate();
+
+  const SOURCE_ENDPOINT_PLACEHOLDER =
+    import.meta.env.VITE_SOURCE_ENDPOINT_PLACEHOLDER || 'https://<host>/api';
+  const DEFAULT_SOURCE_ENDPOINTS = {
+    teamcenter: import.meta.env.VITE_TEAMCENTER_ENDPOINT || '',
+    windchill: import.meta.env.VITE_WINDCHILL_ENDPOINT || '',
+    catia: import.meta.env.VITE_CATIA_ENDPOINT || '',
+    nx: import.meta.env.VITE_NX_ENDPOINT || '',
+    creo: import.meta.env.VITE_CREO_ENDPOINT || '',
+  };
+  const DEFAULT_TARGET_ENDPOINTS = {
+    cloud_plm: import.meta.env.VITE_CLOUD_PLM_ENDPOINT || '',
+    opensearch: import.meta.env.VITE_OPENSEARCH_ENDPOINT || '',
+  };
+
+  const [sourceEndpointPlaceholder, setSourceEndpointPlaceholder] = useState(SOURCE_ENDPOINT_PLACEHOLDER);
+  const [defaultSourceEndpoints, setDefaultSourceEndpoints] = useState(DEFAULT_SOURCE_ENDPOINTS);
+  const [defaultNeo4jUri, setDefaultNeo4jUri] = useState(import.meta.env.VITE_NEO4J_URI || '');
+  const [defaultTargetEndpoints, setDefaultTargetEndpoints] = useState(DEFAULT_TARGET_ENDPOINTS);
+
   const [workflows, setWorkflows] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   const [filter, setFilter] = useState({
     status: 'all',
     sourceType: 'all',
@@ -30,6 +54,8 @@ const WorkflowManagerPage = () => {
   });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [workflowToDelete, setWorkflowToDelete] = useState(null);
   const [configStep, setConfigStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [validationErrors, setValidationErrors] = useState({});
@@ -37,6 +63,8 @@ const WorkflowManagerPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const loadAbortRef = useRef(null);
   const loadSeqRef = useRef(0);
+  const templatesAbortRef = useRef(null);
+  const templatesSeqRef = useRef(0);
   const [workflowConfig, setWorkflowConfig] = useState({
     name: '',
     source: {
@@ -58,6 +86,165 @@ const WorkflowManagerPage = () => {
     loadWorkflowData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  useEffect(() => {
+    if (!Array.isArray(workflows) || workflows.length === 0) {
+      if (selectedWorkflowId) setSelectedWorkflowId('');
+      return;
+    }
+
+    const exists = workflows.some((w) => w?.id === selectedWorkflowId);
+    if (!selectedWorkflowId || !exists) {
+      setSelectedWorkflowId(workflows[0]?.id || '');
+    }
+  }, [workflows, selectedWorkflowId]);
+
+  const getWorkflowDisplayName = (workflow) => {
+    const raw =
+      (typeof workflow?.name === 'string' && workflow.name.trim()) ||
+      (typeof workflow?.workflow_name === 'string' && workflow.workflow_name.trim()) ||
+      (typeof workflow?.title === 'string' && workflow.title.trim()) ||
+      '';
+    return raw || workflow?.id || 'Workflow';
+  };
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+    if (templatesLoading) return;
+    if (templates.length > 0) return;
+    if (templatesError) return;
+
+    const loadTemplates = async () => {
+      const seq = ++templatesSeqRef.current;
+      if (templatesAbortRef.current) {
+        try {
+          templatesAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+      const controller = new AbortController();
+      templatesAbortRef.current = controller;
+
+      try {
+        setTemplatesLoading(true);
+        setTemplatesError('');
+
+        const res = await fetch('/api/workflows/templates/list', { signal: controller.signal });
+        if (!res.ok) {
+          // Avoid console noise; show a compact in-UI message.
+          let detail = '';
+          try {
+            const body = await res.json();
+            detail = typeof body?.detail === 'string' ? body.detail : '';
+          } catch {
+            // ignore
+          }
+          if (seq === templatesSeqRef.current) {
+            setTemplates([]);
+            setTemplatesError(detail || 'Workflow templates are unavailable.');
+          }
+          return;
+        }
+
+        const data = await res.json();
+        if (seq === templatesSeqRef.current) {
+          setTemplates(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+        if (seq === templatesSeqRef.current) {
+          setTemplates([]);
+          setTemplatesError('Workflow templates are unavailable.');
+        }
+      } finally {
+        if (seq === templatesSeqRef.current) {
+          setTemplatesLoading(false);
+        }
+      }
+    };
+
+    loadTemplates();
+  }, [showCreateModal, templates.length, templatesError, templatesLoading]);
+
+  // Load DB-backed runtime configuration once to avoid relying on VITE_* for installed deployments.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const cfg = await getRuntimeConfig();
+      if (cancelled || !cfg) return;
+
+      const neo4jUri = (cfg.neo4j && typeof cfg.neo4j === 'object' ? cfg.neo4j.uri : '') || '';
+      const opensearchUrl = (cfg.opensearch && typeof cfg.opensearch === 'object' ? cfg.opensearch.url : '') || '';
+
+      const workflowDefaults = cfg.workflow_defaults && typeof cfg.workflow_defaults === 'object'
+        ? cfg.workflow_defaults
+        : null;
+      const dbPlaceholder = workflowDefaults && typeof workflowDefaults.source_endpoint_placeholder === 'string'
+        ? workflowDefaults.source_endpoint_placeholder
+        : '';
+      const dbSources = workflowDefaults && workflowDefaults.source_endpoints && typeof workflowDefaults.source_endpoints === 'object'
+        ? workflowDefaults.source_endpoints
+        : null;
+
+      if (neo4jUri) {
+        setDefaultNeo4jUri(neo4jUri);
+      }
+      if (opensearchUrl) {
+        setDefaultTargetEndpoints(prev => ({ ...prev, opensearch: opensearchUrl }));
+      }
+
+      if (dbPlaceholder && dbPlaceholder.trim()) {
+        setSourceEndpointPlaceholder(dbPlaceholder.trim());
+      }
+      if (dbSources) {
+        setDefaultSourceEndpoints(prev => ({
+          ...prev,
+          teamcenter: typeof dbSources.teamcenter === 'string' ? dbSources.teamcenter : prev.teamcenter,
+          windchill: typeof dbSources.windchill === 'string' ? dbSources.windchill : prev.windchill,
+          catia: typeof dbSources.catia === 'string' ? dbSources.catia : prev.catia,
+          nx: typeof dbSources.nx === 'string' ? dbSources.nx : prev.nx,
+          creo: typeof dbSources.creo === 'string' ? dbSources.creo : prev.creo,
+        }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keyboard shortcuts (minimal): Escape closes active modal.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+
+      // Close the top-most modal first.
+      if (showDeleteModal) {
+        setShowDeleteModal(false);
+        setWorkflowToDelete(null);
+        return;
+      }
+
+      if (showConfigModal) {
+        setShowConfigModal(false);
+        setConfigStep(1);
+        return;
+      }
+
+      if (showCreateModal) {
+        setShowCreateModal(false);
+      }
+    };
+
+    // Only attach listener when a modal is open.
+    const anyModalOpen = showCreateModal || showConfigModal || showDeleteModal;
+    if (!anyModalOpen) return undefined;
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showCreateModal, showConfigModal, showDeleteModal]);
 
   const loadWorkflowData = async () => {
     const seq = ++loadSeqRef.current;
@@ -94,20 +281,36 @@ const WorkflowManagerPage = () => {
       const workflowsUrl = queryString ? `/api/workflows/?${queryString}` : '/api/workflows/';
       const workflowsRes = await fetch(workflowsUrl, { signal: controller.signal });
       const workflowsData = await workflowsRes.ok ? await workflowsRes.json() : [];
-      
-      // Load statistics
-      const statsRes = await fetch('/api/workflows/statistics/summary', { signal: controller.signal });
-      const statsData = await statsRes.ok ? await statsRes.json() : null;
-      
-      // Load templates
-      const templatesRes = await fetch('/api/workflows/templates/list', { signal: controller.signal });
-      const templatesData = await templatesRes.ok ? await templatesRes.json() : [];
+
+      // Compute statistics client-side (backend stats endpoint is not available).
+      const safeWorkflows = Array.isArray(workflowsData) ? workflowsData : [];
+      const normalizedWorkflows = safeWorkflows.map((w) => ({
+        ...w,
+        name: getWorkflowDisplayName(w),
+      }));
+      const totalWorkflows = safeWorkflows.length;
+      const activeExecutions = safeWorkflows.filter((w) => w?.status === 'running').length;
+      const totalRecordsProcessed = safeWorkflows.reduce(
+        (sum, w) => sum + (Number(w?.processed_records) || 0),
+        0,
+      );
+      const qualityScores = safeWorkflows
+        .map((w) => Number(w?.quality_score))
+        .filter((v) => Number.isFinite(v));
+      const avgQuality = qualityScores.length
+        ? qualityScores.reduce((sum, v) => sum + v, 0) / qualityScores.length
+        : null;
+      const statsData = {
+        total_workflows: totalWorkflows,
+        active_executions: activeExecutions,
+        total_records_processed: totalRecordsProcessed,
+        average_quality_score: avgQuality,
+      };
 
       // Ignore stale responses (e.g., slow request after filter changes)
       if (seq === loadSeqRef.current) {
-        setWorkflows(workflowsData);
+        setWorkflows(normalizedWorkflows);
         setStatistics(statsData);
-        setTemplates(templatesData);
       }
     } catch (error) {
       if (error?.name === 'AbortError') return;
@@ -157,10 +360,12 @@ const WorkflowManagerPage = () => {
     navigate(`/workflow/${workflowId}`);
   };
 
-  const handleDeleteWorkflow = async (workflowId) => {
-    // TODO: Replace with proper confirmation modal
-    if (!window.confirm('Are you sure you want to delete this workflow?')) return;
-    
+  const handleDeleteWorkflow = (workflow) => {
+    setWorkflowToDelete(workflow);
+    setShowDeleteModal(true);
+  };
+
+  const performDeleteWorkflow = async (workflowId) => {
     try {
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
@@ -188,7 +393,21 @@ const WorkflowManagerPage = () => {
     }
   };
 
+  const confirmDeleteWorkflow = async () => {
+    const workflowId = workflowToDelete?.id;
+    if (!workflowId) return;
+    setShowDeleteModal(false);
+    setWorkflowToDelete(null);
+    await performDeleteWorkflow(workflowId);
+  };
+
   const handleUseTemplate = (template) => {
+    const sourceEndpoint = defaultSourceEndpoints[template.source_type] || '';
+    const targetUri =
+      template.target_type === 'neo4j'
+        ? defaultNeo4jUri
+        : (defaultTargetEndpoints[template.target_type] || '');
+
     // Set selected template and pre-fill configuration
     setSelectedTemplate(template);
     setConfigStep(1);
@@ -200,18 +419,24 @@ const WorkflowManagerPage = () => {
         system: `${template.source_type.charAt(0).toUpperCase() + template.source_type.slice(1)} Production`,
         type: template.source_type,
         version: '13.2',
-        endpoint: `https://${template.source_type}.company.com/api`,
+        endpoint: sourceEndpoint,
         authentication: 'SOA'
       },
       target: {
         system: `${template.target_type.charAt(0).toUpperCase() + template.target_type.slice(1)} Instance`,
         type: template.target_type,
-        uri: template.target_type === 'neo4j' ? 'neo4j+s://prod.databases.neo4j.io' : 'https://target.company.com',
+        uri: targetUri,
         database: 'plm_migration'
       }
     });
     setShowCreateModal(false);
     setShowConfigModal(true);
+  };
+
+  const CUSTOM_TEMPLATE = {
+    id: 'custom',
+    name: 'Custom Configuration',
+    description: 'Configure a custom source→target pipeline without a predefined template.'
   };
 
   const validateStep = (step) => {
@@ -223,12 +448,14 @@ const WorkflowManagerPage = () => {
       }
     } else if (step === 2) {
       if (!workflowConfig.source.system) errors.sourceSystem = 'Source system name is required';
+      if (!workflowConfig.source.type) errors.sourceType = 'Source system type is required';
       if (!workflowConfig.source.endpoint) errors.sourceEndpoint = 'Source endpoint is required';
       if (workflowConfig.source.endpoint && !workflowConfig.source.endpoint.startsWith('http')) {
         errors.sourceEndpoint = 'Endpoint must start with http:// or https://';
       }
     } else if (step === 3) {
       if (!workflowConfig.target.system) errors.targetSystem = 'Target system name is required';
+      if (!workflowConfig.target.type) errors.targetType = 'Target system type is required';
       if (!workflowConfig.target.uri) errors.targetUri = 'Target URI is required';
       if (workflowConfig.target.uri && !workflowConfig.target.uri.match(/^(https?|neo4j)/)) {
         errors.targetUri = 'URI must start with http://, https://, or neo4j';
@@ -266,12 +493,64 @@ const WorkflowManagerPage = () => {
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
+
+      const isCustom = selectedTemplate?.id === 'custom';
+
+      const buildCustomPayload = () => {
+        const nodes = [
+          { id: 'extract', label: 'Extract', type: 'etl_stage', stage: 'extract', status: 'healthy', properties: {} },
+          { id: 'transform', label: 'Transform', type: 'etl_stage', stage: 'transform', status: 'healthy', properties: {} },
+          { id: 'quality', label: 'Quality', type: 'etl_stage', stage: 'quality', status: 'healthy', properties: {} },
+          { id: 'load', label: 'Load', type: 'etl_stage', stage: 'load', status: 'healthy', properties: {} }
+        ];
+        const edges = [
+          { id: 'extract-transform', source: 'extract', target: 'transform', label: 'dataflow', type: 'dataflow' },
+          { id: 'transform-quality', source: 'transform', target: 'quality', label: 'dataflow', type: 'dataflow' },
+          { id: 'quality-load', source: 'quality', target: 'load', label: 'dataflow', type: 'dataflow' }
+        ];
+
+        return {
+          name: workflowConfig.name,
+          description: selectedTemplate?.description || null,
+          source: {
+            id: workflowConfig.source.system,
+            name: workflowConfig.source.system,
+            type: workflowConfig.source.type,
+            connection_details: {
+              endpoint: workflowConfig.source.endpoint,
+              version: workflowConfig.source.version,
+              authentication: workflowConfig.source.authentication
+            },
+            extraction_config: {}
+          },
+          target: {
+            id: workflowConfig.target.system,
+            name: workflowConfig.target.system,
+            type: workflowConfig.target.type,
+            connection_details: {
+              uri: workflowConfig.target.uri,
+              database: workflowConfig.target.database
+            },
+            load_config: {}
+          },
+          workflow_config: {
+            nodes,
+            edges,
+            ai_agents: []
+          },
+          ai_agents_enabled: [],
+          schedule_enabled: false,
+          schedule_cron: null,
+          created_by: 'ui'
+        };
+      };
+
       const response = await fetch(
-        `/api/workflows/templates/${selectedTemplate.id}/instantiate?source_id=${encodeURIComponent(workflowConfig.source.system)}&target_id=${encodeURIComponent(workflowConfig.target.system)}&name=${encodeURIComponent(workflowConfig.name)}`,
+        '/api/workflows/',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildCustomPayload()),
           signal: controller.signal
         }
       );
@@ -304,9 +583,29 @@ const WorkflowManagerPage = () => {
   };
 
   const handleCustomConfig = () => {
-    console.info('Custom workflow configuration coming soon');
-    // TODO: Implement custom configuration modal
+    setSelectedTemplate(CUSTOM_TEMPLATE);
+    setConfigStep(1);
+    setValidationErrors({});
+    setShowHelp({});
+
+    setWorkflowConfig({
+      name: `Custom Workflow - ${new Date().toLocaleDateString()}`,
+      source: {
+        system: 'Source System',
+        type: 'teamcenter',
+        version: '13.2',
+        endpoint: defaultSourceEndpoints.teamcenter || '',
+        authentication: 'SOA'
+      },
+      target: {
+        system: 'Target System',
+        type: 'neo4j',
+        uri: defaultNeo4jUri,
+        database: 'plm_migration'
+      }
+    });
     setShowCreateModal(false);
+    setShowConfigModal(true);
   };
 
   const getStatusBadgeClass = (status) => {
@@ -347,6 +646,10 @@ const WorkflowManagerPage = () => {
   const failedWorkflows = workflows.filter((w) => w.status === 'failed');
   const pausedWorkflows = workflows.filter((w) => w.status === 'paused');
   const actionableWorkflows = workflows.filter((w) => w.status === 'failed' || w.status === 'paused');
+
+  const selectedWorkflow = selectedWorkflowId
+    ? workflows.find((w) => w?.id === selectedWorkflowId)
+    : null;
 
   if (loading) {
     return (
@@ -447,7 +750,7 @@ const WorkflowManagerPage = () => {
             actionableWorkflows.slice(0, 6).map((workflow) => (
               <div key={workflow.id} className="selfhealing-row">
                 <div className="selfhealing-row-main">
-                  <div className="selfhealing-row-title">{workflow.name}</div>
+                  <div className="selfhealing-row-title">{getWorkflowDisplayName(workflow)}</div>
                   <div className="selfhealing-row-meta">
                     <span className={`status-badge ${getStatusBadgeClass(workflow.status)}`}>{workflow.status}</span>
                     <span className="selfhealing-row-pipe">
@@ -527,130 +830,181 @@ const WorkflowManagerPage = () => {
         </div>
       </div>
 
-      {/* Workflows Grid */}
-      <div className="workflows-grid">
-        {workflows.map((workflow) => (
-          <div key={workflow.id} className="workflow-card">
-            <div className="workflow-card-header">
-              <div className="workflow-title-row">
-                <h3 className="workflow-name">{workflow.name}</h3>
-                <span className={`status-badge ${getStatusBadgeClass(workflow.status)}`}>
-                  {workflow.status}
-                </span>
-              </div>
-              <p className="workflow-description">{workflow.description}</p>
-            </div>
+      {/* Workflow Instances: Row list + right-side details */}
+      <div className="workflow-instances">
+        <div className="workflow-instances__list" aria-label="Workflow instances">
+          {workflows.map((workflow) => {
+            const isSelected = workflow?.id === selectedWorkflowId;
+            const name = getWorkflowDisplayName(workflow);
+            const sourceLabel = workflow?.source_name || workflow?.source_type || 'Source';
+            const targetLabel = workflow?.target_name || workflow?.target_type || 'Target';
 
-            <div className="workflow-card-body">
-              {/* Source → Target */}
-              <div className="workflow-pipeline">
-                <div className="pipeline-node">
-                  <span className="node-icon"><i className={`fas ${getSourceIcon(workflow.source_type)}`} aria-hidden="true" /></span>
-                  <span className="node-label">{workflow.source_name}</span>
-                  <span className="node-type">{workflow.source_type}</span>
-                </div>
-                <div className="pipeline-arrow"><i className="fas fa-arrow-right" aria-hidden="true" /></div>
-                <div className="pipeline-node">
-                  <span className="node-icon"><i className={`fas ${getTargetIcon(workflow.target_type)}`} aria-hidden="true" /></span>
-                  <span className="node-label">{workflow.target_name}</span>
-                  <span className="node-type">{workflow.target_type}</span>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              {workflow.status === 'running' && (
-                <div className="workflow-progress">
-                  <div className="progress-bar">
-                    <div 
-                      className="progress-fill" 
-                      style={{ width: `${workflow.progress_percentage}%` }}
-                    />
-                  </div>
-                  <span className="progress-text">{workflow.progress_percentage.toFixed(1)}%</span>
-                </div>
-              )}
-
-              {/* Statistics */}
-              <div className="workflow-stats">
-                <div className="stat-item">
-                  <span className="stat-label">Records:</span>
-                  <span className="stat-value">{workflow.total_records.toLocaleString()}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Processed:</span>
-                  <span className="stat-value">{workflow.processed_records.toLocaleString()}</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">Failed:</span>
-                  <span className="stat-value failed">{workflow.failed_records}</span>
-                </div>
-                {workflow.quality_score && (
-                  <div className="stat-item">
-                    <span className="stat-label">Quality:</span>
-                    <span className="stat-value quality">{workflow.quality_score.toFixed(1)}%</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Timestamps */}
-              <div className="workflow-timestamps">
-                <small>Created: {new Date(workflow.created_at).toLocaleDateString()}</small>
-                {workflow.started_at && (
-                  <small>Started: {new Date(workflow.started_at).toLocaleTimeString()}</small>
-                )}
-              </div>
-            </div>
-
-            <div className="workflow-card-actions">
-              <button 
-                className="btn-action btn-view"
-                onClick={() => handleViewWorkflow(workflow.id)}
-                title="View Workflow Graph"
+            return (
+              <button
+                key={workflow.id}
+                type="button"
+                className={`workflow-instance-row ${isSelected ? 'selected' : ''}`}
+                onClick={() => setSelectedWorkflowId(workflow.id)}
+                aria-pressed={isSelected}
               >
-                View
+                <div className="workflow-instance-row__main">
+                  <div className="workflow-instance-row__title">
+                    <span className="workflow-instance-row__name">{name}</span>
+                    <span className={`status-badge ${getStatusBadgeClass(workflow.status)}`}>{workflow.status}</span>
+                  </div>
+                  <div className="workflow-instance-row__subtitle">
+                    <span className="workflow-instance-row__endpoint">{sourceLabel}</span>
+                    <span className="workflow-instance-row__arrow" aria-hidden="true">→</span>
+                    <span className="workflow-instance-row__endpoint">{targetLabel}</span>
+                  </div>
+                </div>
+
+                {workflow.status === 'running' ? (
+                  <div className="workflow-instance-row__progress" aria-label="Workflow progress">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${Number(workflow.progress_percentage) || 0}%` }}
+                      />
+                    </div>
+                    <span className="progress-text">{(Number(workflow.progress_percentage) || 0).toFixed(1)}%</span>
+                  </div>
+                ) : null}
               </button>
-              
-              {workflow.status === 'draft' || workflow.status === 'configured' || workflow.status === 'paused' ? (
-                <button 
-                  className="btn-action btn-start"
-                  onClick={() => handleWorkflowAction(workflow.id, 'start')}
-                  title="Start Workflow"
-                >
-                  <i className="fas fa-play" aria-hidden="true" /> Start
-                </button>
-              ) : null}
-              
-              {workflow.status === 'running' ? (
-                <>
-                  <button 
-                    className="btn-action btn-pause"
-                    onClick={() => handleWorkflowAction(workflow.id, 'pause')}
-                    title="Pause Workflow"
+            );
+          })}
+        </div>
+
+        <div className="workflow-instances__detail" aria-label="Workflow instance details">
+          {selectedWorkflow ? (
+            <>
+              <div className="workflow-detail-header">
+                <div className="workflow-detail-header__title">
+                  <div className="workflow-detail-header__top">
+                    <h2 className="workflow-detail-name">{getWorkflowDisplayName(selectedWorkflow)}</h2>
+                    <span className={`status-badge ${getStatusBadgeClass(selectedWorkflow.status)}`}>
+                      {selectedWorkflow.status}
+                    </span>
+                  </div>
+                  {selectedWorkflow.description ? (
+                    <p className="workflow-description">{selectedWorkflow.description}</p>
+                  ) : null}
+                </div>
+
+                <div className="workflow-detail-header__actions">
+                  <button
+                    className="btn-action btn-view"
+                    onClick={() => handleViewWorkflow(selectedWorkflow.id)}
+                    title="View Workflow Graph"
                   >
-                    <i className="fas fa-pause" aria-hidden="true" /> Pause
+                    View
                   </button>
-                  <button 
-                    className="btn-action btn-stop"
-                    onClick={() => handleWorkflowAction(workflow.id, 'stop')}
-                    title="Stop Workflow"
-                  >
-                    <i className="fas fa-stop" aria-hidden="true" /> Stop
-                  </button>
-                </>
-              ) : null}
-              
-              {(workflow.status === 'draft' || workflow.status === 'completed' || workflow.status === 'failed') && (
-                <button 
-                  className="btn-action btn-delete"
-                  onClick={() => handleDeleteWorkflow(workflow.id)}
-                  title="Delete Workflow"
-                >
-                  <i className="fas fa-trash" aria-hidden="true" /> Delete
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+
+                  {selectedWorkflow.status === 'draft' || selectedWorkflow.status === 'configured' || selectedWorkflow.status === 'paused' ? (
+                    <button
+                      className="btn-action btn-start"
+                      onClick={() => handleWorkflowAction(selectedWorkflow.id, 'start')}
+                      title="Start Workflow"
+                    >
+                      <i className="fas fa-play" aria-hidden="true" /> Start
+                    </button>
+                  ) : null}
+
+                  {selectedWorkflow.status === 'running' ? (
+                    <>
+                      <button
+                        className="btn-action btn-pause"
+                        onClick={() => handleWorkflowAction(selectedWorkflow.id, 'pause')}
+                        title="Pause Workflow"
+                      >
+                        <i className="fas fa-pause" aria-hidden="true" /> Pause
+                      </button>
+                      <button
+                        className="btn-action btn-stop"
+                        onClick={() => handleWorkflowAction(selectedWorkflow.id, 'stop')}
+                        title="Stop Workflow"
+                      >
+                        <i className="fas fa-stop" aria-hidden="true" /> Stop
+                      </button>
+                    </>
+                  ) : null}
+
+                  {(selectedWorkflow.status === 'draft' || selectedWorkflow.status === 'completed' || selectedWorkflow.status === 'failed') && (
+                    <button
+                      className="btn-action btn-delete"
+                      onClick={() => handleDeleteWorkflow(selectedWorkflow)}
+                      title="Delete Workflow"
+                    >
+                      <i className="fas fa-trash" aria-hidden="true" /> Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="workflow-detail-body">
+                {/* Source → Target */}
+                <div className="workflow-pipeline">
+                  <div className="pipeline-node">
+                    <span className="node-icon"><i className={`fas ${getSourceIcon(selectedWorkflow.source_type)}`} aria-hidden="true" /></span>
+                    <span className="node-label">{selectedWorkflow.source_name}</span>
+                    <span className="node-type">{selectedWorkflow.source_type}</span>
+                  </div>
+                  <div className="pipeline-arrow"><i className="fas fa-arrow-right" aria-hidden="true" /></div>
+                  <div className="pipeline-node">
+                    <span className="node-icon"><i className={`fas ${getTargetIcon(selectedWorkflow.target_type)}`} aria-hidden="true" /></span>
+                    <span className="node-label">{selectedWorkflow.target_name}</span>
+                    <span className="node-type">{selectedWorkflow.target_type}</span>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                {selectedWorkflow.status === 'running' ? (
+                  <div className="workflow-progress">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${Number(selectedWorkflow.progress_percentage) || 0}%` }}
+                      />
+                    </div>
+                    <span className="progress-text">{(Number(selectedWorkflow.progress_percentage) || 0).toFixed(1)}%</span>
+                  </div>
+                ) : null}
+
+                {/* Statistics */}
+                <div className="workflow-stats">
+                  <div className="stat-item">
+                    <span className="stat-label">Records:</span>
+                    <span className="stat-value">{Number(selectedWorkflow.total_records || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Processed:</span>
+                    <span className="stat-value">{Number(selectedWorkflow.processed_records || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-label">Failed:</span>
+                    <span className="stat-value failed">{Number(selectedWorkflow.failed_records || 0)}</span>
+                  </div>
+                  {selectedWorkflow.quality_score ? (
+                    <div className="stat-item">
+                      <span className="stat-label">Quality:</span>
+                      <span className="stat-value quality">{Number(selectedWorkflow.quality_score).toFixed(1)}%</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Timestamps */}
+                <div className="workflow-timestamps">
+                  <small>Created: {selectedWorkflow.created_at ? new Date(selectedWorkflow.created_at).toLocaleDateString() : '—'}</small>
+                  {selectedWorkflow.started_at ? (
+                    <small>Started: {new Date(selectedWorkflow.started_at).toLocaleTimeString()}</small>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="workflow-detail-empty">Select a workflow instance to view details.</div>
+          )}
+        </div>
       </div>
 
       {workflows.length === 0 && (
@@ -696,9 +1050,17 @@ const WorkflowManagerPage = () => {
                       </button>
                     </div>
                   ))
-                ) : (
+                ) : templatesLoading ? (
                   <div className="no-templates">
                     <p>Loading templates...</p>
+                  </div>
+                ) : templatesError ? (
+                  <div className="no-templates">
+                    <p>{templatesError}</p>
+                  </div>
+                ) : (
+                  <div className="no-templates">
+                    <p>No templates available.</p>
                   </div>
                 )}
               </div>
@@ -709,6 +1071,34 @@ const WorkflowManagerPage = () => {
               >
                 <i className="fas fa-plus" aria-hidden="true" /> Custom Configuration
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setWorkflowToDelete(null); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Workflow</h2>
+              <button className="btn-close" onClick={() => { setShowDeleteModal(false); setWorkflowToDelete(null); }}>×</button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete{' '}
+                <strong>{workflowToDelete?.name || 'this workflow'}</strong>?
+              </p>
+              <p>This action cannot be undone.</p>
+
+              <div className="modal-actions">
+                <button className="btn btn-secondary" onClick={() => { setShowDeleteModal(false); setWorkflowToDelete(null); }}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={confirmDeleteWorkflow}>
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -843,6 +1233,9 @@ const WorkflowManagerPage = () => {
                           })}
                           placeholder="e.g., teamcenter, windchill"
                         />
+                        {validationErrors.sourceType && (
+                          <div className="error-message">{validationErrors.sourceType}</div>
+                        )}
                       </div>
                     </div>
                     <div className="form-row">
@@ -876,7 +1269,7 @@ const WorkflowManagerPage = () => {
                             });
                             if (validationErrors.sourceEndpoint) setValidationErrors({ ...validationErrors, sourceEndpoint: null });
                           }}
-                          placeholder="https://teamcenter.company.com/api"
+                          placeholder={sourceEndpointPlaceholder}
                         />
                         {validationErrors.sourceEndpoint && (
                           <div className="error-message">{validationErrors.sourceEndpoint}</div>
@@ -960,6 +1353,9 @@ const WorkflowManagerPage = () => {
                           })}
                           placeholder="e.g., neo4j, postgresql"
                         />
+                        {validationErrors.targetType && (
+                          <div className="error-message">{validationErrors.targetType}</div>
+                        )}
                       </div>
                     </div>
                     <div className="form-row">

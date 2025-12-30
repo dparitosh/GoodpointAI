@@ -28,6 +28,11 @@ export function E2ETraceETLOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const displayValue = (value) => {
+    if (value === null || value === undefined || value === '') return 'N/A';
+    return value;
+  };
+
   // Function to fetch actual ETL data from the backend
   const fetchEtlData = useCallback(async () => {
     setLoading(true);
@@ -42,15 +47,14 @@ export function E2ETraceETLOverviewPage() {
       }
       const realData = await response.json();
 
-      // Assuming realData structure matches what you want to display
-      // You might need to transform realData if its structure differs from etlMetrics
+      // Do not fabricate values; render N/A for missing fields.
       setEtlMetrics({
-        latestStatus: realData.latestStatus || 'Unknown',
-        ingestionVolume: realData.ingestionVolume || 'N/A',
-        pendingDQIssues: realData.pendingDQIssues || 0,
-        criticalDQIssues: realData.criticalDQIssues || 0,
-        scheduledJobs: realData.scheduledJobs || 0,
-        lastRemediation: realData.lastRemediation || 'N/A',
+        latestStatus: realData?.latestStatus ?? null,
+        ingestionVolume: realData?.ingestionVolume ?? null,
+        pendingDQIssues: realData?.pendingDQIssues ?? null,
+        criticalDQIssues: realData?.criticalDQIssues ?? null,
+        scheduledJobs: realData?.scheduledJobs ?? null,
+        lastRemediation: realData?.lastRemediation ?? null,
       });
       // --- CHANGE END ---
 
@@ -85,11 +89,20 @@ export function E2ETraceETLOverviewPage() {
           <>
             <p>This panel provides an overview of ETL job statuses, data quality reports, and other operational metrics.</p>
             <ul>
-              <li>Latest ETL Run Status: <span className={`status-indicator ${etlMetrics.latestStatus === 'Success' ? 'success' : 'failed'}`}>{etlMetrics.latestStatus}</span></li>
-              <li>Data Ingestion Volume: {etlMetrics.ingestionVolume}</li>
-              <li>Pending Data Quality Issues: {etlMetrics.pendingDQIssues} (Critical: {etlMetrics.criticalDQIssues})</li>
-              <li>Scheduled Jobs: {etlMetrics.scheduledJobs}</li>
-              <li>Last Remediation Action: {etlMetrics.lastRemediation}</li>
+              <li>
+                Latest ETL Run Status:{' '}
+                <span
+                  className={`status-indicator ${String(etlMetrics.latestStatus || '').toLowerCase() === 'completed' ? 'success' : 'failed'}`}
+                >
+                  {displayValue(etlMetrics.latestStatus)}
+                </span>
+              </li>
+              <li>Data Ingestion Volume: {displayValue(etlMetrics.ingestionVolume)}</li>
+              <li>
+                Pending Data Quality Issues: {displayValue(etlMetrics.pendingDQIssues)} (Critical: {displayValue(etlMetrics.criticalDQIssues)})
+              </li>
+              <li>Scheduled Jobs: {displayValue(etlMetrics.scheduledJobs)}</li>
+              <li>Last Remediation Action: {displayValue(etlMetrics.lastRemediation)}</li>
             </ul>
           </>
         )}

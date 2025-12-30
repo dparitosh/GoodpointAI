@@ -38,9 +38,9 @@ npm run dev
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:5173 |
-| Backend API | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
-| Redoc | http://localhost:8000/redoc |
+| Backend API | http://localhost:8011 |
+| API Docs | http://localhost:8011/docs |
+| Redoc | http://localhost:8011/redoc |
 
 ##  Configuration Files
 
@@ -54,7 +54,7 @@ npm run dev
 ### Port Already in Use
 ```bash
 # Kill process on port 8000
-lsof -i :8000 | grep LISTEN | awk '{print $2}' | xargs kill -9
+lsof -i :8011 | grep LISTEN | awk '{print $2}' | xargs kill -9
 
 # Kill process on port 5173  
 lsof -i :5173 | grep LISTEN | awk '{print $2}' | xargs kill -9
@@ -136,7 +136,7 @@ pkill -f "vite"
 ## ✓ Health Check
 ```bash
 # Backend alive?
-curl http://localhost:8000/docs
+curl http://localhost:8011/docs
 
 # Frontend alive?
 curl http://localhost:5173

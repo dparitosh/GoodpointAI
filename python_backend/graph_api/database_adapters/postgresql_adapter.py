@@ -7,6 +7,8 @@ import asyncpg  # type: ignore[import-untyped]
 import logging
 from typing import Dict, List, Any, Optional
 from ..database_adapters import SQLDatabaseAdapter, DatabaseConnectionError, DatabaseQueryError
+from core.db_session import DATABASE_URL
+from core.postgres_config import asyncpg_params_from_database_url, is_postgres_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +34,28 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
     async def connect(self) -> bool:
         """Establish connection pool to PostgreSQL"""
         try:
-            # Build connection string
-            host = self.connection_params['host']
-            port = self.connection_params.get('port', self.DEFAULT_PORT)
-            database = self.connection_params['database']
-            username = self.connection_params['username']
-            password = self.connection_params['password']
+            # Allow a single-source-of-truth DATABASE_URL to drive asyncpg.
+            if "database_url" in self.connection_params and str(self.connection_params.get("database_url") or "").strip():
+                params = asyncpg_params_from_database_url(str(self.connection_params["database_url"]).strip())
+                host = params["host"]
+                port = params["port"]
+                database = params["database"]
+                username = params["user"]
+                password = params["password"]
+            elif is_postgres_database_url(DATABASE_URL):
+                params = asyncpg_params_from_database_url(DATABASE_URL)
+                host = params["host"]
+                port = params["port"]
+                database = params["database"]
+                username = params["user"]
+                password = params["password"]
+            else:
+                # Legacy param form
+                host = self.connection_params['host']
+                port = self.connection_params.get('port', self.DEFAULT_PORT)
+                database = self.connection_params['database']
+                username = self.connection_params['username']
+                password = self.connection_params['password']
             
             # Create connection pool
             self.pool = await asyncpg.create_pool(

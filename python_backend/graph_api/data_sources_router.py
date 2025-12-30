@@ -2,10 +2,16 @@ import logging
 import json
 import os
 from typing import List, Dict, Optional, Any
-from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field, field_serializer
 from datetime import datetime
 import neo4j
+from sqlalchemy.orm import Session
+
+from core.crypto import decrypt_json, encrypt_json
+from core.db_session import get_db
+from models.configuration_models import DataSourceConfigRecord
 
 # pylint: disable=broad-exception-caught
 
@@ -24,6 +30,10 @@ class DataSourceConnection(BaseModel):
     file_path: Optional[str] = None
     connection_string: Optional[str] = None
 
+    @field_serializer("password", "api_key", "connection_string", when_used="json")
+    def _hide_secrets_in_api(self, value):  # pylint: disable=unused-argument
+        return None
+
 class DataSource(BaseModel):
     id: Optional[str] = None
     name: str
@@ -39,7 +49,7 @@ class DataSource(BaseModel):
 class DataSourceResponse(BaseModel):
     status: str
     message: str
-    data: Optional[Any] = None
+    data: Optional[DataSource] = None
 
 class TestConnectionResponse(BaseModel):
     success: bool
@@ -49,25 +59,86 @@ class TestConnectionResponse(BaseModel):
 # In-memory storage for data sources (in production, use a database)
 DATA_SOURCES_FILE = "data_sources.json"
 
-def load_data_sources() -> List[Dict]:
-    """Load data sources from JSON file"""
+def _load_data_sources_legacy_file() -> List[Dict]:
+    """Legacy loader for data_sources.json (migration fallback)."""
     try:
         if os.path.exists(DATA_SOURCES_FILE):
-            with open(DATA_SOURCES_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            with open(DATA_SOURCES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
         return []
     except (OSError, json.JSONDecodeError) as e:
-        logger.error("Error loading data sources: %s", e)
+        logger.error("Error loading legacy data sources: %s", e)
         return []
 
-def save_data_sources(sources: List[Dict]):
-    """Save data sources to JSON file"""
-    try:
-        with open(DATA_SOURCES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(sources, f, indent=2, default=str)
-    except OSError as e:
-        logger.error("Error saving data sources: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to save data sources") from e
+def _allowed_connection_keys() -> set[str]:
+    if hasattr(DataSourceConnection, "model_fields"):
+        return set(DataSourceConnection.model_fields.keys())
+    return set(getattr(DataSourceConnection, "__fields__", {}).keys())
+
+
+def _filter_connection_fields(connection: Dict[str, Any]) -> Dict[str, Any]:
+    allowed = _allowed_connection_keys()
+    return {k: v for k, v in (connection or {}).items() if k in allowed}
+
+
+def _redact_connection(connection: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a sanitized copy of connection data."""
+    redacted: Dict[str, Any] = {}
+    sensitive_exact = {
+        "password",
+        "secret",
+        "token",
+        "api_key",
+        "access_key",
+        "sas",
+        "connection_string",
+    }
+    sensitive_substrings = [
+        "password",
+        "secret",
+        "token",
+        "api_key",
+        "access_key",
+        "connection_string",
+        "sas",
+    ]
+    for k, v in (connection or {}).items():
+        key_lower = str(k).lower()
+        if key_lower in sensitive_exact or any(s in key_lower for s in sensitive_substrings):
+            redacted[k] = None
+        else:
+            redacted[k] = v
+    return redacted
+
+
+def _merge_connection_secrets(incoming: Dict[str, Any], existing: Dict[str, Any]) -> Dict[str, Any]:
+    """Preserve existing secrets when the client sends empty or masked values."""
+    merged = dict(incoming or {})
+    for secret_key in ("password", "api_key", "connection_string"):
+        incoming_val = merged.get(secret_key)
+        if incoming_val in (None, "", "***"):
+            existing_val = (existing or {}).get(secret_key)
+            if existing_val:
+                merged[secret_key] = existing_val
+            else:
+                merged.pop(secret_key, None)
+    return merged
+
+
+def _record_to_api(record: DataSourceConfigRecord, connection: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": record.id,
+        "name": record.name,
+        "type": record.type,
+        "connection": _redact_connection(_filter_connection_fields(connection)),
+        "description": record.description or "",
+        "status": record.status,
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+        "last_tested": record.last_tested.isoformat() if record.last_tested else None,
+        "test_result": record.test_result,
+    }
 
 @router.get(
     "/",
@@ -79,16 +150,61 @@ async def get_data_sources(
     response: Response,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=5000),
+    db: Session = Depends(get_db),
 ):
     """Get all data sources (paged)."""
     try:
-        sources = load_data_sources()
-        total_count = len(sources)
+        total_count = db.query(DataSourceConfigRecord).count()
         response.headers["X-Total-Count"] = str(total_count)
-        return sources[skip:skip + limit]
+
+        rows = (
+            db.query(DataSourceConfigRecord)
+            .order_by(DataSourceConfigRecord.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+        if not rows:
+            legacy = _load_data_sources_legacy_file()
+            # best-effort redaction for legacy payloads
+            for item in legacy:
+                if isinstance(item, dict) and isinstance(item.get("connection"), dict):
+                    item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
+            response.headers["X-Total-Count"] = str(len(legacy))
+            return legacy[skip : skip + limit]
+
+        result: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                connection = decrypt_json(row.connection_ciphertext)
+                if not isinstance(connection, dict):
+                    connection = {}
+            except ValueError as e:
+                raise HTTPException(status_code=503, detail=str(e)) from e
+            except Exception:
+                connection = {}
+            result.append(_record_to_api(row, connection))
+        return result
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         logger.error("Error fetching data sources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch data sources") from e
+
+
+@router.get(
+    "",
+    response_model=List[DataSource],
+    summary="Get All Data Sources (No Slash)",
+    include_in_schema=False,
+)
+async def get_data_sources_no_slash(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=5000),
+    db: Session = Depends(get_db),
+):
+    # Avoid relying on redirect-slashes behavior when running behind proxies.
+    return await get_data_sources(response=response, skip=skip, limit=limit, db=db)
 
 @router.get(
     "/{source_id}",
@@ -96,14 +212,23 @@ async def get_data_sources(
     summary="Get Data Source by ID",
     description="Retrieve a specific data source by its ID."
 )
-async def get_data_source(source_id: str):
+async def get_data_source(source_id: str, db: Session = Depends(get_db)):
     """Get a specific data source by ID"""
     try:
-        sources = load_data_sources()
-        source = next((s for s in sources if s.get('id') == source_id), None)
-        if not source:
+        row = db.get(DataSourceConfigRecord, source_id)
+        if row is None:
             raise HTTPException(status_code=404, detail="Data source not found")
-        return source
+
+        try:
+            connection = decrypt_json(row.connection_ciphertext)
+            if not isinstance(connection, dict):
+                connection = {}
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        except Exception:
+            connection = {}
+
+        return _record_to_api(row, connection)
     except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
         logger.error("Error fetching data source %s: %s", source_id, e)
         raise HTTPException(status_code=500, detail="Failed to fetch data source") from e
@@ -114,38 +239,69 @@ async def get_data_source(source_id: str):
     summary="Create Data Source",
     description="Create a new data source configuration."
 )
-async def create_data_source(source: DataSource):
+async def create_data_source(source: DataSource, db: Session = Depends(get_db)):
     """Create a new data source"""
     try:
-        sources = load_data_sources()
-        
         # Generate ID if not provided
         if not source.id:
-            source.id = f"ds_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(sources)}"
+            source.id = f"ds_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{source.name.strip().replace(' ', '_')[:24]}"
         
-        # Check if ID already exists
-        if any(s.get('id') == source.id for s in sources):
+        # Reject duplicates by id or name
+        existing_by_id = db.get(DataSourceConfigRecord, source.id)
+        if existing_by_id is not None:
             raise HTTPException(status_code=400, detail="Data source ID already exists")
-        
-        # Set timestamps
-        source.created_at = datetime.now().isoformat()
-        source.updated_at = datetime.now().isoformat()
-        
-        # Convert to dict and add to sources
-        source_dict = source.model_dump() if hasattr(source, "model_dump") else source.dict()
-        sources.append(source_dict)
-        
-        # Save to file
-        save_data_sources(sources)
+
+        existing_by_name = (
+            db.query(DataSourceConfigRecord)
+            .filter(DataSourceConfigRecord.name == source.name)
+            .first()
+        )
+        if existing_by_name is not None:
+            raise HTTPException(status_code=400, detail="Data source name already exists")
+
+        # Encrypt connection payload
+        connection_payload = (
+            source.connection.model_dump(mode="python", exclude_none=True)
+            if hasattr(source.connection, "model_dump")
+            else source.connection.dict(exclude_none=True)
+        )
+
+        try:
+            ciphertext = encrypt_json(connection_payload)
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+
+        record = DataSourceConfigRecord(
+            id=source.id,
+            name=source.name,
+            type=source.type,
+            description=source.description,
+            status=source.status or "inactive",
+            connection_ciphertext=ciphertext,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
         
         return DataSourceResponse(
             status="success",
             message="Data source created successfully",
-            data=source_dict
+            data=DataSource(**_record_to_api(record, connection_payload))
         )
     except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
         logger.error("Error creating data source: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create data source") from e
+
+
+@router.post(
+    "",
+    response_model=DataSourceResponse,
+    summary="Create Data Source (No Slash)",
+    include_in_schema=False,
+)
+async def create_data_source_no_slash(source: DataSource, db: Session = Depends(get_db)):
+    # Avoid relying on redirect-slashes behavior when running behind proxies.
+    return await create_data_source(source=source, db=db)
 
 @router.put(
     "/{source_id}",
@@ -153,32 +309,53 @@ async def create_data_source(source: DataSource):
     summary="Update Data Source",
     description="Update an existing data source configuration."
 )
-async def update_data_source(source_id: str, source: DataSource):
+async def update_data_source(source_id: str, source: DataSource, db: Session = Depends(get_db)):
     """Update an existing data source"""
     try:
-        sources = load_data_sources()
-        
-        # Find the source to update
-        source_index = next((i for i, s in enumerate(sources) if s.get('id') == source_id), None)
-        if source_index is None:
+        record = db.get(DataSourceConfigRecord, source_id)
+        if record is None:
             raise HTTPException(status_code=404, detail="Data source not found")
-        
-        # Update the source
-        source.id = source_id
-        source.updated_at = datetime.now().isoformat()
-        # Preserve created_at if it exists
-        if 'created_at' in sources[source_index]:
-            source.created_at = sources[source_index]['created_at']
-        
-        sources[source_index] = source.model_dump() if hasattr(source, "model_dump") else source.dict()
-        
-        # Save to file
-        save_data_sources(sources)
+
+        # Enforce unique name (excluding this record)
+        name_conflict = (
+            db.query(DataSourceConfigRecord)
+            .filter(DataSourceConfigRecord.name == source.name)
+            .filter(DataSourceConfigRecord.id != source_id)
+            .first()
+        )
+        if name_conflict is not None:
+            raise HTTPException(status_code=400, detail="Data source name already exists")
+
+        incoming_payload = (
+            source.connection.model_dump(mode="python", exclude_none=True)
+            if hasattr(source.connection, "model_dump")
+            else source.connection.dict(exclude_none=True)
+        )
+
+        try:
+            existing_connection = decrypt_json(record.connection_ciphertext)
+            if not isinstance(existing_connection, dict):
+                existing_connection = {}
+        except Exception:
+            existing_connection = {}
+
+        connection_payload = _merge_connection_secrets(incoming_payload, existing_connection)
+
+        record.name = source.name
+        record.type = source.type
+        record.description = source.description
+        record.status = source.status or record.status
+        try:
+            record.connection_ciphertext = encrypt_json(connection_payload)
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        db.commit()
+        db.refresh(record)
         
         return DataSourceResponse(
             status="success",
             message="Data source updated successfully",
-            data=sources[source_index]
+            data=DataSource(**_record_to_api(record, connection_payload))
         )
     except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
         logger.error("Error updating data source %s: %s", source_id, e)
@@ -190,20 +367,15 @@ async def update_data_source(source_id: str, source: DataSource):
     summary="Delete Data Source",
     description="Delete a data source configuration."
 )
-async def delete_data_source(source_id: str):
+async def delete_data_source(source_id: str, db: Session = Depends(get_db)):
     """Delete a data source"""
     try:
-        sources = load_data_sources()
-        
-        # Find and remove the source
-        original_count = len(sources)
-        sources = [s for s in sources if s.get('id') != source_id]
-        
-        if len(sources) == original_count:
+        record = db.get(DataSourceConfigRecord, source_id)
+        if record is None:
             raise HTTPException(status_code=404, detail="Data source not found")
-        
-        # Save updated sources
-        save_data_sources(sources)
+
+        db.delete(record)
+        db.commit()
         
         return DataSourceResponse(
             status="success",
@@ -219,17 +391,31 @@ async def delete_data_source(source_id: str):
     summary="Test Data Source Connection",
     description="Test the connection to a data source."
 )
-async def test_data_source_connection(source_id: str):
+async def test_data_source_connection(source_id: str, db: Session = Depends(get_db)):
     """Test connection to a data source"""
     try:
         logger.info("Testing connection for data source: %s", source_id)
-        sources = load_data_sources()
-        source = next((s for s in sources if s.get('id') == source_id), None)
-        
-        if not source:
+        record = db.get(DataSourceConfigRecord, source_id)
+        if record is None:
             logger.error("Data source not found: %s", source_id)
             raise HTTPException(status_code=404, detail="Data source not found")
-        
+
+        try:
+            connection = decrypt_json(record.connection_ciphertext)
+            if not isinstance(connection, dict):
+                connection = {}
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decrypt data source connection: {str(e)}") from e
+
+        source = {
+            "id": record.id,
+            "name": record.name,
+            "type": record.type,
+            "connection": connection,
+        }
+
         logger.info("Found data source: %s, type: %s", source.get('name'), source.get('type'))
         
         # Test connection based on source type
@@ -237,14 +423,10 @@ async def test_data_source_connection(source_id: str):
         logger.info("Connection test result: %s, message: %s", test_result.success, test_result.message)
         
         # Update source with test results
-        for i, s in enumerate(sources):
-            if s.get('id') == source_id:
-                sources[i]['last_tested'] = datetime.now().isoformat()
-                sources[i]['test_result'] = 'success' if test_result.success else 'failed'
-                sources[i]['status'] = 'active' if test_result.success else 'error'
-                break
-        
-        save_data_sources(sources)
+        record.last_tested = datetime.now()
+        record.test_result = "success" if test_result.success else "failed"
+        record.status = "active" if test_result.success else "error"
+        db.commit()
         
         return test_result
     except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError, RuntimeError) as e:

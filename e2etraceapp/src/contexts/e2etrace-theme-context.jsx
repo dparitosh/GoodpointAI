@@ -15,6 +15,11 @@ export const E2ETraceThemeProvider = ({ children }) => {
     useEffect(() => {
         // Apply the theme to the root element
         document.documentElement.setAttribute('data-theme', theme);
+        try {
+            localStorage.setItem('e2etrace-theme', theme);
+        } catch {
+            // ignore storage failures (private mode, quota, etc.)
+        }
     }, [theme]);
 
     const toggleTheme = () => {
@@ -33,4 +38,7 @@ export const E2ETraceThemeProvider = ({ children }) => {
     );
 };
 
-export const e2etraceUseTheme = () => useContext(E2ETraceThemeContext);
+export const useE2ETraceTheme = () => useContext(E2ETraceThemeContext);
+
+// Backwards compatibility for existing imports.
+export const e2etraceUseTheme = useE2ETraceTheme;

@@ -4,7 +4,8 @@
  */
 
 // Prefer relative URLs so Vite proxy (dev) and same-origin deploys work by default.
-const API_BASE = import.meta.env.VITE_API_URL || '';
+// Prefer VITE_API_BASE_URL (documented and used elsewhere); keep VITE_API_URL as a legacy fallback.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 
 class GraphIntegrationService {
   // GraphQL Operations

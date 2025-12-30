@@ -9,6 +9,7 @@ import './ObservabilityDashboard.css';
 export const ObservabilityDashboard = () => {
   const [alerts, setAlerts] = useState([]);
   const [qualityMetrics, setQualityMetrics] = useState(null);
+  const [qualityUnavailable, setQualityUnavailable] = useState(false);
   const [agenticStatus, setAgenticStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
@@ -38,8 +39,14 @@ export const ObservabilityDashboard = () => {
 
       // Fetch data quality metrics
       const qualityResponse = await e2etraceFetchWithRetry('/api/monitoring/data-quality');
-      const qualityPayload = await qualityResponse.json().catch(() => null);
-      setQualityMetrics(qualityPayload);
+      if (!qualityResponse.ok) {
+        setQualityMetrics(null);
+        setQualityUnavailable(true);
+      } else {
+        const qualityPayload = await qualityResponse.json().catch(() => null);
+        setQualityMetrics(qualityPayload);
+        setQualityUnavailable(false);
+      }
 
       // Fetch agentic system status
       try {
@@ -110,16 +117,16 @@ export const ObservabilityDashboard = () => {
                 <span className="metric-icon">✓</span>
               </div>
               <div className="metric-value" style={{ color: getQualityScoreColor(qualityMetrics?.qualityScore || 0) }}>
-                {qualityMetrics?.qualityScore?.toFixed(1) || 0}%
+                {qualityUnavailable ? 'N/A' : `${qualityMetrics?.qualityScore?.toFixed(1) ?? 'N/A'}%`}
               </div>
               <div className="metric-details">
                 <div className="metric-detail-item">
                   <span>Valid Records:</span>
-                  <span>{qualityMetrics?.validRecords?.toLocaleString() || 0}</span>
+                  <span>{qualityUnavailable ? 'N/A' : (qualityMetrics?.validRecords?.toLocaleString() ?? 'N/A')}</span>
                 </div>
                 <div className="metric-detail-item">
                   <span>Total Records:</span>
-                  <span>{qualityMetrics?.totalRecords?.toLocaleString() || 0}</span>
+                  <span>{qualityUnavailable ? 'N/A' : (qualityMetrics?.totalRecords?.toLocaleString() ?? 'N/A')}</span>
                 </div>
               </div>
             </div>
@@ -131,16 +138,16 @@ export const ObservabilityDashboard = () => {
                 <span className="metric-icon">!</span>
               </div>
               <div className="metric-value" style={{ color: '#FF832B' }}>
-                {((qualityMetrics?.duplicates || 0) + (qualityMetrics?.nullValues || 0))}
+                {qualityUnavailable ? 'N/A' : ((qualityMetrics?.duplicates || 0) + (qualityMetrics?.nullValues || 0))}
               </div>
               <div className="metric-details">
                 <div className="metric-detail-item">
                   <span>Duplicates:</span>
-                  <span>{qualityMetrics?.duplicates || 0}</span>
+                  <span>{qualityUnavailable ? 'N/A' : (qualityMetrics?.duplicates ?? 0)}</span>
                 </div>
                 <div className="metric-detail-item">
                   <span>Null Values:</span>
-                  <span>{qualityMetrics?.nullValues || 0}</span>
+                  <span>{qualityUnavailable ? 'N/A' : (qualityMetrics?.nullValues ?? 0)}</span>
                 </div>
               </div>
             </div>

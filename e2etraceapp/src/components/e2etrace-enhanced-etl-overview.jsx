@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
-import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { sheetsToXlsxBlob } from '../utils/spreadsheet-utils.js';
 import { applyETLFilter, highlightPerformanceIssues, calculatePipelineMetrics } from '../utils/e2etrace-graph-enhancement.js';
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import './e2etrace-enhanced-etl-overview.css';
@@ -334,8 +334,7 @@ const EnhancedETLOverview = ({
   });
 
   // Excel export functionality
-  const exportToExcel = useCallback(() => {
-    const workbook = XLSX.utils.book_new();
+  const exportToExcel = useCallback(async () => {
     
     // ETL Overview Sheet
     const overviewData = [
@@ -350,8 +349,7 @@ const EnhancedETLOverview = ({
       ['Error Rate (%)', etlMetrics.errorRate, parseFloat(etlMetrics.errorRate) < 5 ? 'Good' : 'Critical']
     ];
     
-    const overviewSheet = XLSX.utils.aoa_to_sheet(overviewData);
-    XLSX.utils.book_append_sheet(workbook, overviewSheet, 'ETL Overview');
+    const sheets = [{ name: 'ETL Overview', aoa: overviewData }];
     
     // Time Series Data Sheet
     const timeSeriesHeaders = ['Timestamp', 'Throughput', 'Latency (ms)', 'Error Rate (%)', 'Success Rate (%)'];
@@ -366,8 +364,7 @@ const EnhancedETLOverview = ({
       ])
     ];
     
-    const timeSeriesSheet = XLSX.utils.aoa_to_sheet(timeSeriesData);
-    XLSX.utils.book_append_sheet(workbook, timeSeriesSheet, 'Time Series Data');
+    sheets.push({ name: 'Time Series Data', aoa: timeSeriesData });
     
     // Node Distribution Sheet
     const nodeDistHeaders = ['Node Type', 'Count', 'Percentage'];
@@ -381,8 +378,7 @@ const EnhancedETLOverview = ({
       ])
     ];
     
-    const nodeDistSheet = XLSX.utils.aoa_to_sheet(nodeDistData);
-    XLSX.utils.book_append_sheet(workbook, nodeDistSheet, 'Node Distribution');
+    sheets.push({ name: 'Node Distribution', aoa: nodeDistData });
     
     // Performance Trends Sheet
     const perfHeaders = ['Metric', 'Current Value', 'Target Value', 'Trend', 'Unit'];
@@ -397,14 +393,17 @@ const EnhancedETLOverview = ({
       ])
     ];
     
-    const perfSheet = XLSX.utils.aoa_to_sheet(perfData);
-    XLSX.utils.book_append_sheet(workbook, perfSheet, 'Performance Trends');
+    sheets.push({ name: 'Performance Trends', aoa: perfData });
     
     // Generate and save file
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const fileName = `ETL_Overview_${new Date().toISOString().split('T')[0]}.xlsx`;
-    saveAs(data, fileName);
+    try {
+      const blob = await sheetsToXlsxBlob(sheets);
+      const fileName = `ETL_Overview_${new Date().toISOString().split('T')[0]}.xlsx`;
+      saveAs(blob, fileName);
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      alert('Excel export failed. Please try again.');
+    }
   }, [etlMetrics]);
 
   // Filter handling functions

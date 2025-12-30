@@ -4,13 +4,45 @@ Handles Azure Blob Storage, Data Lake, Cosmos DB, Service Bus, Event Hub
 """
 import logging
 from typing import List, Dict, Optional, Any, cast
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File
 from pydantic import BaseModel, Field
 from uuid import UUID
+import importlib
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/azure", tags=["Azure Integration"])
+
+
+def _require_module(module_name: str, *, install_hint: str) -> Any:
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as e:
+        raise HTTPException(status_code=503, detail=f"{module_name} is not installed. {install_hint}") from e
+
+
+def _require_azure_storage_configured() -> None:
+    from core.external_config import azure_config
+    if not azure_config.storage_connection_string:
+        raise HTTPException(status_code=503, detail="Azure Storage is not configured")
+
+
+def _require_azure_cosmos_configured() -> None:
+    from core.external_config import azure_config
+    if not (azure_config.cosmos_endpoint and azure_config.cosmos_key):
+        raise HTTPException(status_code=503, detail="Azure Cosmos DB is not configured")
+
+
+def _require_azure_servicebus_configured() -> None:
+    from core.external_config import azure_config
+    if not azure_config.servicebus_connection_string:
+        raise HTTPException(status_code=503, detail="Azure Service Bus is not configured")
+
+
+def _require_azure_eventhub_configured() -> None:
+    from core.external_config import azure_config
+    if not azure_config.eventhub_connection_string:
+        raise HTTPException(status_code=503, detail="Azure Event Hub is not configured")
 
 
 ServiceBusAppPropertyValue = int | float | bytes | bool | str | UUID
@@ -77,10 +109,11 @@ async def upload_blob(
     """
     try:
         from core.external_config import azure_config
-        from azure.storage.blob import BlobServiceClient
-        
-        if not azure_config.storage_connection_string:
-            raise HTTPException(status_code=500, detail="Azure Storage not configured")
+        _require_azure_storage_configured()
+        BlobServiceClient = getattr(
+            _require_module("azure.storage.blob", install_hint="Install `azure-storage-blob`."),
+            "BlobServiceClient",
+        )
         
         blob_service_client = BlobServiceClient.from_connection_string(
             azure_config.storage_connection_string
@@ -114,7 +147,9 @@ async def upload_blob(
             "size": len(content),
             "url": blob_client.url
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error uploading to Azure Blob: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -131,7 +166,11 @@ async def list_blobs(
     """List all blobs in a container"""
     try:
         from core.external_config import azure_config
-        from azure.storage.blob import BlobServiceClient
+        _require_azure_storage_configured()
+        BlobServiceClient = getattr(
+            _require_module("azure.storage.blob", install_hint="Install `azure-storage-blob`."),
+            "BlobServiceClient",
+        )
         
         blob_service_client = BlobServiceClient.from_connection_string(
             azure_config.storage_connection_string
@@ -160,7 +199,9 @@ async def list_blobs(
             "count": len(blobs_page),
             "blobs": blobs_page,
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error listing Azure blobs: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -171,7 +212,11 @@ async def download_blob(container_name: str, blob_name: str):
     """Download a blob from Azure Storage"""
     try:
         from core.external_config import azure_config
-        from azure.storage.blob import BlobServiceClient
+        _require_azure_storage_configured()
+        BlobServiceClient = getattr(
+            _require_module("azure.storage.blob", install_hint="Install `azure-storage-blob`."),
+            "BlobServiceClient",
+        )
         from fastapi.responses import StreamingResponse
         import io
         
@@ -192,7 +237,9 @@ async def download_blob(container_name: str, blob_name: str):
             media_type="application/octet-stream",
             headers={"Content-Disposition": f"attachment; filename={blob_name}"}
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error downloading Azure blob: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -203,7 +250,11 @@ async def delete_blob(container_name: str, blob_name: str):
     """Delete a blob from Azure Storage"""
     try:
         from core.external_config import azure_config
-        from azure.storage.blob import BlobServiceClient
+        _require_azure_storage_configured()
+        BlobServiceClient = getattr(
+            _require_module("azure.storage.blob", install_hint="Install `azure-storage-blob`."),
+            "BlobServiceClient",
+        )
         
         blob_service_client = BlobServiceClient.from_connection_string(
             azure_config.storage_connection_string
@@ -222,7 +273,9 @@ async def delete_blob(container_name: str, blob_name: str):
             "blob_name": blob_name,
             "container": container_name
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error deleting Azure blob: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -242,7 +295,12 @@ async def upload_to_datalake(
     """Upload file to Azure Data Lake Gen2"""
     try:
         from core.external_config import azure_config
-        from azure.storage.filedatalake import DataLakeServiceClient
+        if not (azure_config.storage_account_name and azure_config.storage_account_key):
+            raise HTTPException(status_code=503, detail="Azure Data Lake is not configured")
+        DataLakeServiceClient = getattr(
+            _require_module("azure.storage.filedatalake", install_hint="Install `azure-storage-file-datalake`."),
+            "DataLakeServiceClient",
+        )
         
         service_client = DataLakeServiceClient(
             account_url=f"https://{azure_config.storage_account_name}.dfs.core.windows.net",
@@ -269,7 +327,9 @@ async def upload_to_datalake(
             "path": file_path,
             "size": len(content)
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error uploading to Data Lake: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -284,7 +344,11 @@ async def create_cosmos_document(request: CosmosDocumentRequest):
     """Create or update a document in Cosmos DB"""
     try:
         from core.external_config import azure_config
-        from azure.cosmos import CosmosClient
+        _require_azure_cosmos_configured()
+        CosmosClient = getattr(
+            _require_module("azure.cosmos", install_hint="Install `azure-cosmos`."),
+            "CosmosClient",
+        )
         
         client = CosmosClient(azure_config.cosmos_endpoint, azure_config.cosmos_key)
         database = client.get_database_client(azure_config.cosmos_database)
@@ -292,7 +356,7 @@ async def create_cosmos_document(request: CosmosDocumentRequest):
         
         # Ensure document has an id
         if 'id' not in request.document:
-            request.document['id'] = f"{datetime.utcnow().timestamp()}"
+            request.document['id'] = f"{datetime.now(timezone.utc).timestamp()}"
         
         result = container.upsert_item(request.document)
         
@@ -302,7 +366,9 @@ async def create_cosmos_document(request: CosmosDocumentRequest):
             "document_id": result['id'],
             "container": request.container_id
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Cosmos document: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -320,7 +386,11 @@ async def query_cosmos_documents(
     """Query documents from Cosmos DB"""
     try:
         from core.external_config import azure_config
-        from azure.cosmos import CosmosClient
+        _require_azure_cosmos_configured()
+        CosmosClient = getattr(
+            _require_module("azure.cosmos", install_hint="Install `azure-cosmos`."),
+            "CosmosClient",
+        )
         
         client = CosmosClient(azure_config.cosmos_endpoint, azure_config.cosmos_key)
         database = client.get_database_client(azure_config.cosmos_database)
@@ -344,7 +414,9 @@ async def query_cosmos_documents(
             "count": len(documents_page),
             "documents": documents_page,
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error querying Cosmos DB: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -359,7 +431,10 @@ async def send_service_bus_message(request: ServiceBusMessageRequest):
     """Send message to Azure Service Bus queue"""
     try:
         from core.external_config import azure_config
-        from azure.servicebus import ServiceBusClient, ServiceBusMessage
+        _require_azure_servicebus_configured()
+        servicebus_mod = _require_module("azure.servicebus", install_hint="Install `azure-servicebus`." )
+        ServiceBusClient = getattr(servicebus_mod, "ServiceBusClient")
+        ServiceBusMessage = getattr(servicebus_mod, "ServiceBusMessage")
         import json
         
         client = ServiceBusClient.from_connection_string(
@@ -381,7 +456,9 @@ async def send_service_bus_message(request: ServiceBusMessageRequest):
             "message": "Message sent to Service Bus",
             "queue": request.queue_name
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error sending to Service Bus: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -396,7 +473,10 @@ async def send_event_hub_events(request: EventHubEventRequest):
     """Send events to Azure Event Hub"""
     try:
         from core.external_config import azure_config
-        from azure.eventhub import EventHubProducerClient, EventData
+        _require_azure_eventhub_configured()
+        eventhub_mod = _require_module("azure.eventhub", install_hint="Install `azure-eventhub`." )
+        EventHubProducerClient = getattr(eventhub_mod, "EventHubProducerClient")
+        EventData = getattr(eventhub_mod, "EventData")
         import json
         
         producer = EventHubProducerClient.from_connection_string(
@@ -418,7 +498,9 @@ async def send_event_hub_events(request: EventHubEventRequest):
             "event_hub": request.event_hub_name,
             "event_count": len(request.events)
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error sending to Event Hub: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -432,16 +514,17 @@ async def send_event_hub_events(request: EventHubEventRequest):
 async def azure_health_check():
     """Check Azure service connectivity"""
     from core.external_config import azure_config
-    
-    health = {
-        "status": "healthy",
-        "services": {
-            "blob_storage": azure_config.storage_connection_string != "",
-            "cosmos_db": azure_config.cosmos_endpoint != "",
-            "service_bus": azure_config.servicebus_connection_string != "",
-            "event_hub": azure_config.eventhub_connection_string != ""
-        },
-        "timestamp": datetime.utcnow().isoformat()
+
+    services = {
+        "blob_storage": bool(azure_config.storage_connection_string),
+        "cosmos_db": bool(azure_config.cosmos_endpoint and azure_config.cosmos_key),
+        "service_bus": bool(azure_config.servicebus_connection_string),
+        "event_hub": bool(azure_config.eventhub_connection_string),
     }
-    
-    return health
+    status = "healthy" if any(services.values()) else "unconfigured"
+
+    return {
+        "status": status,
+        "services": services,
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+    }

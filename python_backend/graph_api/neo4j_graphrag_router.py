@@ -40,6 +40,7 @@ class GraphRAGQueryRequest(BaseModel):
     tools: Optional[List[str]] = Field(default=None, description="Optional tools to invoke")
     top_k: int = Field(default=5, ge=1, le=50, description="Number of top results (1-50)")
     include_paths: bool = Field(default=False, description="Include graph paths in results")
+    embedding: Optional[List[float]] = Field(default=None, description="Optional embedding vector for the query")
 
 
 class GraphRAGQueryResponse(BaseModel):
@@ -116,7 +117,8 @@ async def execute_graphrag_query(request: GraphRAGQueryRequest):
             context=request.context,
             tools=request.tools,
             top_k=request.top_k,
-            include_paths=request.include_paths
+            include_paths=request.include_paths,
+            embedding=request.embedding,
         )
         
         return result

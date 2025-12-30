@@ -10,7 +10,7 @@ from sqlalchemy.sql import func
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from core.database import Base
 
@@ -134,26 +134,29 @@ class WorkflowInstanceCreate(BaseModel):
     schedule_cron: Optional[str] = None
     created_by: Optional[str] = "system"
     
-    @validator('name')
-    def validate_name(cls, v):
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
         if not v or not v.strip():
-            raise ValueError('Workflow name cannot be empty')
+            raise ValueError("Workflow name cannot be empty")
         return v.strip()
     
-    @validator('source')
-    def validate_source(cls, v):
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v: "WorkflowSourceConfig") -> "WorkflowSourceConfig":
         if not v.id or len(v.id) < 3:
-            raise ValueError('Source system ID must be at least 3 characters')
+            raise ValueError("Source system ID must be at least 3 characters")
         if not v.type:
-            raise ValueError('Source system type is required')
+            raise ValueError("Source system type is required")
         return v
     
-    @validator('target')
-    def validate_target(cls, v):
+    @field_validator("target")
+    @classmethod
+    def validate_target(cls, v: "WorkflowTargetConfig") -> "WorkflowTargetConfig":
         if not v.id or len(v.id) < 3:
-            raise ValueError('Target system ID must be at least 3 characters')
+            raise ValueError("Target system ID must be at least 3 characters")
         if not v.type:
-            raise ValueError('Target system type is required')
+            raise ValueError("Target system type is required")
         return v
 
 
@@ -197,8 +200,7 @@ class WorkflowInstanceResponse(BaseModel):
     schedule_cron: Optional[str]
     next_run_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WorkflowInstanceDetail(WorkflowInstanceResponse):

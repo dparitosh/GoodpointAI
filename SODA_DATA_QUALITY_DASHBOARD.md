@@ -150,7 +150,7 @@ November 24, 2025
 
 ### Backend Endpoints Integration
 
-**Base URL:** `http://localhost:8000/api/analytics/quality`
+**Base URL:** `http://localhost:8011/api/analytics/quality`
 
 **Endpoints Used:**
 
@@ -355,21 +355,21 @@ November 24, 2025
 ### API Testing
 ```bash
 # Health check
-curl http://localhost:8000/api/analytics/quality/health
+curl http://localhost:8011/api/analytics/quality/health
 
 # Get dashboard
-curl http://localhost:8000/api/analytics/quality/dashboard
+curl http://localhost:8011/api/analytics/quality/dashboard
 
 # Get rules
-curl http://localhost:8000/api/analytics/quality/rules
+curl http://localhost:8011/api/analytics/quality/rules
 
 # Run scan
-curl -X POST http://localhost:8000/api/analytics/quality/scan/test_table \
+curl -X POST http://localhost:8011/api/analytics/quality/scan/test_table \
   -H "Content-Type: application/json" \
   -d '{"table_name":"test_table","data_source":"neo4j","rules":[]}'
 
 # Get reports
-curl http://localhost:8000/api/analytics/quality/reports
+curl http://localhost:8011/api/analytics/quality/reports
 ```
 
 ## Future Enhancements

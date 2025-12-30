@@ -703,7 +703,7 @@ Content-Type: application/json
 
 #### Create Service
 ```http
-POST /api/gateway/kong/services?name=my-service&url=http://backend:8000
+POST /api/gateway/kong/services?name=my-service&url=http://backend:8011
 ```
 
 #### Create Route
@@ -715,7 +715,7 @@ Content-Type: application/json
   "name": "workflow-route",
   "path": "/workflows",
   "methods": ["GET", "POST"],
-  "upstream_url": "http://backend:8000/api/workflows"
+  "upstream_url": "http://backend:8011/api/workflows"
 }
 ```
 
@@ -752,7 +752,7 @@ Content-Type: application/json
 
 #### Create API Proxy
 ```http
-POST /api/gateway/apigee/proxies?name=workflow-api&base_path=/workflows&target_url=http://backend:8000
+POST /api/gateway/apigee/proxies?name=workflow-api&base_path=/workflows&target_url=http://backend:8011
 ```
 
 #### List API Proxies
@@ -784,7 +784,7 @@ Content-Type: application/json
   "name": "workflow-endpoint",
   "path": "/api/workflows",
   "methods": ["GET", "POST", "PUT"],
-  "upstream_url": "http://backend:8000/api/workflows",
+  "upstream_url": "http://backend:8011/api/workflows",
   "plugins": []
 }
 ```
@@ -962,7 +962,7 @@ import requests
 
 # Upload file
 files = {'file': open('data.xml', 'rb')}
-response = requests.post('http://localhost:8000/api/azure/blob/upload', files=files)
+response = requests.post('http://localhost:8011/api/azure/blob/upload', files=files)
 blob_url = response.json()['url']
 
 # Analyze with LLM
@@ -972,7 +972,7 @@ llm_request = {
     ],
     "temperature": 0.7
 }
-analysis = requests.post('http://localhost:8000/api/llm/openai/chat', json=llm_request)
+analysis = requests.post('http://localhost:8011/api/llm/openai/chat', json=llm_request)
 ```
 
 ### Example 2: Query PLM and store in DynamoDB
@@ -985,7 +985,7 @@ plm_query = {
     "query_criteria": {"item_id": "P*"},
     "limit": 100
 }
-parts = requests.post('http://localhost:8000/api/plm/teamcenter/query', json=plm_query)
+parts = requests.post('http://localhost:8011/api/plm/teamcenter/query', json=plm_query)
 
 # Store in DynamoDB
 for part in parts.json()['objects']:
@@ -993,14 +993,14 @@ for part in parts.json()['objects']:
         "table_name": "plm-parts",
         "item": part
     }
-    requests.post('http://localhost:8000/api/aws/dynamodb/put', json=dynamodb_item)
+    requests.post('http://localhost:8011/api/aws/dynamodb/put', json=dynamodb_item)
 ```
 
 ### Example 3: Process files from folder and upload to S3
 
 ```python
 # List files
-file_list = requests.post('http://localhost:8000/api/filesystem/list', json={
+file_list = requests.post('http://localhost:8011/api/filesystem/list', json={
     "path": "./data/uploads",
     "filter_extension": "xml"
 })
@@ -1008,13 +1008,13 @@ file_list = requests.post('http://localhost:8000/api/filesystem/list', json={
 # Process and upload each
 for file_info in file_list.json()['files']:
     # Parse XML
-    parsed = requests.post('http://localhost:8000/api/filesystem/xml/parse', json={
+    parsed = requests.post('http://localhost:8011/api/filesystem/xml/parse', json={
         "file_path": file_info['path']
     })
     
     # Upload to S3
     with open(file_info['path'], 'rb') as f:
-        requests.post('http://localhost:8000/api/aws/s3/upload', 
+        requests.post('http://localhost:8011/api/aws/s3/upload', 
                      files={'file': f},
                      params={'bucket_name': 'processed-data'})
 ```
@@ -1027,4 +1027,4 @@ For issues or questions:
 1. Check logs in `./logs/`
 2. Verify environment variables in `.env`
 3. Test health endpoints
-4. Review FastAPI docs at `http://localhost:8000/docs`
+4. Review FastAPI docs at `http://localhost:8011/docs`

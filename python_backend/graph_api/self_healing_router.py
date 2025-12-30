@@ -27,9 +27,9 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 from dataclasses import dataclass, field
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import neo4j
-import random
 import json
 
 from .dependencies import get_driver, get_ws_driver
@@ -137,10 +137,9 @@ class SelfHealingService:
             self.retry_config.initial_delay_ms * (self.retry_config.backoff_multiplier ** attempt),
             self.retry_config.max_delay_ms
         )
-        
-        # Add jitter to prevent thundering herd
-        jitter = exponential_delay * self.retry_config.jitter_factor * (random.random() - 0.5)
-        return (exponential_delay + jitter) / 1000  # Convert to seconds
+
+        # Deterministic backoff: do not introduce randomness.
+        return exponential_delay / 1000  # Convert to seconds
     
     def classify_error(self, error: Exception) -> ErrorClassification:
         """Classify error severity and determine if retryable"""
@@ -253,20 +252,13 @@ class SelfHealingService:
         _payload: Dict[str, Any],
         route: Route
     ) -> Dict[str, Any]:
-        """Execute task on specified route (simulated for now)"""
-        # Simulate network delay
-        await asyncio.sleep(random.uniform(0.1, 0.5))
-        
-        # Simulate occasional failures for testing
-        if random.random() < 0.2:  # 20% failure rate
-            raise TimeoutError(f"Network timeout connecting to {route.endpoint}")
-        
-        # Simulate successful execution
-        return {
-            "data": {"message": f"Task {task_id} executed successfully on {route.id}"},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "route_id": route.id
-        }
+        """Execute task on specified route.
+
+        Execution is intentionally not implemented here to avoid mock/demo behavior.
+        A real implementation should call an actual workflow runner / integration connector.
+        """
+        _ = task_id, _workflow_id, _operation, _payload, route
+        raise NotImplementedError("Self-healing task execution is not configured")
     
     async def execute_with_self_healing(
         self,
@@ -514,23 +506,33 @@ async def websocket_monitor(
 
 @router.post("/execute", summary="Execute Task with Self-Healing")
 async def execute_task(
-    request: TaskExecutionRequest,
+    request: Dict[str, Any],
     driver: neo4j.AsyncDriver = Depends(get_driver)
 ):
-    """Execute a task with self-healing orchestration"""
-    service = SelfHealingService(driver)
-    
-    result = await service.execute_with_self_healing(
-        task_id=request.task_id,
-        workflow_id=request.workflow_id,
-        operation=request.operation,
-        payload=request.payload,
-        primary_route_id=request.primary_route_id,
-        alternative_route_ids=request.alternative_route_ids,
-        validation_rules=request.validation_rules
-    )
-    
-    return result
+    """Execute a task with self-healing orchestration.
+
+    This endpoint is currently disabled (no simulated execution). It returns a
+    stable, UI-friendly error payload so the frontend can show the feature as unavailable.
+    """
+    _ = driver
+
+    task_id = None
+    workflow_id = None
+    if isinstance(request, dict):
+        task_id = request.get("task_id")
+        workflow_id = request.get("workflow_id")
+
+    payload = {
+        "task_id": task_id or "",
+        "status": TaskStatus.FAILED,
+        "result": None,
+        "error": "Self-healing execution is unavailable: integrate a real workflow runner/connector. No simulated execution is provided.",
+        "retry_count": 0,
+        "execution_time_ms": 0,
+        "route_used": None,
+        "workflow_id": workflow_id or "",
+    }
+    return JSONResponse(status_code=501, content=payload)
 
 
 @router.get("/circuit-breaker/{route_id}", summary="Get Circuit Breaker Status")

@@ -16,6 +16,16 @@ async def get_data_sources_alias(
     return await ds.get_data_sources(response=response, skip=skip, limit=limit)
 
 
+@router.get("", response_model=List[ds.DataSource], include_in_schema=False)
+async def get_data_sources_alias_no_slash(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=5000),
+):
+    # Avoid relying on redirect-slashes behavior when running behind proxies.
+    return await ds.get_data_sources(response=response, skip=skip, limit=limit)
+
+
 @router.get("/{source_id}", response_model=ds.DataSource)
 async def get_data_source_alias(source_id: str):
     return await ds.get_data_source(source_id)

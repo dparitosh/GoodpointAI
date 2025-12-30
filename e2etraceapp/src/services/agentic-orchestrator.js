@@ -58,18 +58,23 @@ const agenticWorkflowMachine = createMachine({
     },
     routing: {
       entry: 'routeTaskToAgent',
-      on: {
-        AGENT_ASSIGNED: 'executing',
-        NO_AGENT_AVAILABLE: 'waiting',
-        ROUTING_ERROR: 'error'
-      }
+      always: [
+        { target: 'executing', cond: 'hasAssignedAgent' },
+        { target: 'waiting' }
+      ]
     },
     executing: {
-      entry: 'executeAgentTask',
-      on: {
-        TASK_COMPLETED: 'aggregating',
-        TASK_FAILED: 'error',
-        REQUIRES_COLLABORATION: 'collaborating'
+      invoke: {
+        id: 'executeCurrentTask',
+        src: 'executeCurrentTask',
+        onDone: {
+          target: 'aggregating',
+          actions: 'storeTaskResults'
+        },
+        onError: {
+          target: 'error',
+          actions: 'captureError'
+        }
       }
     },
     collaborating: {
@@ -81,10 +86,7 @@ const agenticWorkflowMachine = createMachine({
     },
     aggregating: {
       entry: 'aggregateResults',
-      on: {
-        RESULTS_READY: 'ready',
-        MORE_PROCESSING_NEEDED: 'routing'
-      }
+      always: { target: 'ready' }
     },
     chat_processing: {
       entry: 'processChatMessage',
@@ -114,6 +116,18 @@ const agenticWorkflowMachine = createMachine({
     }
   }
 }, {
+  guards: {
+    hasAssignedAgent: (context) => Boolean(context.currentTask?.assignedAgent)
+  },
+  services: {
+    executeCurrentTask: async (context) => {
+      const currentTask = context.currentTask;
+      if (!currentTask) {
+        throw new Error('No current task to execute');
+      }
+      return await executeTaskWithAgent(currentTask);
+    }
+  },
   actions: {
     initializeAgents: assign((context, event) => {
       const agents = Object.values(AGENT_TYPES).map(type => ({
@@ -144,27 +158,19 @@ const agenticWorkflowMachine = createMachine({
         taskQueue: [...context.taskQueue, task]
       };
     }),
-    
-    executeAgentTask: assign((context, event) => {
-      // Execute task with assigned agent
-      const { currentTask } = context;
-      if (currentTask?.assignedAgent) {
-        executeTaskWithAgent(currentTask);
-      }
-      return context;
-    }),
-    
-    aggregateResults: assign((context, event) => {
-      const { results } = event;
+
+    storeTaskResults: assign((context, event) => {
       return {
         ...context,
         observabilityMetrics: {
           ...context.observabilityMetrics,
-          lastTaskResults: results,
+          lastTaskResults: event.data,
           tasksCompleted: (context.observabilityMetrics.tasksCompleted || 0) + 1
         }
       };
     }),
+    
+    aggregateResults: assign((context) => context),
     
     processChatMessage: assign((context, event) => {
       const { message, sender } = event;
@@ -177,18 +183,21 @@ const agenticWorkflowMachine = createMachine({
       };
     }),
     
-    handleError: assign((context, event) => {
-      const { error } = event;
+    captureError: assign((context, event) => {
+      const error = event.data || event.error || event;
+      const message = error?.message || String(error);
       return {
         ...context,
         systemState: 'error',
         observabilityMetrics: {
           ...context.observabilityMetrics,
-          lastError: error,
+          lastError: message,
           errorCount: (context.observabilityMetrics.errorCount || 0) + 1
         }
       };
-    })
+    }),
+
+    handleError: assign((context) => context)
   }
 });
 
@@ -284,13 +293,50 @@ async function executeTaskWithAgent(task) {
   }
 }
 
+function normalizeApiErrorMessage(err, fallback) {
+  if (err?.code === 'DEPENDENCY_UNAVAILABLE') return err.message || fallback;
+  return err?.message || fallback;
+}
+
+async function fetchJsonFailClosed(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  const isJson = (response.headers.get('content-type') || '').includes('application/json');
+  const body = isJson ? await response.json().catch(() => null) : await response.text().catch(() => '');
+
+  if (response.status === 503) {
+    const detail = (body && typeof body === 'object' ? body.detail : null) || 'Dependency unavailable (503)';
+    const err = new Error(detail);
+    err.code = 'DEPENDENCY_UNAVAILABLE';
+    err.status = 503;
+    err.detail = detail;
+    throw err;
+  }
+
+  if (!response.ok) {
+    const detail = (body && typeof body === 'object' ? body.detail : null) || response.statusText || 'Request failed';
+    const err = new Error(detail);
+    err.status = response.status;
+    err.detail = detail;
+    throw err;
+  }
+
+  return body;
+}
+
 // AGENT TASK EXECUTION HELPERS
 async function executeGraphQuery(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Executing graph query:`, payload);
-  // Mock implementation - replace with actual graph query logic
   return {
-    success: true,
-    data: { nodes: [], edges: [] },
+    success: false,
+    message: 'Graph query agent is not wired to a backend query endpoint yet (N/A).',
+    data: { unavailable: true },
     timestamp: new Date().toISOString(),
     agent: assignedAgent
   };
@@ -298,10 +344,10 @@ async function executeGraphQuery(payload, assignedAgent) {
 
 async function performDataAnalysis(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Performing data analysis:`, payload);
-  // Mock implementation - replace with actual analysis logic
   return {
-    success: true,
-    insights: ['Pattern A detected', 'Anomaly B found'],
+    success: false,
+    message: 'Data analysis agent is not wired to persisted-truth endpoints yet (N/A).',
+    data: { unavailable: true },
     timestamp: new Date().toISOString(),
     agent: assignedAgent
   };
@@ -309,22 +355,120 @@ async function performDataAnalysis(payload, assignedAgent) {
 
 async function orchestratePipeline(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Orchestrating pipeline:`, payload);
-  // Mock implementation - replace with actual pipeline logic
-  return {
-    success: true,
-    pipelineId: `pipeline_${Date.now()}`,
-    status: 'running',
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+
+  // Advisory mode must not fabricate run IDs or results.
+  if (!payload || payload.mode !== 'execute') {
+    return {
+      success: true,
+      message: 'Pipeline orchestration is advisory only (no demo run created). Provide mode=execute with source_system/target_system to run persisted ETL.',
+      data: { mode: payload?.mode || 'advisory' },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
+
+  const source_system = payload.source_system || payload.sourceSystem;
+  const target_system = payload.target_system || payload.targetSystem;
+
+  if (!source_system || !target_system) {
+    return {
+      success: false,
+      message: 'Missing required fields: source_system and target_system.',
+      data: { missing: ['source_system', 'target_system'] },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
+
+  const baseUrl = API_CONFIG?.API_BASE_URL || '';
+  const plmBase = `${baseUrl}/api/plm/etl`;
+
+  try {
+    const run = await fetchJsonFailClosed(`${plmBase}/runs`, {
+      method: 'POST',
+      body: JSON.stringify({ source_system, target_system })
+    });
+
+    const run_id = run?.run_id;
+    if (!run_id) {
+      throw new Error('Backend did not return run_id');
+    }
+
+    const parts = Array.isArray(payload.parts_records) ? payload.parts_records : payload.partsRecords;
+    const bom = Array.isArray(payload.bom_records) ? payload.bom_records : payload.bomRecords;
+    const stageSourceField = payload.source_object_id_field || payload.sourceObjectIdField;
+
+    if (Array.isArray(parts) && parts.length > 0) {
+      await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/stage`, {
+        method: 'POST',
+        body: JSON.stringify({
+          object_type: 'part',
+          records: parts,
+          source_object_id_field: stageSourceField || null
+        })
+      });
+    }
+
+    if (Array.isArray(bom) && bom.length > 0) {
+      await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/stage`, {
+        method: 'POST',
+        body: JSON.stringify({
+          object_type: 'bom',
+          records: bom,
+          source_object_id_field: stageSourceField || null
+        })
+      });
+    }
+
+    const transformRequest = payload.transform || payload.transform_request || payload.transformRequest || {};
+    await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/transform`, {
+      method: 'POST',
+      body: JSON.stringify(transformRequest)
+    });
+
+    await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+
+    const results = await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/results`, {
+      method: 'GET',
+      headers: {}
+    });
+
+    return {
+      success: true,
+      message: `ETL run created and executed (run_id=${run_id}).`,
+      data: {
+        run_id,
+        run_status: run?.status,
+        results
+      },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (err) {
+    const message = normalizeApiErrorMessage(err, 'Pipeline orchestration failed');
+    return {
+      success: false,
+      message,
+      data: {
+        unavailable: err?.code === 'DEPENDENCY_UNAVAILABLE',
+        status: err?.status,
+        detail: err?.detail
+      },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 async function generateVisualization(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Generating visualization:`, payload);
-  // Mock implementation - replace with actual visualization logic
   return {
-    success: true,
-    visualization: { type: 'graph', config: {} },
+    success: false,
+    message: 'Visualization agent is not wired to a deterministic backend yet (N/A).',
+    data: { unavailable: true },
     timestamp: new Date().toISOString(),
     agent: assignedAgent
   };
@@ -332,11 +476,10 @@ async function generateVisualization(payload, assignedAgent) {
 
 async function assessDataQuality(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Assessing data quality:`, payload);
-  // Mock implementation - replace with actual quality assessment logic
   return {
-    success: true,
-    qualityScore: 0.85,
-    issues: [],
+    success: false,
+    message: 'Quality assessment is not wired to Postgres-backed scans yet (N/A).',
+    data: { unavailable: true },
     timestamp: new Date().toISOString(),
     agent: assignedAgent
   };
@@ -344,10 +487,10 @@ async function assessDataQuality(payload, assignedAgent) {
 
 async function processChatWithAgent(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Processing chat:`, payload);
-  // Mock implementation - replace with actual chat processing logic
   return {
     success: true,
-    response: 'Hello! How can I help you?',
+    message: 'Chat agent is ready; orchestration hooks are limited in this build.',
+    data: { intent: payload?.intent },
     timestamp: new Date().toISOString(),
     agent: assignedAgent
   };
@@ -658,7 +801,7 @@ export class AgenticOrchestrator {
         if (state.matches('error')) {
           clearTimeout(timeout);
           subscription.unsubscribe();
-          reject(new Error(state._context.observabilityMetrics.lastError));
+          reject(new Error(state.context?.observabilityMetrics?.lastError || 'Task failed'));
         }
       });
     });

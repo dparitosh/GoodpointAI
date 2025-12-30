@@ -113,7 +113,19 @@ const SelfHealingMonitorPage = () => {
   const loadCircuitBreakers = async () => {
     try {
       const response = await fetch('/api/self-healing/circuit-breakers');
-      const data = await response.json();
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (_e) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        console.warn('Circuit breakers unavailable:', data?.detail || data?.message || response.status);
+        setCircuitBreakers([]);
+        return;
+      }
+
       setCircuitBreakers(normalizeArrayPayload(data, ['circuit_breakers', 'circuitBreakers', 'items', 'data']));
     } catch (error) {
       console.error('Error loading circuit breakers:', error);
@@ -125,7 +137,19 @@ const SelfHealingMonitorPage = () => {
   const loadDLQ = async () => {
     try {
       const response = await fetch('/api/self-healing/dead-letter-queue');
-      const data = await response.json();
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (_e) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        console.warn('DLQ unavailable:', data?.detail || data?.message || response.status);
+        setDlqMessages([]);
+        return;
+      }
+
       setDlqMessages(normalizeArrayPayload(data, ['messages', 'dlq', 'items', 'data']));
     } catch (error) {
       console.error('Error loading DLQ:', error);
@@ -183,7 +207,19 @@ const SelfHealingMonitorPage = () => {
         }
       );
 
-      const result = await response.json();
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (_e) {
+        result = null;
+      }
+
+      if (!response.ok) {
+        const message = result?.detail || result?.error || result?.message || `Self-healing unavailable (HTTP ${response.status})`;
+        alert(message);
+        return;
+      }
+
       setTaskResults(prev => [result, ...prev].slice(0, 10));
       
       // Reload circuit breakers and DLQ

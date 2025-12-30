@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '@config/api-config.js';
 import { saveAs } from 'file-saver';
-import * as XLSX from 'xlsx';
+import { jsonToAoa, jsonToCsv, sheetsToXlsxBlob } from '../../utils/spreadsheet-utils.js';
 import './DataExportPage.css';
 
 const normalizeExportHistory = (raw) => {
@@ -173,40 +173,37 @@ const DataExportPage = () => {
   };
 
   const exportToExcel = async (data) => {
-    const wb = XLSX.utils.book_new();
-    
+    const sheets = [];
+
     Object.entries(data).forEach(([sheetName, sheetData]) => {
       if (Array.isArray(sheetData) && sheetData.length > 0) {
-        const ws = XLSX.utils.json_to_sheet(sheetData);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        const aoa = jsonToAoa(sheetData);
+        if (aoa.length) sheets.push({ name: sheetName, aoa });
       }
     });
 
     if (exportConfig.includeSchema) {
-      // Add schema information
-      const schemaData = selectedDatasets.map(id => {
-        const dataset = availableDatasets.find(d => d.id === id);
+      const schemaData = selectedDatasets.map((id) => {
+        const dataset = availableDatasets.find((d) => d.id === id);
         return {
           Dataset: dataset?.name,
           Type: dataset?.type,
           Count: dataset?.count,
-          Description: dataset?.description
+          Description: dataset?.description,
         };
       });
-      const schemaWs = XLSX.utils.json_to_sheet(schemaData);
-      XLSX.utils.book_append_sheet(wb, schemaWs, 'Schema_Info');
+      const schemaAoa = jsonToAoa(schemaData);
+      if (schemaAoa.length) sheets.push({ name: 'Schema_Info', aoa: schemaAoa });
     }
 
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = await sheetsToXlsxBlob(sheets);
     saveAs(blob, `e2etrace_export_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportToCSV = async (data) => {
     Object.entries(data).forEach(([fileName, fileData]) => {
       if (Array.isArray(fileData) && fileData.length > 0) {
-        const csv = XLSX.utils.json_to_sheet(fileData);
-        const csvOutput = XLSX.utils.sheet_to_csv(csv);
+        const csvOutput = jsonToCsv(fileData);
         const blob = new Blob([csvOutput], { type: 'text/csv;charset=utf-8;' });
         saveAs(blob, `${fileName}_${new Date().toISOString().split('T')[0]}.csv`);
       }

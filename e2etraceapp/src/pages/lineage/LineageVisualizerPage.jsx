@@ -60,7 +60,12 @@ const LineageVisualizerPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/lineage/workflows/${workflowId}/lineage-graph`);
+      const params = new URLSearchParams();
+      if (filterType && filterType !== 'all') {
+        params.append('node_types', filterType.toLowerCase());
+      }
+      const qs = params.toString();
+      const response = await fetch(`/api/lineage/workflows/${workflowId}/lineage-graph${qs ? `?${qs}` : ''}`);
       const data = await response.json();
 
       if (data.nodes && data.nodes.length > 0) {
@@ -93,7 +98,8 @@ const LineageVisualizerPage = () => {
         body: JSON.stringify({
           record_id: recordId,
           direction: direction,
-          max_depth: maxDepth
+          max_depth: maxDepth,
+          ...(filterType && filterType !== 'all' ? { node_types: [filterType.toLowerCase()] } : {})
         })
       });
       const data = await response.json();

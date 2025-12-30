@@ -10,8 +10,9 @@
   min-height: 58vh;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1.75rem 3rem;
+  justify-content: center;
+  gap: 2.75rem;
+  padding: 1.75rem 2rem;
   background: var(--background-color-offset);
   position: relative;
   overflow: hidden;
@@ -30,8 +31,22 @@
 
 .hero-content {
   flex: 1;
-  max-width: 600px;
+  max-width: 480px;
   z-index: 1;
+}
+
+/* Embedded Interactive State Flow section */
+.interactive-state-flow-section {
+  padding: 2rem 2rem;
+  background: var(--background-color);
+}
+
+.interactive-state-flow-embed {
+  margin-top: 1rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .hero-badge {
@@ -150,10 +165,23 @@
 .hero-visual {
   flex: 1;
   position: relative;
-  height: 250px;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
+  max-width: 640px;
+}
+
+@media (min-width: 1200px) {
+  .hero-visual {
+    flex: 0 1 640px;
+  }
+}
+
+/* When the XState visualizer is embedded in the hero, keep it compact */
+.hero-visual .xstate-visualizer--embedded {
+  height: 46vh;
+  min-height: 380px;
+  max-height: 520px;
 }
 
 .floating-card {

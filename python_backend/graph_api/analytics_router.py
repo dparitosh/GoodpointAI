@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from services.analytics_storage_service import analytics_service
 
@@ -77,7 +77,7 @@ async def record_upload_metric(request: UploadMetricRequest):
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -115,7 +115,7 @@ async def record_service_health(request: ServiceHealthRequest):
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -151,7 +151,7 @@ async def record_migration_quality(request: MigrationQualityRequest):
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -187,7 +187,7 @@ async def get_upload_metrics(
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -220,7 +220,7 @@ async def get_service_health_metrics(
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -253,7 +253,7 @@ async def get_migration_quality_metrics(
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e
 
@@ -281,7 +281,7 @@ async def analytics_health_check():
                 "total_health_records": len(analytics_service.metrics_store["service_health"]),
                 "total_quality_records": len(analytics_service.metrics_store["migration_quality"])
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
         
     except Exception as e:
@@ -289,6 +289,6 @@ async def analytics_health_check():
         detail = {
             "status": "error",
             "message": str(e),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
         raise HTTPException(status_code=500, detail=detail) from e

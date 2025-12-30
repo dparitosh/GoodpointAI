@@ -4,6 +4,7 @@ import os
 from json import JSONDecodeError
 from typing import List, Dict, Optional
 from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
@@ -301,14 +302,21 @@ async def apply_mapping_template(template_id: str, source_system_id: str, target
 )
 async def execute_mapping_rule(rule_id: str, execution: MappingExecution):
     """Execute a mapping rule"""
+    _ = execution
     rules = load_mapping_rules()
     rule = next((r for r in rules if r.get('id') == rule_id), None)
 
     if not rule:
         raise HTTPException(status_code=404, detail="Mapping rule not found")
 
-    # Simulate mapping execution
-    return await _execute_mapping(rule, execution)
+    # Fail-closed: execution requires real source/target connectors and a workflow runner.
+    # We intentionally do not simulate/fabricate execution results.
+    result = MappingResult(
+        success=False,
+        message="Mapping execution is unavailable: source/target connectors and an execution engine are not configured.",
+        errors=["EXECUTION_NOT_CONFIGURED"],
+    )
+    return JSONResponse(status_code=503, content=result.dict())
 
 @router.post(
     "/rules/{rule_id}/validate",
@@ -328,36 +336,6 @@ async def validate_mapping_rule(rule_id: str):
     return await _validate_mapping(rule)
 
 # Helper Functions
-
-async def _execute_mapping(rule: Dict, execution: MappingExecution) -> MappingResult:
-    """Execute mapping transformation"""
-    _ = rule, execution
-
-    # This is a simulation - in a real implementation, you would:
-    # 1. Connect to source system
-    # 2. Extract data according to mapping rules
-    # 3. Apply transformations
-    # 4. Validate results
-    # 5. Load to target system
-
-    start_time = datetime.now()
-
-    # Simulate processing
-    import asyncio
-    await asyncio.sleep(0.1)  # Simulate processing time
-
-    end_time = datetime.now()
-    execution_time = (end_time - start_time).total_seconds()
-
-    return MappingResult(
-        success=True,
-        message="Mapping executed successfully (simulated)",
-        records_processed=1000,
-        records_success=980,
-        records_failed=20,
-        warnings=["Some records had validation warnings"],
-        execution_time=execution_time
-    )
 
 async def _validate_mapping(rule: Dict) -> MappingResult:
     """Validate mapping rule"""
@@ -397,27 +375,9 @@ async def get_field_suggestions(source_system_id: str):
     """Get field suggestions for mapping"""
     _ = source_system_id
 
-    # This would typically analyze the source system schema.
-    # For now, return some common field suggestions.
-    return {
-        "common_fields": [
-            {"name": "id", "type": "string", "description": "Unique identifier"},
-            {"name": "name", "type": "string", "description": "Name field"},
-            {"name": "email", "type": "string", "description": "Email address"},
-            {"name": "created_at", "type": "datetime", "description": "Creation timestamp"},
-            {"name": "updated_at", "type": "datetime", "description": "Last update timestamp"},
-            {"name": "status", "type": "string", "description": "Status field"}
-        ],
-        "transformations": [
-            {"name": "uppercase", "description": "Convert to uppercase"},
-            {"name": "lowercase", "description": "Convert to lowercase"},
-            {"name": "trim", "description": "Remove leading/trailing spaces"},
-            {"name": "date_format", "description": "Format date/time"},
-            {"name": "concat", "description": "Concatenate multiple fields"},
-            {"name": "substring", "description": "Extract substring"},
-            {"name": "default_value", "description": "Use default if null/empty"}
-        ]
-    }
+    # Fail-closed: schema introspection for arbitrary source systems is not configured.
+    # Return empty suggestions rather than fabricated examples.
+    return {"common_fields": [], "transformations": []}
 
 @router.get(
     "/mapping-analytics",

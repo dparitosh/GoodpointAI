@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
  * @param {number} delay The debounce delay in milliseconds.
  * @returns The debounced value.
  */
-export function e2etraceUseDebounce(value, delay) {
+export function useE2ETraceDebounce(value, delay) {
     const [debouncedValue, setDebouncedValue] = useState(value);
 
     useEffect(() => {
@@ -19,3 +19,5 @@ export function e2etraceUseDebounce(value, delay) {
 
     return debouncedValue;
 }
+
+export const e2etraceUseDebounce = useE2ETraceDebounce;

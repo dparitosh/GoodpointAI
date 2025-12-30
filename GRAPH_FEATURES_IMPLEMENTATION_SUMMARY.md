@@ -202,7 +202,7 @@ NEO4J_PASSWORD=password
 GRAPH_RAG_EMBED_DIMENSION=1536  # Optional, defaults to 1536
 
 # Frontend Configuration
-REACT_APP_API_URL=http://localhost:8000
+REACT_APP_API_URL=http://localhost:8011
 REACT_APP_NEO4J_URI=bolt://localhost:7687
 REACT_APP_NEO4J_USER=neo4j
 ```
@@ -297,7 +297,7 @@ SQLAlchemy models created for PostgreSQL:
 
 ### GraphQL Schema Introspection
 ```bash
-curl -X POST http://localhost:8000/api/graphql/introspect \
+curl -X POST http://localhost:8011/api/graphql/introspect \
   -H "Content-Type: application/json" \
   -d '{
     "content": "<user><id>123</id><name>John</name></user>",
@@ -308,7 +308,7 @@ curl -X POST http://localhost:8000/api/graphql/introspect \
 
 ### Data Transformation
 ```bash
-curl -X POST http://localhost:8000/api/graphql/transform \
+curl -X POST http://localhost:8011/api/graphql/transform \
   -H "Content-Type: application/json" \
   -d '{
     "source_data": {"firstName": "john", "age": "30"},
@@ -322,7 +322,7 @@ curl -X POST http://localhost:8000/api/graphql/transform \
 
 ### Neo4j GraphRAG Query
 ```bash
-curl -X POST http://localhost:8000/api/neo4j-graphrag/query \
+curl -X POST http://localhost:8011/api/neo4j-graphrag/query \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What are the migration patterns?",

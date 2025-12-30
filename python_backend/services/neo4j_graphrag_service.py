@@ -5,10 +5,22 @@ Provides semantic search capabilities bridging Neo4j and OpenSearch.
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import os
+import httpx
+
+from core.config_store import get_encrypted_config_payload
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _utcnow_iso() -> str:
+    return _utcnow().isoformat()
 
 
 class Neo4jGraphRAGService:
@@ -19,10 +31,27 @@ class Neo4jGraphRAGService:
     
     def __init__(self):
         """Initialize GraphRAG service with configuration from environment."""
-        self.neo4j_uri = os.getenv("NEO4J_URI", "neo4j://127.0.0.1:7687")
-        self.neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-        self.neo4j_password = os.getenv("NEO4J_PASSWORD", "tcs12345")
+        neo4j_payload = get_encrypted_config_payload("neo4j") or {}
+        self.neo4j_uri = str(
+            neo4j_payload.get("uri")
+            or os.getenv("NEO4J_URI")
+            or "neo4j://127.0.0.1:7687"
+        )
+        self.neo4j_user = str(
+            neo4j_payload.get("username")
+            or os.getenv("NEO4J_USER")
+            or os.getenv("NEO4J_USERNAME")
+            or "neo4j"
+        )
+        # No insecure/hardcoded default password.
+        self.neo4j_password = str(
+            neo4j_payload.get("password")
+            or os.getenv("NEO4J_PASSWORD")
+            or ""
+        )
         self.embed_dimension = int(os.getenv("GRAPH_RAG_EMBED_DIMENSION", "1536"))
+        self.vector_index_name = (os.getenv("GRAPH_RAG_VECTOR_INDEX") or "").strip()
+        self.embeddings_url = (os.getenv("EMBEDDINGS_URL") or "").strip()
         self.driver = None
         self.connected = False
 
@@ -72,7 +101,7 @@ class Neo4jGraphRAGService:
             "status": "healthy" if self.connected else "degraded",
             "neo4j_connected": self.connected,
             "embedding_dimension": self.embed_dimension,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": _utcnow_iso()
         }
     
     def run_query(
@@ -81,7 +110,8 @@ class Neo4jGraphRAGService:
         context: Optional[str] = None,
         tools: Optional[List[str]] = None,
         top_k: int = 5,
-        include_paths: bool = False
+        include_paths: bool = False,
+        embedding: Optional[List[float]] = None,
     ) -> Dict[str, Any]:
         """
         Run hybrid GraphRAG query combining vector search and metadata lookup.
@@ -96,27 +126,52 @@ class Neo4jGraphRAGService:
         Returns:
             Query response with answers, sources, tools invoked, and metrics
         """
-        start_time = datetime.utcnow()
+        start_time = _utcnow()
         
         try:
             self._connect()
             
             if not self.connected:
+                end_time = _utcnow()
                 return {
                     "answers": [],
                     "sources": [],
                     "tools_invoked": [],
                     "error": "Neo4j not connected",
-                    "latency_ms": 0
+                    "latency_ms": int((end_time - start_time).total_seconds() * 1000),
+                    "result_count": 0,
+                    "timestamp": end_time.isoformat(),
                 }
             
-            # Generate embeddings for question + context
             query_text = f"{question} {context}" if context else question
-            embedding = self._generate_embedding(query_text)
+            embedding_vec = embedding or self._get_embedding(query_text)
+            if not embedding_vec:
+                end_time = _utcnow()
+                return {
+                    "answers": [],
+                    "sources": [],
+                    "tools_invoked": [],
+                    "error": "Embedding not available (provide embedding or configure EMBEDDINGS_URL)",
+                    "latency_ms": int((end_time - start_time).total_seconds() * 1000),
+                    "result_count": 0,
+                    "timestamp": end_time.isoformat(),
+                }
+
+            if not self.vector_index_name:
+                end_time = _utcnow()
+                return {
+                    "answers": [],
+                    "sources": [],
+                    "tools_invoked": [],
+                    "error": "GRAPH_RAG_VECTOR_INDEX not configured",
+                    "latency_ms": int((end_time - start_time).total_seconds() * 1000),
+                    "result_count": 0,
+                    "timestamp": end_time.isoformat(),
+                }
             
             # Execute hybrid search
             results = self._hybrid_search(
-                embedding=embedding,
+                embedding=embedding_vec,
                 query_text=query_text,
                 top_k=top_k,
                 include_paths=include_paths
@@ -128,7 +183,7 @@ class Neo4jGraphRAGService:
                 tools_invoked = self._invoke_tools(tools, results)
             
             # Calculate latency
-            end_time = datetime.utcnow()
+            end_time = _utcnow()
             latency_ms = int((end_time - start_time).total_seconds() * 1000)
             
             return {
@@ -144,17 +199,30 @@ class Neo4jGraphRAGService:
             logger.error("GraphRAG query error: %s", e)
             raise
     
-    def _generate_embedding(self, text: str) -> List[float]:
+    def _get_embedding(self, text: str) -> Optional[List[float]]:
+        """Get an embedding for text.
+
+        - If EMBEDDINGS_URL is configured, call it.
+        - Otherwise, require the caller to provide an embedding.
+
+        Expected EMBEDDINGS_URL response shape:
+          {"embedding": [..floats..]}
         """
-        Generate embedding vector for text.
-        
-        In production, this would call an embedding model (OpenAI, Sentence Transformers, etc.)
-        For now, returns a mock embedding.
-        """
-        # Mock embedding - in production, use actual embedding model
-        import random
-        random.seed(hash(text) % (2**32))
-        return [random.random() for _ in range(self.embed_dimension)]
+        if not self.embeddings_url:
+            return None
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(self.embeddings_url, json={"text": text})
+                resp.raise_for_status()
+                payload = resp.json()
+                embedding = payload.get("embedding")
+                if not isinstance(embedding, list) or not embedding:
+                    return None
+                return embedding
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Embedding request failed: %s", exc)
+            return None
     
     def _hybrid_search(
         self,
@@ -171,30 +239,51 @@ class Neo4jGraphRAGService:
         2. Full-text search (textual summaries)
         3. Optionally includes graph paths
         """
-        _ = embedding, include_paths
-
         if not self.connected or not self.driver:
             return []
         
         try:
-            with self.driver.session():
-                # Mock query - in production, use actual vector index query
-                # Example Cypher for vector search:
-                # CALL db.index.vector.queryNodes('vectorIndex', $top_k, $embedding)
-                
-                # For now, return mock results
-                results = []
-                for i in range(min(top_k, 3)):
-                    results.append({
-                        "answer": f"Mock answer {i+1} for: {query_text[:50]}...",
-                        "source": {
-                            "node_id": f"node_{i}",
-                            "type": "Document",
-                            "score": 0.95 - (i * 0.1),
-                            "metadata": {}
+            with self.driver.session() as session:
+                cypher = """
+                CALL db.index.vector.queryNodes($index_name, $k, $embedding)
+                YIELD node, score
+                RETURN node, score
+                ORDER BY score DESC
+                LIMIT $k
+                """
+                records = session.run(
+                    cypher,
+                    index_name=self.vector_index_name,
+                    k=int(top_k),
+                    embedding=embedding,
+                )
+
+                results: List[Dict[str, Any]] = []
+                for record in records:
+                    node = record.get("node")
+                    score = record.get("score")
+                    node_props = dict(node) if node is not None else {}
+                    node_id = str(node_props.get("id") or node_props.get("node_id") or "")
+                    text = (
+                        str(node_props.get("text") or "")
+                        or str(node_props.get("content") or "")
+                        or str(node_props.get("name") or "")
+                    )
+
+                    results.append(
+                        {
+                            "answer": text,
+                            "source": {
+                                "node_id": node_id,
+                                "type": str(node_props.get("type") or "Document"),
+                                "score": float(score) if score is not None else None,
+                                "metadata": node_props,
+                            },
                         }
-                    })
-                
+                    )
+
+                # Optional graph path expansion can be added later; never fabricate.
+                _ = include_paths, query_text
                 return results
                 
         except (OSError, ValueError, RuntimeError) as e:

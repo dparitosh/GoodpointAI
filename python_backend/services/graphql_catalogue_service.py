@@ -4,10 +4,15 @@ Provides CRUD operations for query registry with unique name constraints.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import importlib
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+
+
+def _utcnow() -> datetime:
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 _graphql_models = importlib.import_module("models.graphql_models")
 PersistedGraphQLQueryModel: Any = getattr(_graphql_models, "PersistedGraphQLQueryModel")
@@ -144,7 +149,7 @@ class GraphQLCatalogueService:
             if hasattr(query, key) and key not in ['id', 'created_at']:
                 setattr(query, key, value)
         
-        query.updated_at = datetime.utcnow()
+        query.updated_at = _utcnow()
         
         try:
             self.db.commit()
@@ -203,7 +208,7 @@ class GraphQLCatalogueService:
         if schema:
             # Update access tracking
             schema.access_count += 1
-            schema.last_accessed_at = datetime.utcnow()
+            schema.last_accessed_at = _utcnow()
             self.db.commit()
             self.db.refresh(schema)
         
@@ -237,7 +242,7 @@ class GraphQLCatalogueService:
             existing.fields = fields
             existing.types = types
             existing.metadata = metadata or {}
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = _utcnow()
             self.db.commit()
             self.db.refresh(existing)
             return existing.to_dict()

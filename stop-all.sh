@@ -3,9 +3,9 @@
 
 echo "Stopping GraphTrace services..."
 
-# Stop backend (port 8000)
-if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    PID=$(lsof -Pi :8000 -sTCP:LISTEN -t)
+# Stop backend (port 8011)
+if lsof -Pi :8011 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    PID=$(lsof -Pi :8011 -sTCP:LISTEN -t)
     echo "Stopping backend (PID: $PID)..."
     kill $PID
     echo "Backend stopped"

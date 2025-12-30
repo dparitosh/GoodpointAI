@@ -29,7 +29,7 @@ def _check_backend_up(base: str, timeout: float) -> bool:
 
 
 def main() -> None:
-    base = "http://127.0.0.1:8000"
+    base = "http://127.0.0.1:8011"
     timeout = _get_timeout_seconds()
 
     if not _check_backend_up(base, timeout=timeout):

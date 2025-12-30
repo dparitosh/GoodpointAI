@@ -124,6 +124,62 @@ export const xstateStylesheet = [
     }
   },
 
+  // Agentic workflow demo types (used by sample/hero and some workflow configs)
+  {
+    selector: 'node[type="extract"], node[group="extract"]',
+    style: {
+      'background-color': '#42A5F5',
+      'color': 'white',
+      'border-color': '#2f86d1',
+      'shape': 'round-rectangle',
+    }
+  },
+  {
+    selector: 'node[type="transform"], node[group="transform"]',
+    style: {
+      'background-color': '#FB8C00',
+      'color': 'white',
+      'border-color': '#d97706',
+      'shape': 'diamond',
+    }
+  },
+  {
+    selector: 'node[type="quality"], node[group="quality"]',
+    style: {
+      'background-color': '#43A047',
+      'color': 'white',
+      'border-color': '#2e7d32',
+      'shape': 'round-rectangle',
+    }
+  },
+  {
+    selector: 'node[type="load"], node[group="load"]',
+    style: {
+      'background-color': '#5E35B1',
+      'color': 'white',
+      'border-color': '#4527a0',
+      'shape': 'round-rectangle',
+    }
+  },
+  {
+    selector: 'node[type="target"], node[group="target"]',
+    style: {
+      'background-color': '#263238',
+      'color': 'white',
+      'border-color': '#111827',
+      'shape': 'round-rectangle',
+    }
+  },
+  {
+    selector: 'node[type="ai_agent"], node[group="ai_agent"]',
+    style: {
+      'background-color': '#6A1B9A',
+      'color': 'white',
+      'border-color': '#4a148c',
+      'shape': 'hexagon',
+    }
+  },
+
   // API/Service Nodes
   {
     selector: 'node[type="API"], node[group="API"], node[type="Service"], node[group="Service"], node[type="Endpoint"], node[group="Endpoint"]',
@@ -241,6 +297,28 @@ export const xstateStylesheet = [
   },
 
   // === RELATIONSHIP TYPE STYLING ===
+  {
+    selector: 'edge[type="FLOW"]',
+    style: {
+      'line-color': '#0033A0',
+      'target-arrow-color': '#0033A0',
+      'opacity': 0.95,
+      'width': 'mapData(weight, 0, 10, 3, 6)',
+      'text-outline-color': 'white',
+    }
+  },
+  {
+    selector: 'edge[type="ASSISTS"]',
+    style: {
+      'line-color': '#6A1B9A',
+      'target-arrow-color': '#6A1B9A',
+      'line-style': 'dashed',
+      'line-dash-pattern': [10, 5],
+      'opacity': 0.9,
+      'width': 'mapData(weight, 0, 10, 2, 5)',
+      'text-outline-color': 'white',
+    }
+  },
   {
     selector: 'edge[type="HAS_PART"]',
     style: {

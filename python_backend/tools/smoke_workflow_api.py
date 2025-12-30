@@ -23,7 +23,7 @@ def _json_post(url: str, payload: dict):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test /api/workflows execution lifecycle")
-    parser.add_argument("--base", default="http://localhost:8000", help="FastAPI base URL")
+    parser.add_argument("--base", default="http://localhost:8011", help="FastAPI base URL")
     parser.add_argument("--sleep", type=float, default=0.4, help="Seconds to sleep between actions")
     args = parser.parse_args()
 

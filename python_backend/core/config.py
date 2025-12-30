@@ -1,20 +1,17 @@
-import os
 import logging
-from dotenv import load_dotenv
-from pathlib import Path
+import os
 
-# --- Environment and Configuration ---
-# Construct the path to the .env file.
-# __file__ is the path to the current file (config.py)
-# .parent is the 'core' directory
-# .parent.parent is the 'python_backend' directory, where .env is located.
-dotenv_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=dotenv_path)
 logger = logging.getLogger(__name__)
+
+# NOTE:
+# - The installed application should use DB-backed configuration (EncryptedConfig).
+# - We keep environment variables as a *bootstrap/fallback* only.
+# - Do not auto-load a repo-local .env here.
 
 NEO4J_URI = os.getenv("NEO4J_URI", "neo4j://127.0.0.1:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "tcs12345")
+# No insecure/hardcoded default password.
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
 
 

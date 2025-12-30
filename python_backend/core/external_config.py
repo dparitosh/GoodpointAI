@@ -3,6 +3,7 @@ External Integration Configuration
 Manages all external service connections and credentials
 """
 import logging
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,9 +11,26 @@ from pydantic import Field
 from typing import List
 
 # Load environment variables
+# In installed/service deployments, configuration should be stored in the DB.
+# Allow opting into repo-local `.env` loading for local development only.
 dotenv_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=dotenv_path)
+_LOAD_DOTENV = (os.getenv("GRAPH_TRACE_LOAD_DOTENV") or "").strip().lower() in {"1", "true", "yes"}
+if _LOAD_DOTENV:
+    load_dotenv(dotenv_path=dotenv_path, override=True)
 logger = logging.getLogger(__name__)
+
+
+def reload_dotenv(*, override: bool = True) -> str:
+    """Reload variables from the repo-local `.env` file.
+
+    This is useful for endpoints that want to pick up integration configuration
+    changes without requiring a full process restart.
+    """
+    if not _LOAD_DOTENV:
+        return str(dotenv_path)
+
+    load_dotenv(dotenv_path=dotenv_path, override=override)
+    return str(dotenv_path)
 
 
 class AzureConfig(BaseSettings):

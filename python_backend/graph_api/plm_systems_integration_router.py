@@ -7,7 +7,7 @@ Handles Teamcenter, Windchill, ENOVIA, Aras Innovator, CATIA, NX, Creo
 
 import logging
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 import requests  # pyright: ignore[reportMissingTypeStubs]
@@ -26,14 +26,14 @@ class PLMConnection(BaseModel):
     url: str
     username: str
     password: str
-    additional_config: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    additional_config: Optional[Dict[str, Any]] = Field(default_factory=lambda: {})
 
 
 class PLMQueryRequest(BaseModel):
     system_type: str
     object_type: str = Field(..., description="Part, Document, BOM, etc.")
-    query_criteria: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    properties: Optional[List[str]] = Field(default_factory=list)
+    query_criteria: Optional[Dict[str, Any]] = Field(default_factory=lambda: {})
+    properties: Optional[List[str]] = Field(default_factory=lambda: [])
     limit: int = 100
 
 
@@ -63,6 +63,36 @@ async def query_teamcenter_objects(request: PLMQueryRequest):
         from zeep import Client
         from zeep.transports import Transport
         
+        # Prefer REST if configured (more likely to work in modern deployments).
+        rest_url = str(getattr(plm_config, "teamcenter_rest_url", "") or "").strip()
+        if rest_url:
+            url = f"{rest_url.rstrip('/')}/query"
+            payload = {
+                "type": request.object_type,
+                "criteria": request.query_criteria or {},
+                "properties": request.properties or ["object_name", "object_desc", "item_id"],
+                "maxResults": int(request.limit or 100),
+            }
+            response = requests.post(
+                url,
+                json=payload,
+                auth=HTTPBasicAuth(plm_config.teamcenter_username, plm_config.teamcenter_password),
+                headers={"Accept": "application/json"},
+                timeout=60,
+            )
+
+            # If the endpoint isn't supported, fall through to SOAP attempt below.
+            if response.status_code not in (404, 405):
+                response.raise_for_status()
+                data = response.json() if response.content else {}
+                return {
+                    "status": "success",
+                    "system": "Teamcenter",
+                    "object_type": request.object_type,
+                    "count": len(data.get("objects", [])) if isinstance(data, dict) else 0,
+                    "objects": data.get("objects", []) if isinstance(data, dict) else data,
+                }
+
         if not plm_config.teamcenter_soap_url:
             raise HTTPException(status_code=400, detail="Teamcenter not configured")
         
@@ -83,18 +113,28 @@ async def query_teamcenter_objects(request: PLMQueryRequest):
             "maxResults": request.limit
         }
 
-        # Note: SOAP/REST execution is intentionally not implemented yet.
-        # response = client.service.query(query_input)
-        # results = parse_teamcenter_response(response)
-        
-        logger.warning("Teamcenter API integration not yet implemented")
+        # Best-effort SOAP call (depends on WSDL contract).
+        service = getattr(_client, "service", None)
+        query_fn = getattr(service, "query", None) if service is not None else None
+        if callable(query_fn):
+            soap_response = query_fn(_query_input)
+            return {
+                "status": "success",
+                "system": "Teamcenter",
+                "object_type": request.object_type,
+                "raw": soap_response,
+            }
+
+        logger.warning("Teamcenter SOAP client initialized but no 'query' operation found")
         raise HTTPException(
             status_code=501,
-            detail="Teamcenter API integration not implemented. Configure Teamcenter credentials and implement SOAP/REST calls."
+            detail="Teamcenter query endpoint not supported by configured SOAP WSDL. Use REST configuration or update the WSDL/operation mapping.",
         )
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error("Error querying Teamcenter: %s", e)
+        logger.error("Error querying Teamcenter: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -181,17 +221,12 @@ async def query_windchill_objects(request: PLMQueryRequest):
             headers={"Accept": "application/json"},
             timeout=60
         )
-        
+
         if response.status_code == 404:
-            # Mock response
-            return {
-                "status": "success",
-                "system": "Windchill",
-                "object_type": request.object_type,
-                "count": 0,
-                "objects": [],
-                "message": "Mock data - configure Windchill OData API"
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="Windchill upstream returned 404 (endpoint/entity set not found)",
+            )
         
         response.raise_for_status()
         data = response.json()
@@ -230,21 +265,9 @@ async def get_windchill_part(part_number: str):
             headers={"Accept": "application/json"},
             timeout=30
         )
-        
+
         if response.status_code == 404:
-            # Mock part data
-            return {
-                "status": "success",
-                "system": "Windchill",
-                "part": {
-                    "number": part_number,
-                    "name": f"Part {part_number}",
-                    "version": "A.1",
-                    "state": "In Work",
-                    "created": datetime.utcnow().isoformat()
-                },
-                "message": "Mock part data - configure Windchill API"
-            }
+            raise HTTPException(status_code=404, detail="Windchill part not found")
         
         response.raise_for_status()
         
@@ -298,16 +321,12 @@ async def query_enovia_objects(request: PLMQueryRequest):
             headers=headers,
             timeout=60
         )
-        
+
         if response.status_code == 404:
-            return {
-                "status": "success",
-                "system": "ENOVIA",
-                "object_type": request.object_type,
-                "count": 0,
-                "objects": [],
-                "message": "Mock data - configure ENOVIA 3DSpace API"
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="ENOVIA upstream returned 404 (endpoint not found)",
+            )
         
         response.raise_for_status()
         data = response.json()
@@ -379,16 +398,12 @@ async def query_aras_objects(request: PLMQueryRequest):
             headers=headers,
             timeout=60
         )
-        
+
         if response.status_code == 404:
-            return {
-                "status": "success",
-                "system": "Aras Innovator",
-                "object_type": request.object_type,
-                "count": 0,
-                "objects": [],
-                "message": "Mock data - configure Aras Innovator API"
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="Aras upstream returned 404 (endpoint not found)",
+            )
         
         response.raise_for_status()
         
@@ -424,39 +439,14 @@ async def query_aras_objects(request: PLMQueryRequest):
 async def get_cad_metadata(system: str, file_id: str):
     """Extract metadata from CAD files (CATIA, NX, Creo)"""
     try:
-        # This would integrate with CAD file parsers
-        # For now, return mock metadata
-        
-        cad_metadata = {
-            "file_id": file_id,
-            "system": system.upper(),
-            "properties": {
-                "name": f"Assembly_{file_id}",
-                "version": "V1.0",
-                "created_by": "user@company.com",
-                "created_date": datetime.utcnow().isoformat(),
-                "modified_date": datetime.utcnow().isoformat(),
-                "file_size": "15.6 MB",
-                "part_count": 142,
-                "material": "Steel",
-                "mass": "12.5 kg"
-            },
-            "geometry": {
-                "bounding_box": {
-                    "min": [0, 0, 0],
-                    "max": [100, 50, 30]
-                },
-                "center_of_gravity": [50, 25, 15]
-            }
-        }
-        
-        return {
-            "status": "success",
-            "system": system,
-            "file_id": file_id,
-            "metadata": cad_metadata,
-            "message": "Mock CAD metadata - integrate with CAD file parsers"
-        }
+        _ = (system, file_id)
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"CAD metadata extraction is not implemented for system='{system}', file_id='{file_id}' "
+                "(configure a CAD parser integration)"
+            ),
+        )
         
     except Exception as e:
         logger.error("Error extracting CAD metadata: %s", e)
@@ -476,29 +466,15 @@ async def export_plm_data(
 ):
     """Export PLM data in various formats"""
     try:
-        # Collect data from PLM system
-        exported_objects: List[Dict[str, Any]] = []
-        exported_data: Dict[str, Any] = {
-            "export_id": f"export_{datetime.utcnow().timestamp()}",
-            "system": system_type,
-            "object_type": object_type,
-            "format": export_format,
-            "object_count": len(object_ids),
-            "objects": exported_objects,
-        }
-        
-        # In production, fetch actual data for each object_id
-        for obj_id in object_ids:
-            exported_objects.append({
-                "id": obj_id,
-                "data": f"Mock data for {obj_id}"
-            })
-        
-        return {
-            "status": "success",
-            "export": exported_data,
-            "download_url": f"/api/plm/download/{exported_data['export_id']}"
-        }
+        _ = (system_type, object_type, export_format, object_ids)
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"PLM export is not implemented for system='{system_type}', object_type='{object_type}', "
+                f"format='{export_format}', object_count={len(object_ids)} "
+                "(requires live PLM connector integration)"
+            ),
+        )
         
     except Exception as e:
         logger.error("Error exporting PLM data: %s", e)
@@ -535,7 +511,7 @@ async def plm_systems_health():
                 "database": plm_config.aras_database
             }
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     }
     
     return health

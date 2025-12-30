@@ -1,7 +1,7 @@
 import logging
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 import neo4j
 from pydantic import BaseModel
 
@@ -107,18 +107,8 @@ async def get_system_alerts(
             
     except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
         logger.error("Error fetching alerts: %s", e)
-        # Return sample alerts if query fails
-        alerts = [
-            AlertModel(
-                id=1,
-                level="info",
-                message="System monitoring is active and collecting metrics",
-                timestamp=datetime.now().isoformat(),
-                component="monitoring"
-            )
-        ]
-
-        response.headers["X-Total-Count"] = str(len(alerts))
+        alerts = []
+        response.headers["X-Total-Count"] = "0"
     
     return alerts
 
@@ -181,27 +171,8 @@ async def get_flow_status(
             
     except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
         logger.error("Error fetching flow status: %s", e)
-        # Return sample data if query fails
-        flows = [
-            FlowStatusModel(
-                id="neo4j-001",
-                name="Neo4j Data Ingestion",
-                status="running",
-                throughput="1,250 records/min",
-                lastActivity="2 seconds ago", 
-                health="healthy"
-            ),
-            FlowStatusModel(
-                id="neo4j-002",
-                name="Graph Analysis Pipeline",
-                status="running",
-                throughput="850 records/min",
-                lastActivity="5 seconds ago",
-                health="healthy"
-            )
-        ]
-
-        response.headers["X-Total-Count"] = str(len(flows))
+        flows = []
+        response.headers["X-Total-Count"] = "0"
     
     return flows
 
@@ -275,16 +246,10 @@ async def get_data_quality_metrics(
             
     except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
         logger.error("Error fetching data quality metrics: %s", e)
-    
-    # Return default metrics if query fails
-    return DataQualityMetrics(
-        totalRecords=1000,
-        validRecords=920,
-        duplicates=15,
-        nullValues=65,
-        qualityScore=92.0,
-        issues=[]
-    )
+        raise HTTPException(
+            status_code=503,
+            detail="Data quality metrics are unavailable (Neo4j query failed)",
+        ) from e
 
 @router.get(
     "/performance-metrics",
@@ -335,26 +300,14 @@ async def get_performance_metrics(
         
     except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
         logger.error("Error fetching performance metrics: %s", e)
-        
-        # Return sample performance data
-        now = datetime.now()
-        sample_metrics = []
-        for i in range(30):
-            sample_metrics.append({
-                "timestamp": (now - timedelta(minutes=i)).isoformat(),
-                "cpuLoad": 45 + (i % 20),
-                "memoryUsed": 1500 + (i % 500),
-                "throughput": 1000 + (i % 300),
-                "latency": 50 + (i % 30)
-            })
-        
+
         return {
             "timeRange": time_range,
-            "metrics": sample_metrics,
+            "metrics": [],
             "summary": {
-                "avgCpuLoad": 55.0,
-                "avgThroughput": 1150.0,
-                "avgLatency": 65.0
+                "avgCpuLoad": 0.0,
+                "avgThroughput": 0.0,
+                "avgLatency": 0.0
             }
         }
 
@@ -418,31 +371,6 @@ async def get_mapping_templates(
         
     except (neo4j.exceptions.Neo4jError, RuntimeError, OSError, ValueError, TypeError) as e:
         logger.error("Error fetching templates: %s", e)
-        
-        # Return sample templates if query fails
-        templates = [
-            {
-                "id": "neo4j-001",
-                "name": "Neo4j Node Mapping",
-                "description": "Standard mapping template for Neo4j node properties",
-                "category": "Graph",
-                "fields": ["id", "labels", "properties", "relationships"]
-            },
-            {
-                "id": "neo4j-002", 
-                "name": "Graph Relationship Mapping",
-                "description": "Template for mapping Neo4j relationships",
-                "category": "Graph",
-                "fields": ["source", "target", "type", "properties"]
-            },
-            {
-                "id": "neo4j-003",
-                "name": "Analytics Data Export",
-                "description": "Template for exporting analytics data from Neo4j",
-                "category": "Analytics", 
-                "fields": ["metric_name", "value", "timestamp", "dimensions"]
-            }
-        ]
 
-        response.headers["X-Total-Count"] = str(len(templates))
-        return templates[skip:skip + limit]
+        response.headers["X-Total-Count"] = "0"
+        return []

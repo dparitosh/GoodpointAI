@@ -1,5 +1,6 @@
 import { createMachine, assign, interpret } from 'xstate';
 import { ETLEngine } from './etl-engine.js';
+import { API_CONFIG } from '../config/api-config.js';
 
 /**
  * AGENTIC ETL ORCHESTRATOR - Modular Cognition Pattern Implementation
@@ -476,7 +477,7 @@ class AgenticETLAgent {
   }
 
   calculateUniqueness(_data) {
-    if (!_data || data.length === 0) return 100;
+    if (!_data || _data.length === 0) return 100;
     
     const uniqueRecords = new Set(_data.map(row => JSON.stringify(row))).size;
     return (uniqueRecords / _data.length) * 100;
@@ -497,6 +498,183 @@ export class AgenticETLOrchestrator {
   // Start an agentic ETL pipeline
   async executePipeline(pipelineConfig) {
     const jobId = `job_${Date.now()}`;
+
+    if (pipelineConfig?.useBackendPlmEtl) {
+      const baseUrl = API_CONFIG?.API_BASE_URL || '';
+      const plmBase = `${baseUrl}/api/plm/etl`;
+
+      const fetchJsonFailClosed = async (url, options = {}) => {
+        const response = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          },
+          ...options
+        });
+
+        const isJson = (response.headers.get('content-type') || '').includes('application/json');
+        const body = isJson ? await response.json().catch(() => null) : await response.text().catch(() => '');
+
+        if (response.status === 503) {
+          const detail = (body && typeof body === 'object' ? body.detail : null) || 'Dependency unavailable (503)';
+          const err = new Error(detail);
+          err.code = 'DEPENDENCY_UNAVAILABLE';
+          err.status = 503;
+          err.detail = detail;
+          throw err;
+        }
+
+        if (!response.ok) {
+          const detail = (body && typeof body === 'object' ? body.detail : null) || response.statusText || 'Request failed';
+          const err = new Error(detail);
+          err.status = response.status;
+          err.detail = detail;
+          throw err;
+        }
+
+        return body;
+      };
+
+      const runSodaGateFailClosed = async ({ run_id, tableName, checksYaml }) => {
+        const encodedTable = encodeURIComponent(tableName);
+        const gate = await fetchJsonFailClosed(
+          `${plmBase}/runs/${encodeURIComponent(run_id)}/dq/soda/scan/${encodedTable}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              stage: 'transformed',
+              checks_yaml: checksYaml || null,
+              data_source_name: 'postgres'
+            })
+          }
+        );
+
+        if (gate?.blocked || gate?.status === 'fail') {
+          const err = new Error('Quality gate failed');
+          err.code = 'QUALITY_GATE_FAILED';
+          err.gate = gate;
+          throw err;
+        }
+
+        return gate;
+      };
+
+      try {
+        const source_system = pipelineConfig.source_system || pipelineConfig.sourceSystem;
+        const target_system = pipelineConfig.target_system || pipelineConfig.targetSystem;
+
+        if (!source_system || !target_system) {
+          throw new Error('Missing required source_system/target_system for backend PLM ETL');
+        }
+
+        const run = await fetchJsonFailClosed(`${plmBase}/runs`, {
+          method: 'POST',
+          body: JSON.stringify({ source_system, target_system })
+        });
+
+        const run_id = run?.run_id;
+        if (!run_id) {
+          throw new Error('Backend did not return run_id');
+        }
+
+        this.activeJobs.set(jobId, { config: pipelineConfig, status: 'running', run_id });
+
+        const parts = Array.isArray(pipelineConfig.parts_records)
+          ? pipelineConfig.parts_records
+          : pipelineConfig.partsRecords;
+        const bom = Array.isArray(pipelineConfig.bom_records) ? pipelineConfig.bom_records : pipelineConfig.bomRecords;
+        const stageSourceField = pipelineConfig.source_object_id_field || pipelineConfig.sourceObjectIdField;
+
+        if (Array.isArray(parts) && parts.length > 0) {
+          await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/stage`, {
+            method: 'POST',
+            body: JSON.stringify({
+              object_type: 'part',
+              records: parts,
+              source_object_id_field: stageSourceField || null
+            })
+          });
+        }
+
+        if (Array.isArray(bom) && bom.length > 0) {
+          await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/stage`, {
+            method: 'POST',
+            body: JSON.stringify({
+              object_type: 'bom',
+              records: bom,
+              source_object_id_field: stageSourceField || null
+            })
+          });
+        }
+
+        const transformRequest = pipelineConfig.transform || pipelineConfig.transformRequest || {};
+        await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/transform`, {
+          method: 'POST',
+          body: JSON.stringify(transformRequest)
+        });
+
+        const gates = [];
+        const sodaChecks = pipelineConfig.soda_checks || pipelineConfig.sodaChecks || {};
+        const shouldGateParts = Array.isArray(parts) && parts.length > 0;
+        const shouldGateBom = Array.isArray(bom) && bom.length > 0;
+
+        if (shouldGateParts) {
+          const checksYaml = sodaChecks.parts || sodaChecks.plm_parts || pipelineConfig.sodaChecksParts;
+          gates.push(
+            await runSodaGateFailClosed({
+              run_id,
+              tableName: 'public.plm_parts',
+              checksYaml
+            })
+          );
+        }
+
+        if (shouldGateBom) {
+          const checksYaml = sodaChecks.bom || sodaChecks.plm_bom_items || pipelineConfig.sodaChecksBom;
+          gates.push(
+            await runSodaGateFailClosed({
+              run_id,
+              tableName: 'public.plm_bom_items',
+              checksYaml
+            })
+          );
+        }
+
+        await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/validate`, {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
+
+        const results = await fetchJsonFailClosed(`${plmBase}/runs/${encodeURIComponent(run_id)}/results`, {
+          method: 'GET',
+          headers: {}
+        });
+
+        const finalResult = {
+          jobId,
+          status: 'completed',
+          run_id,
+          gates,
+          results
+        };
+
+        this.activeJobs.set(jobId, { ...this.activeJobs.get(jobId), status: 'completed', result: finalResult });
+        return finalResult;
+      } catch (error) {
+        const errorResult = {
+          jobId,
+          status: 'error',
+          error: error?.message || String(error),
+          unavailable: error?.code === 'DEPENDENCY_UNAVAILABLE',
+          qualityGateFailed: error?.code === 'QUALITY_GATE_FAILED',
+          gate: error?.gate || null,
+          timestamp: new Date().toISOString()
+        };
+
+        this.activeJobs.set(jobId, { ...this.activeJobs.get(jobId), status: 'error', result: errorResult });
+        throw error;
+      }
+    }
     
     try {
       // Deploy specialized agents based on pipeline requirements

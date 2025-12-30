@@ -8,7 +8,8 @@
  * - Request deduplication (future enhancement)
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// Prefer VITE_API_BASE_URL (documented and used elsewhere); keep VITE_API_URL as a legacy fallback.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
 /**

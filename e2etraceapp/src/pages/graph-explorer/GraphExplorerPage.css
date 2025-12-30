@@ -260,6 +260,42 @@
   margin-bottom: var(--spacing-md, 16px);
 }
 
+/* Cytoscape hover tooltip (tippy.js) */
+.tippy-box {
+  max-width: 420px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--color-border, #BDBDBD);
+  background: var(--color-surface, #FFFFFF);
+  box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
+  color: var(--color-text-primary, #212121);
+}
+
+.tippy-content {
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+}
+
+.cy-tooltip-title {
+  font-weight: 700;
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.cy-tooltip-subtitle {
+  font-weight: 600;
+  color: var(--color-text-secondary, #757575);
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+.cy-tooltip-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: hidden;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
 .query-panel textarea:focus {
   outline: none;
   border-color: var(--tcs-blue-primary, #0066CC);

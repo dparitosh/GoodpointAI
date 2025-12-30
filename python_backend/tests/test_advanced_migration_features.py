@@ -7,7 +7,9 @@ Tests for Advanced Migration Features
 # pylint: disable=redefined-outer-name
 
 import pytest
+import pytest_asyncio
 import asyncio
+from datetime import datetime, timedelta, timezone
 from services.advanced_migration_engine import (
     AdvancedMigrationEngine,
     MigrationState,
@@ -15,15 +17,23 @@ from services.advanced_migration_engine import (
 )
 
 
-@pytest.fixture
-def engine():
-    """Create a migration engine instance for testing"""
-    return AdvancedMigrationEngine()
+@pytest_asyncio.fixture
+async def engine():
+    """Create a migration engine instance for testing, with task cleanup."""
+    local_engine = AdvancedMigrationEngine()
+    yield local_engine
+    for session in list(local_engine.sessions.values()):
+        if session.task is not None and not session.task.done():
+            session.task.cancel()
+            try:
+                await session.task
+            except asyncio.CancelledError:
+                pass
 
 
 @pytest.fixture
-def sample_sources():
-    """Sample source configurations"""
+def test_sources():
+    """Example source configurations"""
     return [
         {
             "type": "postgresql",
@@ -35,8 +45,8 @@ def sample_sources():
 
 
 @pytest.fixture
-def sample_target():
-    """Sample target configuration"""
+def test_target():
+    """Example target configuration"""
     return {
         "type": "postgresql",
         "host": "target-db.example.com",
@@ -46,11 +56,11 @@ def sample_target():
 
 
 @pytest.mark.asyncio
-async def test_create_session(engine, sample_sources, sample_target):
+async def test_create_session(engine, test_sources, test_target):
     """Test creating a migration session"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -63,11 +73,11 @@ async def test_create_session(engine, sample_sources, sample_target):
 
 
 @pytest.mark.asyncio
-async def test_start_migration(engine, sample_sources, sample_target):
+async def test_start_migration(engine, test_sources, test_target):
     """Test starting a migration"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -82,20 +92,20 @@ async def test_start_migration(engine, sample_sources, sample_target):
 
 
 @pytest.mark.asyncio
-async def test_concurrency_limit_rejects_start(monkeypatch, sample_sources, sample_target):
+async def test_concurrency_limit_rejects_start(monkeypatch, test_sources, test_target):
     """Starting beyond max concurrent sessions should be rejected."""
     monkeypatch.setenv("MIGRATION_MAX_CONCURRENT_SESSIONS", "1")
 
     local_engine = AdvancedMigrationEngine()
 
     session_1 = await local_engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental",
     )
     session_2 = await local_engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental",
     )
 
@@ -120,11 +130,41 @@ async def test_concurrency_limit_rejects_start(monkeypatch, sample_sources, samp
 
 
 @pytest.mark.asyncio
-async def test_session_to_dict(engine, sample_sources, sample_target):
+async def test_ttl_cleanup_removes_terminal_sessions(monkeypatch, test_sources, test_target):
+    """Expired terminal sessions should be pruned from engine.sessions."""
+    import services.advanced_migration_engine as ame
+
+    # Make TTL very small for the test.
+    monkeypatch.setattr(ame, "MIGRATION_SESSION_TTL_S", 0.1)
+
+    local_engine = AdvancedMigrationEngine()
+
+    session_1 = await local_engine.create_session(
+        sources=test_sources,
+        target=test_target,
+        strategy="incremental",
+    )
+
+    # Mark it terminal and sufficiently old.
+    session_1.state = MigrationState.COMPLETED
+    session_1.updated_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=10)
+
+    # Trigger cleanup via a subsequent create.
+    await local_engine.create_session(
+        sources=test_sources,
+        target=test_target,
+        strategy="incremental",
+    )
+
+    assert session_1.session_id not in local_engine.sessions
+
+
+@pytest.mark.asyncio
+async def test_session_to_dict(engine, test_sources, test_target):
     """Test session serialization"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="full"
     )
     
@@ -139,11 +179,11 @@ async def test_session_to_dict(engine, sample_sources, sample_target):
 
 
 @pytest.mark.asyncio
-async def test_pause_resume_migration(engine, sample_sources, sample_target):
+async def test_pause_resume_migration(engine, test_sources, test_target):
     """Test pause and resume functionality"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -164,11 +204,11 @@ async def test_pause_resume_migration(engine, sample_sources, sample_target):
 
 
 @pytest.mark.asyncio
-async def test_cancel_migration(engine, sample_sources, sample_target):
+async def test_cancel_migration(engine, test_sources, test_target):
     """Test cancelling a migration"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -183,11 +223,11 @@ async def test_cancel_migration(engine, sample_sources, sample_target):
 
 
 @pytest.mark.asyncio
-async def test_get_history(engine, sample_sources, sample_target):
+async def test_get_history(engine, test_sources, test_target):
     """Test retrieving migration history"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -221,11 +261,11 @@ async def test_invalid_session(engine):
 
 
 @pytest.mark.asyncio
-async def test_migration_progress_tracking(engine, sample_sources, sample_target):
+async def test_migration_progress_tracking(engine, test_sources, test_target):
     """Test that progress is tracked during migration"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     
@@ -243,11 +283,11 @@ async def test_migration_progress_tracking(engine, sample_sources, sample_target
 
 
 @pytest.mark.asyncio
-async def test_state_transitions(engine, sample_sources, sample_target):
+async def test_state_transitions(engine, test_sources, test_target):
     """Test that state transitions follow expected pattern"""
     session = await engine.create_session(
-        sources=sample_sources,
-        target=sample_target,
+        sources=test_sources,
+        target=test_target,
         strategy="incremental"
     )
     

@@ -20,26 +20,50 @@ You need access to a Neo4j database. Options:
 - **Neo4j AuraDB** (Cloud) - [Free tier available](https://neo4j.com/cloud/aura/)
 - **Local Neo4j Desktop** - [Download](https://neo4j.com/download/)
 
-## Environment Configuration
+### Optional External Components
+- **OpenSearch** (for vector/search features)
+- **PostgreSQL** (required for the backend app database)
+- **Apache HTTP Server** (optional; recommended for production reverse-proxy + serving the built frontend)
 
-### Backend Configuration
-1. Navigate to `python_backend` folder
-2. Create a `.env` file with your Neo4j credentials:
+## Configuration Model (Recommended)
+
+GraphTrace now supports **DB-seeded configuration**. On first run, the backend will create its DB schema and seed default config keys.
+
+- Source of truth: DB-backed encrypted configs (managed via the UI)
+- `.env` is optional for local development
+- Required bootstrap secret: `GRAPH_TRACE_CONFIG_ENCRYPTION_KEY` (used to encrypt/decrypt configs at rest)
+
+For local dev, the bootstrap script also writes a local key file at `python_backend/.graphtrace.encryption_key` (ignored by git) so VS Code tasks can decrypt DB configs without needing you to re-export env vars each session.
+
+### Backend Bootstrap (recommended)
+Run the bootstrap script once:
+
+```powershell
+./bootstrap.ps1 -RunDiagnostics
+```
+
+This will:
+- Create backend venv + install dependencies
+- Generate `GRAPH_TRACE_CONFIG_ENCRYPTION_KEY` for the current session
+- Create DB schema + seed default configs
+- Install frontend dependencies
+
+Then configure Neo4j/OpenSearch from the UI at `http://localhost:5173/#/data-config`.
+
+### Legacy `.env` (optional)
+If you still want to use `.env` for local development, create `python_backend/.env`:
 ```env
 NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your-password
 NEO4J_DATABASE=neo4j
+
+# (Recommended) encryption key for DB-backed configs
+GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=your-secret
 ```
 
 ### Frontend Configuration
-1. Navigate to `e2etraceapp` folder
-2. Create or update `.env` file:
-```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_NEO4J_URI=bolt://localhost:7687
-VITE_NEO4J_USER=neo4j
-```
+The frontend uses the Vite proxy in development, and fetches runtime configuration from the backend (`/api/config/runtime`) when available.
 
 ## Running the Application
 
@@ -72,8 +96,8 @@ start-backend.bat
 ```
 
 The backend will be available at:
-- API: `http://localhost:8000`
-- Interactive API Docs: `http://localhost:8000/docs`
+- API: `http://localhost:8011`
+- Interactive API Docs: `http://localhost:8011/docs`
 
 #### Frontend Only
 
@@ -104,7 +128,7 @@ cd .\python_backend
 Optional parameters:
 
 ```powershell
-.\smoke-backend.ps1 -BaseUrl http://127.0.0.1:8000 -WorkflowId wf_demo_001 -TimeoutSec 10
+.\smoke-backend.ps1 -BaseUrl http://127.0.0.1:8011 -WorkflowId wf_demo_001 -TimeoutSec 10
 ```
 
 ## Script Features
@@ -116,6 +140,32 @@ All scripts automatically:
 - ✓ Install/update dependencies
 - ✓ Create default `.env` files if missing
 - ✓ Start development servers with hot reload
+
+## Diagnostics (Windows)
+
+- Run everything:
+
+```powershell
+./diagnostics/windows/diagnose-all.ps1
+```
+
+- Backend-only:
+
+```powershell
+./diagnostics/windows/diagnose-backend.ps1
+```
+
+- Frontend-only:
+
+```powershell
+./diagnostics/windows/diagnose-frontend.ps1
+```
+
+- Apache (optional):
+
+```powershell
+./diagnostics/windows/diagnose-apache.ps1
+```
 
 ### Virtual Environment
 The backend scripts create and use a Python virtual environment (`venv`) to isolate dependencies. This is created automatically on first run.
@@ -130,11 +180,16 @@ npm run build
 
 The production build will be in `e2etraceapp/dist/`
 
+### Apache (optional)
+See `apache/README.md` for a sample httpd configuration that:
+- Serves `e2etraceapp/dist`
+- Proxies `/api` to the backend
+
 ### Run Backend in Production Mode
 ```cmd
 cd python_backend
 venv\Scripts\activate
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8011
 ```
 
 ## Troubleshooting

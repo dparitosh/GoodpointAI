@@ -34,53 +34,53 @@ This document catalogs identified bugs, missing functionalities, and architectur
 
 | ID | Severity | Area | Title | Current Status | Repro / Symptom | Recommended Fix (short) |
 |---|---|---|---|---|---|---|
-| CRIT-001 | Critical | Backend | Workflow persistence missing | Open | Workflows disappear after backend restart | Replace `WORKFLOWS_STORE` with DB persistence (SQLAlchemy + migrations) |
-| CRIT-002 | Critical | Backend | Workflow execution is a facade | Open | Start/pause/stop updates state only | Wire execution to real migration/ETL runner + async jobs |
-| CRIT-003 | Critical | Backend | Lineage not auto-captured | Open | Lineage endpoints exist; no auto lineage during runs | Emit lineage events from execution pipeline and persist to Neo4j |
-| CRIT-004 | Critical | Backend | PLM connectors stubbed | Open | Teamcenter query returns 501; other systems incomplete | Implement at least one real connector end-to-end (Teamcenter recommended) |
-| CRIT-005 | Critical | Backend | Quality scans are mock (no real scan) | Open | Scan returns random scores/issues | Execute real scans via SODA/queries; remove random simulation |
+| CRIT-001 | Critical | Backend | Workflow persistence missing | Needs Verification | Workflows disappear after backend restart | Replace `WORKFLOWS_STORE` with DB persistence (SQLAlchemy + migrations) |
+| CRIT-002 | Critical | Backend | Workflow execution is a facade | Needs Verification | Start/pause/stop updates state only | Wire execution to real migration/ETL runner + async jobs |
+| CRIT-003 | Critical | Backend | Lineage not auto-captured | Needs Verification | Lineage endpoints exist; no auto lineage during runs | Emit lineage events from execution pipeline and persist to Neo4j |
+| CRIT-004 | Critical | Backend | PLM connectors stubbed | Needs Verification | Teamcenter query returns 501; other systems incomplete | Implement at least one real connector end-to-end (Teamcenter recommended) |
+| CRIT-005 | Critical | Backend | Quality scans are mock (no real scan) | Needs Verification | Historical behavior: scan returned simulated/random results in some paths | Deterministic SQL-based scans exist; added Soda Core (Postgres) fail-closed scan endpoint. Verify UI wiring and remove/disable any remaining simulation paths. |
 | CRIT-006 | Critical | Frontend | XState landing null crash | Done | Previously crashed when nodes/edges null | Fixed: normalize arrays + regression test |
 | CRIT-007 | Critical | Backend | Neo4j driver lacks production tuning | Needs Verification | Pool/health/retry policies not configurable | Add configurable driver options + periodic health + structured logging |
-| CRIT-008 | Critical | Security | No auth/RBAC | Open | Any user can call sensitive endpoints | Add JWT/OAuth2 + RBAC + audit logging |
+| CRIT-008 | Critical | Security | No auth/RBAC | Done | Any user can call sensitive endpoints | Add JWT/OAuth2 + RBAC + audit logging |
 | HIGH-001 | High | Frontend | Workflow create → detail page failure | Needs Verification | Potential 404 after create | Await persistence before navigate; show success + loading |
 | HIGH-002 | High | Frontend | Polling refresh risks | Needs Verification | Potential excessive calls while running | Prefer websocket; dedupe inflight requests |
 | HIGH-003 | High | Frontend | No React error boundaries | Done | Any runtime error whitescreens app | Add global ErrorBoundary + per-page boundaries |
 | HIGH-004 | High | Frontend | 30s timeout for long migrations | Needs Verification | Start action times out; user confused | Start async (202) + poll status; avoid aborting start |
-| HIGH-005 | High | Backend | Migration sessions not cleaned up | Needs Verification | Potential memory growth | TTL cleanup; persist to DB; paginate |
-| HIGH-006 | High | Backend | No concurrency limits | Needs Verification | Starting many workflows can exhaust resources | Implemented concurrency cap (env `MIGRATION_MAX_CONCURRENT_SESSIONS`); return 429 when limit reached |
+| HIGH-005 | High | Backend | Migration sessions not cleaned up | Done | Potential memory growth | TTL cleanup; persist to DB; paginate |
+| HIGH-006 | High | Backend | No concurrency limits | Done | Starting many workflows can exhaust resources | Implemented concurrency cap (env `MIGRATION_MAX_CONCURRENT_SESSIONS`); return 429 when limit reached |
 | HIGH-009 | High | Backend | NiFi router stubbed | Done | Endpoints return empty/mock data | Removed NiFi API surface from runtime (router no longer included) and removed frontend dependencies |
-| HIGH-010 | High | Backend | No transaction/saga for multi-step ops | Open | Partial failures leave inconsistent state | DB transactions + compensating actions |
+| HIGH-010 | High | Backend | No transaction/saga for multi-step ops | Done | Partial failures leave inconsistent state | DB transactions + compensating actions |
 | HIGH-011 | High | Backend | Observability not end-to-end | Needs Verification | Metrics/traces incomplete | Instrument key APIs + workflow execution |
-| HIGH-012 | High | Frontend | Placeholders masked as features | Open | Some pages/components are stubs | Label/disable incomplete areas; implement or remove |
+| HIGH-012 | High | Frontend | Placeholders masked as features | Needs Verification | Some pages/components are stubs | Label/disable incomplete areas; implement or remove |
 
 ### Backlog (Medium + Low)
 
 | ID | Severity | Title | Current Status |
 |---|---|---|---|
-| MED-001 | Medium | Demo workflows mixed with real | Open |
+| MED-001 | Medium | Demo workflows mixed with real | Needs Verification |
 | MED-002 | Medium | Inconsistent error response shapes | Done |
 | MED-003 | Medium | No pagination on list endpoints | Done |
 | MED-004 | Medium | Logging uses f-strings (perf/style) | Done |
 | MED-005 | Medium | Unused imports / lint debt | Done |
 | MED-006 | Medium | Migration WS heartbeat bug | Done |
-| MED-007 | Medium | Quality dashboard auto-refresh overlaps | Open |
-| MED-008 | Medium | Lineage filter not server-side | Open |
-| MED-009 | Medium | Impact analysis algorithm simplistic | Open |
-| MED-010 | Medium | No rate limiting | Open |
-| MED-011 | Medium | File upload endpoints missing | Open |
-| MED-012 | Medium | No backup/restore | Open |
-| MED-013 | Medium | Visualizer not real-time | Open |
+| MED-007 | Medium | Quality dashboard auto-refresh overlaps | Needs Verification |
+| MED-008 | Medium | Lineage filter not server-side | Needs Verification |
+| MED-009 | Medium | Impact analysis algorithm simplistic | Needs Verification |
+| MED-010 | Medium | No rate limiting | Needs Verification |
+| MED-011 | Medium | File upload endpoints missing | Done |
+| MED-012 | Medium | No backup/restore | Done |
+| MED-013 | Medium | Visualizer not real-time | Needs Verification |
 | MED-014 | Medium | Workflow search/filter verify server-side | Done |
-| MED-015 | Medium | Workflow custom config modal TODO | Open |
+| MED-015 | Medium | Workflow custom config modal TODO | Needs Verification |
 | MED-016 | Medium | Pydantic v2 .dict() usage in data sources | Done |
 | MED-017 | Medium | Exception handler registration typing mismatch | Done |
-| LOW-001 | Low | Delete uses window.confirm | Open |
-| LOW-002 | Low | Unnecessary pass statement | Open |
-| LOW-003 | Low | No dark mode | Open |
-| LOW-004 | Low | No keyboard shortcuts | Open |
-| LOW-005 | Low | No user settings page | Open |
-| LOW-006 | Low | No i18n | Open |
-| LOW-007 | Low | Inconsistent component naming | Open |
+| LOW-001 | Low | Delete uses window.confirm | Needs Verification |
+| LOW-002 | Low | Unnecessary pass statement | Done |
+| LOW-003 | Low | No dark mode | Needs Verification |
+| LOW-004 | Low | No keyboard shortcuts | Needs Verification |
+| LOW-005 | Low | No user settings page | Needs Verification |
+| LOW-006 | Low | No i18n | Needs Verification |
+| LOW-007 | Low | Inconsistent component naming | Needs Verification |
 | LOW-008 | Low | Windows: REPL vs shell command confusion | Done |
 | LOW-009 | Low | Postgres default port mismatch (needs 5433) | Done |
 
@@ -325,6 +325,8 @@ Neo4j driver is created on startup and connectivity is verified once (with a 5s 
 **Component:** Backend - All Routers  
 **Security:** 🔴 CRITICAL
 
+**Current Status:** Done
+
 **Description:**  
 Entire API has no authentication requirements. Anyone with network access can:
 - Create/delete workflows
@@ -513,6 +515,8 @@ const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second time
 **Component:** Backend - Migration Engine  
 **File:** `python_backend/services/advanced_migration_engine.py`
 
+**Current Status:** Done
+
 **Description:**  
 Migration sessions stored in memory dictionary, never cleaned up. Long-running server accumulates completed/failed sessions indefinitely.
 
@@ -538,6 +542,8 @@ Migration sessions stored in memory dictionary, never cleaned up. Long-running s
 
 ### HIGH-006: No Concurrent Workflow Execution Limit
 **Component:** Backend - Workflow Manager
+
+**Current Status:** Done
 
 **Description:**  
 No limit on how many workflows can run simultaneously. Starting 100 workflows could exhaust system resources.
@@ -640,6 +646,8 @@ async def list_process_groups():
 
 ### HIGH-010: No Transaction Management for Multi-Step Operations
 **Component:** Backend - All Routers
+
+**Current Status:** Done
 
 **Description:**  
 Operations like workflow creation involve multiple steps (create workflow, create lineage nodes, update statistics) with no transaction management. Partial failures leave inconsistent state.
@@ -1141,6 +1149,8 @@ No way to backup/restore workflow configurations, mappings, or lineage data.
 ### MED-013: XState Visualizer Doesn't Show Real-Time Updates
 **Component:** Frontend - XState Visualizer
 
+**Status:** Needs Verification
+
 **Description:**  
 Visualizer shows workflow graph but doesn't update in real-time as workflow executes.
 
@@ -1181,15 +1191,11 @@ Search functionality sends query params to backend but unclear if backend actual
 ### MED-015: Configuration Modal Has TODO Comment
 **Component:** Frontend - Workflow Manager  
 **File:** `e2etraceapp/src/pages/workflow-manager/WorkflowManagerPage.jsx`  
-**Line:** 287
+
+**Status:** Needs Verification
 
 **Description:**  
-Custom configuration modal mentioned but not implemented.
-
-**Evidence:**
-```javascript
-// TODO: Implement custom configuration modal
-```
+Custom configuration flow is implemented by reusing the existing configuration wizard and creating workflows via `POST /api/workflows/`.
 
 **Impact:**
 - Users cannot customize workflow configuration
@@ -1209,7 +1215,7 @@ Custom configuration modal mentioned but not implemented.
 ### LOW-001: Delete Workflow Uses window.confirm
 **Component:** Frontend - Workflow Manager  
 **File:** `WorkflowManagerPage.jsx`  
-**Line:** 140
+**Status:** Needs Verification
 
 **Description:**  
 Workflow deletion uses browser `window.confirm()` instead of styled modal.
@@ -1229,10 +1235,10 @@ Workflow deletion uses browser `window.confirm()` instead of styled modal.
 ### LOW-002: Unnecessary pass Statement
 **Component:** Backend - Workflow Manager  
 **File:** `workflow_manager_router.py`  
-**Line:** 552
+**Status:** Done
 
 **Description:**  
-Empty function body with `pass` statement.
+The referenced empty `pass` function body is no longer present; remaining `pass` usages are in exception handlers and are intentional.
 
 **Impact:** None (cosmetic)
 
@@ -1243,8 +1249,14 @@ Empty function body with `pass` statement.
 ### LOW-003: No Dark Mode Support
 **Component:** Frontend - All Pages
 
+**Status:** Needs Verification
+
 **Description:**  
 No dark mode theme option.
+
+**Notes:**
+- Theme toggle is available in the app header.
+- Theme preference persists via `localStorage` (`e2etrace-theme`).
 
 **Impact:**
 - Accessibility issue
@@ -1259,20 +1271,23 @@ No dark mode theme option.
 ---
 
 ### LOW-004: No Keyboard Shortcuts
-**Component:** Frontend - All Pages
+**Component:** Frontend - Workflow Manager
 
 **Description:**  
 No keyboard shortcuts for common actions.
+
+**Notes:**
+- Added a minimal shortcut on the Workflow Manager page: `Escape` closes the currently open modal.
+- Modal close precedence: delete confirmation modal → config wizard modal → create workflow modal.
 
 **Impact:**
 - Reduced productivity for power users
 - Accessibility issue
 
 **Recommendation:**
-1. Add keyboard shortcut handler
-2. Implement common shortcuts (Ctrl+S, Ctrl+F, ESC)
-3. Add shortcut help modal (?)
-4. Make shortcuts configurable
+1. Add keyboard shortcut handler (scoped to active modal)
+2. Implement `Escape` to close active modal (done)
+3. Expand to other pages only if needed
 
 ---
 
@@ -1282,10 +1297,15 @@ No keyboard shortcuts for common actions.
 **Description:**  
 No way to customize user experience (theme, language, default filters, etc.).
 
+**Notes:**
+- Added a minimal Settings entry point at `/settings` (sidebar: Settings → Preferences).
+- Settings currently focuses on Graph Layout configuration (existing UI) and persists layout config via `localStorage` (`e2etrace-layout-config`).
+- Theme preference already persists via `localStorage` (`e2etrace-theme`) and can be toggled from the app header.
+
 **Recommendation:**
-- Add settings page
-- Store preferences in backend (requires user accounts)
-- Add export/import settings
+- Add settings page (done)
+- Store preferences in backend (optional; requires user accounts)
+- Add export/import settings (optional)
 
 ---
 
@@ -1298,6 +1318,12 @@ All text hardcoded in English. No multi-language support.
 **Impact:**
 - Limits international adoption
 - Accessibility issue for non-English speakers
+
+**Notes:**
+- Added `i18next` + `react-i18next` and initialized i18n at app startup.
+- Added a minimal language selector in Settings (`/settings`) and persisted selection via `localStorage` (`e2etrace-language`).
+- Added starter translations for core navigation strings.
+- Supported languages: English (en), Spanish (es), French (fr), German (de), Chinese (zh).
 
 **Recommendation:**
 1. Add react-i18next library
@@ -1316,6 +1342,11 @@ Mix of naming conventions (e2etrace-*, E2ETrace*, WorkflowManager*, etc.).
 **Impact:**
 - Code organization confusion
 - Difficult to find components
+
+**Notes:**
+- Standardized custom hook exports to follow React hook naming rules (`use*`).
+- Kept backward-compatible aliases for existing `e2etraceUse*` imports.
+- Scope intentionally limited to exports/aliases (no broad file renames).
 
 **Recommendation:**
 - Standardize naming convention

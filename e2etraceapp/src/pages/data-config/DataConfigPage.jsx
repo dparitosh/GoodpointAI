@@ -21,7 +21,7 @@ const DataConfigPage = () => {
     type: 'database',
     connection: {
       host: '',
-      port: '',
+      port: '5433',
       database: '',
       username: '',
       password: ''
@@ -73,10 +73,51 @@ const DataConfigPage = () => {
   const [showNeo4jConfig, setShowNeo4jConfig] = useState(false);
   const [configTestResult, setConfigTestResult] = useState(null);
 
+  // OpenSearch Configuration State
+  const [opensearchConfig, setOpensearchConfig] = useState({
+    url: 'http://localhost:9200',
+    username: '',
+    password: '',
+    verify_certs: true,
+    timeout_s: 5
+  });
+  const [showOpenSearchConfig, setShowOpenSearchConfig] = useState(false);
+  const [opensearchTestResult, setOpensearchTestResult] = useState(null);
+
+  const openEditSource = (source) => {
+    if (!source) return;
+    const connection = { ...(source.connection || {}) };
+    for (const key of ['password', 'apiKey', 'api_key', 'connectionString', 'connection_string']) {
+      if (Object.prototype.hasOwnProperty.call(connection, key)) {
+        connection[key] = '***';
+      }
+    }
+    setEditingSource({
+      ...source,
+      connection,
+    });
+  };
+
+  const openConfigure = (source) => {
+    if (!source) return;
+    if (source.id === 'neo4j') {
+      setShowNeo4jConfig(true);
+      return;
+    }
+    openEditSource(source);
+  };
+
+  const isSourceConnected = (source) => {
+    const status = String(source?.status || '').toLowerCase();
+    const testResult = String(source?.test_result || source?.testResult || '').toLowerCase();
+    return status === 'connected' || status === 'active' || testResult === 'success';
+  };
+
   useEffect(() => {
     loadDataSources();
     loadSchemaInfo();
     loadNeo4jConfig();
+    loadOpenSearchConfig();
     updateWorkflowStatus();
   }, []);
 
@@ -93,6 +134,23 @@ const DataConfigPage = () => {
       setConnectionStatus(prev => ({ ...prev, neo4j: config.connection_status === 'connected' }));
     } catch (error) {
       console.error('Error loading Neo4j config:', error);
+    }
+  };
+
+  const loadOpenSearchConfig = async () => {
+    try {
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.OPENSEARCH_CONFIG);
+      const config = await response.json();
+      setOpensearchConfig({
+        url: config.url || 'http://localhost:9200',
+        username: config.username || '',
+        password: '', // Don't load password for security
+        verify_certs: typeof config.verify_certs === 'boolean' ? config.verify_certs : true,
+        timeout_s: typeof config.timeout_s === 'number' ? config.timeout_s : 5
+      });
+      setConnectionStatus(prev => ({ ...prev, opensearch: config.connection_status === 'connected' }));
+    } catch (error) {
+      console.error('Error loading OpenSearch config:', error);
     }
   };
 
@@ -171,8 +229,7 @@ const DataConfigPage = () => {
         type: newSourceConfig.type,
         connection: newSourceConfig.connection,
         description: newSourceConfig.description,
-        status: 'disconnected',
-        created: new Date().toISOString()
+        status: 'inactive'
       };
 
       console.log('Sending data to backend:', sourceData);
@@ -277,7 +334,7 @@ const DataConfigPage = () => {
       type: 'database',
       connection: {
         host: '',
-        port: '',
+        port: '5433',
         database: '',
         username: '',
         password: ''
@@ -365,6 +422,54 @@ const DataConfigPage = () => {
     }
   };
 
+  const testOpenSearchConfig = async () => {
+    setIsLoading(true);
+    setOpensearchTestResult(null);
+    try {
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.OPENSEARCH_CONFIG_TEST, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(opensearchConfig)
+      });
+      const result = await response.json();
+      setOpensearchTestResult(result);
+      setConnectionStatus(prev => ({ ...prev, opensearch: result.status === 'success' }));
+    } catch (error) {
+      setOpensearchTestResult({
+        status: 'failed',
+        message: `Connection test failed: ${error.message}`
+      });
+      setConnectionStatus(prev => ({ ...prev, opensearch: false }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveOpenSearchConfig = async () => {
+    setIsLoading(true);
+    try {
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.OPENSEARCH_CONFIG, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(opensearchConfig)
+      });
+      const result = await response.json();
+
+      if (result.status === 'success') {
+        setOpensearchTestResult(result);
+        setConnectionStatus(prev => ({ ...prev, opensearch: true }));
+        alert('OpenSearch configuration saved successfully!');
+        setShowOpenSearchConfig(false);
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      alert(`Failed to save OpenSearch configuration: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="data-config-page">
       <div className="page-header">
@@ -372,6 +477,28 @@ const DataConfigPage = () => {
         <p className="page-description">
           Configure and manage your data sources, schemas, and connections
         </p>
+        <p className="page-description">
+          <strong>Neo4j</strong>: Graph database used for graph/lineage features. <strong>Postgres</strong>: Backend storage used to persist configuration and your saved data sources (secrets are stored encrypted).
+        </p>
+        <div className="section-header">
+          <h2>External Services</h2>
+          <div className="source-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowNeo4jConfig(true)}
+              disabled={isLoading}
+            >
+              <i className="fas fa-project-diagram" aria-hidden="true" /> Configure Neo4j
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowOpenSearchConfig(true)}
+              disabled={isLoading}
+            >
+              <i className="fas fa-search" aria-hidden="true" /> Configure OpenSearch
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="tab-navigation">
@@ -416,52 +543,55 @@ const DataConfigPage = () => {
               </button>
             </div>
 
-            <div className="data-sources-grid">
-              {dataSources.map(source => (
-                <div key={source.id} className="data-source-card">
-                  <div className="source-header">
-                    <h3>{source.name}</h3>
-                    <span className={`status-badge ${source.status}`}>
-                      {source.status === 'connected' ? '● Connected' : '● Disconnected'}
-                    </span>
-                  </div>
-                  
-                  <div className="source-details">
-                    <div className="detail-row">
-                      <span className="label">Type:</span>
-                      <span className="value">{source.type.toUpperCase()}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="label">Endpoint:</span>
-                      <span className="value">{source.endpoint}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="label">Description:</span>
-                      <span className="value">{source.description}</span>
-                    </div>
-                  </div>
-
-                  <div className="source-actions">
-                    <button 
-                      onClick={() => testConnection(source.id)}
-                      className="btn btn-secondary"
-                      disabled={isLoading}
-                    >
-                      <i className="fas fa-vial" aria-hidden="true" /> Test Connection
-                    </button>
-                    <button 
-                      className="btn btn-outline"
-                      onClick={() => {
-                        if (source.id === 'neo4j') {
-                          setShowNeo4jConfig(true);
-                        }
-                      }}
-                    >
-                      <i className="fas fa-cog" aria-hidden="true" /> Configure
-                    </button>
-                  </div>
+            <div className="existing-sources">
+              <h3>Connected Sources</h3>
+              <div className="sources-table">
+                <div className="table-header">
+                  <span>Name</span>
+                  <span>Type</span>
+                  <span>Status</span>
+                  <span>Actions</span>
                 </div>
-              ))}
+                {dataSources.filter(isSourceConnected).length === 0 ? (
+                  <div className="table-row">
+                    <span className="source-name">No connected sources</span>
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                ) : (
+                  dataSources
+                    .filter(isSourceConnected)
+                    .map(source => (
+                      <div key={source.id} className="table-row">
+                        <span className="source-name">{source.name}</span>
+                        <span className="source-type">{source.type}</span>
+                        <span className={`source-status ${source.status}`}>✓ Connected</span>
+                        <div className="source-actions">
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={() => testConnection(source.id)}
+                            disabled={isLoading}
+                          >
+                            ✓ Test
+                          </button>
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => openConfigure(source)}
+                          >
+                            <i className="fas fa-cog" aria-hidden="true" /> Configure
+                          </button>
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() => deleteDataSource(source.id)}
+                          >
+                            ✗ Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -499,7 +629,16 @@ const DataConfigPage = () => {
                     <button 
                       className="btn btn-outline btn-sm"
                       onClick={() => {
-                        setNewSourceConfig(prev => ({ ...prev, type: key }));
+                        setNewSourceConfig(prev => ({
+                          ...prev,
+                          type: key,
+                          connection: {
+                            ...prev.connection,
+                            ...(sourceTypes[key]?.fields?.includes('port')
+                              ? { port: sourceTypes[key].defaultPort || '' }
+                              : {})
+                          }
+                        }));
                         setShowCreateSourceModal(true);
                       }}
                     >
@@ -524,7 +663,7 @@ const DataConfigPage = () => {
                     <span className="source-name">{source.name}</span>
                     <span className="source-type">{source.type}</span>
                     <span className={`source-status ${source.status}`}>
-                      {source.status === 'connected' ? '✓ Connected' : '✗ Disconnected'}
+                      {isSourceConnected(source) ? '✓ Connected' : '✗ Disconnected'}
                     </span>
                     <div className="source-actions">
                       <button 
@@ -536,7 +675,7 @@ const DataConfigPage = () => {
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary"
-                        onClick={() => setEditingSource(source)}
+                        onClick={() => openEditSource(source)}
                       >
                         ✎ Edit
                       </button>
@@ -677,7 +816,19 @@ const DataConfigPage = () => {
                 <label>Source Type</label>
                 <select
                   value={newSourceConfig.type}
-                  onChange={(e) => setNewSourceConfig(prev => ({ ...prev, type: e.target.value }))}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setNewSourceConfig(prev => ({
+                      ...prev,
+                      type: nextType,
+                      connection: {
+                        ...prev.connection,
+                        ...(sourceTypes[nextType]?.fields?.includes('port')
+                          ? { port: sourceTypes[nextType].defaultPort || '' }
+                          : {})
+                      }
+                    }));
+                  }}
                 >
                   {Object.entries(sourceTypes).map(([key, type]) => (
                     <option key={key} value={key}>{type.name}</option>
@@ -730,6 +881,100 @@ const DataConfigPage = () => {
                 disabled={!newSourceConfig.name || isLoading}
               >
                 Create Source
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Source Modal */}
+      {editingSource && (
+        <div className="modal-overlay" onClick={() => setEditingSource(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>✎ Edit Data Source</h2>
+              <button
+                className="modal-close"
+                onClick={() => setEditingSource(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Source Name</label>
+                <input
+                  type="text"
+                  value={editingSource.name || ''}
+                  onChange={(e) => setEditingSource(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter source name"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Source Type</label>
+                <select
+                  value={editingSource.type || 'database'}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setEditingSource(prev => ({
+                      ...prev,
+                      type: nextType,
+                      connection: {
+                        ...(prev.connection || {}),
+                        ...(sourceTypes[nextType]?.fields?.includes('port')
+                          ? { port: sourceTypes[nextType].defaultPort || '' }
+                          : {})
+                      }
+                    }));
+                  }}
+                >
+                  {Object.entries(sourceTypes).map(([key, type]) => (
+                    <option key={key} value={key}>{type.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={editingSource.description || ''}
+                  onChange={(e) => setEditingSource(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Describe this data source"
+                />
+              </div>
+
+              <h3>Connection Details</h3>
+              {sourceTypes[editingSource.type || 'database']?.fields.map(field => (
+                <div key={field} className="form-group">
+                  <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                  <input
+                    type={field.includes('password') || field.toLowerCase().includes('apikey') ? 'password' : 'text'}
+                    value={(editingSource.connection || {})[field] || ''}
+                    onChange={(e) => setEditingSource(prev => ({
+                      ...prev,
+                      connection: { ...(prev.connection || {}), [field]: e.target.value }
+                    }))}
+                    placeholder={field === 'port' ? sourceTypes[editingSource.type || 'database'].defaultPort : `Enter ${field}`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setEditingSource(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => updateDataSource(editingSource.id)}
+                disabled={!editingSource.name || isLoading}
+              >
+                Save
               </button>
             </div>
           </div>
@@ -835,6 +1080,106 @@ const DataConfigPage = () => {
                 onClick={() => setShowNeo4jConfig(false)}
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OpenSearch Configuration Modal */}
+      {showOpenSearchConfig && (
+        <div className="modal-overlay" onClick={() => setShowOpenSearchConfig(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🔎 OpenSearch Configuration</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowOpenSearchConfig(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="modal-description">
+                Configure your OpenSearch endpoint. These settings are stored in Postgres (encrypted) and used by the Python backend.
+              </p>
+
+              <div className="form-group">
+                <label>URL</label>
+                <input
+                  type="text"
+                  value={opensearchConfig.url}
+                  onChange={(e) => setOpensearchConfig(prev => ({ ...prev, url: e.target.value }))}
+                  placeholder="http://localhost:9200"
+                />
+                <small className="form-help">Format: http(s)://hostname:port</small>
+              </div>
+
+              <div className="form-group">
+                <label>Username (optional)</label>
+                <input
+                  type="text"
+                  value={opensearchConfig.username}
+                  onChange={(e) => setOpensearchConfig(prev => ({ ...prev, username: e.target.value }))}
+                  placeholder=""
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Password (optional)</label>
+                <input
+                  type="password"
+                  value={opensearchConfig.password}
+                  onChange={(e) => setOpensearchConfig(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder=""
+                />
+                <small className="form-help">Leave blank to keep the existing password.</small>
+              </div>
+
+              <div className="form-group">
+                <label>Verify TLS Certificates</label>
+                <select
+                  value={opensearchConfig.verify_certs ? 'true' : 'false'}
+                  onChange={(e) => setOpensearchConfig(prev => ({ ...prev, verify_certs: e.target.value === 'true' }))}
+                >
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Timeout (seconds)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={opensearchConfig.timeout_s}
+                  onChange={(e) => setOpensearchConfig(prev => ({ ...prev, timeout_s: Number(e.target.value) }))}
+                />
+              </div>
+
+              {opensearchTestResult && (
+                <div className={`config-test-result ${opensearchTestResult.status}`}>
+                  <strong>{opensearchTestResult.status === 'success' ? '✓ Success' : '✗ Failed'}</strong>
+                  <p>{opensearchTestResult.message}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn btn-outline"
+                onClick={testOpenSearchConfig}
+                disabled={isLoading || !opensearchConfig.url}
+              >
+                ✓ Test Connection
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={saveOpenSearchConfig}
+                disabled={isLoading || !opensearchConfig.url}
+              >
+                💾 Save Configuration
               </button>
             </div>
           </div>

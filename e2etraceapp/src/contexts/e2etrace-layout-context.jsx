@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useEffect, useState, useContext } from 'react';
 // Keep the rest of the file minimal or commented out for testing
 
 // Define initial layout options, similar to what's in App.jsx
@@ -27,7 +27,25 @@ const E2ETraceLayoutContext = createContext({
 });
 
 export const E2ETraceLayoutProvider = ({ children }) => {
-    const [layoutConfig, setLayoutConfig] = useState(initialLayoutConfig);
+    const [layoutConfig, setLayoutConfig] = useState(() => {
+        try {
+            const raw = localStorage.getItem('e2etrace-layout-config');
+            if (!raw) return initialLayoutConfig;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return initialLayoutConfig;
+            return { ...initialLayoutConfig, ...parsed };
+        } catch {
+            return initialLayoutConfig;
+        }
+    });
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('e2etrace-layout-config', JSON.stringify(layoutConfig));
+        } catch {
+            // ignore storage failures (private mode, quota, etc)
+        }
+    }, [layoutConfig]);
 
     const resetLayoutConfig = () => setLayoutConfig(initialLayoutConfig);
 
@@ -38,4 +56,6 @@ export const E2ETraceLayoutProvider = ({ children }) => {
     );
 };
 
-export const e2etraceUseLayout = () => useContext(E2ETraceLayoutContext);
+export const useE2ETraceLayout = () => useContext(E2ETraceLayoutContext);
+
+export const e2etraceUseLayout = useE2ETraceLayout;

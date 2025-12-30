@@ -4,7 +4,7 @@ Handles OData services (SAP, Dynamics, generic OData endpoints)
 """
 import logging
 from typing import Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 import requests  # type: ignore[import-untyped]
@@ -52,6 +52,12 @@ class ODataUpdateRequest(BaseModel):
     data: Dict[str, Any]
 
 
+class ODataConnectRequest(BaseModel):
+    service_url: str = Field(..., description="OData service root URL")
+    auth_type: str = Field(default="none", description="none, basic, oauth2, apikey")
+    credentials: Dict[str, Any] = Field(default_factory=dict)
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -62,6 +68,8 @@ def get_odata_auth(config: ODataServiceConfig):
         if not config.username or not config.password:
             return None
         return HTTPBasicAuth(config.username, config.password)
+    elif config.auth_type == "none":
+        return None
     elif config.auth_type == "apikey":
         return None  # Handled in headers
     elif config.auth_type == "oauth2":
@@ -83,6 +91,45 @@ def get_odata_headers(config: ODataServiceConfig) -> Dict[str, str]:
         headers["Authorization"] = f"Bearer {config.token}"
     
     return headers
+
+
+@router.post("/connect")
+async def connect_odata(request: ODataConnectRequest):
+    """Validate an OData connection profile (no persistence)."""
+    service_url = (request.service_url or "").strip()
+    if not service_url.startswith("http://") and not service_url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="service_url must start with http:// or https://")
+
+    auth_type = (request.auth_type or "none").strip().lower()
+    creds = request.credentials or {}
+
+    config = ODataServiceConfig(
+        service_url=service_url,
+        auth_type=auth_type,
+        username=creds.get("username"),
+        password=creds.get("password"),
+        api_key=creds.get("api_key") or creds.get("token"),
+        token=creds.get("token"),
+        headers=creds.get("headers") or {},
+    )
+
+    try:
+        metadata_url = f"{service_url}/$metadata"
+        resp = requests.get(
+            metadata_url,
+            auth=get_odata_auth(config),
+            headers=get_odata_headers(config),
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return {
+            "status": "success",
+            "service_url": service_url,
+            "connected": True,
+        }
+    except requests.exceptions.RequestException as e:
+        logger.error("OData connect validation failed: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to connect to OData service") from e
 
 
 # ============================================================================
@@ -461,15 +508,16 @@ async def list_sap_entity_sets(
 async def odata_health_check():
     """Check OData service connectivity"""
     from core.external_config import odata_config
-    
-    health = {
-        "status": "healthy",
-        "services": {
-            "generic_odata": odata_config.odata_service_url != "",
-            "sap_odata": odata_config.sap_odata_url != ""
-        },
-        "auth_type": odata_config.odata_auth_type,
-        "timestamp": datetime.utcnow().isoformat()
+
+    services = {
+        "generic_odata": bool(odata_config.odata_service_url),
+        "sap_odata": bool(odata_config.sap_odata_url),
     }
-    
-    return health
+    status = "healthy" if any(services.values()) else "unconfigured"
+
+    return {
+        "status": status,
+        "services": services,
+        "auth_type": odata_config.odata_auth_type,
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+    }

@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import './e2etrace-property-palette.css';
 import { E2ETraceUIPanel } from '../../../components/e2etrace-ui-panel';
 import { e2etraceUseDebounce } from '../../../hooks/e2etrace-use-debounce';
+import { useTranslation } from 'react-i18next';
+import { setAppLanguage } from '../../../i18n/index.js';
 
 const layoutDefinitions = {
     'fcose': { 
@@ -37,6 +39,7 @@ const layoutDefinitions = {
 };
 
 const E2ETracePropertyPalette = () => {
+    const { t, i18n } = useTranslation();
     const { layoutConfig, setLayoutConfig } = e2etraceUseLayout();
     const navigate = useNavigate(); 
 
@@ -83,6 +86,25 @@ const E2ETracePropertyPalette = () => {
 
     return (
         <E2ETraceUIPanel className="e2etrace-property-palette-container e2etrace-card-like"> 
+            <h2>{t('settings.title')}</h2>
+
+            <div className="e2etrace-palette-section">
+                <div className="e2etrace-form-group">
+                    <label htmlFor="language-select">{t('settings.language')}:</label>
+                    <select
+                        id="language-select"
+                        value={i18n.language?.split('-')[0] || 'en'}
+                        onChange={(e) => setAppLanguage(e.target.value)}
+                    >
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="de">Deutsch</option>
+                        <option value="zh">中文</option>
+                    </select>
+                </div>
+            </div>
+
             <h2>E2ETrace Graph Layout Settings</h2>
             <div className="e2etrace-palette-section"> 
                 <div className="e2etrace-form-group"> 

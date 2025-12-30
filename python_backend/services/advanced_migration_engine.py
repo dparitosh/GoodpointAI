@@ -5,13 +5,22 @@ Handles database migration orchestration with real-time state management.
 import logging
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 from enum import Enum
 import uuid
 import os
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _utcnow_iso() -> str:
+    return _utcnow().isoformat()
 
 
 def _get_int_env(name: str, default: int) -> int:
@@ -113,8 +122,8 @@ class MigrationSession:
         self.quality_score = 0.0
         self.errors: List[str] = []
         self.metadata: Dict[str, Any] = {}
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.created_at = _utcnow()
+        self.updated_at = _utcnow()
         self.history: List[Dict[str, Any]] = []
         self.task: Optional[asyncio.Task[Any]] = None
 
@@ -161,7 +170,7 @@ class MigrationSession:
     def add_history(self, from_state: str, to_state: str, event: str, context: Optional[Dict] = None):
         """Add transition to history"""
         self.history.append({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
             "from_state": from_state,
             "to_state": to_state,
             "event": event,
@@ -199,7 +208,7 @@ class AdvancedMigrationEngine:
 
         try:
             session_node_id = f"mig:{session.session_id}"
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = _utcnow_iso()
 
             sources = session.sources if isinstance(session.sources, list) else []
             target = session.target if isinstance(session.target, dict) else {}
@@ -315,7 +324,7 @@ class AdvancedMigrationEngine:
 
         Called only while holding self._lock.
         """
-        now = datetime.utcnow()
+        now = _utcnow()
 
         # TTL cleanup for terminal sessions
         ttl_s = max(0.0, float(MIGRATION_SESSION_TTL_S))
@@ -465,7 +474,7 @@ class AdvancedMigrationEngine:
                     "for active migrations; try again later"
                 )
                 session.errors.append(message)
-                session.updated_at = datetime.utcnow()
+                session.updated_at = _utcnow()
                 logger.warning(
                     "Rejecting start for %s due to concurrency limit (%s/%s active)",
                     session_id,
@@ -481,7 +490,7 @@ class AdvancedMigrationEngine:
         # Synchronous state transition so non-async callers still see the new state.
         old_state = session.state
         session.state = MigrationState.INITIALIZING
-        session.updated_at = datetime.utcnow()
+        session.updated_at = _utcnow()
         session.add_history(old_state, session.state, str(MigrationEvent.START))
 
         try:
@@ -570,7 +579,7 @@ class AdvancedMigrationEngine:
         """Transition session to new state"""
         old_state = session.state
         session.state = new_state
-        session.updated_at = datetime.utcnow()
+        session.updated_at = _utcnow()
         session.add_history(old_state, new_state, event)
 
         logger.info("Session %s: %s -> %s", session.session_id, old_state, new_state)
@@ -586,7 +595,7 @@ class AdvancedMigrationEngine:
                 "progress": session.progress,
                 "quality": session.quality_score,
                 "errors": session.errors,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": _utcnow_iso()
             }
             
             # Send to all connected clients for this session
@@ -682,6 +691,26 @@ class AdvancedMigrationEngine:
                 self.active_websockets[session_id].remove(websocket)
             except ValueError:
                 pass
+
+    def remove_session(self, session_id: str, *, cancel: bool = True) -> bool:
+        """Remove a migration session from in-memory storage.
+
+        This is primarily used for best-effort compensation when a workflow
+        start partially fails.
+        """
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+
+        if cancel and getattr(session, "task", None):
+            try:
+                session.task.cancel()
+            except Exception:  # pylint: disable=broad-except
+                pass
+
+        self.sessions.pop(session_id, None)
+        self.active_websockets.pop(session_id, None)
+        return True
 
 
 # Global instance

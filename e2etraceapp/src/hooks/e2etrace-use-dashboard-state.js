@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
 
-export function e2etraceUseDashboardState(setGraphData, _setDashboardMetrics, setTableElements) { // _setDashboardMetrics is ignored as dashboard metrics are now handled by analytics page
+export function useE2ETraceDashboardState(setGraphData, _setDashboardMetrics, setTableElements) { // _setDashboardMetrics is ignored as dashboard metrics are now handled by analytics page
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInputValue, setChatInputValue] = useState('');
     const [isChatSending, setIsChatSending] = useState(false);
@@ -67,3 +67,5 @@ export function e2etraceUseDashboardState(setGraphData, _setDashboardMetrics, se
   
     return { chatMessages, chatInputValue, isChatSending, handleSendChatMessage, onChatInputChange };
 }
+
+  export const e2etraceUseDashboardState = useE2ETraceDashboardState;

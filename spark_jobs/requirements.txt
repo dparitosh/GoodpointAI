@@ -1,0 +1,9 @@
+# Spark job environment only (NOT the FastAPI runtime)
+# Keep PySpark aligned with your Spark distribution.
+pyspark>=3.5.0,<4.0.0
+
+# Cypher execution via Neo4j Bolt driver (openCypher)
+neo4j==5.25.0
+
+# Optional: load env vars from a local .env for local runs
+python-dotenv==1.0.1

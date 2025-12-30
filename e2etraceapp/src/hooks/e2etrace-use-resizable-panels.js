@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export function e2etraceUseResizablePanels(
+export function useE2ETraceResizablePanels(
   leftPanelRef,
   rightPanelRef,
   resizerRef,
@@ -14,6 +14,37 @@ export function e2etraceUseResizablePanels(
     const rightPanel = rightPanelRef.current;
     const mainArea = mainContentAreaRef.current;
     const cy = cyRef.current;
+
+    let isResizing = false;
+    let startX = 0;
+    let initialLeftWidth = 0;
+
+    const onMouseMove = (moveEvent) => {
+      if (!isResizing) return;
+
+      const newLeftWidth = initialLeftWidth + (moveEvent.clientX - startX);
+
+      const minWidth = Math.max(100, mainArea.offsetWidth * 0.1);
+      const maxLeftWidth = mainArea.offsetWidth - minWidth;
+
+      if (newLeftWidth < minWidth || newLeftWidth > maxLeftWidth) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        leftPanel.style.width = `${newLeftWidth}px`;
+        cy.resize();
+      });
+    };
+
+    const onMouseUp = () => {
+      if (!isResizing) return;
+      isResizing = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
 
     const cleanup = () => {
       if (resizer) {
@@ -47,44 +78,14 @@ export function e2etraceUseResizablePanels(
       resizer._has_listeners = true; // Mark as having listeners
     }
 
-    let isResizing = false;
-
     const onMouseDown = (e) => {
       e.preventDefault();
       isResizing = true;
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
 
-      const startX = e.clientX;
-      const initialLeftWidth = leftPanel.offsetWidth;
-
-      const onMouseMove = (moveEvent) => {
-        if (!isResizing) return;
-
-        const newLeftWidth = initialLeftWidth + (moveEvent.clientX - startX);
-
-        // Prevent panels from becoming too small
-        const minWidth = Math.max(100, mainArea.offsetWidth * 0.1); // At least 100px or 10%
-        const maxLeftWidth = mainArea.offsetWidth - minWidth; // Max left width is total - min right
-
-        if (newLeftWidth < minWidth || newLeftWidth > maxLeftWidth) {
-          return; // Stop if trying to go too small
-        }
-
-        // Use requestAnimationFrame to avoid layout thrashing
-        requestAnimationFrame(() => {
-          leftPanel.style.width = `${newLeftWidth}px`; // Update width
-          cy.resize(); // Ensure Cytoscape resizes to the new width
-        });
-      };
-
-      const onMouseUp = () => {
-        isResizing = false;
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-      };
+      startX = e.clientX;
+      initialLeftWidth = leftPanel.offsetWidth;
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
@@ -94,3 +95,5 @@ export function e2etraceUseResizablePanels(
     return cleanup;
   }, [leftPanelRef, rightPanelRef, resizerRef, mainContentAreaRef, cyRef, isActive]); // Dependencies
 }
+
+export const e2etraceUseResizablePanels = useE2ETraceResizablePanels;

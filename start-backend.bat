@@ -47,10 +47,10 @@ set PYTHONPATH=%~dp0python_backend
 REM Start the server
 echo.
 echo ========================================
-echo Starting FastAPI server on port 8000...
-echo API Documentation: http://localhost:8000/docs
+echo Starting FastAPI server on port 8011...
+echo API Documentation: http://localhost:8011/docs
 echo Press Ctrl+C to stop the server
 echo ========================================
 echo.
 
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload

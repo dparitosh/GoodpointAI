@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Request
 import neo4j
 from datetime import datetime
 from core.config import NEO4J_DATABASE
@@ -7,8 +7,20 @@ from .dependencies import get_driver
 router = APIRouter(prefix="/api")
 
 @router.get("/health", summary="Health check endpoint")
-async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now().isoformat(), "service": "Neo4j GraphTrace API"}
+async def health_check(request: Request):
+    db_ok = bool(getattr(request.app.state, "db_ok", False))
+    neo4j_ok = bool(getattr(request.app.state, "neo4j_ok", False))
+    overall = "healthy" if (db_ok and neo4j_ok) else "degraded"
+
+    return {
+        "status": overall,
+        "timestamp": datetime.now().isoformat(),
+        "service": "GoodPoint AgenticAI API",
+        "dependencies": {
+            "postgres": {"ok": db_ok},
+            "neo4j": {"ok": neo4j_ok},
+        },
+    }
 
 @router.get("/entities", summary="Get all node labels and relationship types with properties")
 async def get_entities(

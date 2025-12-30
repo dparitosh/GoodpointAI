@@ -128,7 +128,7 @@ For programmatic access:
 
 ### Create Lineage Node
 ```bash
-POST http://localhost:8000/api/lineage/nodes
+POST http://localhost:8011/api/lineage/nodes
 Content-Type: application/json
 
 {
@@ -142,7 +142,7 @@ Content-Type: application/json
 
 ### Create Lineage Relationship
 ```bash
-POST http://localhost:8000/api/lineage/relationships
+POST http://localhost:8011/api/lineage/relationships
 Content-Type: application/json
 
 {
@@ -156,7 +156,7 @@ Content-Type: application/json
 
 ### Trace Lineage
 ```bash
-POST http://localhost:8000/api/lineage/trace
+POST http://localhost:8011/api/lineage/trace
 Content-Type: application/json
 
 {
@@ -168,7 +168,7 @@ Content-Type: application/json
 
 ### Impact Analysis
 ```bash
-POST http://localhost:8000/api/lineage/impact-analysis
+POST http://localhost:8011/api/lineage/impact-analysis
 Content-Type: application/json
 
 {
@@ -180,7 +180,7 @@ Content-Type: application/json
 
 ### Audit Trail
 ```bash
-POST http://localhost:8000/api/lineage/audit-trail
+POST http://localhost:8011/api/lineage/audit-trail
 Content-Type: application/json
 
 {
@@ -192,7 +192,7 @@ Content-Type: application/json
 
 ### Get Workflow Lineage Graph
 ```bash
-GET http://localhost:8000/api/lineage/workflows/wf_12345/lineage-graph
+GET http://localhost:8011/api/lineage/workflows/wf_12345/lineage-graph
 ```
 
 ## Node Types Reference
@@ -372,7 +372,7 @@ query {
 
 ## Support & Resources
 
-- **API Docs**: http://localhost:8000/docs
+- **API Docs**: http://localhost:8011/docs
 - **Implementation Report**: See `TASK_1_DATA_LINEAGE_IMPLEMENTATION_REPORT.md`
 - **Neo4j Browser**: http://localhost:7474 (if local)
 - **ReactFlow Docs**: https://reactflow.dev

@@ -20,8 +20,8 @@ start "GraphTrace Frontend" cmd /k "%~dp0start-frontend.bat"
 echo.
 echo ========================================
 echo GraphTrace Services Starting...
-echo Backend API: http://localhost:8000
-echo API Docs: http://localhost:8000/docs
+echo Backend API: http://localhost:8011
+echo API Docs: http://localhost:8011/docs
 echo Frontend: http://localhost:5173
 echo.
 echo Close the individual command windows to stop services

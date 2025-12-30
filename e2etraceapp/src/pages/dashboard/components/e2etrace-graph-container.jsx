@@ -318,7 +318,7 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
         </div>
       )}
       
-      <style jsx>{`
+      <style>{`
         @keyframes loading {
           0% { transform: translateX(-70px); }
           100% { transform: translateX(140px); }

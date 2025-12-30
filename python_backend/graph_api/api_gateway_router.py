@@ -4,9 +4,9 @@ Handles Kong, Apigee, and generic API Gateway management
 """
 import logging
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import requests  # type: ignore[import-untyped]
 from requests.auth import HTTPBasicAuth  # type: ignore[import-untyped]
 
@@ -21,15 +21,15 @@ router = APIRouter(prefix="/api/gateway", tags=["API Gateway"])
 class APIRoute(BaseModel):
     name: str
     path: str
-    methods: List[str] = ["GET", "POST", "PUT", "DELETE"]
+    methods: List[str] = Field(default_factory=lambda: ["GET", "POST", "PUT", "DELETE"])
     upstream_url: str
-    plugins: Optional[List[Dict[str, Any]]] = []
+    plugins: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 
 class APIConsumer(BaseModel):
     username: str
     custom_id: Optional[str] = None
-    tags: Optional[List[str]] = []
+    tags: Optional[List[str]] = Field(default_factory=list)
 
 
 class RateLimitConfig(BaseModel):
@@ -68,6 +68,8 @@ async def create_kong_service(name: str, url: str):
             "service": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Kong service: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -78,6 +80,9 @@ async def create_kong_route(route: APIRoute):
     """Create Kong route"""
     try:
         from core.external_config import api_gateway_config
+
+        if not api_gateway_config.kong_admin_url:
+            raise HTTPException(status_code=400, detail="Kong not configured")
         
         # First, ensure service exists
         service_name = route.name + "-service"
@@ -102,6 +107,8 @@ async def create_kong_route(route: APIRoute):
             "route": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Kong route: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -135,6 +142,8 @@ async def list_kong_services(
             "services": services_page,
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error listing Kong services: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -169,6 +178,8 @@ async def add_kong_rate_limiting(service_name: str, config: RateLimitConfig):
             "plugin": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error adding Kong rate limiting: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -199,6 +210,8 @@ async def create_kong_consumer(consumer: APIConsumer):
             "consumer": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Kong consumer: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -238,17 +251,12 @@ async def create_apigee_proxy(name: str, base_path: str, target_url: str):
             headers={"Content-Type": "application/json"},
             timeout=30
         )
-        
+
         if response.status_code == 404:
-            return {
-                "status": "success",
-                "message": "Mock Apigee proxy created - configure Apigee credentials",
-                "proxy": {
-                    "name": name,
-                    "basePath": base_path,
-                    "targetUrl": target_url
-                }
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="Apigee upstream returned 404 (org or endpoint not found)",
+            )
         
         response.raise_for_status()
         
@@ -258,6 +266,8 @@ async def create_apigee_proxy(name: str, base_path: str, target_url: str):
             "proxy": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Apigee proxy: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -275,12 +285,7 @@ async def list_apigee_proxies(
 
         # If Apigee isn't configured, don't attempt any outbound calls.
         if not api_gateway_config.apigee_org or not api_gateway_config.apigee_username or not api_gateway_config.apigee_password:
-            response.headers["X-Total-Count"] = "0"
-            return {
-                "status": "success",
-                "message": "Mock Apigee proxies - configure Apigee",
-                "proxies": [],
-            }
+            raise HTTPException(status_code=400, detail="Apigee not configured")
         
         apigee_url = f"https://api.enterprise.apigee.com/v1/organizations/{api_gateway_config.apigee_org}/apis"
         
@@ -294,12 +299,10 @@ async def list_apigee_proxies(
         )
         
         if apigee_resp.status_code == 404:
-            response.headers["X-Total-Count"] = "0"
-            return {
-                "status": "success",
-                "message": "Mock Apigee proxies - configure Apigee",
-                "proxies": []
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="Apigee upstream returned 404 (org or endpoint not found)",
+            )
         
         apigee_resp.raise_for_status()
 
@@ -316,6 +319,8 @@ async def list_apigee_proxies(
             "proxies": proxies_page,
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error listing Apigee proxies: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -331,6 +336,9 @@ async def create_apigee_product(
     """Create Apigee API product"""
     try:
         from core.external_config import api_gateway_config
+
+        if not api_gateway_config.apigee_org or not api_gateway_config.apigee_username or not api_gateway_config.apigee_password:
+            raise HTTPException(status_code=400, detail="Apigee not configured")
         
         apigee_url = f"https://api.enterprise.apigee.com/v1/organizations/{api_gateway_config.apigee_org}/apiproducts"
         
@@ -353,13 +361,12 @@ async def create_apigee_product(
             headers={"Content-Type": "application/json"},
             timeout=30
         )
-        
+
         if response.status_code == 404:
-            return {
-                "status": "success",
-                "message": "Mock Apigee product created",
-                "product": product_config
-            }
+            raise HTTPException(
+                status_code=502,
+                detail="Apigee upstream returned 404 (org or endpoint not found)",
+            )
         
         response.raise_for_status()
         
@@ -369,6 +376,8 @@ async def create_apigee_product(
             "product": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error creating Apigee product: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -385,20 +394,17 @@ async def register_api_endpoint(route: APIRoute):
         from core.external_config import api_gateway_config
         
         if not api_gateway_config.gateway_url:
-            return {
-                "status": "success",
-                "message": "Mock API registration - configure generic gateway",
-                "route": route.dict()
-            }
+            raise HTTPException(status_code=400, detail="Generic gateway not configured")
         
+        headers = {"Content-Type": "application/json"}
+        if api_gateway_config.gateway_api_key:
+            headers["Authorization"] = f"Bearer {api_gateway_config.gateway_api_key}"
+
         # Generic gateway registration
         response = requests.post(
             f"{api_gateway_config.gateway_url}/api/routes",
-            json=route.dict(),
-            headers={
-                "Authorization": f"Bearer {api_gateway_config.gateway_api_key}",
-                "Content-Type": "application/json"
-            },
+            json=route.model_dump(),
+            headers=headers,
             timeout=30
         )
         response.raise_for_status()
@@ -409,6 +415,8 @@ async def register_api_endpoint(route: APIRoute):
             "route": response.json()
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error registering API endpoint: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -419,50 +427,18 @@ async def register_api_endpoint(route: APIRoute):
 # ============================================================================
 
 @router.get("/analytics/traffic")
-async def get_api_traffic_analytics(gateway: str = "kong", timeframe: str = "1h"):
+async def get_api_traffic_analytics(
+    gateway: str = Query("kong", description="API gateway type"),
+    timeframe: str = Query("1h", description="Analytics timeframe"),
+):
     """Get API traffic analytics from gateway"""
-    try:
-        # Mock analytics data
-        analytics = {
-            "gateway": gateway,
-            "timeframe": timeframe,
-            "total_requests": 15420,
-            "successful_requests": 14892,
-            "failed_requests": 528,
-            "avg_response_time_ms": 145,
-            "top_endpoints": [
-                {
-                    "path": "/api/workflows/",
-                    "requests": 3450,
-                    "avg_response_time_ms": 120
-                },
-                {
-                    "path": "/api/llm/chat",
-                    "requests": 2890,
-                    "avg_response_time_ms": 350
-                },
-                {
-                    "path": "/api/azure/blob/list",
-                    "requests": 1820,
-                    "avg_response_time_ms": 85
-                }
-            ],
-            "errors_by_code": {
-                "400": 145,
-                "404": 89,
-                "500": 294
-            }
-        }
-        
-        return {
-            "status": "success",
-            "analytics": analytics,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error("Error getting analytics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Gateway traffic analytics is not implemented (requires gateway metrics integration); "
+            f"requested gateway={gateway}, timeframe={timeframe}."
+        ),
+    )
 
 
 # ============================================================================
@@ -489,7 +465,7 @@ async def gateway_health_check():
                 "configured": api_gateway_config.gateway_url != ""
             }
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
     return health

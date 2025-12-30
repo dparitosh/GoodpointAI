@@ -14,8 +14,8 @@ def graphql_service():
 
 
 @pytest.fixture
-def sample_json():
-    """Sample JSON data for testing."""
+def test_json():
+    """Example JSON data for testing."""
     return '''
     {
         "user": {
@@ -32,8 +32,8 @@ def sample_json():
 
 
 @pytest.fixture
-def sample_xml():
-    """Sample XML data for testing."""
+def test_xml():
+    """Example XML data for testing."""
     return '''
     <user>
         <id>123</id>
@@ -50,10 +50,10 @@ def sample_xml():
 class TestSchemaIntrospection:
     """Tests for schema introspection functionality."""
     
-    def test_introspect_json_schema(self, graphql_service, sample_json):
+    def test_introspect_json_schema(self, graphql_service, test_json):
         """Test JSON schema introspection."""
         result = graphql_service.introspect_schema(
-            content=sample_json,
+            content=test_json,
             format="json",
             name="test_schema"
         )
@@ -66,10 +66,10 @@ class TestSchemaIntrospection:
         assert "user.id" in result["fields"]
         assert "user.name" in result["fields"]
     
-    def test_introspect_xml_schema(self, graphql_service, sample_xml):
+    def test_introspect_xml_schema(self, graphql_service, test_xml):
         """Test XML schema introspection."""
         result = graphql_service.introspect_schema(
-            content=sample_xml,
+            content=test_xml,
             format="xml",
             name="xml_schema"
         )
@@ -79,13 +79,13 @@ class TestSchemaIntrospection:
         assert "schema_hash" in result
         assert "fields" in result
     
-    def test_invalid_format_raises_error(self, graphql_service, sample_json):
+    def test_invalid_format_raises_error(self, graphql_service, test_json):
         """Test that invalid format raises ValueError."""
         with pytest.raises(ValueError, match="Invalid format"):
             graphql_service.introspect_schema(
-                content=sample_json,
+                content=test_json,
                 format="yaml",
-                name="test"
+                name="test",
             )
     
     def test_invalid_json_raises_error(self, graphql_service):

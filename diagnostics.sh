@@ -230,12 +230,12 @@ echo ""
 
 # Check if ports are available
 if command -v lsof &> /dev/null; then
-    # Backend port 8000
-    if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        PID=$(lsof -Pi :8000 -sTCP:LISTEN -t)
-        print_status "WARN" "Port 8000 already in use by PID $PID"
+    # Backend port 8011
+    if lsof -Pi :8011 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        PID=$(lsof -Pi :8011 -sTCP:LISTEN -t)
+        print_status "WARN" "Port 8011 already in use by PID $PID"
     else
-        print_status "PASS" "Port 8000 available for backend"
+        print_status "PASS" "Port 8011 available for backend"
     fi
     
     # Frontend port 5173

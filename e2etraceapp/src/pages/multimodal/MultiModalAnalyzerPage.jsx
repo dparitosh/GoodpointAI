@@ -135,161 +135,182 @@ const MultiModalAnalyzerPage = () => {
   return (
     <div className="multimodal-page">
       <div className="multimodal-header">
-        <h1>↯ Multi-Modal Data Analyzer</h1>
-        <p>Extract text, metadata, and insights from PDFs, images, CAD files, Excel, and Word documents using vision AI</p>
+        <div className="multimodal-header__grid">
+          <div className="multimodal-header__text">
+            <h1>↯ Multi-Modal Data Analyzer</h1>
+            <p className="multimodal-header__subtitle">
+              Use vision AI to extract text, metadata, and insights from documents and drawings.
+            </p>
+
+            <ul className="multimodal-header__bullets" aria-label="Key capabilities">
+              <li><strong>Text</strong>: OCR + structured extraction</li>
+              <li><strong>Metadata</strong>: file properties and attributes</li>
+              <li><strong>Insights</strong>: summaries and key signals</li>
+            </ul>
+
+            <div className="multimodal-header__chips" aria-label="Supported inputs">
+              <span className="mm-chip">PDF</span>
+              <span className="mm-chip">Images</span>
+              <span className="mm-chip">CAD</span>
+              <span className="mm-chip">Excel</span>
+              <span className="mm-chip">Word</span>
+            </div>
+
+            {supportedFormats ? (
+              <div className="multimodal-header__formats" aria-label="Supported file formats">
+                <span className="multimodal-header__formats-label">Supported formats:</span>
+                <span className="multimodal-header__formats-value">
+                  {Object.entries(supportedFormats)
+                    .map(([category, extensions]) => `${category}: ${extensions.join(', ')}`)
+                    .join(' • ')}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className="multimodal-container">
         {/* Left Panel: Configuration & Upload */}
         <div className="multimodal-left-panel">
-          {/* Vision Model Selection */}
-          <div className="config-section">
-            <h3>⚙ Configuration</h3>
-            
-            <div className="config-group">
-              <label>Vision Model:</label>
-              <select 
-                value={visionModel} 
-                onChange={(e) => setVisionModel(e.target.value)}
-                disabled={analyzing}
-              >
-                <option value="llava:latest">LLaVA (Latest)</option>
-                <option value="llava:13b">LLaVA 13B</option>
-                <option value="llava:7b">LLaVA 7B</option>
-                <option value="bakllava:latest">BakLLaVA</option>
-              </select>
-            </div>
-
-            <div className="config-group">
-              <label>Extraction Method:</label>
-              <div className="radio-group">
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="extraction"
-                    value="vision_llm"
-                    checked={extractionMethod === 'vision_llm'}
-                    onChange={(e) => setExtractionMethod(e.target.value)}
-                    disabled={analyzing}
-                  />
-                  Vision LLM
-                </label>
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="extraction"
-                    value="ocr"
-                    checked={extractionMethod === 'ocr'}
-                    onChange={(e) => setExtractionMethod(e.target.value)}
-                    disabled={analyzing}
-                  />
-                  OCR Only
-                </label>
-                <label className="radio-label">
-                  <input
-                    type="radio"
-                    name="extraction"
-                    value="hybrid"
-                    checked={extractionMethod === 'hybrid'}
-                    onChange={(e) => setExtractionMethod(e.target.value)}
-                    disabled={analyzing}
-                  />
-                  Hybrid
-                </label>
-              </div>
-            </div>
-
-            <div className="config-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={ocrEnabled}
-                  onChange={(e) => setOcrEnabled(e.target.checked)}
+          <div className="multimodal-left-row">
+            {/* Vision Model Selection */}
+            <div className="config-section">
+              <h3>⚙ Configuration</h3>
+              
+              <div className="config-group">
+                <label>Vision Model:</label>
+                <select 
+                  value={visionModel} 
+                  onChange={(e) => setVisionModel(e.target.value)}
                   disabled={analyzing}
-                />
-                Enable OCR Fallback
-              </label>
-            </div>
+                >
+                  <option value="llava:latest">LLaVA (Latest)</option>
+                  <option value="llava:13b">LLaVA 13B</option>
+                  <option value="llava:7b">LLaVA 7B</option>
+                  <option value="bakllava:latest">BakLLaVA</option>
+                </select>
+              </div>
 
-            <div className="config-group">
-              <label>Temperature: {temperature}</label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={temperature}
-                onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                disabled={analyzing}
-                className="temperature-slider"
-              />
-              <small>Lower = more factual, Higher = more creative</small>
-            </div>
-          </div>
-
-          {/* File Upload Area */}
-          <div className="upload-section">
-            <h3>Upload File</h3>
-            
-            <div
-              className={`drop-zone ${dragActive ? 'active' : ''} ${file ? 'has-file' : ''}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => !file && fileInputRef.current?.click()}
-            >
-              {!file ? (
-                <>
-                  <div className="drop-icon">⬆</div>
-                  <p>Drag & drop file here or click to browse</p>
-                  <small>Supported: PDF, Images, Excel, Word, CAD</small>
-                </>
-              ) : (
-                <div className="file-info">
-                  <div className="file-icon-large">{getFileIcon(file.name)}</div>
-                  <div className="file-details">
-                    <div className="file-name">{file.name}</div>
-                    <div className="file-size">{formatFileSize(file.size)}</div>
-                  </div>
-                  <button className="clear-btn" onClick={(e) => { e.stopPropagation(); clearFile(); }}>
-                    ✗
-                  </button>
+              <div className="config-group">
+                <label>Extraction Method:</label>
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="extraction"
+                      value="vision_llm"
+                      checked={extractionMethod === 'vision_llm'}
+                      onChange={(e) => setExtractionMethod(e.target.value)}
+                      disabled={analyzing}
+                    />
+                    Vision LLM
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="extraction"
+                      value="ocr"
+                      checked={extractionMethod === 'ocr'}
+                      onChange={(e) => setExtractionMethod(e.target.value)}
+                      disabled={analyzing}
+                    />
+                    OCR Only
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="extraction"
+                      value="hybrid"
+                      checked={extractionMethod === 'hybrid'}
+                      onChange={(e) => setExtractionMethod(e.target.value)}
+                      disabled={analyzing}
+                    />
+                    Hybrid
+                  </label>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileInputChange}
-              style={{ display: 'none' }}
-              accept=".pdf,.png,.jpg,.jpeg,.bmp,.webp,.tiff,.xls,.xlsx,.csv,.xlsm,.doc,.docx,.dwg,.dxf,.step,.igs,.iges,.stp"
-            />
+              <div className="config-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={ocrEnabled}
+                    onChange={(e) => setOcrEnabled(e.target.checked)}
+                    disabled={analyzing}
+                  />
+                  Enable OCR Fallback
+                </label>
+              </div>
 
-            <button
-              className="analyze-btn"
-              onClick={analyzeFile}
-              disabled={!file || analyzing}
-            >
-              {analyzing ? '⟲ Analyzing...' : '▶ Analyze File'}
-            </button>
-          </div>
-
-          {/* Supported Formats */}
-          {supportedFormats && (
-            <div className="formats-section">
-              <h4>Supported Formats:</h4>
-              <div className="formats-grid">
-                {Object.entries(supportedFormats).map(([category, extensions]) => (
-                  <div key={category} className="format-category">
-                    <strong>{category}:</strong>
-                    <span>{extensions.join(', ')}</span>
-                  </div>
-                ))}
+              <div className="config-group">
+                <label>Temperature: {temperature}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={temperature}
+                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  disabled={analyzing}
+                  className="temperature-slider"
+                />
+                <small>Lower = more factual, Higher = more creative</small>
               </div>
             </div>
-          )}
+
+            {/* File Upload Area */}
+            <div className="upload-section">
+              <h3>Upload File</h3>
+              
+              <div
+                className={`drop-zone ${dragActive ? 'active' : ''} ${file ? 'has-file' : ''}`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => !file && fileInputRef.current?.click()}
+              >
+                {!file ? (
+                  <div className="drop-zone-empty">
+                    <div className="drop-icon" aria-hidden="true">⬆</div>
+                    <div className="drop-zone-empty-text">
+                      <div className="drop-zone-empty-title">Drag & drop file here or click to browse</div>
+                      <div className="drop-zone-empty-subtitle">Supported: PDF, Images, Excel, Word, CAD</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="file-info">
+                    <div className="file-icon-large">{getFileIcon(file.name)}</div>
+                    <div className="file-details">
+                      <div className="file-name">{file.name}</div>
+                      <div className="file-size">{formatFileSize(file.size)}</div>
+                    </div>
+                    <button className="clear-btn" onClick={(e) => { e.stopPropagation(); clearFile(); }}>
+                      ✗
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileInputChange}
+                style={{ display: 'none' }}
+                accept=".pdf,.png,.jpg,.jpeg,.bmp,.webp,.tiff,.xls,.xlsx,.csv,.xlsm,.doc,.docx,.dwg,.dxf,.step,.igs,.iges,.stp"
+              />
+
+              <button
+                className="analyze-btn"
+                onClick={analyzeFile}
+                disabled={!file || analyzing}
+              >
+                {analyzing ? '⟲ Analyzing...' : '▶ Analyze File'}
+              </button>
+            </div>
+          </div>
+
         </div>
 
         {/* Right Panel: Results */}

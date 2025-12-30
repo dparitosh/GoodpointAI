@@ -278,7 +278,7 @@ dist/assets/index-BrXBRAxY.css: 99.34 kB (gzip: 16.96 kB)
 
 ### Service Status: ✓ **RUNNING**
 - **Frontend**: http://localhost:5174
-- **Backend**: http://localhost:8000
+- **Backend**: http://localhost:8011
 - **Hot Module Replacement**: Active
 
 ---

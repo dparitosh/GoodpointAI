@@ -4,18 +4,41 @@ Handles S3, DynamoDB, SQS, Lambda, API Gateway
 """
 import logging
 from typing import Dict, Optional, Any, cast
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Response, UploadFile, File
 from pydantic import BaseModel, Field
 import importlib
 import json
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/aws", tags=["AWS Integration"])
 
 
 def _import_boto3() -> Any:
-    return cast(Any, importlib.import_module("boto3"))
+    try:
+        return cast(Any, importlib.import_module("boto3"))
+    except ModuleNotFoundError as e:
+        raise HTTPException(status_code=503, detail="boto3 is not installed") from e
+
+
+def _aws_credentials_present() -> bool:
+    if (os.getenv("AWS_ACCESS_KEY_ID") or "").strip() and (os.getenv("AWS_SECRET_ACCESS_KEY") or "").strip():
+        return True
+    if (os.getenv("AWS_PROFILE") or "").strip():
+        return True
+    if (os.getenv("AWS_WEB_IDENTITY_TOKEN_FILE") or "").strip():
+        return True
+    if (os.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI") or "").strip():
+        return True
+    if (os.getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI") or "").strip():
+        return True
+    return False
+
+
+def _require_aws_configured() -> None:
+    if not _aws_credentials_present():
+        raise HTTPException(status_code=503, detail="AWS credentials are not configured")
 
 
 # ============================================================================
@@ -51,6 +74,15 @@ class LambdaInvokeRequest(BaseModel):
     invocation_type: str = Field(default="RequestResponse", description="RequestResponse, Event, DryRun")
 
 
+class AWSConnectRequest(BaseModel):
+    region: Optional[str] = None
+
+
+class S3DownloadRequest(BaseModel):
+    bucket_name: str
+    key: str
+
+
 # ============================================================================
 # AWS S3 ENDPOINTS
 # ============================================================================
@@ -64,6 +96,7 @@ async def upload_to_s3(
     """Upload file to S3"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         s3_client = boto3.client(
@@ -101,6 +134,41 @@ async def upload_to_s3(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/s3/download")
+async def download_from_s3_post(request: S3DownloadRequest):
+    """Return a pre-signed S3 download URL (matches frontend state machine)."""
+    try:
+        from core.external_config import aws_config
+        _require_aws_configured()
+        boto3 = _import_boto3()
+
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=aws_config.access_key_id or None,
+            aws_secret_access_key=aws_config.secret_access_key or None,
+            region_name=aws_config.region,
+        )
+
+        url = s3_client.generate_presigned_url(
+            ClientMethod="get_object",
+            Params={"Bucket": request.bucket_name, "Key": request.key},
+            ExpiresIn=300,
+        )
+
+        return {
+            "status": "success",
+            "bucket": request.bucket_name,
+            "key": request.key,
+            "download_url": url,
+            "expires_in_s": 300,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error generating S3 download URL: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/s3/list/{bucket_name}")
 async def list_s3_objects(
     bucket_name: str,
@@ -112,6 +180,7 @@ async def list_s3_objects(
     """List objects in S3 bucket"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         s3_client = boto3.client(
@@ -159,6 +228,7 @@ async def download_from_s3(bucket_name: str, key: str):
     """Download file from S3"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         from fastapi.responses import StreamingResponse
         import io
@@ -191,6 +261,7 @@ async def delete_from_s3(bucket_name: str, key: str):
     """Delete object from S3"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         s3_client = boto3.client(
@@ -223,6 +294,7 @@ async def put_dynamodb_item(request: DynamoDBPutRequest):
     """Put item into DynamoDB table"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
@@ -253,6 +325,7 @@ async def query_dynamodb(request: DynamoDBQueryRequest):
     """Query DynamoDB table"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
@@ -286,6 +359,7 @@ async def scan_dynamodb_table(table_name: str, limit: int = 100):
     """Scan DynamoDB table"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         dynamodb = boto3.resource(
@@ -320,6 +394,7 @@ async def send_sqs_message(request: SQSMessageRequest):
     """Send message to SQS queue"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         sqs = boto3.client(
@@ -352,6 +427,7 @@ async def receive_sqs_messages(queue_url: str, max_messages: int = 10):
     """Receive messages from SQS queue"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         sqs = boto3.client(
@@ -390,6 +466,7 @@ async def invoke_lambda(request: LambdaInvokeRequest):
     """Invoke AWS Lambda function"""
     try:
         from core.external_config import aws_config
+        _require_aws_configured()
         boto3 = _import_boto3()
         
         lambda_client = boto3.client(
@@ -422,6 +499,45 @@ async def invoke_lambda(request: LambdaInvokeRequest):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/connect")
+async def connect_aws(request: AWSConnectRequest):
+    """Validate AWS credentials via STS (matches frontend state machine)."""
+    try:
+        from core.external_config import aws_config
+        _require_aws_configured()
+        boto3 = _import_boto3()
+
+        region = (request.region or aws_config.region or "us-east-1").strip() or "us-east-1"
+        sts = boto3.client(
+            "sts",
+            aws_access_key_id=aws_config.access_key_id or None,
+            aws_secret_access_key=aws_config.secret_access_key or None,
+            region_name=region,
+        )
+        identity = sts.get_caller_identity()
+
+        return {
+            "status": "success",
+            "region": region,
+            "identity": {
+                "account": identity.get("Account"),
+                "arn": identity.get("Arn"),
+                "user_id": identity.get("UserId"),
+            },
+            "services": {
+                "s3": True,
+                "dynamodb": True,
+                "sqs": True,
+                "lambda": True,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("AWS connect validation failed: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to validate AWS credentials") from e
+
+
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
@@ -430,17 +546,21 @@ async def invoke_lambda(request: LambdaInvokeRequest):
 async def aws_health_check():
     """Check AWS service connectivity"""
     from core.external_config import aws_config
-    
-    health = {
-        "status": "healthy",
-        "services": {
-            "s3": aws_config.s3_bucket_name != "",
-            "dynamodb": aws_config.dynamodb_table_name != "",
-            "sqs": aws_config.sqs_queue_url != "",
-            "lambda": aws_config.lambda_function_arn != ""
-        },
-        "region": aws_config.region,
-        "timestamp": datetime.utcnow().isoformat()
+
+    creds = _aws_credentials_present()
+    fields_set = getattr(aws_config, "model_fields_set", set())
+    services = {
+        "s3": bool(creds and ("s3_bucket_name" in fields_set)),
+        "dynamodb": bool(creds and ("dynamodb_table_name" in fields_set)),
+        "sqs": bool(creds and bool(aws_config.sqs_queue_url)),
+        "lambda": bool(creds and bool(aws_config.lambda_function_arn)),
     }
-    
-    return health
+    status = "healthy" if any(services.values()) else ("unconfigured" if not creds else "degraded")
+
+    return {
+        "status": status,
+        "credentials_present": creds,
+        "services": services,
+        "region": aws_config.region,
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+    }

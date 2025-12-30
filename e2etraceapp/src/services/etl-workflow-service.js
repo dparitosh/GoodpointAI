@@ -17,268 +17,58 @@ class ETLWorkflowService {
       failedRuns: 0,
       avgDuration: 0,
       throughput: 0
-    };
-    
-    this.initializeDefaultWorkflows();
-  }
+    /**
+     * ETL Workflow Service
+     * Thin wrapper around the backend Workflow Instance Manager APIs.
+     * No local demo templates, no fabricated metrics.
+     */
 
-  initializeDefaultWorkflows() {
-    // Data Import Workflow
-    this.createWorkflowTemplate('data_import', {
-      name: 'Data Import Workflow',
-      description: 'Import data from various sources into the system',
-      steps: [
-        { type: 'extract', stage: 'extraction' },
-        { type: 'validate', stage: 'validation', validator: 'schema' },
-        { type: 'transform', stage: 'transformation', transformer: 'cleanse' },
-        { type: 'load', stage: 'loading', loader: 'neo4j' }
-      ],
-      defaultConfig: {
-        extraction: { source: 'auto' }, // Will be determined based on input
-        validation: { strict: true },
-        transformation: { skipErrors: false },
-        loading: { batchSize: 1000 }
-      }
-    });
+    import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
+    import { API_CONFIG } from '../config/api-config.js';
 
-    // Data Migration Workflow
-    this.createWorkflowTemplate('data_migration', {
-      name: 'Data Migration Workflow',
-      description: 'Migrate data between systems with mapping',
-      steps: [
-        { type: 'extract', stage: 'extraction' },
-        { type: 'validate', stage: 'source_validation', validator: 'quality' },
-        { type: 'transform', stage: 'mapping', transformer: 'mapping' },
-        { type: 'validate', stage: 'target_validation', validator: 'business' },
-        { type: 'load', stage: 'loading' }
-      ],
-      defaultConfig: {
-        mapping: { required: true },
-        validation: { businessRules: true }
-      }
-    });
-
-    // Data Quality Workflow
-    this.createWorkflowTemplate('data_quality', {
-      name: 'Data Quality Assessment',
-      description: 'Assess and improve data quality',
-      steps: [
-        { type: 'extract', stage: 'extraction' },
-        { type: 'validate', stage: 'quality_check', validator: 'quality' },
-        { type: 'transform', stage: 'cleansing', transformer: 'cleanse' },
-        { type: 'validate', stage: 'final_validation', validator: 'integrity' },
-        { type: 'load', stage: 'loading' }
-      ],
-      defaultConfig: {
-        quality: { threshold: 0.95 },
-        cleansing: { aggressive: false }
-      }
-    });
-
-    // Spreadsheet Processing Workflow
-    this.createWorkflowTemplate('spreadsheet_processing', {
-      name: 'Spreadsheet Data Processing',
-      description: 'Process spreadsheet data with validation and conversion',
-      steps: [
-        { type: 'extract', stage: 'file_import', config: { source: 'file' } },
-        { type: 'validate', stage: 'format_validation', validator: 'schema' },
-        { type: 'transform', stage: 'data_conversion', transformer: 'normalize' },
-        { type: 'validate', stage: 'data_validation', validator: 'business' },
-        { type: 'load', stage: 'data_export' }
-      ],
-      defaultConfig: {
-        file_import: { source: 'file' },
-        conversion: { autoDetectTypes: true },
-        export: { format: 'multiple' }
-      }
-    });
-  }
-
-  // ============= WORKFLOW MANAGEMENT =============
-
-  createWorkflowTemplate(id, template) {
-    this.templates.set(id, {
-      ...template,
-      id,
-      created: new Date().toISOString(),
-      version: '1.0'
-    });
-  }
-
-  getWorkflowTemplate(id) {
-    return this.templates.get(id);
-  }
-
-  listWorkflowTemplates() {
-    return Array.from(this.templates.values());
-  }
-
-  async createWorkflow(templateId, config = {}) {
-    const template = this.getWorkflowTemplate(templateId);
-    if (!template) {
-      throw new Error(`Workflow template not found: ${templateId}`);
-    }
-
-    const workflow = {
-      id: `workflow_${Date.now()}`,
-      templateId,
-      name: config.name || template.name,
-      description: config.description || template.description,
-      status: 'created',
-      config: { ...template.defaultConfig, ...config },
-      steps: template.steps.map(step => ({
-        ...step,
-        id: `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        status: 'pending'
-      })),
-      created: new Date().toISOString(),
-      metrics: {
-        recordsProcessed: 0,
-        errors: [],
-        warnings: [],
-        duration: 0,
-        stages: {}
-      }
-    };
-
-    this.workflows.set(workflow.id, workflow);
-    return workflow;
-  }
-
-  async executeWorkflow(workflowId, inputData, options = {}) {
-    const workflow = this.workflows.get(workflowId);
-    if (!workflow) {
-      throw new Error(`Workflow not found: ${workflowId}`);
-    }
-
-    workflow.status = 'running';
-    workflow.startTime = Date.now();
-    
-    try {
-      let currentData = inputData;
-      const stageResults = [];
-
-      // Execute each workflow step
-      for (const step of workflow.steps) {
-        step.status = 'running';
-        const stepStartTime = Date.now();
-
-        try {
-          const stepResult = await this.executeWorkflowStep(step, currentData, workflow.config, options);
-          
-          step.status = 'completed';
-          step.duration = Date.now() - stepStartTime;
-          step.recordsProcessed = stepResult.recordsProcessed || 0;
-          
-          // Update workflow metrics
-          workflow.metrics.recordsProcessed += stepResult.recordsProcessed || 0;
-          workflow.metrics.stages[step.stage] = {
-            duration: step.duration,
-            recordsProcessed: step.recordsProcessed,
-            status: 'success'
-          };
-
-          if (stepResult.errors?.length > 0) {
-            workflow.metrics.errors.push(...stepResult.errors);
-          }
-          if (stepResult.warnings?.length > 0) {
-            workflow.metrics.warnings.push(...stepResult.warnings);
-          }
-
-          // Update data for next step
-          if (stepResult.data !== undefined) {
-            currentData = stepResult.data;
-          }
-
-          stageResults.push(stepResult);
-
-        } catch (stepError) {
-          step.status = 'failed';
-          step.error = stepError.message;
-          workflow.metrics.stages[step.stage] = {
-            duration: Date.now() - stepStartTime,
-            status: 'failed',
-            error: stepError.message
-          };
-          throw stepError;
-        }
+    class ETLWorkflowService {
+      async listWorkflows() {
+        const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOWS, { method: 'GET' });
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
       }
 
-      workflow.status = 'completed';
-      workflow.endTime = Date.now();
-      workflow.metrics.duration = workflow.endTime - workflow.startTime;
-      workflow.metrics.throughput = workflow.metrics.recordsProcessed / (workflow.metrics.duration / 1000);
-
-      // Update global metrics
-      this.metrics.totalWorkflows++;
-      this.metrics.successfulRuns++;
-      this.updateAverageMetrics();
-
-      return {
-        workflowId,
-        status: 'success',
-        data: currentData,
-        stages: stageResults,
-        metrics: workflow.metrics
-      };
-
-    } catch (error) {
-      workflow.status = 'failed';
-      workflow.endTime = Date.now();
-      workflow.metrics.duration = workflow.endTime - workflow.startTime;
-      workflow.error = error.message;
-
-      // Update global metrics
-      this.metrics.totalWorkflows++;
-      this.metrics.failedRuns++;
-      this.updateAverageMetrics();
-
-      throw new Error(`Workflow execution failed: ${error.message}`);
-    }
-  }
-
-  async executeWorkflowStep(step, data, workflowConfig, options) {
-    const stepConfig = { ...workflowConfig[step.stage], ...step.config };
-
-    switch (step.type) {
-      case 'extract':
-        return await this.executeExtractionStep(step, stepConfig, options);
-      
-      case 'transform':
-        return await this.executeTransformationStep(step, data, stepConfig, options);
-      
-      case 'load':
-        return await this.executeLoadingStep(step, data, stepConfig, options);
-      
-      case 'validate':
-        return await this.executeValidationStep(step, data, stepConfig, options);
-      
-      default:
-        throw new Error(`Unknown workflow step type: ${step.type}`);
-    }
-  }
-
-  // ============= STAGE-SPECIFIC IMPLEMENTATIONS =============
-
-  async executeExtractionStep(step, config, options) {
-    // Determine extractor type - prioritize file if file is provided
-    let extractorType;
-    if (options.file) {
-      extractorType = 'file';
-    } else if (config.source === 'auto') {
-      // Auto-detect based on available options
-      if (options.file) {
-        extractorType = 'file';
-      } else if (config.query || options.query) {
-        extractorType = 'neo4j';
-      } else {
-        extractorType = 'neo4j'; // Default
+      async listWorkflowTemplates() {
+        const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOW_TEMPLATES, { method: 'GET' });
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
       }
-    } else if (config.source) {
-      extractorType = config.source;
+
+      async instantiateWorkflowFromTemplate(templateId, { sourceId, targetId, name } = {}) {
+        if (!templateId) throw new Error('templateId is required');
+        if (!sourceId) throw new Error('sourceId is required');
+        if (!targetId) throw new Error('targetId is required');
+
+        const url = `${API_CONFIG.ENDPOINTS.WORKFLOW_INSTANTIATE(templateId)}?source_id=${encodeURIComponent(
+          sourceId
+        )}&target_id=${encodeURIComponent(targetId)}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
+
+        const response = await e2etraceFetchWithRetry(url, { method: 'POST' });
+        return await response.json();
+      }
+
+      async executeWorkflow(workflowId, { action = 'start', executionParams = {} } = {}) {
+        if (!workflowId) throw new Error('workflowId is required');
+        const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOW_EXECUTE(workflowId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, execution_params: executionParams }),
+        });
+        return await response.json();
+      }
+
+      async deleteWorkflow(workflowId) {
+        if (!workflowId) throw new Error('workflowId is required');
+        await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOW_DELETE(workflowId), { method: 'DELETE' });
+      }
     } else if (options.source) {
-      extractorType = options.source;
-    } else {
+
+    export const etlWorkflowService = new ETLWorkflowService();
       extractorType = 'neo4j'; // Default fallback
     }
     
@@ -471,7 +261,7 @@ class ETLWorkflowService {
       case 'json': return 'json';
       case 'xml': return 'xml';
       case 'xlsx':
-      case 'xls': return 'csv'; // Excel files will be processed as CSV using XLSX
+      case 'xls': return 'csv'; // Excel files will be processed as CSV using xlsx-based reader
       default: return 'json';
     }
   }

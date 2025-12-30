@@ -37,7 +37,7 @@ if not exist ".env" (
     (
         echo # Frontend Environment Variables
         echo # The VITE_ prefix is required for Vite to expose these to the client
-        echo VITE_API_BASE_URL=http://localhost:8000
+        echo VITE_API_BASE_URL=http://localhost:8011
         echo VITE_NEO4J_URI=bolt://localhost:7687
         echo VITE_NEO4J_USER=neo4j
     ) > .env

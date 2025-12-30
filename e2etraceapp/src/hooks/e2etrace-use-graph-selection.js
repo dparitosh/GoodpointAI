@@ -8,7 +8,7 @@ import { e2etraceCreateTableElementsFromGraph } from '../utils/e2etrace-graph';
  * @param {object} graphData - The full graph data (nodes and edges).
  * @param {Function} setTableElements - State setter function for the table elements.
  */
-export const e2etraceUseGraphSelection = (cyRef, graphData, setTableElements) => {
+export const useE2ETraceGraphSelection = (cyRef, graphData, setTableElements) => {
     useEffect(() => {
         const cy = cyRef.current;
         if (!cy) return;
@@ -43,3 +43,5 @@ export const e2etraceUseGraphSelection = (cyRef, graphData, setTableElements) =>
         };
     }, [cyRef, graphData, setTableElements]);
 };
+
+export const e2etraceUseGraphSelection = useE2ETraceGraphSelection;

@@ -415,13 +415,13 @@ GET /api/gateway/analytics/traffic
 
 3. **Test Health Endpoints**
    ```bash
-   curl http://localhost:8000/api/azure/health
-   curl http://localhost:8000/api/aws/health
-   curl http://localhost:8000/api/llm/health
+   curl http://localhost:8011/api/azure/health
+   curl http://localhost:8011/api/aws/health
+   curl http://localhost:8011/api/llm/health
    ```
 
 4. **Verify API Docs**
-   - Visit `http://localhost:8000/docs`
+   - Visit `http://localhost:8011/docs`
    - Test interactive endpoints
 
 ### Short-term Enhancements

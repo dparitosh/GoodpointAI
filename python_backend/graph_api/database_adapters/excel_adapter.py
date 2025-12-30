@@ -184,10 +184,6 @@ class ExcelAdapter(DatabaseAdapter):
                     "unique_count": int(df[col].nunique())
                 }
                 
-                # Add sample values for better understanding
-                if not df[col].empty:
-                    col_info["sample_values"] = df[col].dropna().head(3).tolist()
-                
                 columns.append(col_info)
             
             return {

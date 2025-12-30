@@ -6,11 +6,11 @@
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import connectionService from '../../services/connectionService';
-import graphIntegrationService from '../../services/GraphIntegrationService';
 import goodPointLogo from '../../assets/goodpoint-logo.svg';
 import { E2ETraceCytoscapeGraph } from '../dashboard/e2etrace-cytoscape-graph';
 import { cytoscapeStylesheet } from '../dashboard/e2etrace-cytoscape-stylesheet';
 import { e2etraceTransformDataForCytoscape } from '../../utils/e2etrace-graph';
+import { getRuntimeConfig } from '../../config/runtime-config';
 import './GraphExplorerPage.css';
 
 const GraphExplorerPage = () => {
@@ -33,27 +33,25 @@ const GraphExplorerPage = () => {
     connected: false,
     status: 'disconnected',
     config: {
-      uri: 'bolt://localhost:7687',
-      user: 'neo4j',
+      uri: '',
+      user: '',
       password: '',
-      database: 'neo4j',
+      database: '',
       auto_connect: false
     }
-  });
-  
-  const [queryPanel, setQueryPanel] = useState({
-    query: '',
-    results: null,
-    executing: false,
-    error: null
   });
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const [selectedElement, setSelectedElement] = useState(null);
+  const selectedElementRef = useRef(null);
 
   const cyRef = useRef(null);
+
+  useEffect(() => {
+    selectedElementRef.current = selectedElement;
+  }, [selectedElement]);
 
   const cyElements = useMemo(() => {
     if (!connection.connected || graphData.nodes.length === 0) return [];
@@ -70,12 +68,21 @@ const GraphExplorerPage = () => {
 
   const cyLayout = useMemo(
     () => ({
-      name: 'fcose',
+      name: 'cose-bilkent',
       animate: true,
       randomize: true,
       fit: true,
       padding: 30,
       nodeDimensionsIncludeLabels: true,
+
+      // COSE-Bilkent tuning (kept close to the referenced example)
+      packComponents: true,
+      nestingFactor: 0.9,
+      nodeRepulsion: 4500,
+      idealEdgeLength: 100,
+      edgeElasticity: 0.45,
+      gravity: 0.25,
+      initialEnergyOnIncremental: 0.5,
     }),
     []
   );
@@ -187,20 +194,45 @@ const GraphExplorerPage = () => {
       });
     };
 
+    const handleNodeHover = (evt) => {
+      if (selectedElementRef.current) return;
+      applyNodeFocus(evt.target);
+    };
+
+    const handleEdgeHover = (evt) => {
+      if (selectedElementRef.current) return;
+      applyEdgeFocus(evt.target);
+    };
+
+    const handleUnhover = () => {
+      if (selectedElementRef.current) return;
+      clearFocusClasses();
+    };
+
     cy.on('tap', handleBackgroundTap);
     cy.on('tap', 'node', handleNodeTap);
     cy.on('tap', 'edge', handleEdgeTap);
+
+    cy.on('mouseover', 'node', handleNodeHover);
+    cy.on('mouseover', 'edge', handleEdgeHover);
+    cy.on('mouseout', 'node', handleUnhover);
+    cy.on('mouseout', 'edge', handleUnhover);
 
     return () => {
       cy.off('tap', handleBackgroundTap);
       cy.off('tap', 'node', handleNodeTap);
       cy.off('tap', 'edge', handleEdgeTap);
+
+      cy.off('mouseover', 'node', handleNodeHover);
+      cy.off('mouseover', 'edge', handleEdgeHover);
+      cy.off('mouseout', 'node', handleUnhover);
+      cy.off('mouseout', 'edge', handleUnhover);
     };
   }, [cyElements]);
 
   useEffect(() => {
     // Setup event listeners
-    const handleConnected = (data) => {
+    const handleConnected = () => {
       setConnection(prev => ({ ...prev, connected: true, status: 'connected' }));
     };
 
@@ -209,11 +241,16 @@ const GraphExplorerPage = () => {
     };
 
     const handleGraphDataLoaded = (data) => {
+      if (!data || typeof data !== 'object') {
+        setGraphData(prev => ({ ...prev, loading: false }));
+        return;
+      }
       setGraphData(prev => ({ ...prev, ...data, loading: false }));
     };
 
     const handleError = (data) => {
-      setError(data.error);
+      const message = data && typeof data === 'object' ? data.error : null;
+      setError(message || 'An unexpected error occurred.');
       setLoading(false);
     };
 
@@ -230,11 +267,40 @@ const GraphExplorerPage = () => {
     };
   }, []);
 
+  useEffect(() => {
+    // Pull DB-backed runtime config (non-secret) to avoid hardcoded defaults.
+    // This is best-effort; user can still type values manually.
+    let cancelled = false;
+
+    (async () => {
+      const runtime = await getRuntimeConfig();
+      if (cancelled) return;
+      const neo4j = runtime && runtime.neo4j ? runtime.neo4j : null;
+      if (!neo4j) return;
+
+      setConnection(prev => {
+        const nextConfig = { ...prev.config };
+        if (!nextConfig.uri) nextConfig.uri = String(neo4j.uri || '');
+        if (!nextConfig.user) nextConfig.user = String(neo4j.username || '');
+        if (!nextConfig.database) nextConfig.database = String(neo4j.database || '');
+        return { ...prev, config: nextConfig };
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleConnect = async () => {
     try {
       setLoading(true);
       setError(null);
-      await connectionService.connect(connection.config);
+      await connectionService.connect(
+        connection.config.uri,
+        connection.config.user,
+        connection.config.password
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -255,18 +321,6 @@ const GraphExplorerPage = () => {
       setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleExecuteQuery = async () => {
-    if (!queryPanel.query.trim()) return;
-
-    try {
-      setQueryPanel(prev => ({ ...prev, executing: true, error: null }));
-      const results = await connectionService.executeQuery(queryPanel.query);
-      setQueryPanel(prev => ({ ...prev, results, executing: false }));
-    } catch (err) {
-      setQueryPanel(prev => ({ ...prev, error: err.message, executing: false }));
     }
   };
 
@@ -308,7 +362,7 @@ const GraphExplorerPage = () => {
                   ...prev,
                   config: { ...prev.config, uri: e.target.value }
                 }))}
-                placeholder="bolt://localhost:7687"
+                placeholder="bolt://<host>:7687"
               />
             </div>
             <div className="form-group">
@@ -320,7 +374,7 @@ const GraphExplorerPage = () => {
                   ...prev,
                   config: { ...prev.config, user: e.target.value }
                 }))}
-                placeholder="neo4j"
+                placeholder="username"
               />
             </div>
             <div className="form-group">
@@ -364,7 +418,10 @@ const GraphExplorerPage = () => {
             <input
               type="number"
               value={filters.limit}
-              onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                if (Number.isFinite(next)) handleFilterChange('limit', next);
+              }}
               min="10"
               max="1000"
             />
@@ -385,37 +442,6 @@ const GraphExplorerPage = () => {
           >
             {loading ? 'Loading...' : 'Load Graph Data'}
           </button>
-        </div>
-      )}
-
-      {/* Query Panel */}
-      {connection.connected && (
-        <div className="query-panel card">
-          <h2>Cypher Query</h2>
-          <textarea
-            value={queryPanel.query}
-            onChange={(e) => setQueryPanel(prev => ({ ...prev, query: e.target.value }))}
-            placeholder="MATCH (n) RETURN n LIMIT 25"
-            rows="4"
-          />
-          <button 
-            onClick={handleExecuteQuery}
-            disabled={queryPanel.executing || !queryPanel.query.trim()}
-            className="btn-primary"
-          >
-            {queryPanel.executing ? 'Executing...' : 'Execute Query'}
-          </button>
-          
-          {queryPanel.results && (
-            <div className="query-results">
-              <h3>Results:</h3>
-              <pre>{JSON.stringify(queryPanel.results, null, 2)}</pre>
-            </div>
-          )}
-          
-          {queryPanel.error && (
-            <div className="error-message">{queryPanel.error}</div>
-          )}
         </div>
       )}
 

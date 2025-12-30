@@ -1,9 +1,8 @@
-import { createHashRouter } from 'react-router-dom';
+import { Navigate, createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
 import XStateLandingPage from '../pages/xstate-landing/XStateLandingPage.jsx';
 import LandingPage from '../pages/landing/LandingPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
-import E2ETraceMainDashboard from '../pages/dashboard/e2etrace-main-dashboard.jsx';
 import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 import WorkflowManagerPage from '../pages/workflow-manager/WorkflowManagerPage.jsx';
@@ -16,6 +15,8 @@ import { E2ETraceAnalyticsPage } from '../pages/analytics/analytics/e2etrace-ana
 import ReportingPage from '../pages/reporting/ReportingPage.jsx';
 import DataConfigPage from '../pages/data-config/DataConfigPage.jsx';
 import EChartsSpreadsheetPage from '../pages/spreadsheet/EChartsSpreadsheetPage.jsx';
+import E2ETracePropertyPalette from '../pages/settings/settings/e2etrace-property-palette.jsx';
+import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
 import RouteErrorPage from '../pages/errors/RouteErrorPage.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 
@@ -24,132 +25,150 @@ const router = createHashRouter([
     path: '/',
     element: <E2ETraceRootLayout />,
     errorElement: <RouteErrorPage />,
-    handle: { crumb: 'Home' },
+    handle: { crumb: 'nav.home' },
     children: [
       // Default route - Hero / Platform overview
       {
         index: true,
         element: <LandingPage />,
-        handle: { crumb: 'Home' }
+        handle: { crumb: 'nav.overview' }
       },
 
       // Interactive State Flow (XState)
       {
         path: 'interactive-state-flow',
         element: <XStateLandingPage />,
-        handle: { crumb: 'Interactive State Flow' }
+        handle: { crumb: 'nav.interactiveStateFlow' }
       },
 
       // Data Configuration (used by Landing "Get Started" and WorkflowProgress)
       {
         path: 'data-config',
         element: <DataConfigPage />,
-        handle: { crumb: 'Data Configuration' },
+        handle: { crumb: 'nav.dataConfig' },
       },
 
       // ECharts Spreadsheet (used by WorkflowProgress)
       {
         path: 'spreadsheet',
         element: <EChartsSpreadsheetPage />,
-        handle: { crumb: 'Spreadsheet' },
+        handle: { crumb: 'nav.spreadsheet' },
+      },
+
+      // Data Processing Hub
+      {
+        path: 'processing',
+        element: <DataProcessingHubPage />,
+        handle: { crumb: 'nav.dataProcessingHub' },
+      },
+
+      // Settings
+      {
+        path: 'settings',
+        element: <E2ETracePropertyPalette />,
+        handle: { crumb: 'nav.settings' },
       },
       
       // Graph Explorer (Graph Features)
       {
         path: 'graph-explorer',
         element: <GraphExplorerPage />,
-        handle: { crumb: 'Graph Explorer' },
+        handle: { crumb: 'nav.graphExplorer' },
       },
 
       // Legacy alias (clean-env compatibility)
       {
         path: 'graphexplorer',
-        element: <E2ETraceMainDashboard />,
-        handle: { crumb: 'Graph Explorer' },
+        element: <Navigate to="/graph-explorer" replace />,
       },
 
       // Reports & Dashboards (clean-env compatibility)
       {
         path: 'reporting',
         element: <ReportingPage />,
-        handle: { crumb: 'Reports & Dashboards' },
+        handle: { crumb: 'nav.reporting' },
       },
       
       // Data Quality Dashboard (SODA)
       {
         path: 'data-quality',
         element: <DataQualityDashboard />,
-        handle: { crumb: 'Data Quality' },
+        handle: { crumb: 'nav.dataQuality' },
       },
 
       // Legacy alias
       {
         path: 'dataquality',
-        element: <DataQualityDashboard />,
-        handle: { crumb: 'Data Quality' },
+        element: <Navigate to="/data-quality" replace />,
       },
       
       // Observability Dashboard
       {
         path: 'observability',
         element: <ObservabilityDashboard />,
-        handle: { crumb: 'Observability' },
+        handle: { crumb: 'nav.observability' },
+      },
+
+      // Legacy alias (older UI links)
+      {
+        path: 'monitoring',
+        element: <Navigate to="/observability" replace />,
       },
 
       // Analytics Dashboard
       {
         path: 'analytics',
         element: <E2ETraceAnalyticsPage />,
-        handle: { crumb: 'Analytics' },
+        handle: { crumb: 'nav.analytics' },
       },
       
       // Workflow Manager - Multi-instance workflow management
       {
         path: 'workflow-manager',
         element: <WorkflowManagerPage />,
-        handle: { crumb: 'Workflow Manager' },
+        handle: { crumb: 'nav.workflowManager' },
       },
       
       // Workflow Detail - Individual workflow instance view
       {
         path: 'workflow/:workflowId',
         element: <WorkflowDetailPage />,
-        handle: { crumb: 'Workflow Detail' },
+        handle: { crumb: 'nav.workflowDetail' },
       },
       
       // Data Lineage Visualizer
       {
         path: 'lineage',
         element: <LineageVisualizerPage />,
-        handle: { crumb: 'Data Lineage' },
+        handle: { crumb: 'nav.dataLineage' },
       },
       
       // Self-Healing Orchestration Monitor
       {
         path: 'self-healing',
         element: <SelfHealingMonitorPage />,
-        handle: { crumb: 'Self-Healing Monitor' },
+        handle: { crumb: 'nav.selfHealingMonitor' },
       },
       
       // Multi-Modal Data Analyzer
       {
         path: 'multimodal',
         element: <MultiModalAnalyzerPage />,
-        handle: { crumb: 'Multi-Modal Analyzer' },
+        handle: { crumb: 'nav.multiModalAnalyzer' },
       },
 
       // API Docs (OpenAPI/Swagger)
       {
         path: 'api-docs',
         element: <OpenApiDocsPage />,
-        handle: { crumb: 'API Docs' },
+        handle: { crumb: 'nav.apiDocs' },
       },
 
       // Catch-all (prevents React Router default 404 overlay)
       {
         path: '*',
         element: <NotFoundPage />,
-        handle: { crumb: 'Not Found' },
+        handle: { crumb: 'errors.notFound' },
       },
     ],
   },

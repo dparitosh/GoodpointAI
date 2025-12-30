@@ -58,7 +58,7 @@ const WorkflowProgress = ({ currentPage, showDetails = true, showNavigation = tr
         icon: '∿',
         description: 'Visualize and monitor data flow through the system',
         route: '/',
-        pages: ['/', '/graphexplorer', '/monitoring']
+        pages: ['/', '/graph-explorer', '/observability']
       },
       [WORKFLOW_STAGES.REPORTING]: {
         title: 'Reporting',

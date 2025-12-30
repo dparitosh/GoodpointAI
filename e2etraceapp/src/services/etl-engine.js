@@ -5,7 +5,7 @@
 
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import { API_CONFIG } from '../config/api-config.js';
-import * as XLSX from 'xlsx';
+import { readExcelArrayBufferToAoa } from '../utils/spreadsheet-utils.js';
 
 class ETLEngine {
   constructor() {
@@ -177,12 +177,9 @@ class ETLEngine {
       const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
       
       if (isExcel) {
-        // Handle Excel files using XLSX
+        // Handle Excel files
         const arrayBuffer = await this.readFileAsArrayBuffer(file);
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetName = workbook.SheetNames[0]; // Use first sheet
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData = await readExcelArrayBufferToAoa(arrayBuffer);
         
         if (jsonData.length > 0) {
           headers = jsonData[0];

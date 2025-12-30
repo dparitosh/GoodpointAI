@@ -1,30 +1,54 @@
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { XStateLayout } from './XStateLayout';
 import { TreeNavigator } from './TreeNavigator';
 import { InspectorPanel } from './InspectorPanel';
 import { EventPanel } from './EventPanel';
 import { DetailDrawer } from './DetailDrawer';
-import { SwimLaneLayout } from './SwimLaneLayout';
 import { StateFlowDiagram } from './StateFlowDiagram';
 import { E2ETraceCytoscapeGraph } from '../../pages/dashboard/e2etrace-cytoscape-graph';
 import { xstateStylesheet, xstateStylesheetDark } from './xstate-cytoscape-stylesheet';
 import { useAdvancedCytoscapeInteractions } from '../../hooks/useAdvancedCytoscapeInteractions';
+import { useE2ETraceTheme } from '../../contexts/e2etrace-theme-context.jsx';
 import './XStateVisualizer.css';
 
 /**
  * XState Visualizer Main Component
  * Complete XState-style graph visualization with 3-panel layout
- * Modes: Graph View, Swimlane Workflow, State Flow Diagram
+ * Modes: Graph View, State Flow Diagram
  */
-export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
-  const [theme, setTheme] = useState('dark');
+export const XStateVisualizer = ({
+  graphData,
+  onNodeUpdate,
+  embedded = false,
+  enabledViewModes = ['stateflow', 'graph'],
+  uiVariant = 'full', // 'full' | 'graph-only'
+  navigatorVariant = 'tree', // 'tree' | 'workflow'
+  workflowOptions = [],
+  selectedWorkflowId = '',
+  onWorkflowSelect,
+  workflowNavigatorHint = '',
+}) => {
+  const themeContext = useE2ETraceTheme?.();
+  const theme = themeContext?.theme === 'dark' ? 'dark' : 'light';
   const [selectedNode, setSelectedNode] = useState(null);
   const [events, setEvents] = useState([]);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [detailDrawerNode, setDetailDrawerNode] = useState(null);
-  const [viewMode, setViewMode] = useState('stateflow'); // 'graph', 'swimlane', or 'stateflow'
+  const [viewMode, setViewMode] = useState('stateflow'); // 'graph' | 'stateflow'
   const [layoutMode, setLayoutMode] = useState('hierarchical');
   const cyRef = useRef(null);
+
+  const normalizedEnabledViewModes = useMemo(() => {
+    const allowed = ['stateflow', 'graph'];
+    const incoming = Array.isArray(enabledViewModes) ? enabledViewModes : [];
+    const filtered = incoming.filter((mode) => allowed.includes(mode));
+    return filtered.length > 0 ? filtered : ['stateflow'];
+  }, [enabledViewModes]);
+
+  useEffect(() => {
+    if (normalizedEnabledViewModes.includes(viewMode)) return;
+    setViewMode(normalizedEnabledViewModes.includes('stateflow') ? 'stateflow' : normalizedEnabledViewModes[0] || 'stateflow');
+  }, [normalizedEnabledViewModes, viewMode]);
 
   // Convert graph data to tree structure for navigator
   const treeNodes = useMemo(() => {
@@ -287,47 +311,113 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
     };
   }, [graphData]);
 
-  // Toggle theme
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
   // Get stylesheet based on theme
   const stylesheet = theme === 'dark' ? xstateStylesheetDark : xstateStylesheet;
 
+  const treePanel = useMemo(() => {
+    if (navigatorVariant === 'workflow') {
+      const safeSelected = selectedWorkflowId || '';
+      const hasOptions = Array.isArray(workflowOptions) && workflowOptions.length > 0;
+
+      return (
+        <div className={`xstate-visualizer__workflow-navigator xstate-visualizer__workflow-navigator--${theme}`}>
+          <label className="xstate-visualizer__workflow-label" htmlFor="xstate-workflow-selector">
+            Workflow Instance
+          </label>
+          <select
+            id="xstate-workflow-selector"
+            className="xstate-visualizer__workflow-select"
+            value={safeSelected}
+            onChange={(e) => onWorkflowSelect?.(e.target.value)}
+            disabled={!hasOptions}
+            aria-label="Workflow instance selector"
+          >
+            {hasOptions ? null : <option value="">No workflows</option>}
+            {workflowOptions.map((wf) => {
+              const id = wf?.id;
+              if (!id) return null;
+              const label = wf?.name || wf?.workflow_name || wf?.title || id;
+              return (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              );
+            })}
+          </select>
+          {workflowNavigatorHint ? (
+            <div className="xstate-visualizer__workflow-hint">{String(workflowNavigatorHint)}</div>
+          ) : null}
+        </div>
+      );
+    }
+
+    return (
+      <TreeNavigator
+        nodes={treeNodes}
+        onNodeClick={handleNodeClick}
+        selectedNodeId={selectedNode?.id}
+        theme={theme}
+      />
+    );
+  }, [navigatorVariant, selectedWorkflowId, workflowOptions, onWorkflowSelect, workflowNavigatorHint, theme, treeNodes, handleNodeClick, selectedNode?.id]);
+
+  if (uiVariant === 'graph-only') {
+    return (
+      <div className={`xstate-visualizer xstate-visualizer--${theme}${embedded ? ' xstate-visualizer--embedded' : ''} xstate-visualizer--graph-only`}>
+        <div className="xstate-visualizer__graph-only">
+          <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+            <E2ETraceCytoscapeGraph
+              elements={cytoscapeElements}
+              stylesheet={stylesheet}
+              layout={layoutConfig}
+              cyRef={cyRef}
+            />
+
+            <div className="xstate-visualizer__controls">
+              <button
+                className="xstate-visualizer__control-btn"
+                onClick={() => cyRef.current?.fit()}
+                title="Fit to screen"
+              >
+                ⊡
+              </button>
+              <button
+                className="xstate-visualizer__control-btn"
+                onClick={() => cyRef.current?.layout(layoutConfig).run()}
+                title="Reset layout"
+              >
+                ⟲
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`xstate-visualizer xstate-visualizer--${theme}`}>
+    <div className={`xstate-visualizer xstate-visualizer--${theme}${embedded ? ' xstate-visualizer--embedded' : ''}`}>
       {/* Theme and View Mode Toggle Buttons */}
       <div className="xstate-visualizer__toolbar">
-        <button 
-          className="xstate-visualizer__theme-toggle"
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-        >
-          {theme === 'light' ? '◐' : '◑'}
-        </button>
         <div className="xstate-visualizer__view-toggle">
-          <button
-            className={`view-toggle-btn ${viewMode === 'stateflow' ? 'active' : ''}`}
-            onClick={() => setViewMode('stateflow')}
-            title="State Flow Diagram - XState Style"
-          >
-            ⇄ State Flow
-          </button>
-          <button
-            className={`view-toggle-btn ${viewMode === 'graph' ? 'active' : ''}`}
-            onClick={() => setViewMode('graph')}
-            title="Graph View"
-          >
-            ◆ Graph
-          </button>
-          <button
-            className={`view-toggle-btn ${viewMode === 'swimlane' ? 'active' : ''}`}
-            onClick={() => setViewMode('swimlane')}
-            title="Swimlane Workflow View"
-          >
-            ▥ Swimlane
-          </button>
+          {normalizedEnabledViewModes.includes('stateflow') ? (
+            <button
+              className={`view-toggle-btn ${viewMode === 'stateflow' ? 'active' : ''}`}
+              onClick={() => setViewMode('stateflow')}
+              title="State Flow Diagram - XState Style"
+            >
+              ⇄ State Flow
+            </button>
+          ) : null}
+          {normalizedEnabledViewModes.includes('graph') ? (
+            <button
+              className={`view-toggle-btn ${viewMode === 'graph' ? 'active' : ''}`}
+              onClick={() => setViewMode('graph')}
+              title="Graph View"
+            >
+              ◆ Graph
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -342,14 +432,7 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
       {viewMode === 'stateflow' ? (
         <XStateLayout
           theme={theme}
-          treePanel={
-            <TreeNavigator
-              nodes={treeNodes}
-              onNodeClick={handleNodeClick}
-              selectedNodeId={selectedNode?.id}
-              theme={theme}
-            />
-          }
+          treePanel={treePanel}
           graphPanel={
             <StateFlowDiagram
               nodes={graphData?.nodes || []}
@@ -379,17 +462,10 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
             />
           }
         />
-      ) : viewMode === 'graph' ? (
+      ) : (
         <XStateLayout
           theme={theme}
-          treePanel={
-            <TreeNavigator
-              nodes={treeNodes}
-              onNodeClick={handleNodeClick}
-              selectedNodeId={selectedNode?.id}
-              theme={theme}
-            />
-          }
+          treePanel={treePanel}
           graphPanel={
             <div style={{ width: '100%', height: '100%', position: 'relative' }}>
               <E2ETraceCytoscapeGraph
@@ -417,40 +493,6 @@ export const XStateVisualizer = ({ graphData, onNodeUpdate }) => {
                 </button>
               </div>
             </div>
-          }
-          inspectorPanel={
-            <InspectorPanel
-              selectedNode={selectedNode}
-              onPropertyChange={handlePropertyChange}
-              theme={theme}
-            />
-          }
-          eventPanel={
-            <EventPanel
-              events={events}
-              onEventClick={handleEventClick}
-              theme={theme}
-            />
-          }
-        />
-      ) : (
-        <XStateLayout
-          theme={theme}
-          treePanel={
-            <TreeNavigator
-              nodes={treeNodes}
-              onNodeClick={handleNodeClick}
-              selectedNodeId={selectedNode?.id}
-              theme={theme}
-            />
-          }
-          graphPanel={
-            <SwimLaneLayout
-              nodes={graphData?.nodes || []}
-              edges={graphData?.edges || []}
-              selectedNode={selectedNode}
-              onNodeClick={handleNodeClick}
-            />
           }
           inspectorPanel={
             <InspectorPanel

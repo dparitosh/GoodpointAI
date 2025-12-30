@@ -14,8 +14,8 @@ echo "=================================================="
 echo ""
 
 # Check if services are already running
-if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "${BLUE}Backend already running on port 8000${NC}"
+if lsof -Pi :8011 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${BLUE}Backend already running on port 8011${NC}"
 else
     echo "Starting Backend..."
     cd "$SCRIPT_DIR/python_backend"
@@ -45,8 +45,8 @@ echo -e "  ${GREEN}GraphTrace Services Started${NC}"
 echo "=================================================="
 echo ""
 echo "Access Points:"
-echo "  Backend API:       http://localhost:8000"
-echo "  API Documentation: http://localhost:8000/docs"
+echo "  Backend API:       http://localhost:8011"
+echo "  API Documentation: http://localhost:8011/docs"
 echo "  Frontend App:      http://localhost:5173"
 echo ""
 echo "Logs:"

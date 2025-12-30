@@ -1,6 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import goodPointLogo from '../../assets/goodpoint-logo.svg';
+import { InteractiveStateFlowEmbed } from '../../components/InteractiveStateFlowEmbed.jsx';
+import { XStateVisualizer } from '../../components/xstate-visualizer/XStateVisualizer';
+import { getSampleInteractiveStateFlow } from '../../data/sampleInteractiveStateFlow';
 import './LandingPage.css';
 
 const LandingPage = () => {
@@ -22,7 +25,7 @@ const LandingPage = () => {
     {
       icon: 'fas fa-route',
       title: 'Interactive State Flow',
-      description: 'Visualize the agentic workflow and swimlanes end-to-end',
+      description: 'Visualize the agentic workflow end-to-end',
       link: '/interactive-state-flow',
       color: 'var(--critical-color)'
     },
@@ -76,18 +79,25 @@ const LandingPage = () => {
           </div>
         </div>
         <div className="hero-visual">
-          <div className="floating-card card-1">
-            <div className="card-icon"><i className="fas fa-chart-bar" aria-hidden="true" /></div>
-            <div className="card-label">Analytics</div>
-          </div>
-          <div className="floating-card card-2">
-            <div className="card-icon"><i className="fas fa-sync-alt" aria-hidden="true" /></div>
-            <div className="card-label">ETL Pipeline</div>
-          </div>
-          <div className="floating-card card-3">
-            <div className="card-icon"><i className="fas fa-network-wired" aria-hidden="true" /></div>
-            <div className="card-label">Graph DB</div>
-          </div>
+          <XStateVisualizer
+            graphData={getSampleInteractiveStateFlow()}
+            embedded
+            enabledViewModes={['graph']}
+            uiVariant="graph-only"
+          />
+        </div>
+      </section>
+
+      {/* Interactive State Flow (3-panel) */}
+      <section className="interactive-state-flow-section">
+        <div className="section-header">
+          <h2 className="section-title">Interactive State Flow</h2>
+          <p className="section-description">
+            Visualize the agentic workflow end-to-end
+          </p>
+        </div>
+        <div className="interactive-state-flow-embed">
+          <InteractiveStateFlowEmbed />
         </div>
       </section>
 

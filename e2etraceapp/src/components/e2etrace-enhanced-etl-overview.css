@@ -18,7 +18,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--accent-color);
   color: white;
   position: relative;
 }
@@ -217,7 +217,7 @@
 }
 
 .export-btn.json {
-  background: linear-gradient(135deg, #6f42c1, #6610f2);
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-hover-color));
   color: white;
 }
 

@@ -131,7 +131,7 @@ if [ ! -f ".env" ]; then
     cat > .env << 'EOF'
 # Frontend Environment Variables
 # The VITE_ prefix is required for Vite to expose these to the client
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8011
 VITE_APP_NAME=GraphTrace
 VITE_APP_VERSION=1.0.0
 EOF
@@ -160,7 +160,7 @@ echo "     - Backend only: ./start-backend.sh"
 echo "     - Frontend only: ./start-frontend.sh"
 echo ""
 echo "Access Points:"
-echo "  Backend API:  http://localhost:8000"
-echo "  API Docs:     http://localhost:8000/docs"
+echo "  Backend API:  http://localhost:8011"
+echo "  API Docs:     http://localhost:8011/docs"
 echo "  Frontend:     http://localhost:5173"
 echo ""

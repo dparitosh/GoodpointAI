@@ -5,7 +5,7 @@ Includes folder monitoring and batch file operations
 """
 import logging
 from typing import Any, List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import os
 import json
@@ -317,6 +317,12 @@ async def validate_xml_file(file_path: str, schema_path: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/xml/validate")
+async def validate_xml_file_get(file_path: str, schema_path: Optional[str] = None):
+    """GET wrapper for XML validation (matches frontend state machine)."""
+    return await validate_xml_file(file_path=file_path, schema_path=schema_path)
+
+
 # ============================================================================
 # JSON FILE PROCESSING
 # ============================================================================
@@ -532,29 +538,13 @@ async def batch_file_operation(request: BatchFileOperation):
 async def start_folder_monitoring(config: FolderMonitorConfig, _background_tasks: BackgroundTasks):
     """Start monitoring a folder for file changes"""
     try:
-        watch_path = Path(config.watch_path)
-        
-        if not watch_path.exists():
-            watch_path.mkdir(parents=True, exist_ok=True)
-        
-        # In production, use watchdog library for file system monitoring
-        # For now, return configuration
-        
-        monitor_id = f"monitor_{datetime.utcnow().timestamp()}"
-        
-        return {
-            "status": "success",
-            "message": "Folder monitoring configured",
-            "monitor_id": monitor_id,
-            "config": {
-                "watch_path": str(watch_path),
-                "patterns": config.file_patterns,
-                "action": config.action,
-                "destination": config.destination_path
-            },
-            "note": "Implement watchdog library for production monitoring"
-        }
-        
+        raise HTTPException(
+            status_code=501,
+            detail="Folder monitoring is not implemented (watchdog integration required).",
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error starting folder monitoring: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -580,8 +570,11 @@ async def filesystem_health_check():
             "writable": os.access(path, os.W_OK) if path.exists() else False
         }
     
+    all_ok = all(v.get("exists") and v.get("writable") for v in directories_status.values())
+    status = "healthy" if all_ok else "degraded"
+
     return {
-        "status": "healthy",
+        "status": status,
         "directories": directories_status,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }

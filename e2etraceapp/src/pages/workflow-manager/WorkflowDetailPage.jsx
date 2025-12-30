@@ -5,6 +5,71 @@ import './WorkflowDetailPage.css';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const buildWebSocketUrl = (path) => {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${protocol}://${window.location.host}${path}`;
+};
+
+const mapMigrationStateToWorkflowStage = (state) => {
+  const s = String(state || '').toLowerCase();
+  if (!s) return null;
+
+  if (['initializing', 'discovering'].includes(s)) return 'extracting';
+  if (['profiling', 'schema_mapping'].includes(s)) return 'transforming';
+  if (['data_migration'].includes(s)) return 'loading';
+  if (['validation'].includes(s)) return 'validating';
+  if (['completed'].includes(s)) return 'finalizing';
+  return null;
+};
+
+const mapMigrationStateToActiveGraphStage = (state) => {
+  const s = String(state || '').toLowerCase();
+  if (!s) return null;
+
+  if (['initializing', 'discovering'].includes(s)) return 'extract';
+  if (['profiling', 'schema_mapping'].includes(s)) return 'transform';
+  if (['data_migration'].includes(s)) return 'load';
+  if (['validation'].includes(s)) return 'quality';
+  return null;
+};
+
+const applyMigrationUpdateToGraphData = (data, update) => {
+  if (!data || !Array.isArray(data.nodes)) return data;
+
+  const state = String(update?.state || '').toLowerCase();
+  const isCompleted = state === 'completed';
+  const isFailed = state === 'failed';
+
+  if (isCompleted) {
+    return {
+      ...data,
+      nodes: data.nodes.map((n) => ({ ...n, status: 'healthy' }))
+    };
+  }
+
+  if (isFailed) {
+    return {
+      ...data,
+      nodes: data.nodes.map((n) => ({ ...n, status: 'error' }))
+    };
+  }
+
+  const activeStage = mapMigrationStateToActiveGraphStage(update?.state);
+  if (!activeStage) return data;
+
+  return {
+    ...data,
+    nodes: data.nodes.map((n) => {
+      const nodeStage = String(n?.stage || '').toLowerCase();
+      const isActive = nodeStage === activeStage;
+      return {
+        ...n,
+        status: isActive ? 'warning' : 'healthy'
+      };
+    })
+  };
+};
+
 /**
  * Workflow Detail Page
  * 
@@ -21,14 +86,28 @@ const WorkflowDetailPage = () => {
   const [workflow, setWorkflow] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
   const loadAbortRef = useRef(null);
   const loadSeqRef = useRef(0);
+
+  const wsRef = useRef(null);
+  const wsSessionIdRef = useRef(null);
+  const wsReconnectTimeoutRef = useRef(null);
+  const lastWsUpdateRef = useRef(null);
+  const latestWorkflowRef = useRef({ status: null, sessionId: null });
 
   // Load workflow details on mount and when workflowId changes
   useEffect(() => {
     loadWorkflowDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workflowId]);
+
+  useEffect(() => {
+    latestWorkflowRef.current = {
+      status: workflow?.status,
+      sessionId: workflow?.execution_metadata?.migration_session_id
+    };
+  }, [workflow?.status, workflow?.execution_metadata?.migration_session_id]);
 
   // Cancel any in-flight requests on unmount/workflowId changes
   useEffect(() => {
@@ -40,6 +119,12 @@ const WorkflowDetailPage = () => {
           // ignore
         }
       }
+
+      // WebSocket cleanup
+      if (wsReconnectTimeoutRef.current) {
+        clearTimeout(wsReconnectTimeoutRef.current);
+        wsReconnectTimeoutRef.current = null;
+      }
     };
   }, [workflowId]);
 
@@ -47,6 +132,7 @@ const WorkflowDetailPage = () => {
   useEffect(() => {
     let interval;
     if (workflow?.status === 'running') {
+      const refreshMs = wsConnected ? 30000 : 5000;
       interval = setInterval(() => {
         // Wrap in try-catch to prevent interval from continuing on error
         try {
@@ -55,7 +141,7 @@ const WorkflowDetailPage = () => {
           console.error('Error in auto-refresh:', error);
           clearInterval(interval);
         }
-      }, 5000);
+      }, refreshMs);
     }
     
     return () => {
@@ -64,7 +150,139 @@ const WorkflowDetailPage = () => {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflow?.status]);
+  }, [workflow?.status, wsConnected]);
+
+  // Subscribe to migration session updates for real-time visualizer updates
+  useEffect(() => {
+    const sessionId = workflow?.execution_metadata?.migration_session_id;
+
+    const cleanup = () => {
+      if (wsReconnectTimeoutRef.current) {
+        clearTimeout(wsReconnectTimeoutRef.current);
+        wsReconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch {
+          // ignore
+        }
+      }
+      wsRef.current = null;
+      wsSessionIdRef.current = null;
+      setWsConnected(false);
+    };
+
+    const scheduleReconnect = () => {
+      if (wsReconnectTimeoutRef.current) return;
+      wsReconnectTimeoutRef.current = setTimeout(() => {
+        wsReconnectTimeoutRef.current = null;
+        const latest = latestWorkflowRef.current;
+        if (latest?.status === 'running' && latest?.sessionId) {
+          // re-run effect by forcing a noop state update isn't needed; just connect
+          connect(latest.sessionId);
+        }
+      }, 2000);
+    };
+
+    const connect = (sid) => {
+      const url = buildWebSocketUrl(`/api/migration/advanced/ws/${encodeURIComponent(sid)}`);
+      let ws;
+      try {
+        ws = new WebSocket(url);
+      } catch (err) {
+        console.warn('Failed to create WebSocket connection:', err);
+        return;
+      }
+
+      wsRef.current = ws;
+      wsSessionIdRef.current = sid;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+      };
+
+      ws.onmessage = (evt) => {
+        let msg;
+        try {
+          msg = JSON.parse(evt.data);
+        } catch {
+          return;
+        }
+
+        if (!msg || msg.type === 'heartbeat') return;
+        if (msg.session_id && String(msg.session_id) !== String(wsSessionIdRef.current || '')) return;
+
+        lastWsUpdateRef.current = msg;
+
+        // Reflect WS progress/state into the header + progress UI
+        setWorkflow((prev) => {
+          if (!prev) return prev;
+
+          const next = { ...prev };
+          const stage = mapMigrationStateToWorkflowStage(msg.state);
+
+          next.execution_metadata = {
+            ...(next.execution_metadata || {}),
+            migration_session_state: msg.state,
+            migration_session_updated_at: msg.timestamp
+          };
+
+          if (typeof msg.progress === 'number' && Number.isFinite(msg.progress)) {
+            next.progress_percentage = msg.progress;
+          }
+          if (typeof msg.quality === 'number' && Number.isFinite(msg.quality)) {
+            next.quality_score = msg.quality;
+          }
+          if (Array.isArray(msg.errors) && msg.errors.length > 0) {
+            next.execution_metadata.migration_errors = msg.errors;
+          }
+          if (stage) {
+            next.current_stage = stage;
+          }
+          return next;
+        });
+
+        // Reflect WS state into node statuses
+        setGraphData((prev) => applyMigrationUpdateToGraphData(prev, msg));
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        const latest = latestWorkflowRef.current;
+        if (latest?.status === 'running' && latest?.sessionId === sid) {
+          scheduleReconnect();
+        }
+      };
+
+      ws.onerror = () => {
+        // Close triggers reconnect path
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
+      };
+    };
+
+    if (workflow?.status !== 'running' || !sessionId) {
+      cleanup();
+      return cleanup;
+    }
+
+    // Already connected (or connecting) to the right session
+    if (
+      wsRef.current &&
+      wsSessionIdRef.current === sessionId &&
+      (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return cleanup;
+    }
+
+    cleanup();
+    connect(sessionId);
+    return cleanup;
+  }, [workflow?.status, workflow?.execution_metadata?.migration_session_id]);
 
   const loadWorkflowDetails = async () => {
     const seq = ++loadSeqRef.current;
@@ -105,15 +323,28 @@ const WorkflowDetailPage = () => {
           if (graphRes.ok) {
             const graphData = await graphRes.json();
             if (seq !== loadSeqRef.current) return;
-            setGraphData(graphData);
+            const withLiveState = lastWsUpdateRef.current ? applyMigrationUpdateToGraphData(graphData, lastWsUpdateRef.current) : graphData;
+            setGraphData(withLiveState);
           }
         } catch {
           // Fallback to default PLM workflow if custom graph not available
-          const fallbackRes = await fetch('/api/plm/workflow', { signal: controller.signal });
-          if (fallbackRes.ok) {
+          try {
+            const availabilityRes = await fetch('/api/plm/workflow/availability', { signal: controller.signal });
+            if (!availabilityRes.ok) return;
+            const availability = await availabilityRes.json();
+            if (!availability?.available) return;
+
+            const fallbackRes = await fetch('/api/plm/workflow', { signal: controller.signal });
+            if (!fallbackRes.ok) return;
+
             const fallbackData = await fallbackRes.json();
             if (seq !== loadSeqRef.current) return;
-            setGraphData(fallbackData);
+            const withLiveState = lastWsUpdateRef.current
+              ? applyMigrationUpdateToGraphData(fallbackData, lastWsUpdateRef.current)
+              : fallbackData;
+            setGraphData(withLiveState);
+          } catch {
+            // ignore
           }
         }
       } else {

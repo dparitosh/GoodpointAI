@@ -49,7 +49,7 @@ class TestGraphQLMigrationIntegration:
     
     def test_data_migration_phase_uses_graphql_transforms(self):
         """Test DATA_MIGRATION phase uses GraphQL transform engine."""
-        # Sample source data
+        # Example source data
         source_data = {
             "user_id": "123",
             "user_name": "John Doe",
@@ -94,7 +94,7 @@ class TestGraphQLMigrationIntegration:
     
     def test_validation_phase_uses_graphql_queries(self):
         """Test VALIDATION phase uses GraphQL query execution."""
-        # Sample migrated data
+        # Example migrated data
         migrated_data = {
             "users": [
                 {"id": 123, "name": "John Doe", "email": "john@example.com"},

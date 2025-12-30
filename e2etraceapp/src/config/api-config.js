@@ -35,7 +35,7 @@ const DEFAULT_CONFIG = {
     ANALYTICS: '/api/analytics',
     ANALYTICS_NODES: '/api/analytics/nodes',
     ANALYTICS_RELATIONSHIPS: '/api/analytics/relationships',
-    DATA_QUALITY: '/api/analytics/data-quality',
+    DATA_QUALITY: '/api/analytics/quality/dashboard',
     DATA_QUALITY_RULES: '/api/data-quality/rules',
     DATA_QUALITY_SCRUB: '/api/data-quality/scrub',
     DATA_QUALITY_DUPLICATES: '/api/data-quality/duplicates',
@@ -59,6 +59,12 @@ const DEFAULT_CONFIG = {
     // Configuration Management
     NEO4J_CONFIG: '/api/config/neo4j',
     NEO4J_CONFIG_TEST: '/api/config/neo4j/test',
+    OPENSEARCH_CONFIG: '/api/config/opensearch',
+    OPENSEARCH_CONFIG_TEST: '/api/config/opensearch/test',
+    CORS_CONFIG: '/api/config/cors',
+    SYSTEM_CONFIG: '/api/config/system',
+    WORKFLOW_DEFAULTS: '/api/config/workflow-defaults',
+    RUNTIME_CONFIG: '/api/config/runtime',
     ENVIRONMENT_STATUS: '/api/config/environment',
     
     // Data Pipelines
@@ -112,6 +118,13 @@ const DEFAULT_CONFIG = {
     REPORT_GENERATE: '/api/reports/generate',
     DASHBOARDS: '/api/dashboards',
     DASHBOARD_DATA: (dashboardId) => `/api/dashboards/${dashboardId}/data`,
+
+    // Workflow Instance Manager
+    WORKFLOWS: '/api/workflows',
+    WORKFLOW_TEMPLATES: '/api/workflows/templates/list',
+    WORKFLOW_INSTANTIATE: (templateId) => `/api/workflows/templates/${templateId}/instantiate`,
+    WORKFLOW_EXECUTE: (workflowId) => `/api/workflows/${workflowId}/execute`,
+    WORKFLOW_DELETE: (workflowId) => `/api/workflows/${workflowId}`,
     
     // Configuration Management
     CONFIG_BACKUP: '/api/config/backup',

@@ -30,7 +30,7 @@ if (-not (Test-Path ".env")) {
     @"
 # Frontend Environment Variables
 # The VITE_ prefix is required for Vite to expose these to the client
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:8011
 VITE_NEO4J_URI=bolt://localhost:7687
 VITE_NEO4J_USER=neo4j
 "@ | Out-File -FilePath ".env" -Encoding UTF8

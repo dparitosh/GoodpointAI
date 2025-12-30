@@ -7,6 +7,7 @@ import { E2ETraceLayoutProvider } from './contexts/e2etrace-layout-context.jsx';
 import { GraphFilterProvider } from './contexts/e2etrace-graph-filter-context.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import router from './routes';
+import './i18n/index.js';
 
 // Ensure refresh/direct navigation preserves the current page.
 // This app uses a hash router; if the browser URL is path-based (e.g. /workflow-manager)

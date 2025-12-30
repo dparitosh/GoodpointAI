@@ -3,11 +3,16 @@ Analytics Storage Service
 Handles metrics ingestion, storage, and retrieval for governance dashboards.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow_iso() -> str:
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 # Constants
 MAX_HEALTH_RECORDS_PER_SERVICE = 100
@@ -25,8 +30,8 @@ class MetricType(str, Enum):
 class AnalyticsStorageService:
     """
     Service for collecting and storing analytics metrics.
-    In production, this would interface with PostgreSQL analytics schema.
-    For now, using in-memory storage with proper structure.
+    In production, this should interface with a persistent analytics store.
+    This implementation keeps an in-memory store and does NOT seed placeholder data.
     """
     
     def __init__(self):
@@ -37,35 +42,6 @@ class AnalyticsStorageService:
             "processing_metrics": [],
             "error_logs": []
         }
-        self._initialize_sample_data()
-    
-    def _initialize_sample_data(self):
-        """Initialize with sample data for demonstration"""
-        # Sample upload metrics
-        for i in range(10):
-            self.metrics_store["upload_metrics"].append({
-                "id": f"upload_{i}",
-                "timestamp": datetime.utcnow().isoformat(),
-                "file_name": f"plm_data_{i}.xml",
-                "file_size_mb": 50 + (i * 10),
-                "upload_duration_sec": 5 + (i * 2),
-                "status": "success" if i % 5 != 0 else "failed",
-                "user": "user@example.com",
-                "source": "gateway"
-            })
-        
-        # Sample service health metrics
-        services = ["backend_gateway", "plm_xml_service", "migration_engine", "neo4j"]
-        for service in services:
-            self.metrics_store["service_health"].append({
-                "service_name": service,
-                "timestamp": datetime.utcnow().isoformat(),
-                "status": "healthy",
-                "cpu_percent": 45.5,
-                "memory_percent": 62.3,
-                "response_time_ms": 120,
-                "error_rate": 0.5
-            })
     
     async def record_upload_metric(
         self,
@@ -79,7 +55,7 @@ class AnalyticsStorageService:
         """Record upload metrics"""
         metric = {
             "id": f"upload_{len(self.metrics_store['upload_metrics'])}",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
             "file_name": file_name,
             "file_size_mb": file_size_mb,
             "upload_duration_sec": upload_duration_sec,
@@ -109,7 +85,7 @@ class AnalyticsStorageService:
         """Record service health metrics"""
         metric = {
             "service_name": service_name,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
             "status": status,
             "cpu_percent": cpu_percent,
             "memory_percent": memory_percent,
@@ -152,7 +128,7 @@ class AnalyticsStorageService:
         """Record migration quality metrics"""
         metric = {
             "session_id": session_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": _utcnow_iso(),
             "quality_score": quality_score,
             "rows_migrated": rows_migrated,
             "rows_failed": rows_failed,
@@ -208,7 +184,7 @@ class AnalyticsStorageService:
                     "avg_duration_sec": avg_duration_sec
                 }
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": _utcnow_iso()
         }
     
     async def get_service_health_metrics(
@@ -259,7 +235,7 @@ class AnalyticsStorageService:
                 "metrics": metrics,
                 "summary": list(services_summary.values())
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": _utcnow_iso()
         }
     
     async def get_migration_quality_metrics(
@@ -302,7 +278,7 @@ class AnalyticsStorageService:
                     "overall_success_rate": (total_rows / (total_rows + total_failed) * 100) if (total_rows + total_failed) > 0 else 0
                 }
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": _utcnow_iso()
         }
 
 

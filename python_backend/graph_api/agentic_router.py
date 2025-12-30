@@ -620,29 +620,8 @@ async def get_performance_metrics():
 async def get_agentic_system_status():
     """Get overall agentic system status"""
     try:
-        # Mock system status data
-        return {
-            "status": "operational",
-            "version": "1.0.0",
-            "uptime": "5d 12h 30m",
-            "active_agents": 6,
-            "total_agents": 8,
-            "tasks_completed": 1247,
-            "tasks_pending": 3,
-            "system_health": "healthy",
-            "last_health_check": datetime.now().isoformat(),
-            "components": {
-                "data_analyst": {"status": "active", "load": 0.65},
-                "etl_orchestrator": {"status": "active", "load": 0.43},
-                "query_planner": {"status": "active", "load": 0.72},
-                "visualization_agent": {"status": "active", "load": 0.51},
-                "quality_monitor": {"status": "active", "load": 0.38},
-                "chat_coordinator": {"status": "active", "load": 0.29}
-            },
-            "memory_usage": 78.5,
-            "cpu_usage": 65.2,
-            "timestamp": datetime.now().isoformat()
-        }
+        # Return real orchestrator status (no fabricated payloads)
+        return orchestrator.get_system_status()
     except Exception as e:
         logger.error("Error getting agentic system status: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -656,61 +635,17 @@ async def get_active_agents_list(
     """Get list of currently active agents"""
     try:
         active_agents = [
-            {
-                "id": "data_analyst_001",
-                "type": "data_analyst",
-                "status": "active",
-                "current_task": "analyzing graph patterns",
-                "load": 0.65,
-                "uptime": "2h 15m"
-            },
-            {
-                "id": "etl_orchestrator_001",
-                "type": "etl_orchestrator", 
-                "status": "active",
-                "current_task": "monitoring pipeline health",
-                "load": 0.43,
-                "uptime": "5h 42m"
-            },
-            {
-                "id": "query_planner_001",
-                "type": "query_planner",
-                "status": "active", 
-                "current_task": "optimizing cypher queries",
-                "load": 0.72,
-                "uptime": "1h 33m"
-            },
-            {
-                "id": "visualization_agent_001",
-                "type": "visualization_agent",
-                "status": "active",
-                "current_task": "generating chart configurations",
-                "load": 0.51,
-                "uptime": "3h 18m"
-            },
-            {
-                "id": "quality_monitor_001", 
-                "type": "quality_monitor",
-                "status": "active",
-                "current_task": "data quality assessment",
-                "load": 0.38,
-                "uptime": "4h 27m"
-            },
-            {
-                "id": "chat_coordinator_001",
-                "type": "chat_coordinator",
-                "status": "active",
-                "current_task": "processing user queries",
-                "load": 0.29,
-                "uptime": "6h 51m"
-            }
+            agent
+            for agent in orchestrator.agents.values()
+            if str(getattr(agent, "status", "")).lower() in ("ready", "active", "running")
         ]
+
         response.headers["X-Total-Count"] = str(len(active_agents))
         return {
             "status": "success",
             "active_agents": active_agents[skip : skip + limit],
             "total_count": len(active_agents),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error("Error getting active agents: %s", e)
@@ -720,30 +655,28 @@ async def get_active_agents_list(
 async def get_agent_metrics():
     """Get performance metrics for all agents"""
     try:
+        system_metrics = orchestrator.system_metrics
+        tasks_completed = int(system_metrics.get("tasks_completed", 0) or 0)
+        tasks_failed = int(system_metrics.get("tasks_failed", 0) or 0)
+        total_tasks = tasks_completed + tasks_failed
+        success_rate = (tasks_completed / total_tasks) * 100.0 if total_tasks else 0.0
+        error_rate = (tasks_failed / total_tasks) * 100.0 if total_tasks else 0.0
+
         return {
             "status": "success",
             "metrics": {
-                "total_tasks_processed": 1247,
-                "average_response_time": 145.7,
-                "success_rate": 98.3,
-                "error_rate": 1.7,
-                "throughput_per_minute": 12.4,
-                "agent_utilization": {
-                    "data_analyst": 65.2,
-                    "etl_orchestrator": 43.1,
-                    "query_planner": 72.8,
-                    "visualization_agent": 51.3,
-                    "quality_monitor": 38.7,
-                    "chat_coordinator": 29.4
-                },
-                "resource_usage": {
-                    "memory_mb": 512.3,
-                    "cpu_percent": 65.2,
-                    "active_connections": 42
-                }
+                "total_tasks_processed": total_tasks,
+                "tasks_completed": tasks_completed,
+                "tasks_failed": tasks_failed,
+                "average_response_time": float(system_metrics.get("average_response_time", 0.0) or 0.0),
+                "success_rate": round(success_rate, 2),
+                "error_rate": round(error_rate, 2),
+                "agent_utilization": system_metrics.get("agent_utilization", {}),
             },
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error("Error getting agent metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+

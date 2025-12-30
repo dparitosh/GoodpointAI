@@ -7,7 +7,12 @@ import json
 import xml.etree.ElementTree as ET
 import hashlib
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow_iso() -> str:
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
 class GraphQLService:
@@ -137,7 +142,7 @@ class GraphQLService:
             "fields": fields,
             "types": types,
             "metadata": {
-                "introspected_at": datetime.utcnow().isoformat(),
+                "introspected_at": _utcnow_iso(),
                 "field_count": len(fields),
                 "type_count": len(types)
             }

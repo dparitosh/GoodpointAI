@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import XStateLandingPage from './XStateLandingPage.jsx';
 
@@ -20,27 +21,39 @@ describe('XStateLandingPage', () => {
     vi.resetAllMocks();
   });
 
-  it('does not crash when API returns nodes/edges as null', async () => {
-    fetch.mockResolvedValue({
+  it('renders with the sample demo flow when no workflows are returned', async () => {
+    fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ nodes: null, edges: null }),
+      json: async () => ([]),
     });
 
-    render(<XStateLandingPage />);
+    render(
+      <MemoryRouter>
+        <XStateLandingPage />
+      </MemoryRouter>
+    );
 
+    expect(await screen.findByLabelText(/Workflow selector/i)).toBeInTheDocument();
     expect(await screen.findByTestId('xstate-visualizer')).toBeInTheDocument();
   });
 
-  it('renders an error message when workflow load fails', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    fetch.mockRejectedValue(new Error('Network error'));
+  it('loads and renders the first workflow graph when workflows exist', async () => {
+    fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ([{ id: 'wf-1', name: 'WF One' }]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ workflow_config: { nodes: null, edges: null } }),
+      });
 
-    render(<XStateLandingPage />);
+    render(
+      <MemoryRouter>
+        <XStateLandingPage />
+      </MemoryRouter>
+    );
 
-    expect(
-      await screen.findByText(/Unable to load workflow data/i)
-    ).toBeInTheDocument();
-
-    consoleErrorSpy.mockRestore();
+    expect(await screen.findByTestId('xstate-visualizer')).toBeInTheDocument();
   });
 });

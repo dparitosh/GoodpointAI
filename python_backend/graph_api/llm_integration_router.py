@@ -3,14 +3,44 @@ LLM Integration Router
 Handles OpenAI, Anthropic Claude, Azure OpenAI, Ollama
 """
 import logging
+import os
+import importlib
 from typing import Any, Dict, List, Optional, cast
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/llm", tags=["LLM Integration"])
+
+
+def _is_ollama_explicitly_configured() -> bool:
+    # Avoid treating default config values as "configured".
+    return bool((os.getenv("OLLAMA_BASE_URL") or "").strip() or (os.getenv("OLLAMA_HOST") or "").strip())
+
+
+def _require_module(module_name: str, *, install_hint: str) -> Any:
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{module_name} dependency is not installed. {install_hint}",
+        ) from e
+
+
+def _require_provider_configured(provider: str) -> None:
+    from core.external_config import llm_config
+
+    if provider == "openai" and not llm_config.openai_api_key:
+        raise HTTPException(status_code=503, detail="OpenAI is not configured")
+    if provider == "anthropic" and not llm_config.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="Anthropic is not configured")
+    if provider == "azure-openai" and not (llm_config.azure_openai_endpoint and llm_config.azure_openai_key):
+        raise HTTPException(status_code=503, detail="Azure OpenAI is not configured")
+    if provider == "ollama" and not _is_ollama_explicitly_configured():
+        raise HTTPException(status_code=503, detail="Ollama is not configured")
 
 
 # ============================================================================
@@ -51,10 +81,9 @@ async def openai_chat_completion(request: LLMChatRequest):
     """OpenAI Chat Completion"""
     try:
         from core.external_config import llm_config
-        from openai import OpenAI
-        
-        if not llm_config.openai_api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key not configured")
+        _require_provider_configured("openai")
+        openai_mod = _require_module("openai", install_hint="Install `openai`." )
+        OpenAI = getattr(openai_mod, "OpenAI")
         
         client = OpenAI(api_key=llm_config.openai_api_key)
         
@@ -83,6 +112,8 @@ async def openai_chat_completion(request: LLMChatRequest):
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with OpenAI chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -93,10 +124,9 @@ async def openai_embedding(request: LLMEmbeddingRequest):
     """OpenAI Text Embedding"""
     try:
         from core.external_config import llm_config
-        from openai import OpenAI
-        
-        if not llm_config.openai_api_key:
-            raise HTTPException(status_code=400, detail="OpenAI API key not configured")
+        _require_provider_configured("openai")
+        openai_mod = _require_module("openai", install_hint="Install `openai`." )
+        OpenAI = getattr(openai_mod, "OpenAI")
         
         client = OpenAI(api_key=llm_config.openai_api_key)
         
@@ -121,6 +151,8 @@ async def openai_embedding(request: LLMEmbeddingRequest):
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with OpenAI embedding: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -135,10 +167,9 @@ async def anthropic_chat_completion(request: LLMChatRequest):
     """Anthropic Claude Chat Completion"""
     try:
         from core.external_config import llm_config
-        from anthropic import Anthropic
-        
-        if not llm_config.anthropic_api_key:
-            raise HTTPException(status_code=400, detail="Anthropic API key not configured")
+        _require_provider_configured("anthropic")
+        anthropic_mod = _require_module("anthropic", install_hint="Install `anthropic`." )
+        Anthropic = getattr(anthropic_mod, "Anthropic")
         
         client = Anthropic(api_key=llm_config.anthropic_api_key)
         
@@ -176,6 +207,8 @@ async def anthropic_chat_completion(request: LLMChatRequest):
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with Anthropic chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -190,10 +223,9 @@ async def azure_openai_chat_completion(request: LLMChatRequest):
     """Azure OpenAI Chat Completion"""
     try:
         from core.external_config import llm_config
-        from openai import AzureOpenAI
-        
-        if not llm_config.azure_openai_endpoint or not llm_config.azure_openai_key:
-            raise HTTPException(status_code=400, detail="Azure OpenAI not configured")
+        _require_provider_configured("azure-openai")
+        openai_mod = _require_module("openai", install_hint="Install `openai`." )
+        AzureOpenAI = getattr(openai_mod, "AzureOpenAI")
         
         client = AzureOpenAI(
             api_key=llm_config.azure_openai_key,
@@ -226,6 +258,8 @@ async def azure_openai_chat_completion(request: LLMChatRequest):
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with Azure OpenAI chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -240,7 +274,8 @@ async def ollama_chat_completion(request: LLMChatRequest):
     """Ollama Local LLM Chat Completion"""
     try:
         from core.external_config import llm_config
-        import ollama
+        _require_provider_configured("ollama")
+        ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         
         model = request.model or llm_config.ollama_model
         
@@ -267,6 +302,8 @@ async def ollama_chat_completion(request: LLMChatRequest):
             "done": response.get('done', True)
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with Ollama chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -277,7 +314,8 @@ async def ollama_generate(request: LLMCompletionRequest):
     """Ollama Text Generation"""
     try:
         from core.external_config import llm_config
-        import ollama
+        _require_provider_configured("ollama")
+        ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         
         model = request.model or llm_config.ollama_model
         
@@ -297,6 +335,8 @@ async def ollama_generate(request: LLMCompletionRequest):
             "done": response.get('done', True)
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with Ollama generate: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -310,7 +350,8 @@ async def list_ollama_models(
 ):
     """List available Ollama models"""
     try:
-        import ollama
+        _require_provider_configured("ollama")
+        ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         
         ollama_resp = cast(Dict[str, Any], ollama.list())
         
@@ -334,6 +375,8 @@ async def list_ollama_models(
             "models": models_page,
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error listing Ollama models: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -344,7 +387,8 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
     """Ollama Text Embedding"""
     try:
         from core.external_config import llm_config
-        import ollama
+        _require_provider_configured("ollama")
+        ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         
         model = request.model or llm_config.ollama_model
         
@@ -361,6 +405,8 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
             "dimensions": len(response['embedding'])
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with Ollama embedding: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -388,6 +434,8 @@ async def unified_chat_completion(
         else:
             raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error with unified chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -401,21 +449,23 @@ async def unified_chat_completion(
 async def llm_health_check():
     """Check LLM service connectivity"""
     from core.external_config import llm_config
-    
-    health = {
-        "status": "healthy",
-        "providers": {
-            "openai": llm_config.openai_api_key != "",
-            "anthropic": llm_config.anthropic_api_key != "",
-            "azure_openai": llm_config.azure_openai_endpoint != "",
-            "ollama": llm_config.ollama_base_url != ""
-        },
+
+    providers = {
+        "openai": bool(llm_config.openai_api_key),
+        "anthropic": bool(llm_config.anthropic_api_key),
+        "azure_openai": bool(llm_config.azure_openai_endpoint and llm_config.azure_openai_key),
+        "ollama": _is_ollama_explicitly_configured(),
+    }
+    configured_any = any(providers.values())
+    status = "healthy" if configured_any else "unconfigured"
+
+    return {
+        "status": status,
+        "providers": providers,
         "models": {
             "openai": llm_config.openai_model,
             "anthropic": llm_config.anthropic_model,
-            "ollama": llm_config.ollama_model
+            "ollama": llm_config.ollama_model,
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
-    
-    return health

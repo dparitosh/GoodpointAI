@@ -1,5 +1,5 @@
 param(
-  [string]$BaseUrl = "http://127.0.0.1:8000",
+  [string]$BaseUrl = "http://127.0.0.1:8011",
   [string]$WorkflowId = "wf_demo_001",
   [int]$TimeoutSec = 10
 )

@@ -6,6 +6,9 @@
 - **Node.js 18+** (Tested with Node 20+)
 - **npm 9+**
 - **Neo4j Database** (Cloud or local instance)
+- **PostgreSQL** (required for the app database)
+- **OpenSearch** (optional, for vector/search features)
+- **Apache HTTP Server** (optional, for production reverse-proxy + serving the built frontend)
 - **Git** (optional but recommended)
 
 ## Quick Start
@@ -23,6 +26,12 @@ chmod +x diagnostics.sh
 ./diagnostics.sh
 ```
 
+On Windows, use:
+
+```powershell
+./diagnostics/windows/diagnose-all.ps1
+```
+
 ### 3. Run Installation Script
 Install all dependencies:
 ```bash
@@ -30,19 +39,26 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### 4. Configure Neo4j Credentials
-Edit `python_backend/.env` with your Neo4j database credentials:
-```bash
-nano python_backend/.env
+On Windows, the recommended bootstrap is:
+
+```powershell
+./bootstrap.ps1 -RunDiagnostics
 ```
 
-Required variables:
+### 4. Configuration (DB-seeded, UI-managed)
+
+GraphTrace seeds DB-backed configuration on first run and the UI is the recommended way to configure integrations:
+
+- Open the UI: `http://localhost:5173/#/data-config`
+- Configure Neo4j + OpenSearch there
+
+Bootstrap secret required for encrypted config:
+
 ```env
-NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-password-here
-NEO4J_DATABASE=neo4j
+GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=your-secret
 ```
+
+Legacy `.env` remains optional for local development.
 
 ### 5. Start Services
 ```bash
@@ -52,8 +68,8 @@ chmod +x start-all.sh
 
 ### 6. Access Application
 - **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8000
-- **API Docs:** http://localhost:8000/docs
+- **Backend API:** http://localhost:8011
+- **API Docs:** http://localhost:8011/docs
 
 ## Manual Installation
 
@@ -75,6 +91,10 @@ python -m pip install --upgrade pip
 # Install dependencies
 pip install -r requirement.txt
 
+# Create DB schema + seed default config
+# NOTE: Requires DATABASE_URL (Postgres) or POSTGRES_* env vars.
+python -m scripts.init_db_schema
+
 # Create .env file
 cp .env.example .env
 # Edit .env with your credentials
@@ -91,7 +111,7 @@ cd e2etraceapp
 npm install
 
 # (Optional) Create .env
-echo "VITE_API_BASE_URL=http://localhost:8000" > .env
+echo "VITE_API_BASE_URL=http://localhost:8011" > .env
 
 # Start frontend
 npm run dev
@@ -122,6 +142,19 @@ graphTrace/
 ```
 
 ## Scripts Reference
+### DB schema + seed
+
+```bash
+cd python_backend
+python -m scripts.init_db_schema
+```
+
+### DB/config diagnostics
+
+```bash
+cd python_backend
+python -m scripts.diagnose_db_config
+```
 
 ### diagnostics.sh
 Validates system prerequisites and configuration:
@@ -168,7 +201,7 @@ Stops all running services:
 ### Issue: Port Already in Use
 ```bash
 # Check what's using the port
-lsof -i :8000  # Backend
+lsof -i :8011  # Backend
 lsof -i :5173  # Frontend
 
 # Kill the process
@@ -254,6 +287,9 @@ cd e2etraceapp
 npm run build
 # Serve dist/ folder with nginx/apache
 ```
+
+### Apache (optional)
+See `apache/README.md` and `apache/graphtrace-httpd.conf` for a sample configuration.
 
 ## Known Issues
 

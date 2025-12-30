@@ -27,6 +27,34 @@
   gap: 20px;
 }
 
+.landing-workflow-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 240px;
+}
+
+.landing-workflow-selector__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c757d;
+}
+
+.landing-workflow-selector__select {
+  height: 36px;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: white;
+  color: #0033A0;
+  font-weight: 600;
+}
+
+.landing-workflow-selector__hint {
+  font-size: 12px;
+  color: #6c757d;
+}
+
 .landing-logo {
   height: 108px;
   width: auto;
@@ -131,6 +159,10 @@
     flex-direction: column;
     gap: 16px;
     align-items: flex-start;
+  }
+
+  .landing-workflow-selector {
+    width: 100%;
   }
 
   .landing-stats {

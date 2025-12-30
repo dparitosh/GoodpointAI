@@ -19,18 +19,18 @@ nano .env  # or use your preferred editor
 
 ### Step 3: Start Backend
 ```bash
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload
 ```
 
 ### Step 4: Test API
 ```bash
 # Health checks
-curl http://localhost:8000/api/azure/health
-curl http://localhost:8000/api/aws/health
-curl http://localhost:8000/api/llm/health
+curl http://localhost:8011/api/azure/health
+curl http://localhost:8011/api/aws/health
+curl http://localhost:8011/api/llm/health
 
 # Interactive docs
-open http://localhost:8000/docs
+open http://localhost:8011/docs
 ```
 
 ---
@@ -57,14 +57,14 @@ open http://localhost:8000/docs
 
 ### Use Case 1: Upload File to Azure
 ```bash
-curl -X POST http://localhost:8000/api/azure/blob/upload \
+curl -X POST http://localhost:8011/api/azure/blob/upload \
   -F "file=@data.xml" \
   -F "container_name=plm-data"
 ```
 
 ### Use Case 2: Query Teamcenter PLM
 ```bash
-curl -X POST http://localhost:8000/api/plm/teamcenter/query \
+curl -X POST http://localhost:8011/api/plm/teamcenter/query \
   -H "Content-Type: application/json" \
   -d '{
     "system_type": "teamcenter",
@@ -76,7 +76,7 @@ curl -X POST http://localhost:8000/api/plm/teamcenter/query \
 
 ### Use Case 3: Chat with LLM
 ```bash
-curl -X POST http://localhost:8000/api/llm/openai/chat \
+curl -X POST http://localhost:8011/api/llm/openai/chat \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8000/api/llm/openai/chat \
 
 ### Use Case 4: Parse XML File
 ```bash
-curl -X POST http://localhost:8000/api/filesystem/xml/parse \
+curl -X POST http://localhost:8011/api/filesystem/xml/parse \
   -H "Content-Type: application/json" \
   -d '{
     "file_path": "./data/xml/input/data.xml"
@@ -97,7 +97,7 @@ curl -X POST http://localhost:8000/api/filesystem/xml/parse \
 
 ### Use Case 5: Upload to S3
 ```bash
-curl -X POST http://localhost:8000/api/aws/s3/upload \
+curl -X POST http://localhost:8011/api/aws/s3/upload \
   -F "file=@data.json" \
   -F "bucket_name=my-bucket"
 ```
@@ -187,13 +187,13 @@ pip install pandas openpyxl xmltodict jsonschema
 import requests
 
 # Health check
-response = requests.get('http://localhost:8000/api/azure/health')
+response = requests.get('http://localhost:8011/api/azure/health')
 print(response.json())
 
 # Upload file
 files = {'file': open('data.xml', 'rb')}
 response = requests.post(
-    'http://localhost:8000/api/azure/blob/upload',
+  'http://localhost:8011/api/azure/blob/upload',
     files=files
 )
 print(response.json())
@@ -202,12 +202,12 @@ print(response.json())
 ### Using JavaScript/Node
 ```javascript
 // Health check
-fetch('http://localhost:8000/api/llm/health')
+fetch('http://localhost:8011/api/llm/health')
   .then(res => res.json())
   .then(data => console.log(data));
 
 // LLM chat
-fetch('http://localhost:8000/api/llm/openai/chat', {
+fetch('http://localhost:8011/api/llm/openai/chat', {
   method: 'POST',
   headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({
@@ -241,8 +241,8 @@ cp .env.example .env
 ### Issue: "Azure/AWS connection failed"
 ```bash
 # Test credentials
-curl http://localhost:8000/api/azure/health
-curl http://localhost:8000/api/aws/health
+curl http://localhost:8011/api/azure/health
+curl http://localhost:8011/api/aws/health
 
 # Check logs
 tail -f logs/app.log
@@ -271,7 +271,7 @@ MAX_UPLOAD_SIZE_MB=500
 
 1. **Complete API Reference**: `EXTERNAL_INTEGRATIONS_API_REFERENCE.md`
 2. **Implementation Details**: `EXTERNAL_INTEGRATIONS_IMPLEMENTATION_SUMMARY.md`
-3. **Interactive Docs**: http://localhost:8000/docs
+3. **Interactive Docs**: http://localhost:8011/docs
 4. **Environment Template**: `.env.example`
 
 ---
@@ -281,7 +281,7 @@ MAX_UPLOAD_SIZE_MB=500
 ### React/JavaScript Example
 ```javascript
 // Add to your frontend service file
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8011';
 
 // Upload to Azure
 export const uploadToAzure = async (file) => {
@@ -367,13 +367,13 @@ Create a simple health check script:
 import requests
 
 services = [
-    ('Azure', 'http://localhost:8000/api/azure/health'),
-    ('AWS', 'http://localhost:8000/api/aws/health'),
-    ('OData', 'http://localhost:8000/api/odata/health'),
-    ('LLM', 'http://localhost:8000/api/llm/health'),
-    ('PLM', 'http://localhost:8000/api/plm/systems/health'),
-    ('FileSystem', 'http://localhost:8000/api/filesystem/health'),
-    ('Gateway', 'http://localhost:8000/api/gateway/health'),
+  ('Azure', 'http://localhost:8011/api/azure/health'),
+  ('AWS', 'http://localhost:8011/api/aws/health'),
+  ('OData', 'http://localhost:8011/api/odata/health'),
+  ('LLM', 'http://localhost:8011/api/llm/health'),
+  ('PLM', 'http://localhost:8011/api/plm/systems/health'),
+  ('FileSystem', 'http://localhost:8011/api/filesystem/health'),
+  ('Gateway', 'http://localhost:8011/api/gateway/health'),
 ]
 
 for name, url in services:
@@ -449,7 +449,7 @@ python3 health_check.py
 ##  Need Help?
 
 1. Check logs: `tail -f logs/app.log`
-2. Review API docs: http://localhost:8000/docs
+2. Review API docs: http://localhost:8011/docs
 3. Test health endpoints
 4. Check environment variables
 5. Verify network connectivity
@@ -466,21 +466,21 @@ cd python_backend && python3 -m uvicorn main:app --reload
 pip install -r requirements_external_integrations.txt
 
 # Check health
-curl http://localhost:8000/api/azure/health | jq
+curl http://localhost:8011/api/azure/health | jq
 
 # View logs
 tail -f logs/app.log
 
 # Test upload
-curl -X POST -F "file=@test.xml" http://localhost:8000/api/filesystem/upload
+curl -X POST -F "file=@test.xml" http://localhost:8011/api/filesystem/upload
 
 # List files
 curl -X POST -H "Content-Type: application/json" \
   -d '{"path": "./data/uploads"}' \
-  http://localhost:8000/api/filesystem/list
+  http://localhost:8011/api/filesystem/list
 
 # Interactive docs
-open http://localhost:8000/docs
+open http://localhost:8011/docs
 ```
 
 ---
