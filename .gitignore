@@ -2,8 +2,31 @@ __pycache__/
 
 *.pyc
 
+# Node
+node_modules/
+
+# Python virtualenv
+python_backend/venv/
+venv/
+
+# Env files (local-only)
+.env
+e2etraceapp/.env
+python_backend/.env
+
+# Logs
+logs/
+python_backend/logs/
+
+# Frontend build artifacts
+e2etraceapp/dist/
+e2etraceapp/.vite/
+
 # Runtime data (SQLite default DB)
 python_backend/data/
+
+# Local-only encryption key (do not commit)
+python_backend/.graphtrace.encryption_key
 
 # Generated test artifacts
 e2etraceapp/test-results/junit.xml
