@@ -23,17 +23,10 @@ const LandingPage = () => {
       color: 'var(--cy-selected-color)'
     },
     {
-      icon: 'fas fa-route',
-      title: 'Interactive State Flow',
-      description: 'Visualize the agentic workflow end-to-end',
-      link: '/interactive-state-flow',
-      color: 'var(--critical-color)'
-    },
-    {
       icon: 'fas fa-layer-group',
       title: 'Workflow Manager',
       description: 'Manage multiple pipeline instances and execution runs',
-      link: '/workflow-manager',
+      link: '/processing',
       color: 'var(--accent-color)'
     },
     {
@@ -97,7 +90,7 @@ const LandingPage = () => {
           </p>
         </div>
         <div className="interactive-state-flow-embed">
-          <InteractiveStateFlowEmbed />
+          <InteractiveStateFlowEmbed mode="sample" />
         </div>
       </section>
 

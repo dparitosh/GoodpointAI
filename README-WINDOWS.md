@@ -9,7 +9,7 @@ This guide provides instructions for running GraphTrace on Windows using PowerSh
    - During installation, check "Add Python to PATH"
    - Verify: `python --version`
 
-2. **Node.js 16+** - [Download](https://nodejs.org/)
+2. **Node.js 18+** - [Download](https://nodejs.org/)
    - npm is included with Node.js
    - Verify: `node --version` and `npm --version`
 
@@ -98,6 +98,9 @@ start-backend.bat
 The backend will be available at:
 - API: `http://localhost:8011`
 - Interactive API Docs: `http://localhost:8011/docs`
+
+Notes:
+- Persisted reports (`/api/reports`) require Postgres to be reachable (configured via `DATABASE_URL` or `POSTGRES_*`). If unavailable, the API returns **HTTP 503**.
 
 #### Frontend Only
 

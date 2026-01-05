@@ -345,7 +345,7 @@ Navigate to `http://localhost:3000/#/graph-explorer` and:
 
 **1. Neo4j Connection Failed**
 - Verify `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` environment variables
-- Ensure Neo4j is running: `docker ps` or check service status
+- Ensure Neo4j is running (Neo4j AuraDB or Neo4j Desktop)
 - Check firewall rules for port 7687
 
 **2. GraphQL Schema Introspection Fails**

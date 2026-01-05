@@ -69,10 +69,6 @@ export function E2ETraceAnalyticsPage() {
     }, []);
 
     useEffect(() => {
-        let cancelled = False
-    }, []);
-
-    useEffect(() => {
         let cancelled = false;
         const fetchQualityReports = async () => {
             try {

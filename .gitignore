@@ -1,5 +1,13 @@
 __pycache__/
 
+# Python caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
 *.pyc
 
 # Node
@@ -18,6 +26,10 @@ python_backend/.env
 logs/
 python_backend/logs/
 
+# Temporary/runtime data created by the backend
+python_backend/mapping_rules.json
+python_backend/mapping_templates.json
+
 # Frontend build artifacts
 e2etraceapp/dist/
 e2etraceapp/.vite/
@@ -32,5 +44,14 @@ python_backend/.graphtrace.encryption_key
 e2etraceapp/test-results/junit.xml
 e2etraceapp/test-results/test-results.json
 
+# Playwright / UI test outputs
+e2etraceapp/playwright-report/
+e2etraceapp/test-results/
+test-results/
+
 # Local archive artifacts
 python_backend.7z
+
+# Local diagnostics outputs (generated)
+diagnostics/windows/*_report.*
+diagnostics/windows/audit_*_report.*

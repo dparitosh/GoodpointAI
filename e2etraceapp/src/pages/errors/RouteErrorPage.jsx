@@ -27,7 +27,6 @@ export default function RouteErrorPage() {
       ) : null}
       <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <Link to="/" style={{ color: 'var(--tcs-blue-primary)' }}>Go Home</Link>
-        <Link to="/interactive-state-flow" style={{ color: 'var(--tcs-blue-primary)' }}>Interactive State Flow</Link>
         <Link to="/graphexplorer" style={{ color: 'var(--tcs-blue-primary)' }}>Graph Explorer</Link>
       </div>
     </div>

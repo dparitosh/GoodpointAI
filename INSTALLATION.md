@@ -14,31 +14,18 @@
 ## Quick Start
 
 ### 1. Clone or Download Repository
-```bash
+```powershell
 git clone <repository-url>
-cd graphTrace
+cd graphTrace\agentic-restored
 ```
 
 ### 2. Run System Diagnostics
 Before installation, check system compatibility:
-```bash
-chmod +x diagnostics.sh
-./diagnostics.sh
-```
-
-On Windows, use:
-
 ```powershell
 ./diagnostics/windows/diagnose-all.ps1
 ```
 
 ### 3. Run Installation Script
-Install all dependencies:
-```bash
-chmod +x install.sh
-./install.sh
-```
-
 On Windows, the recommended bootstrap is:
 
 ```powershell
@@ -61,9 +48,14 @@ GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=your-secret
 Legacy `.env` remains optional for local development.
 
 ### 5. Start Services
-```bash
-chmod +x start-all.sh
-./start-all.sh
+```powershell
+./start-all.ps1
+```
+
+Or using Command Prompt:
+
+```cmd
+start-all.bat
 ```
 
 ### 6. Access Application
@@ -71,19 +63,26 @@ chmod +x start-all.sh
 - **Backend API:** http://localhost:8011
 - **API Docs:** http://localhost:8011/docs
 
+### Notes on persistence (important)
+
+- **Postgres is required** for DB-backed features like persisted reports (`/api/reports`). If the DB is unreachable, the API returns **HTTP 503** with a clear message.
+- **Data Mapping rules/templates** are currently stored as local JSON files created at runtime:
+	- `python_backend/mapping_rules.json`
+	- `python_backend/mapping_templates.json`
+	These files are intentionally **ignored by git** (local dev artifact).
+- **Mapping execution** (`/api/data-mapping/rules/{id}/execute`) intentionally returns **HTTP 503** unless source/target connectors + an execution engine are configured.
+
 ## Manual Installation
 
 ### Backend Setup
-```bash
-cd python_backend
+```powershell
+cd .\python_backend
 
 # Create virtual environment
-python3 -m venv venv
+python -m venv venv
 
-# Activate virtual environment
-source venv/bin/activate  # Linux/Mac
-# OR
-venv\Scripts\activate  # Windows
+# Activate virtual environment (PowerShell)
+.\venv\Scripts\Activate.ps1
 
 # Upgrade pip
 python -m pip install --upgrade pip
@@ -95,26 +94,25 @@ pip install -r requirement.txt
 # NOTE: Requires DATABASE_URL (Postgres) or POSTGRES_* env vars.
 python -m scripts.init_db_schema
 
-# Create .env file
-cp .env.example .env
-# Edit .env with your credentials
+# Create .env file (optional)
+Copy-Item .\.env.example .\.env -Force
 
 # Start backend
-python main.py
+python -m uvicorn --app-dir . main:app --host 0.0.0.0 --port 8011 --reload
 ```
 
 ### Frontend Setup
-```bash
-cd e2etraceapp
+```powershell
+cd .\e2etraceapp
 
 # Install dependencies
 npm install
 
 # (Optional) Create .env
-echo "VITE_API_BASE_URL=http://localhost:8011" > .env
+Set-Content -Path .\.env -Value "VITE_API_BASE_URL=http://localhost:8011"
 
 # Start frontend
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 ## Directory Structure
@@ -135,10 +133,10 @@ graphTrace/
 │   ├── index.html          # Entry HTML
 │   └── src/                # Source code
 ├── logs/                   # Application logs
-├── diagnostics.sh          # System validation script
-├── install.sh              # Installation script
-├── start-all.sh            # Start all services
-└── stop-all.sh             # Stop all services
+├── bootstrap.ps1           # Bootstrap (Windows)
+├── start-all.ps1           # Start all services (Windows)
+├── start-all.bat           # Start all services (Windows, cmd)
+└── diagnostics/            # Windows diagnostics scripts
 ```
 
 ## Scripts Reference
@@ -156,63 +154,32 @@ cd python_backend
 python -m scripts.diagnose_db_config
 ```
 
-### diagnostics.sh
-Validates system prerequisites and configuration:
-- Checks Python, Node.js, npm versions
-- Verifies required files exist
-- Tests port availability
-- Validates environment configuration
-- Checks network connectivity
+### Windows scripts
 
-```bash
-./diagnostics.sh
-```
-
-### install.sh
-Installs all dependencies:
-- Creates Python virtual environment
-- Installs Python packages
-- Installs npm packages
-- Creates template .env files
-
-```bash
-./install.sh
-```
-
-### start-all.sh
-Starts both backend and frontend:
-- Activates Python venv
-- Starts FastAPI on port 8000
-- Starts Vite dev server on port 5173
-- Logs to `logs/` directory
-
-```bash
-./start-all.sh
-```
-
-### stop-all.sh
-Stops all running services:
-```bash
-./stop-all.sh
-```
+- Diagnostics: `./diagnostics/windows/diagnose-all.ps1`
+- Bootstrap (recommended): `./bootstrap.ps1 -RunDiagnostics`
+- Start all: `./start-all.ps1` or `start-all.bat`
+- Start backend: `./start-backend.ps1` or `start-backend.bat`
+- Start frontend: `./start-frontend.ps1` or `start-frontend.bat`
 
 ## Common Issues & Solutions
 
 ### Issue: Port Already in Use
-```bash
-# Check what's using the port
-lsof -i :8011  # Backend
-lsof -i :5173  # Frontend
+```powershell
+# Stop the process owning port 8011
+$pid = (Get-NetTCPConnection -LocalPort 8011 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
+if ($pid) { Stop-Process -Id $pid -Force }
 
-# Kill the process
-kill -9 <PID>
+# Stop the process owning port 5173
+$pid = (Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
+if ($pid) { Stop-Process -Id $pid -Force }
 ```
 
 ### Issue: Python packages not found
-```bash
+```powershell
 # Make sure virtual environment is activated
-cd python_backend
-source venv/bin/activate
+cd .\python_backend
+.\venv\Scripts\Activate.ps1
 
 # Reinstall packages
 pip install -r requirement.txt
@@ -249,26 +216,26 @@ Backend uses uvicorn with `--reload` flag for automatic reloading.
 Vite provides instant HMR - changes appear immediately.
 
 ### Viewing Logs
-```bash
+```powershell
 # Backend logs
-tail -f logs/backend.log
+Get-Content -Path .\logs\backend.log -Wait
 
 # Frontend logs
-tail -f logs/frontend.log
+Get-Content -Path .\logs\frontend.log -Wait
 ```
 
 ## Testing
 
 ### Run Backend Tests
-```bash
-cd python_backend
-source venv/bin/activate
+```powershell
+cd .\python_backend
+.\venv\Scripts\Activate.ps1
 pytest tests/
 ```
 
 ### Run Frontend Tests
-```bash
-cd e2etraceapp
+```powershell
+cd .\e2etraceapp
 npm test
 ```
 
@@ -282,11 +249,12 @@ npm test
 5. Use environment variables for secrets
 
 ### Frontend
-```bash
-cd e2etraceapp
+```powershell
+cd .\e2etraceapp
 npm run build
-# Serve dist/ folder with nginx/apache
 ```
+
+Serve `e2etraceapp/dist/` using a Windows-friendly static server or Apache (optional).
 
 ### Apache (optional)
 See `apache/README.md` and `apache/graphtrace-httpd.conf` for a sample configuration.
@@ -301,7 +269,7 @@ See `apache/README.md` and `apache/graphtrace-httpd.conf` for a sample configura
 
 For issues or questions:
 1. Check logs in `logs/` directory
-2. Run `./diagnostics.sh` for system validation
+2. Run `./diagnostics/windows/diagnose-all.ps1` for system validation
 3. Review this README for common issues
 4. Check Neo4j connectivity separately
 

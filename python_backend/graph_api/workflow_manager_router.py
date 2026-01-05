@@ -221,6 +221,22 @@ def _load_templates_or_503() -> List[Dict[str, Any]]:
     return templates
 
 
+def _load_templates_optional() -> List[Dict[str, Any]]:
+    """Best-effort templates loader for UI listing endpoints.
+
+    Workflow templates are optional in local/dev setups; listing should not fail-closed.
+    """
+
+    try:
+        return _load_templates_or_503()
+    except HTTPException as exc:
+        if getattr(exc, "status_code", None) == 503:
+            logger.info("Workflow templates unavailable for listing: %s", getattr(exc, "detail", exc))
+            return []
+        raise
+
+
+@router.get("", response_model=List[WorkflowInstanceResponse], include_in_schema=False)
 @router.get("/", response_model=List[WorkflowInstanceResponse])
 async def list_workflows(
     response: Response,
@@ -345,6 +361,49 @@ async def get_workflow(
     return store_row
 
 
+@router.get("/{workflow_id}/graph", response_model=Dict[str, Any])
+async def get_workflow_graph(
+    workflow_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return the workflow's graph configuration (nodes/edges).
+
+    The frontend's workflow detail view expects graph-shaped data even when the
+    workflow instance itself is otherwise healthy.
+    """
+
+    workflow_id = str(workflow_id or "").strip()
+    if not workflow_id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    await _ensure_store_loaded(db)
+
+    async with _WORKFLOWS_STORE_LOCK:
+        wf = WORKFLOWS_STORE.get(workflow_id)
+
+    if wf is None:
+        row = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Workflow {workflow_id} not found")
+        wf = _row_to_store_dict(row)
+        async with _WORKFLOWS_STORE_LOCK:
+            WORKFLOWS_STORE[workflow_id] = wf
+
+    cfg = wf.get("workflow_config")
+    if not isinstance(cfg, dict):
+        cfg = {}
+
+    nodes = cfg.get("nodes")
+    edges = cfg.get("edges")
+    ai_agents = cfg.get("ai_agents")
+
+    return {
+        "nodes": nodes if isinstance(nodes, list) else [],
+        "edges": edges if isinstance(edges, list) else [],
+        "ai_agents": ai_agents if isinstance(ai_agents, list) else [],
+    }
+
+
 @router.patch("/{workflow_id}", response_model=WorkflowInstanceDetail)
 async def update_workflow(
     workflow_id: str,
@@ -448,7 +507,15 @@ async def execute_workflow(
 
     if action == "start":
         if status == WorkflowStatus.RUNNING:
-            raise HTTPException(status_code=400, detail="Workflow already running")
+            # Idempotent start: returning 200 avoids noisy UX when a user clicks
+            # "Run" multiple times or the UI refreshes mid-run.
+            return WorkflowExecutionResponse(
+                workflow_id=workflow_id,
+                execution_id=str(wf.get("last_execution_id") or ""),
+                status=str(WorkflowStatus.RUNNING.value),
+                message="Workflow already running",
+                started_at=wf.get("started_at"),
+            )
         wf["status"] = WorkflowStatus.RUNNING
         wf["current_stage"] = WorkflowStage.EXTRACTING
         wf["started_at"] = wf.get("started_at") or now
@@ -505,7 +572,7 @@ async def list_workflow_templates(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    templates = _load_templates_or_503()
+    templates = _load_templates_optional()
 
     total = len(templates)
     page = templates[skip : skip + limit]

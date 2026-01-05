@@ -41,7 +41,7 @@ class ConfigurationMetadata(BaseModel):
 class DeploymentConfig(BaseModel):
     """Deployment configuration model"""
     auto_deploy: bool = True
-    deployment_strategy: str = Field("progressive", pattern="^(progressive|offline|docker|enterprise)$")
+    deployment_strategy: str = Field("progressive", pattern="^(progressive|offline|enterprise)$")
     install_types: List[str] = Field(default=["all"])
     verification_level: str = Field("comprehensive", pattern="^(basic|comprehensive|none)$")
     cache_dependencies: bool = True
@@ -408,8 +408,6 @@ class AgenticConfigurationManager:
                 cmd = self._build_progressive_deployment_command(install_types)
             elif deployment_strategy == "offline":
                 cmd = self._build_offline_deployment_command(install_types)
-            elif deployment_strategy == "docker":
-                cmd = self._build_docker_deployment_command()
             elif deployment_strategy == "enterprise":
                 cmd = self._build_enterprise_deployment_command(install_types)
             else:
@@ -498,10 +496,6 @@ class AgenticConfigurationManager:
         cmd = self._build_progressive_deployment_command(install_types)
         cmd.extend(["-OfflineMode"])
         return cmd
-    
-    def _build_docker_deployment_command(self) -> List[str]:
-        """Build Docker deployment command"""
-        return ["docker", "build", "-t", "e2etrace-database", "-f", "Dockerfile.database", "."]
     
     def _build_enterprise_deployment_command(self, install_types: List[str]) -> List[str]:
         """Build enterprise deployment command"""

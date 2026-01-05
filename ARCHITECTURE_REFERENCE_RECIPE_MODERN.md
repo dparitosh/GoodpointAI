@@ -75,6 +75,24 @@ FastAPI is the control plane:
 
 Invariant: **UI renders from persisted truth (Postgres)** or shows **N/A**. Never “demo dashboards”.
 
+## Repo Implementation Notes (What Exists Today)
+
+This repo contains a mix of **DB-backed** and **file-backed** features. The intent is still aligned with the “fail-closed / no fabricated data” policy.
+
+### Data Mapping
+
+- **CRUD + validation**: implemented under `python_backend/graph_api/data_mapping_router.py` (`/api/data-mapping/*`).
+- **Storage**: currently **local JSON files** created at runtime (dev artifact):
+	- `python_backend/mapping_rules.json`
+	- `python_backend/mapping_templates.json`
+- **Execution**: `/api/data-mapping/rules/{id}/execute` returns **HTTP 503** until source/target connectors and an execution engine are configured (intentional fail-closed).
+
+### Reporting + Spreadsheet
+
+- **Persisted reports**: implemented under `python_backend/graph_api/reports_router.py` (`/api/reports/*`) and stored in Postgres (`reports` table).
+- **Fail-closed**: if the configured DB is unreachable, report endpoints return **HTTP 503** with a clear error.
+- **Spreadsheet UX**: `e2etraceapp` provides import/export and charting. The backend includes `/api/convert` but only implements **JSON → CSV** currently; other conversions return “not yet implemented”.
+
 ## 4. Data Quality Stack — The Correct Way to Combine Them
 
 ### Current repo reality

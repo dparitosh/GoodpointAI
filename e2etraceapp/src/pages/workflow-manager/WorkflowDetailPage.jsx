@@ -349,7 +349,7 @@ const WorkflowDetailPage = () => {
         }
       } else {
         console.error('Workflow not found:', workflowId);
-        navigate('/workflow-manager', { 
+        navigate('/processing?tab=workflows', {
           state: { error: 'Workflow not found' } 
         });
       }
@@ -414,7 +414,7 @@ const WorkflowDetailPage = () => {
     return (
       <div className="workflow-detail-error">
         <h2>Workflow Not Found</h2>
-        <button onClick={() => navigate('/workflow-manager')}>← Back to Workflows</button>
+        <button onClick={() => navigate('/processing?tab=workflows')}>← Back to Workflows</button>
       </div>
     );
   }
@@ -423,7 +423,7 @@ const WorkflowDetailPage = () => {
     <div className="workflow-detail-page">
       {/* Header */}
       <div className="workflow-detail-header">
-        <button className="btn-back" onClick={() => navigate('/workflow-manager')}>
+        <button className="btn-back" onClick={() => navigate('/processing?tab=workflows')}>
           ← Back to Workflows
         </button>
         

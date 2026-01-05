@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   // Default to the repo's standard backend dev port.
   // Override locally with e.g. `VITE_DEV_PROXY_TARGET=http://127.0.0.1:8011` when using a different port.
   // Note: keep the dev-server proxy target independent from `VITE_API_BASE_URL` to avoid accidental misroutes.
-  const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:8000'
+  const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:8011'
 
   return {
     plugins: [react()],

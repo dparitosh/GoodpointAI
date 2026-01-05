@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveAs } from 'file-saver';
+import { useSearchParams } from 'react-router-dom';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '../../config/api-config.js';
 import { DataQualityDashboard } from '../quality/DataQualityDashboard.jsx';
@@ -9,6 +10,7 @@ import './DataProcessingHubPage.css';
 
 const DataProcessingHubPage = () => {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const plmBaseUrl = useMemo(() => `${API_CONFIG?.API_BASE_URL || ''}/api/plm/etl`, []);
 
@@ -444,6 +446,10 @@ const DataProcessingHubPage = () => {
   };
 
   const openCreate = () => {
+    if (templatesUnavailable || templates.length === 0) {
+      alert(t('processingHub.templates.unavailable'));
+      return;
+    }
     const firstTemplate = templates?.[0]?.id || '';
     setSelectedTemplateId(firstTemplate);
     setWorkflowName('');
@@ -521,6 +527,22 @@ const DataProcessingHubPage = () => {
 
   const metricValue = (value) => (value === null || value === undefined ? 'N/A' : value);
 
+  useEffect(() => {
+    const requested = String(searchParams.get('tab') || '').trim();
+    if (!requested) return;
+    if (!['workflows', 'templates', 'quick', 'quality'].includes(requested)) return;
+    if (requested === activeTab) return;
+    setActiveTab(requested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const selectTab = (nextTab) => {
+    setActiveTab(nextTab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', nextTab);
+    setSearchParams(next, { replace: true });
+  };
+
   return (
     <div className="data-processing-hub">
       <div className="data-processing-hub__header">
@@ -547,28 +569,28 @@ const DataProcessingHubPage = () => {
         <button
           type="button"
           className={`data-processing-hub__tab ${activeTab === 'workflows' ? 'data-processing-hub__tab--active' : ''}`}
-          onClick={() => setActiveTab('workflows')}
+          onClick={() => selectTab('workflows')}
         >
           {t('processingHub.tabs.workflows')}
         </button>
         <button
           type="button"
           className={`data-processing-hub__tab ${activeTab === 'templates' ? 'data-processing-hub__tab--active' : ''}`}
-          onClick={() => setActiveTab('templates')}
+          onClick={() => selectTab('templates')}
         >
           {t('processingHub.tabs.templates')}
         </button>
         <button
           type="button"
           className={`data-processing-hub__tab ${activeTab === 'quick' ? 'data-processing-hub__tab--active' : ''}`}
-          onClick={() => setActiveTab('quick')}
+          onClick={() => selectTab('quick')}
         >
           {t('processingHub.tabs.quick')}
         </button>
         <button
           type="button"
           className={`data-processing-hub__tab ${activeTab === 'quality' ? 'data-processing-hub__tab--active' : ''}`}
-          onClick={() => setActiveTab('quality')}
+          onClick={() => selectTab('quality')}
         >
           {t('processingHub.tabs.quality')}
         </button>
@@ -578,7 +600,12 @@ const DataProcessingHubPage = () => {
         <section className="data-processing-hub__panel">
           <div className="data-processing-hub__panel-header">
             <h2>{t('processingHub.workflows.title')}</h2>
-            <button type="button" className="data-processing-hub__btn data-processing-hub__btn--primary" onClick={openCreate} disabled={isLoading}>
+            <button
+              type="button"
+              className="data-processing-hub__btn data-processing-hub__btn--primary"
+              onClick={openCreate}
+              disabled={isLoading || templatesUnavailable || templates.length === 0}
+            >
               {t('processingHub.workflows.create')}
             </button>
           </div>
@@ -622,6 +649,9 @@ const DataProcessingHubPage = () => {
           <div className="data-processing-hub__content">
             <div className="data-processing-hub__list">
               {templatesUnavailable ? (
+                <div className="data-processing-hub__item">{t('processingHub.templates.unavailable')}</div>
+              ) : null}
+              {!templatesUnavailable && templates.length === 0 ? (
                 <div className="data-processing-hub__item">{t('processingHub.templates.unavailable')}</div>
               ) : null}
               {templates.map((tpl) => (

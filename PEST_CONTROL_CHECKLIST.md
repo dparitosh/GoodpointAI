@@ -59,7 +59,6 @@
 - [x] `/e2etraceapp/src/utils/apiClient.js`
 - [x] `/BUG_FIXES_REPORT.md`
 - [x] `/PEST_CONTROL_SUMMARY.md`
-- [x] `/validate-bug-fixes.sh`
 - [x] `/PEST_CONTROL_CHECKLIST.md` (this file)
 
 ---
@@ -177,7 +176,6 @@
 - [x] Detailed fix report (BUG_FIXES_REPORT.md)
 - [x] Executive summary (PEST_CONTROL_SUMMARY.md)
 - [x] Completion checklist (this file)
-- [x] Validation script (validate-bug-fixes.sh)
 - [x] Inline code comments added
 - [x] TODO items marked for future work
 

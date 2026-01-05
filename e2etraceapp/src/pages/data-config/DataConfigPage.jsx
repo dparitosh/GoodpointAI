@@ -34,7 +34,8 @@ const DataConfigPage = () => {
     database: {
       name: 'Database (SQL)',
       fields: ['host', 'port', 'database', 'username', 'password'],
-      defaultPort: '5433'
+      // Postgres default is 5432; users can override per environment.
+      defaultPort: '5432'
     },
     neo4j: {
       name: 'Neo4j Graph Database',
@@ -48,17 +49,20 @@ const DataConfigPage = () => {
     },
     api: {
       name: 'REST API',
-      fields: ['baseUrl', 'apiKey', 'authType'],
+      // Backend persists `endpoint` + `api_key` (and can also store basic auth credentials).
+      fields: ['endpoint', 'api_key', 'username', 'password'],
       defaultPort: '443'
     },
     file: {
       name: 'File Source',
-      fields: ['path', 'format', 'delimiter'],
+      // Backend persists `file_path`.
+      fields: ['file_path'],
       defaultPort: null
     },
     kafka: {
       name: 'Apache Kafka',
-      fields: ['brokers', 'topic', 'groupId'],
+      // Backend has no Kafka-specific schema; store as a connection string.
+      fields: ['connection_string'],
       defaultPort: '9092'
     }
   };
@@ -848,9 +852,9 @@ const DataConfigPage = () => {
               <h3>Connection Details</h3>
               {sourceTypes[newSourceConfig.type]?.fields.map(field => (
                 <div key={field} className="form-group">
-                  <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                  <label>{field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</label>
                   <input
-                    type={field.includes('password') ? 'password' : 'text'}
+                    type={field.includes('password') || field.toLowerCase().includes('api_key') ? 'password' : 'text'}
                     value={newSourceConfig.connection[field] || ''}
                     onChange={(e) => setNewSourceConfig(prev => ({
                       ...prev,
@@ -948,7 +952,7 @@ const DataConfigPage = () => {
               <h3>Connection Details</h3>
               {sourceTypes[editingSource.type || 'database']?.fields.map(field => (
                 <div key={field} className="form-group">
-                  <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                  <label>{field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</label>
                   <input
                     type={field.includes('password') || field.toLowerCase().includes('apikey') ? 'password' : 'text'}
                     value={(editingSource.connection || {})[field] || ''}

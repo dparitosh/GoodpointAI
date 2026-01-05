@@ -1,11 +1,8 @@
 import { Navigate, createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
-import XStateLandingPage from '../pages/xstate-landing/XStateLandingPage.jsx';
 import LandingPage from '../pages/landing/LandingPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
-import { DataQualityDashboard } from '../pages/quality/DataQualityDashboard.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
-import WorkflowManagerPage from '../pages/workflow-manager/WorkflowManagerPage.jsx';
 import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
 import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
 import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
@@ -37,8 +34,8 @@ const router = createHashRouter([
       // Interactive State Flow (XState)
       {
         path: 'interactive-state-flow',
-        element: <XStateLandingPage />,
-        handle: { crumb: 'nav.interactiveStateFlow' }
+        element: <Navigate to="/" replace />,
+        handle: { crumb: 'nav.overview' }
       },
 
       // Data Configuration (used by Landing "Get Started" and WorkflowProgress)
@@ -92,14 +89,14 @@ const router = createHashRouter([
       // Data Quality Dashboard (SODA)
       {
         path: 'data-quality',
-        element: <DataQualityDashboard />,
-        handle: { crumb: 'nav.dataQuality' },
+        element: <Navigate to="/processing?tab=quality" replace />,
+        handle: { crumb: 'nav.dataProcessingHub' },
       },
 
       // Legacy alias
       {
         path: 'dataquality',
-        element: <Navigate to="/data-quality" replace />,
+        element: <Navigate to="/processing?tab=quality" replace />,
       },
       
       // Observability Dashboard
@@ -125,8 +122,8 @@ const router = createHashRouter([
       // Workflow Manager - Multi-instance workflow management
       {
         path: 'workflow-manager',
-        element: <WorkflowManagerPage />,
-        handle: { crumb: 'nav.workflowManager' },
+        element: <Navigate to="/processing?tab=workflows" replace />,
+        handle: { crumb: 'nav.dataProcessingHub' },
       },
       
       // Workflow Detail - Individual workflow instance view

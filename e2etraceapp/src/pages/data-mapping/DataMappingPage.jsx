@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '../../config/api-config.js';
 import './DataMappingPage.css';
@@ -9,6 +9,26 @@ const DataMappingPage = () => {
   const [activeTab, setActiveTab] = useState('mappings');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMapping, setSelectedMapping] = useState(null);
+
+  const editorMapping = useMemo(() => {
+    if (!selectedMapping) return null;
+    return {
+      id: selectedMapping.id,
+      name: selectedMapping.name ?? '',
+      description: selectedMapping.description ?? '',
+      source_system_id: selectedMapping.source_system_id ?? '',
+      target_system_id: selectedMapping.target_system_id ?? '',
+      status: selectedMapping.status ?? 'draft',
+      field_mappings: Array.isArray(selectedMapping.field_mappings) ? selectedMapping.field_mappings : [],
+      validation_enabled:
+        typeof selectedMapping.validation_enabled === 'boolean' ? selectedMapping.validation_enabled : true,
+      transformation_enabled:
+        typeof selectedMapping.transformation_enabled === 'boolean' ? selectedMapping.transformation_enabled : true,
+      created_at: selectedMapping.created_at,
+      updated_at: selectedMapping.updated_at,
+      created_by: selectedMapping.created_by,
+    };
+  }, [selectedMapping]);
 
   // Load real data from Neo4j via API
   useEffect(() => {
@@ -53,7 +73,7 @@ const DataMappingPage = () => {
         category: template.category,
         sourceType: template.source_type,
         targetType: template.target_type,
-        fieldMappings: template.field_mappings || [],
+        field_mappings: template.field_mappings || [],
         tags: template.tags || []
       })) : [];
       
@@ -178,9 +198,56 @@ const DataMappingPage = () => {
     }
   };
 
-  const editMapping = (mapping) => {
-    setSelectedMapping(mapping);
-    setActiveTab('editor');
+  const editMapping = async (mapping) => {
+    try {
+      setIsLoading(true);
+      const response = await e2etraceFetchWithRetry(`${API_CONFIG.ENDPOINTS.DATA_MAPPING_RULES}/${mapping.id}`);
+      if (!response.ok) throw new Error(`Failed to load mapping (HTTP ${response.status})`);
+      const rule = await response.json();
+      setSelectedMapping(rule);
+      setActiveTab('editor');
+    } catch (error) {
+      console.error('Error loading mapping for edit:', error);
+      alert('Failed to load mapping: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addFieldMappingRow = () => {
+    if (!editorMapping) return;
+    setSelectedMapping({
+      ...editorMapping,
+      field_mappings: [
+        ...(editorMapping.field_mappings || []),
+        { source_field: '', target_field: '', transformation: null, validation_rule: null, default_value: null },
+      ],
+    });
+  };
+
+  const updateFieldMappingRow = (index, patch) => {
+    if (!editorMapping) return;
+    const current = Array.isArray(editorMapping.field_mappings) ? editorMapping.field_mappings : [];
+    const next = current.map((row, i) => (i === index ? { ...row, ...patch } : row));
+    setSelectedMapping({ ...editorMapping, field_mappings: next });
+  };
+
+  const removeFieldMappingRow = (index) => {
+    if (!editorMapping) return;
+    const current = Array.isArray(editorMapping.field_mappings) ? editorMapping.field_mappings : [];
+    setSelectedMapping({ ...editorMapping, field_mappings: current.filter((_, i) => i !== index) });
+  };
+
+  const saveDraft = async () => {
+    if (!editorMapping?.id) return;
+    await updateMapping({ ...editorMapping, status: 'draft' });
+    alert('Draft saved');
+  };
+
+  const deployMapping = async () => {
+    if (!editorMapping?.id) return;
+    await updateMapping({ ...editorMapping, status: 'active' });
+    alert('Mapping deployed');
   };
 
   const executeMapping = async (mappingId) => {
@@ -376,9 +443,9 @@ const DataMappingPage = () => {
                   <div className="template-fields">
                     <h4>Template Fields:</h4>
                     <div className="fields-list">
-                      {template.fields.map((field, index) => (
+                      {(Array.isArray(template.field_mappings) ? template.field_mappings : []).slice(0, 12).map((fm, index) => (
                         <span key={index} className="field-tag">
-                          {field}
+                          {fm?.source_field || '—'} → {fm?.target_field || '—'}
                         </span>
                       ))}
                     </div>
@@ -407,16 +474,16 @@ const DataMappingPage = () => {
             <div className="section-header">
               <h2>Mapping Editor</h2>
               <div className="editor-actions">
-                <button className="btn btn-outline">
+                <button className="btn btn-outline" onClick={saveDraft} disabled={isLoading || !editorMapping?.id}>
                   ● Save Draft
                 </button>
-                <button className="btn btn-success">
+                <button className="btn btn-success" onClick={deployMapping} disabled={isLoading || !editorMapping?.id}>
                   ➔ Deploy Mapping
                 </button>
               </div>
             </div>
 
-            {selectedMapping ? (
+            {editorMapping ? (
               <div className="mapping-editor">
                 <div className="editor-form">
                   <div className="form-section">
@@ -426,9 +493,9 @@ const DataMappingPage = () => {
                         <label>Mapping Name</label>
                         <input 
                           type="text" 
-                          value={selectedMapping.name}
+                          value={editorMapping.name}
                           onChange={(e) => setSelectedMapping({
-                            ...selectedMapping,
+                            ...editorMapping,
                             name: e.target.value
                           })}
                         />
@@ -436,9 +503,9 @@ const DataMappingPage = () => {
                       <div className="form-group">
                         <label>Description</label>
                         <textarea 
-                          value={selectedMapping.description}
+                          value={editorMapping.description}
                           onChange={(e) => setSelectedMapping({
-                            ...selectedMapping,
+                            ...editorMapping,
                             description: e.target.value
                           })}
                         />
@@ -450,35 +517,28 @@ const DataMappingPage = () => {
                     <h3>Source Configuration</h3>
                     <div className="form-grid">
                       <div className="form-group">
-                        <label>Source System</label>
-                        <select 
-                          value={selectedMapping.sourceSystem}
+                        <label>Source System ID</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. neo4j"
+                          value={editorMapping.source_system_id}
                           onChange={(e) => setSelectedMapping({
-                            ...selectedMapping,
-                            sourceSystem: e.target.value
+                            ...editorMapping,
+                            source_system_id: e.target.value
                           })}
-                        >
-                          <option value="Select Source">Select Source</option>
-                          <option value="Neo4j Graph Database">Neo4j Graph Database</option>
-                          <option value="CSV File">CSV File</option>
-                          <option value="JSON API">JSON API</option>
-                          <option value="SQL Database">SQL Database</option>
-                        </select>
+                        />
                       </div>
                       <div className="form-group">
-                        <label>Target System</label>
-                        <select 
-                          value={selectedMapping.targetSystem}
+                        <label>Target System ID</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. neo4j"
+                          value={editorMapping.target_system_id}
                           onChange={(e) => setSelectedMapping({
-                            ...selectedMapping,
-                            targetSystem: e.target.value
+                            ...editorMapping,
+                            target_system_id: e.target.value
                           })}
-                        >
-                          <option value="Select Target">Select Target</option>
-                          <option value="Neo4j Graph Database">Neo4j Graph Database</option>
-                          <option value="Relational Database">Relational Database</option>
-                          <option value="File Export">File Export</option>
-                        </select>
+                        />
                       </div>
                     </div>
                   </div>
@@ -492,21 +552,42 @@ const DataMappingPage = () => {
                         <span>Target Field</span>
                         <span>Actions</span>
                       </div>
-                      {/* Field mapping rows would be dynamically generated here */}
-                      <div className="mapping-row">
-                        <input type="text" placeholder="Enter source field" />
-                        <select>
-                          <option>No transformation</option>
-                          <option>Uppercase</option>
-                          <option>Lowercase</option>
-                          <option>Date format</option>
-                          <option>Custom function</option>
-                        </select>
-                        <input type="text" placeholder="Enter target field" />
-                        <button className="btn btn-sm btn-danger">✗</button>
-                      </div>
+                      {(Array.isArray(editorMapping.field_mappings) ? editorMapping.field_mappings : []).map((row, idx) => (
+                        <div key={idx} className="mapping-row">
+                          <input
+                            type="text"
+                            placeholder="Enter source field"
+                            value={row?.source_field ?? ''}
+                            onChange={(e) => updateFieldMappingRow(idx, { source_field: e.target.value })}
+                          />
+                          <select
+                            value={row?.transformation ?? ''}
+                            onChange={(e) => updateFieldMappingRow(idx, { transformation: e.target.value || null })}
+                          >
+                            <option value="">No transformation</option>
+                            <option value="uppercase">Uppercase</option>
+                            <option value="lowercase">Lowercase</option>
+                            <option value="trim">Trim</option>
+                            <option value="date_format">Date format</option>
+                            <option value="concat">Concat</option>
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Enter target field"
+                            value={row?.target_field ?? ''}
+                            onChange={(e) => updateFieldMappingRow(idx, { target_field: e.target.value })}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger"
+                            onClick={() => removeFieldMappingRow(idx)}
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <button className="btn btn-outline">
+                    <button type="button" className="btn btn-outline" onClick={addFieldMappingRow}>
                       ✚ Add Field Mapping
                     </button>
                   </div>

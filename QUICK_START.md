@@ -1,39 +1,52 @@
-# GraphTrace - Quick Reference
+# GraphTrace - Quick Reference (Windows)
 
-##  Quick Start (3 commands)
-```bash
-./diagnostics.sh    # 1. Check system
-./install.sh        # 2. Install dependencies  
-./start-all.sh      # 3. Start services
+## Quick Start (PowerShell)
+
+```powershell
+# 1) Validate system
+./diagnostics/windows/diagnose-all.ps1
+
+# 2) Bootstrap (creates venv, installs deps, seeds DB config)
+./bootstrap.ps1 -RunDiagnostics
+
+# 3) Start backend + frontend
+./start-all.ps1
 ```
 
 Then open: http://localhost:5173
 
-##  Available Scripts
+## Key Workflows (Business Users)
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `diagnostics.sh` | Validate system | `./diagnostics.sh` |
-| `install.sh` | Install all deps | `./install.sh` |
-| `start-all.sh` | Start services | `./start-all.sh` |
-| `stop-all.sh` | Stop services | `./stop-all.sh` |
+- **Configure integrations**: `http://localhost:5173/#/data-config` (Neo4j/OpenSearch/Postgres-backed config)
+- **Create mappings + transformations**: `http://localhost:5173/#/data-mapping` (save draft, validate, deploy)
+- **Insights + reports**: `http://localhost:5173/#/reporting` (download JSON/CSV; open spreadsheet)
+- **Spreadsheet**: `http://localhost:5173/#/spreadsheet` (import/export xlsx/csv/json/xml, charting)
 
-##  Individual Service Control
+## Required for Reports
 
-### Backend Only
-```bash
-cd python_backend
-source venv/bin/activate
-python main.py
+Persisted reports (`/api/reports`) require Postgres to be reachable via `DATABASE_URL` or `POSTGRES_*` env vars. If Postgres is unavailable, the API returns **HTTP 503**.
+
+## Quick Start (Command Prompt)
+
+```cmd
+start-all.bat
 ```
 
-### Frontend Only
-```bash
-cd e2etraceapp
-npm run dev
+## Individual Service Control
+
+### Backend Only (PowerShell)
+
+```powershell
+./start-backend.ps1
 ```
 
-##  Access Points
+### Frontend Only (PowerShell)
+
+```powershell
+./start-frontend.ps1
+```
+
+## Access Points
 
 | Service | URL |
 |---------|-----|
@@ -42,125 +55,58 @@ npm run dev
 | API Docs | http://localhost:8011/docs |
 | Redoc | http://localhost:8011/redoc |
 
-##  Configuration Files
+## Configuration
 
-| File | Purpose |
-|------|---------|
-| `python_backend/.env` | Backend config (Neo4j) |
-| `e2etraceapp/.env` | Frontend config (optional) |
+- Recommended: configure integrations from the UI at `http://localhost:5173/#/data-config`.
+- Optional local dev env:
+	- `python_backend/.env` (Neo4j and secrets)
+	- `e2etraceapp/.env` (only if you want to override the API URL)
 
-##  Quick Troubleshooting
+## Quick Troubleshooting (Windows)
 
 ### Port Already in Use
-```bash
-# Kill process on port 8000
-lsof -i :8011 | grep LISTEN | awk '{print $2}' | xargs kill -9
 
-# Kill process on port 5173  
-lsof -i :5173 | grep LISTEN | awk '{print $2}' | xargs kill -9
+```powershell
+# Stop the process owning port 8011
+$pid = (Get-NetTCPConnection -LocalPort 8011 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
+if ($pid) { Stop-Process -Id $pid -Force }
+
+# Stop the process owning port 5173
+$pid = (Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess)
+if ($pid) { Stop-Process -Id $pid -Force }
 ```
 
 ### Backend Won't Start
-```bash
-# Check Neo4j credentials
-cat python_backend/.env
 
-# Reinstall dependencies
-cd python_backend
-pip install -r requirement.txt
+```powershell
+cd .\python_backend
+python -m pip install -r requirement.txt
 ```
 
 ### Frontend Won't Start
-```bash
-# Clean install
-cd e2etraceapp
-rm -rf node_modules package-lock.json
+
+```powershell
+cd .\e2etraceapp
+Remove-Item -Recurse -Force .\node_modules -ErrorAction SilentlyContinue
+Remove-Item -Force .\package-lock.json -ErrorAction SilentlyContinue
 npm install
 ```
 
-##  Project Structure
-```
-graphTrace/
-├── python_backend/      # FastAPI backend
-├── e2etraceapp/         # React frontend
-├── logs/                # Application logs
-├── diagnostics.sh       # System check
-├── install.sh           # Installation
-├── start-all.sh         # Start services
-└── stop-all.sh          # Stop services
-```
+## View Logs (Windows)
 
-##  View Logs
-```bash
+```powershell
 # Backend
-tail -f logs/backend.log
+Get-Content -Path .\logs\backend.log -Wait
 
 # Frontend
-tail -f logs/frontend.log
+Get-Content -Path .\logs\frontend.log -Wait
 ```
 
-##  Full Documentation
-- Installation Guide: `INSTALLATION.md`
-- Validation Report: `INSTALLATION_VALIDATION_REPORT.md`
-- Bug Analysis: `BUGS_ANALYSIS_REPORT.md`
+## Stop Services
 
-##  Development Workflow
-```bash
-# 1. Make changes to code
-# 2. Services auto-reload (HMR/--reload enabled)
-# 3. View logs for errors
-# 4. Test in browser
+- If you started via `start-all.ps1` / `start-all.bat`: close the spawned terminal windows, or press Ctrl+C in each.
 
-# To restart services:
-./stop-all.sh
-./start-all.sh
-```
+## Full Documentation
 
-##  Testing
-```bash
-# Backend tests
-cd python_backend && pytest
-
-# Frontend tests  
-cd e2etraceapp && npm test
-```
-
-##  Stop Everything
-```bash
-./stop-all.sh
-# OR manually:
-pkill -f "python.*main.py"
-pkill -f "vite"
-```
-
-## ✓ Health Check
-```bash
-# Backend alive?
-curl http://localhost:8011/docs
-
-# Frontend alive?
-curl http://localhost:5173
-```
-
-##  Required Environment Variables
-
-### Backend `.env`
-```env
-NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your-password
-NEO4J_DATABASE=neo4j
-```
-
-##  Pro Tips
-1. Always run `diagnostics.sh` before starting
-2. Check logs first when debugging
-3. Use `./stop-all.sh` before system shutdown
-4. Keep .env files secure (never commit!)
-5. Run `install.sh` after pulling new changes
-
-##  Help
-1. Run diagnostics: `./diagnostics.sh`
-2. Check logs: `tail -f logs/*.log`  
-3. Read docs: `INSTALLATION.md`
-4. Review common issues in docs
+- Windows setup: `README-WINDOWS.md`
+- Installation guide: `INSTALLATION.md`

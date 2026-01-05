@@ -12,19 +12,17 @@ const NAV_GROUPS = [
     id: 'overview',
     titleKey: 'nav.overview',
     href: '/',
-    matchPrefixes: ['/', '/interactive-state-flow'],
+    matchPrefixes: ['/'],
     items: [
       { to: '/', labelKey: 'nav.overview', end: true },
-      { to: '/interactive-state-flow', labelKey: 'nav.interactiveStateFlow' },
     ],
   },
   {
     id: 'workflows',
-    titleKey: 'nav.workflowManager',
-    href: '/workflow-manager',
-    matchPrefixes: ['/workflow-manager', '/workflow', '/processing'],
+    titleKey: 'nav.dataProcessingHub',
+    href: '/processing',
+    matchPrefixes: ['/processing', '/workflow', '/workflow-manager'],
     items: [
-      { to: '/workflow-manager', labelKey: 'nav.workflowManager' },
       { to: '/processing', labelKey: 'nav.dataProcessingHub' },
     ],
   },
@@ -43,12 +41,11 @@ const NAV_GROUPS = [
     id: 'insights',
     titleKey: 'nav.insightsReports',
     href: '/reporting',
-    matchPrefixes: ['/self-healing', '/data-quality', '/observability', '/analytics', '/reporting'],
+    matchPrefixes: ['/self-healing', '/observability', '/analytics', '/reporting'],
     items: [
       { to: '/reporting', labelKey: 'nav.reporting' },
       { to: '/analytics', labelKey: 'nav.analytics' },
       { to: '/observability', labelKey: 'nav.observability' },
-      { to: '/data-quality', labelKey: 'nav.dataQuality' },
       { to: '/self-healing', labelKey: 'nav.selfHealingMonitor' },
     ],
   },
@@ -77,9 +74,9 @@ export const E2ETraceRootLayout = () => {
   const { theme, toggleTheme } = useE2ETraceTheme();
   const { t } = useTranslation();
 
-  // Some pages (like the Landing hero and the interactive state flow) are designed
-  // to be full-bleed and should not be wrapped in the standard padded card.
-  const isFullBleedPage = location.pathname === '/' || location.pathname === '/interactive-state-flow';
+  // Some pages (like the Landing hero) are designed to be full-bleed and should
+  // not be wrapped in the standard padded card.
+  const isFullBleedPage = location.pathname === '/';
 
   const activeNavGroup = useMemo(() => {
     const pathname = location.pathname || '/';

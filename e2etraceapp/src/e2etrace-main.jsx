@@ -10,7 +10,7 @@ import router from './routes';
 import './i18n/index.js';
 
 // Ensure refresh/direct navigation preserves the current page.
-// This app uses a hash router; if the browser URL is path-based (e.g. /workflow-manager)
+// This app uses a hash router; if the browser URL is path-based (e.g. /processing)
 // with no hash, React Router will treat it as the index route. Convert such URLs to
 // their hash equivalents so refresh lands on the same page.
 (() => {

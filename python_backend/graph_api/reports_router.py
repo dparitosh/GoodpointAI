@@ -9,18 +9,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from core.db_session import DATABASE_URL, get_db
-from core.postgres_config import is_postgres_database_url
+from core.db_session import get_db, redacted_database_url, verify_database_connectivity
 from models.report_models import PersistedReport
 
 router = APIRouter(prefix="/api/reports", tags=["Reports"])
 
 
-def _require_postgres() -> None:
-    if not is_postgres_database_url(DATABASE_URL):
+def _require_db() -> None:
+    err = verify_database_connectivity(timeout_s=3.0)
+    if err:
         raise HTTPException(
             status_code=503,
-            detail="Postgres is not configured (set DATABASE_URL to a postgres URL)",
+            detail=f"Database is unavailable: {err} (DATABASE_URL={redacted_database_url()})",
         )
 
 
@@ -63,7 +63,7 @@ class ReportDetail(ReportListItem):
 
 @router.post("", response_model=ReportDetail)
 def create_report(request: ReportCreateRequest, db: Session = Depends(get_db)) -> ReportDetail:
-    _require_postgres()
+    _require_db()
 
     report_id = uuid.uuid4().hex
 
@@ -117,26 +117,29 @@ def list_reports(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> List[ReportListItem]:
-    _require_postgres()
+    _require_db()
 
-    q = db.query(PersistedReport).filter(PersistedReport.is_deleted == 0)
-    if report_type:
-        q = q.filter(PersistedReport.report_type == report_type)
-    if run_id:
-        q = q.filter(PersistedReport.run_id == run_id)
-    if external_id:
-        q = q.filter(PersistedReport.external_id == external_id)
-    if table_name:
-        q = q.filter(PersistedReport.table_name == table_name)
-    if source:
-        q = q.filter(PersistedReport.source == source)
+    try:
+        q = db.query(PersistedReport).filter(PersistedReport.is_deleted == 0)
+        if report_type:
+            q = q.filter(PersistedReport.report_type == report_type)
+        if run_id:
+            q = q.filter(PersistedReport.run_id == run_id)
+        if external_id:
+            q = q.filter(PersistedReport.external_id == external_id)
+        if table_name:
+            q = q.filter(PersistedReport.table_name == table_name)
+        if source:
+            q = q.filter(PersistedReport.source == source)
 
-    rows = (
-        q.order_by(PersistedReport.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+        rows = (
+            q.order_by(PersistedReport.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail=f"Database query failed: {exc}") from exc
 
     return [
         ReportListItem(
@@ -158,14 +161,17 @@ def list_reports(
 
 @router.get("/{report_id}", response_model=ReportDetail)
 def get_report(report_id: str, db: Session = Depends(get_db)) -> ReportDetail:
-    _require_postgres()
+    _require_db()
 
-    row = (
-        db.query(PersistedReport)
-        .filter(PersistedReport.id == report_id)
-        .filter(PersistedReport.is_deleted == 0)
-        .first()
-    )
+    try:
+        row = (
+            db.query(PersistedReport)
+            .filter(PersistedReport.id == report_id)
+            .filter(PersistedReport.is_deleted == 0)
+            .first()
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail=f"Database query failed: {exc}") from exc
     if row is None:
         raise HTTPException(status_code=404, detail="Report not found")
 
@@ -192,7 +198,7 @@ class ReportDeleteResponse(BaseModel):
 
 @router.delete("/{report_id}", response_model=ReportDeleteResponse)
 def delete_report(report_id: str, db: Session = Depends(get_db)) -> ReportDeleteResponse:
-    _require_postgres()
+    _require_db()
 
     row = db.query(PersistedReport).filter(PersistedReport.id == report_id).first()
     if row is None or int(row.is_deleted or 0) == 1:

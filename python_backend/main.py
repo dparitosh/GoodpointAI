@@ -79,6 +79,39 @@ def _best_effort_seed_config() -> None:
         logger.debug("Early DB config seeding skipped: %s", exc)
 
 
+def _expand_localhost_origin_variants(origins: list[str]) -> list[str]:
+    """Expand localhost/127.0.0.1 equivalents without broadening to new hosts.
+
+    This prevents surprising dev-only CORS failures when one side uses
+    http://localhost:* and the other uses http://127.0.0.1:*.
+    """
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+
+    def _add(origin: str) -> None:
+        o = origin.strip()
+        if not o or o in seen:
+            return
+        seen.add(o)
+        expanded.append(o)
+
+    for origin in origins:
+        o = str(origin).strip()
+        if not o:
+            continue
+
+        _add(o)
+
+        for scheme in ("http://", "https://"):
+            if o.startswith(f"{scheme}localhost:"):
+                _add(o.replace(f"{scheme}localhost:", f"{scheme}127.0.0.1:", 1))
+            elif o.startswith(f"{scheme}127.0.0.1:"):
+                _add(o.replace(f"{scheme}127.0.0.1:", f"{scheme}localhost:", 1))
+
+    return expanded
+
+
 def _get_allowed_origins() -> list[str]:
     cors_cfg = get_encrypted_config_payload("cors")
     if isinstance(cors_cfg, dict):
@@ -86,7 +119,7 @@ def _get_allowed_origins() -> list[str]:
         if isinstance(origins, list):
             cleaned = [str(o).strip() for o in origins if str(o).strip()]
             if cleaned:
-                return cleaned
+                return _expand_localhost_origin_variants(cleaned)
 
     env_origins = [
         origin.strip()
@@ -94,16 +127,22 @@ def _get_allowed_origins() -> list[str]:
         if origin.strip()
     ]
     if env_origins:
-        return env_origins
+        return _expand_localhost_origin_variants(env_origins)
 
-    return [
+    return _expand_localhost_origin_variants([
         "http://localhost:3000",  # Replace with the origin of your frontend
+        "http://127.0.0.1:3000",
         "http://localhost:8011",
+        "http://127.0.0.1:8011",
         "http://localhost:5173",  # For Swagger UI/docs
+        "http://127.0.0.1:5173",
         "http://localhost:5174",  # Updated Vite dev server port
+        "http://127.0.0.1:5174",
         "http://localhost:5175",  # Additional Vite port
+        "http://127.0.0.1:5175",
         "http://localhost:5176",  # Additional Vite port
-    ]
+        "http://127.0.0.1:5176",
+    ])
 
 
 _best_effort_seed_config()
