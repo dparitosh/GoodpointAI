@@ -11,17 +11,37 @@
   --error-color: #DA1E28;
   --info-color: #0078D4;
   
-  /* Neutral Colors */
-  --background-color: #FFFFFF;
-  --background-alt: #F4F4F4;
-  --surface-color: #FFFFFF;
-  --border-color: #E0E0E0;
-  --text-color: #1A1A1A;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  /* Blue-Tinted Neutral Colors */
+  --background-color: #f0f4f8;
+  --background-alt: #e8eef4;
+  --background-color-offset: #dce4ed;
+  --surface-color: #f5f8fb;
+  --panel-bg: #f8fafc;
+  --border-color: #c8d4e0;
+  --text-color: #1a2a3a;
+  --text-secondary: #4a5f75;
+  --text-muted: #7a8fa3;
+  --text-on-primary: #ffffff;
+  --text-on-primary-muted: rgba(255, 255, 255, 0.85);
+  
+  /* Dark Theme Variables - Consistent across all dark pages */
+  --dark-bg-primary: #0f172a;
+  --dark-bg-secondary: #1e293b;
+  --dark-bg-tertiary: #334155;
+  --dark-bg-card: #1e293b;
+  --dark-bg-elevated: #283548;
+  --dark-border-color: #475569;
+  --dark-border-subtle: rgba(255, 255, 255, 0.1);
+  --dark-text-primary: #f1f5f9;
+  --dark-text-secondary: #cbd5e1;
+  --dark-text-muted: #94a3b8;
+  --dark-text-heading: #ffffff;
+  --dark-text-link: #60a5fa;
+  --dark-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   
   /* Typography */
   --font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
   --font-size-base: 14px;
   --font-size-lg: 16px;
   --font-size-sm: 12px;
@@ -47,12 +67,13 @@
 
 body, .dashboard-widget, .e2etrace-legend-item, .e2etrace-legend-dropdown-overlay, .echarts-legend, .echarts-axis-label, .dashboard-widget-header, .dashboard-widget-subheader, .dashboard-widget-content {
   font-family: var(--font-family);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
   color: var(--text-color);
 }
 
 .e2etrace-legend-item span {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-family: var(--font-family);
   color: var(--text-color);
   white-space: nowrap;

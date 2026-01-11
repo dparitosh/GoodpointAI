@@ -35,6 +35,9 @@
   --header-bg: #FFFFFF;
   --text-color: #212121;
   --text-muted-color: #757575;
+  /* Bridge tokens used across the app (global.css, page CSS, component CSS) */
+  --text-secondary: var(--sidebar-text-color);
+  --text-muted: var(--text-muted-color);
   --text-color-headings: #212121;
   --text-on-success-bg: #FFFFFF;
   --text-on-secondary-button-bg: #FFFFFF;
@@ -89,17 +92,23 @@
 }
 
 [data-theme='dark'] {
-  --background-color: #1a1b1d;
-  --panel-bg: #212325; /* Darker panel background */
-  --header-bg: #212325; /* Darker header background */
-  --text-color: #f5f6f6; /* Light text for dark mode */
-  --text-muted-color: #a8acb2; /* Muted light text */
-  --text-color-headings: #f5f6f6;
+  /* Prefer the shared dark palette from theme.css for consistency */
+  --background-color: var(--dark-bg-primary, #0f172a);
+  --background-color-offset: var(--dark-bg-secondary, #1e293b);
+  --panel-bg: var(--dark-bg-card, #1e293b);
+  --header-bg: var(--dark-bg-card, #1e293b);
+
+  --text-color: var(--dark-text-primary, #f1f5f9);
+  --text-muted-color: var(--dark-text-muted, #94a3b8);
+  /* Bridge tokens used across the app (global.css, page CSS, component CSS) */
+  --text-secondary: var(--dark-text-secondary, #cbd5e1);
+  --text-muted: var(--dark-text-muted, #94a3b8);
+  --text-color-headings: var(--dark-text-heading, #ffffff);
   --text-on-success-bg: #FFFFFF;
   --text-on-secondary-button-bg: #FFFFFF;
 
   /* Borders */
-  --border-color: #3c3f44; /* Darker border */
+  --border-color: var(--dark-border-color, #475569);
   --border-color-weak: #2a2d30;
   --border-color-strong: #55585d; /* Stronger border for inputs */
 

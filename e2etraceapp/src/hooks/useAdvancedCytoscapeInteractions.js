@@ -143,7 +143,7 @@ export const useAdvancedCytoscapeInteractions = (cyRef, options = {}) => {
         draggedNode = evt.target;
       };
 
-      const handleNodeDrag = (evt) => {
+      const handleNodeDrag = () => {
         if (!draggedNode) return;
 
         const draggedPos = draggedNode.position();

@@ -17,17 +17,17 @@ export const EventPanel = ({ events = [], onEventClick, theme = 'light' }) => {
 
   const getEventIcon = (type) => {
     const iconMap = {
-      'migration': '➔',
-      'validation': '✓',
-      'error': '✗',
-      'warning': '!',
-      'info': 'i',
-      'success': '✓',
-      'failure': '✗',
-      'processing': '…',
-      'completed': '✓'
+      'migration': 'fa-arrow-right',
+      'validation': 'fa-check',
+      'error': 'fa-times',
+      'warning': 'fa-exclamation',
+      'info': 'fa-info',
+      'success': 'fa-check',
+      'failure': 'fa-times',
+      'processing': 'fa-spinner fa-spin',
+      'completed': 'fa-check-circle'
     };
-    return iconMap[type] || '•';
+    return iconMap[type] || 'fa-circle';
   };
 
   const getEventClass = (type) => {
@@ -90,7 +90,7 @@ export const EventPanel = ({ events = [], onEventClick, theme = 'light' }) => {
           ))
         ) : (
           <div className="event-panel__empty">
-            <span className="event-panel__empty-icon">◻</span>
+            <span className="event-panel__empty-icon"><i className="fas fa-inbox" aria-hidden="true" /></span>
             <p>No events to display</p>
           </div>
         )}

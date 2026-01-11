@@ -1,5 +1,11 @@
 # GraphTrace - Windows Setup Guide
 
+> This document is kept for backwards compatibility.
+> For the curated release docs, start at `docs/README.md` and then:
+> - `docs/installation/INSTALL_WINDOWS.md`
+> - `docs/installation/DEPENDENCIES.md`
+> - `docs/installation/CONFIGURATION.md`
+
 This guide provides instructions for running GraphTrace on Windows using PowerShell or Command Prompt.
 
 ## Prerequisites

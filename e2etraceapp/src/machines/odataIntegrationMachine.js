@@ -1,5 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import { API_CONFIG } from '../config/api-config.js';
+import { addErrorMessage } from './xstateHelpers.js';
 
 /**
  * OData Integration State Machine
@@ -56,7 +57,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -91,7 +92,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -130,7 +131,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -166,7 +167,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -193,7 +194,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -224,7 +225,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -251,7 +252,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -277,7 +278,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -307,7 +308,7 @@ export const odataIntegrationMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }

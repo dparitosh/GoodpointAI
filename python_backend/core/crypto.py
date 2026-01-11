@@ -28,8 +28,20 @@ def _derive_fernet_key(raw: str) -> bytes:
     return base64.urlsafe_b64encode(digest)
 
 
+def _is_production() -> bool:
+    """Check if running in production mode"""
+    env = (os.getenv("ENVIRONMENT") or os.getenv("GRAPH_TRACE_ENVIRONMENT") or "").strip()
+    return env.lower() in ("production", "prod")
+
+
 def get_fernet() -> Fernet:
-    """Return a Fernet instance, or raise ValueError if no key is available."""
+    """Return a Fernet instance, or raise ValueError if no key is available.
+    
+    In production mode, requires an explicit encryption key to be set.
+    In development mode, allows fallback to derived keys.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
 
     raw = (os.getenv("GRAPH_TRACE_CONFIG_ENCRYPTION_KEY") or "").strip()
     if raw:
@@ -57,14 +69,22 @@ def get_fernet() -> Fernet:
         # Ignore file fallback errors and continue to other sources.
         pass
 
+    # Security: In production, require explicit key - don't use fallbacks
+    if _is_production():
+        raise ValueError(
+            "No encryption key configured. In production, set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY explicitly."
+        )
+
     jwt_secret = (os.getenv("GRAPH_TRACE_JWT_SECRET") or "").strip()
     if jwt_secret:
+        logger.warning("Using JWT secret as encryption key fallback (development mode only)")
         return Fernet(_derive_fernet_key(jwt_secret))
 
     # Last-resort: derive from DATABASE_URL password (if present) so secrets are at
     # least encrypted-at-rest for single-machine/dev. If DB has no password, fail.
     db_url = (os.getenv("DATABASE_URL") or "").strip()
     if "://" in db_url and "@" in db_url and ":" in db_url.split("@", 1)[0]:
+        logger.warning("Using DATABASE_URL as encryption key fallback (development mode only)")
         return Fernet(_derive_fernet_key(db_url))
 
     raise ValueError("No encryption key configured")

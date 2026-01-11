@@ -21,12 +21,18 @@ export async function e2etraceFetchWithRetry(url, options, retries = API_CONFIG.
             // Don't retry on 4xx client errors, as they are likely not transient.
             if (response.status >= 400 && response.status < 500) {
                 const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
-                throw new Error(errorData.message || `Client Error: ${response.status}`);
+                const clientError = new Error(errorData.message || errorData.detail || `Client Error: ${response.status}`);
+                clientError.isClientError = true; // Mark as non-retryable
+                throw clientError;
             }
 
             // For 5xx server errors, we'll throw, which triggers a retry.
             throw new Error(`Server Error: ${response.status}`);
         } catch (error) {
+            // Don't retry client errors (4xx)
+            if (error.isClientError) {
+                throw error;
+            }
             if (attempt >= retries) {
                 console.error(`All ${retries} fetch attempts failed for ${fullUrl}.`);
                 throw error; // Re-throw the last error after all retries fail.

@@ -129,7 +129,7 @@ const agenticWorkflowMachine = createMachine({
     }
   },
   actions: {
-    initializeAgents: assign((context, event) => {
+    initializeAgents: assign((context, _event) => {
       const agents = Object.values(AGENT_TYPES).map(type => ({
         id: `${type}_${Date.now()}`,
         type,
@@ -158,6 +158,10 @@ const agenticWorkflowMachine = createMachine({
         taskQueue: [...context.taskQueue, task]
       };
     }),
+
+    orchestrateCollaboration: (context, event) => {
+      void orchestrateCollaboration(context, event);
+    },
 
     storeTaskResults: assign((context, event) => {
       return {

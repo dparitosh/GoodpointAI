@@ -1,40 +1,91 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import goodPointLogo from '../../assets/goodpoint-logo.svg';
-import { InteractiveStateFlowEmbed } from '../../components/InteractiveStateFlowEmbed.jsx';
 import { XStateVisualizer } from '../../components/xstate-visualizer/XStateVisualizer';
 import { getSampleInteractiveStateFlow } from '../../data/sampleInteractiveStateFlow';
 import './LandingPage.css';
 
 const LandingPage = () => {
-  const features = [
+  // Organized by PLM Data Migration workflow stages
+  const migrationSteps = [
+    {
+      step: 1,
+      icon: 'fas fa-plug',
+      title: 'Connect',
+      description: 'Configure source and target data connections',
+      action: 'Set up connections',
+      link: '/migration'
+    },
+    {
+      step: 2,
+      icon: 'fas fa-sitemap',
+      title: 'Schema',
+      description: 'Review and map data structures',
+      action: 'Explore schemas',
+      link: '/migration'
+    },
+    {
+      step: 3,
+      icon: 'fas fa-arrows-alt-h',
+      title: 'Map',
+      description: 'AI-assisted field mapping',
+      action: 'Create mappings',
+      link: '/migration'
+    },
+    {
+      step: 4,
+      icon: 'fas fa-check-double',
+      title: 'Validate',
+      description: 'Quality checks & transformations',
+      action: 'Run validation',
+      link: '/migration'
+    },
+    {
+      step: 5,
+      icon: 'fas fa-play-circle',
+      title: 'Execute',
+      description: 'Run migration & monitor',
+      action: 'Start migration',
+      link: '/migration'
+    }
+  ];
+
+  const toolCards = [
+    {
+      icon: 'fas fa-exchange-alt',
+      title: 'Migration Wizard',
+      description: 'End-to-end guided data migration with AI-powered mapping and validation',
+      link: '/migration',
+      color: 'var(--accent-color)',
+      primary: true
+    },
     {
       icon: 'fas fa-project-diagram',
       title: 'Graph Explorer',
-      description: 'Visualize and explore graph relationships with interactive tools',
-      link: '/graphexplorer',
+      description: 'Visualize and explore data relationships',
+      link: '/graph-explorer',
       color: 'var(--success-color)'
     },
     {
-      icon: 'fas fa-chart-bar',
+      icon: 'fas fa-stream',
+      title: 'Data Lineage',
+      description: 'Track data flow and transformations',
+      link: '/lineage',
+      color: 'var(--info-color)'
+    },
+    {
+      icon: 'fas fa-clipboard-check',
+      title: 'Rule Engine',
+      description: 'Data quality rules and validation',
+      link: '/rule-engine',
+      color: 'var(--warning-color)'
+    },
+    {
+      icon: 'fas fa-chart-line',
       title: 'Analytics',
-      description: 'Explore graph analytics and data quality metrics',
+      description: 'Insights and performance metrics',
       link: '/analytics',
-      color: 'var(--cy-selected-color)'
-    },
-    {
-      icon: 'fas fa-layer-group',
-      title: 'Workflow Manager',
-      description: 'Manage multiple pipeline instances and execution runs',
-      link: '/processing',
-      color: 'var(--accent-color)'
-    },
-    {
-      icon: 'fas fa-book',
-      title: 'API Docs',
-      description: 'Browse OpenAPI/Swagger documentation for all endpoints',
-      link: '/api-docs',
-      color: 'var(--warning-color-dark)'
+      color: 'var(--primary-light)'
     }
   ];
 
@@ -51,23 +102,23 @@ const LandingPage = () => {
             <img src={goodPointLogo} alt="GoodPoint Logo" className="hero-logo-img" />
           </div>
           <h1 className="hero-title">
-            Welcome to <span className="brand-highlight">GoodPoint AgenticAI</span>
+            <span className="brand-highlight">GoodPoint</span> AgenticAI
           </h1>
           <p className="hero-subtitle">
-            Intelligent PLM Data Migration Platform
+            Intelligent PLM Data Migration
           </p>
           <p className="hero-description">
-            AI-powered solution for seamless Product Lifecycle Management data migration, 
-            transformation, and integration with enterprise-grade reliability and visualization.
+            Streamlined data migration with AI-powered schema mapping, quality validation, 
+            and enterprise-grade transformation capabilities.
           </p>
           <div className="hero-actions">
-            <Link to="/data-config" className="btn btn-primary">
-              Get Started
-              <span className="btn-icon"><i className="fas fa-arrow-right" aria-hidden="true" /></span>
+            <Link to="/migration" className="btn btn-primary btn-lg">
+              <i className="fas fa-rocket" aria-hidden="true" />
+              Start Migration
             </Link>
-            <Link to="/graphexplorer" className="btn btn-secondary">
-              Explore Features
-              <span className="btn-icon"><i className="fas fa-search" aria-hidden="true" /></span>
+            <Link to="/admin" className="btn btn-secondary">
+              <i className="fas fa-cog" aria-hidden="true" />
+              Admin Settings
             </Link>
           </div>
         </div>
@@ -81,79 +132,107 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Interactive State Flow (3-panel) */}
-      <section className="interactive-state-flow-section">
+      {/* Migration Workflow Steps */}
+      <section className="workflow-section">
         <div className="section-header">
-          <h2 className="section-title">Interactive State Flow</h2>
+          <h2 className="section-title">Migration Workflow</h2>
           <p className="section-description">
-            Visualize the agentic workflow end-to-end
-          </p>
-        </div>
-        <div className="interactive-state-flow-embed">
-          <InteractiveStateFlowEmbed mode="sample" />
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="features-section">
-        <div className="section-header">
-          <h2 className="section-title">Platform Capabilities</h2>
-          <p className="section-description">
-            Comprehensive tools for modern data engineering and analytics
+            Simple 5-step process for end-to-end PLM data migration
           </p>
         </div>
         
-        <div className="features-grid">
-          {features.map((feature, index) => (
+        <div className="workflow-steps">
+          {migrationSteps.map((step, index) => (
+            <Link to={`${step.link}?step=${step.step}`} key={step.step} className="workflow-step">
+              <div className="step-number">{step.step}</div>
+              <div className="step-icon">
+                <i className={step.icon} aria-hidden="true" />
+              </div>
+              <h3 className="step-title">{step.title}</h3>
+              <p className="step-description">{step.description}</p>
+              {index < migrationSteps.length - 1 && (
+                <div className="step-connector">
+                  <i className="fas fa-chevron-right" aria-hidden="true" />
+                </div>
+              )}
+            </Link>
+          ))}
+        </div>
+        
+        <div className="workflow-cta">
+          <Link to="/migration" className="btn btn-primary">
+            <i className="fas fa-play" aria-hidden="true" />
+            Launch Migration Wizard
+          </Link>
+        </div>
+      </section>
+
+      {/* Tool Cards */}
+      <section className="tools-section">
+        <div className="section-header">
+          <h2 className="section-title">Platform Tools</h2>
+          <p className="section-description">
+            Comprehensive toolkit for data engineering and analytics
+          </p>
+        </div>
+        
+        <div className="tools-grid">
+          {toolCards.map((tool, index) => (
             <Link 
-              to={feature.link} 
+              to={tool.link} 
               key={index} 
-              className="feature-card"
-              style={{ '--accent-color': feature.color }}
+              className={`tool-card ${tool.primary ? 'primary' : ''}`}
+              style={{ '--card-color': tool.color }}
             >
-              <div className="feature-icon"><i className={feature.icon} aria-hidden="true" /></div>
-              <h3 className="feature-title">{feature.title}</h3>
-              <p className="feature-description">{feature.description}</p>
-              <div className="feature-link-arrow"><i className="fas fa-arrow-right" aria-hidden="true" /></div>
+              <div className="tool-icon">
+                <i className={tool.icon} aria-hidden="true" />
+              </div>
+              <div className="tool-content">
+                <h3 className="tool-title">{tool.title}</h3>
+                <p className="tool-description">{tool.description}</p>
+              </div>
+              <div className="tool-arrow">
+                <i className="fas fa-arrow-right" aria-hidden="true" />
+              </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Stats Section */}
+      {/* Quick Stats */}
       <section className="stats-section">
         <div className="stats-grid">
           <div className="stat-item">
-            <div className="stat-value">100+</div>
-            <div className="stat-label">Data Sources</div>
+            <div className="stat-value">5</div>
+            <div className="stat-label">Migration Steps</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value">1M+</div>
-            <div className="stat-label">Records Processed</div>
+            <div className="stat-value">AI</div>
+            <div className="stat-label">Powered Mapping</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value">99.9%</div>
-            <div className="stat-label">Uptime</div>
+            <div className="stat-value">100%</div>
+            <div className="stat-label">GraphQL Native</div>
           </div>
           <div className="stat-item">
-            <div className="stat-value">50TB+</div>
-            <div className="stat-label">Data Managed</div>
+            <div className="stat-value">Real-time</div>
+            <div className="stat-label">Validation</div>
           </div>
         </div>
       </section>
 
-      {/* Tech Stack Section */}
+      {/* Tech Stack */}
       <section className="tech-stack-section">
         <div className="section-header">
-          <h2 className="section-title">Powered By</h2>
+          <h2 className="section-title">Technology Stack</h2>
         </div>
         <div className="tech-badges">
-          <div className="tech-badge">Neo4j</div>
-          <div className="tech-badge">React</div>
-          <div className="tech-badge">FastAPI</div>
-          <div className="tech-badge">Cytoscape</div>
-          <div className="tech-badge">XState</div>
-          <div className="tech-badge">Python</div>
+          <div className="tech-badge"><i className="fas fa-brain" /> GraphRAG</div>
+          <div className="tech-badge"><i className="fas fa-database" /> Neo4j</div>
+          <div className="tech-badge"><i className="fas fa-code-branch" /> GraphQL</div>
+          <div className="tech-badge"><i className="fas fa-robot" /> Agentic AI</div>
+          <div className="tech-badge"><i className="fab fa-react" /> React</div>
+          <div className="tech-badge"><i className="fab fa-python" /> FastAPI</div>
         </div>
       </section>
     </div>

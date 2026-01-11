@@ -19,7 +19,7 @@ export const InspectorPanel = ({
     return (
       <div className={`inspector-panel inspector-panel--${theme}`}>
         <div className="inspector-panel__empty">
-          <div className="inspector-panel__empty-icon">◻</div>
+          <div className="inspector-panel__empty-icon"><i className="fas fa-mouse-pointer" aria-hidden="true" /></div>
           <p>Select a node to view details</p>
         </div>
       </div>
@@ -27,11 +27,11 @@ export const InspectorPanel = ({
   }
 
   const tabs = [
-    { id: 'properties', label: 'Properties', icon: '⚙' },
-    { id: 'relationships', label: 'Relationships', icon: '⛭' },
-    { id: 'metadata', label: 'Metadata', icon: '✎' },
-    { id: 'ai', label: 'AI Insights', icon: '✧' },
-    { id: 'history', label: 'History', icon: '◰' }
+    { id: 'properties', label: 'Properties', icon: 'fas fa-cog' },
+    { id: 'relationships', label: 'Relationships', icon: 'fas fa-link' },
+    { id: 'metadata', label: 'Metadata', icon: 'fas fa-edit' },
+    { id: 'ai', label: 'AI Insights', icon: 'fas fa-robot' },
+    { id: 'history', label: 'History', icon: 'fas fa-history' }
   ];
 
   const handleFieldEdit = (field, value) => {

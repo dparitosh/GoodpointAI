@@ -1,6 +1,10 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -29,17 +33,23 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           ws: true,
-          configure: (proxy, _options) => {
-            proxy.on('error', (err, _req, _res) => {
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
               console.log('proxy error', err);
             });
-            proxy.on('proxyReq', (proxyReq, req, _res) => {
+            proxy.on('proxyReq', (_proxyReq, req) => {
               console.log('Sending Request to the Target:', req.method, req.url);
             });
-            proxy.on('proxyRes', (proxyRes, req, _res) => {
+            proxy.on('proxyRes', (proxyRes, req) => {
               console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
             });
           },
+        },
+        // Proxy health check endpoint
+        '/health': {
+          target: proxyTarget,
+          changeOrigin: true,
+          secure: false,
         },
       },
     },

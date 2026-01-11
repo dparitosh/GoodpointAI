@@ -1,8 +1,8 @@
 .self-healing-monitor-page {
   padding: 20px;
-  background: #f5f5f5;
+  background: var(--background-color, #f0f4f8);
   min-height: 100vh;
-  color: #333;
+  color: var(--text-color, #1a2a3a);
 }
 
 .monitor-header {
@@ -11,16 +11,16 @@
   align-items: center;
   margin-bottom: 30px;
   padding: 20px;
-  background: #0066cc;
+  background: var(--primary-color, #0066cc);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 50, 100, 0.15);
 }
 
 .monitor-header h1 {
   margin: 0;
   font-size: 32px;
   font-weight: bold;
-  color: #fff;
+  color: var(--text-on-secondary-button-bg, #fff);
 }
 
 .ws-status {
@@ -32,7 +32,7 @@
 .ws-indicator {
   padding: 8px 16px;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: var(--font-size-base, 14px);
   font-weight: bold;
   display: flex;
   align-items: center;
@@ -41,12 +41,12 @@
 
 .ws-indicator.connected {
   background: rgba(40, 167, 69, 0.3);
-  border: 2px solid #28a745;
+  border: 2px solid var(--success-color, #28a745);
 }
 
 .ws-indicator.disconnected {
   background: rgba(220, 53, 69, 0.3);
-  border: 2px solid #dc3545;
+  border: 2px solid var(--error-color, #dc3545);
 }
 
 .metrics-dashboard {
@@ -57,71 +57,101 @@
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--panel-bg, #f8fafc);
   padding: 20px;
   border-radius: 12px;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 50, 100, 0.1);
   transition: transform 0.2s;
-  color: #333;
+  color: var(--text-color, #1a2a3a);
+  border: 1px solid var(--border-color, #c8d4e0);
 }
 
 .metric-card:hover {
   transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0, 50, 100, 0.15);
 }
 
 .metric-icon {
   font-size: 32px;
   margin-bottom: 10px;
+  color: var(--primary-color, #0066cc);
 }
 
 .metric-value {
   font-size: 36px;
   font-weight: bold;
   margin-bottom: 8px;
+  color: var(--text-color, #1a2a3a);
 }
 
 .metric-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary, #4a5f75);
   font-weight: 500;
 }
 
 .metric-card.success {
-  border-left: 4px solid #28a745;
+  border-left: 4px solid var(--success-color, #28a745);
+}
+
+.metric-card.success .metric-icon {
+  color: var(--success-color, #28a745);
 }
 
 .metric-card.warning {
-  border-left: 4px solid #ffc107;
+  border-left: 4px solid var(--warning-color-dark, var(--warning-color, #ffc107));
+}
+
+.metric-card.warning .metric-icon {
+  color: var(--warning-color-dark, var(--warning-color, #ffc107));
 }
 
 .metric-card.danger {
-  border-left: 4px solid #dc3545;
+  border-left: 4px solid var(--error-color, #dc3545);
+}
+
+.metric-card.danger .metric-icon {
+  color: var(--error-color, #dc3545);
 }
 
 .metric-card.info {
-  border-left: 4px solid #17a2b8;
+  border-left: 4px solid var(--info-color, #17a2b8);
+}
+
+.metric-card.info .metric-icon {
+  color: var(--info-color, #17a2b8);
 }
 
 .metric-card.alert {
   border-left: 4px solid #fd7e14;
 }
 
+.metric-card.alert .metric-icon {
+  color: #fd7e14;
+}
+
 .metric-card.active {
   border-left: 4px solid #6f42c1;
 }
 
+.metric-card.active .metric-icon {
+  color: #6f42c1;
+}
+
 .test-controls {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--panel-bg, #f8fafc);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 30px;
-  color: #333;
+  color: var(--text-color, #1a2a3a);
+  border: 1px solid var(--border-color, #c8d4e0);
 }
 
 .test-controls h2 {
   margin: 0 0 15px;
   font-size: 20px;
+  color: var(--text-color, #1a2a3a);
 }
 
 .control-buttons {
@@ -145,44 +175,21 @@
   cursor: not-allowed;
 }
 
-.btn-success {
-  background: #28a745;
-  color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-  background: #218838;
-}
-
-.btn-warning {
-  background: #ffc107;
-  color: #333;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background: #e0a800;
-}
-
-.btn-info {
-  background: #17a2b8;
-  color: white;
-}
-
-.btn-info:hover:not(:disabled) {
-  background: #138496;
-}
+/* Button styles now in global buttons.css */
 
 .task-results-section {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--panel-bg, #f8fafc);
   padding: 20px;
   border-radius: 12px;
   margin-bottom: 30px;
-  color: #333;
+  color: var(--text-color, #1a2a3a);
+  border: 1px solid var(--border-color, #c8d4e0);
 }
 
 .task-results-section h2 {
   margin: 0 0 15px;
   font-size: 20px;
+  color: var(--text-color, #1a2a3a);
 }
 
 .task-results-list {
@@ -192,22 +199,22 @@
 }
 
 .task-result-card {
-  background: #f8f9fa;
+  background: var(--background-color, #f0f4f8);
   padding: 15px;
   border-radius: 8px;
-  border-left: 4px solid #6c757d;
+  border-left: 4px solid var(--secondary-button-bg, var(--secondary-color, #6c757d));
 }
 
 .task-result-card.status-completed {
-  border-left-color: #28a745;
+  border-left-color: var(--success-color, #28a745);
 }
 
 .task-result-card.status-failed {
-  border-left-color: #dc3545;
+  border-left-color: var(--error-color, #dc3545);
 }
 
 .task-result-card.status-dead_letter {
-  border-left-color: #6c757d;
+  border-left-color: var(--secondary-button-bg, var(--secondary-color, #6c757d));
 }
 
 .result-header {
@@ -286,21 +293,23 @@
 }
 
 .monitor-section {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--panel-bg, #f8fafc);
   padding: 20px;
   border-radius: 12px;
-  color: #333;
+  color: var(--text-color, #1a2a3a);
+  border: 1px solid var(--border-color, #c8d4e0);
 }
 
 .monitor-section h2 {
   margin: 0 0 15px;
   font-size: 20px;
+  color: var(--text-color, #1a2a3a);
 }
 
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #6c757d;
+  color: var(--text-muted, #7a8fa3);
 }
 
 .empty-state p {
@@ -316,7 +325,7 @@
 }
 
 .circuit-breaker-card {
-  background: #f8f9fa;
+  background: var(--background-color, #f0f4f8);
   padding: 15px;
   border-radius: 8px;
   border-left: 4px solid #6c757d;
@@ -450,8 +459,8 @@
 
 .btn-retry {
   padding: 6px 12px;
-  background: #17a2b8;
-  color: white;
+  background: var(--info-color, #17a2b8);
+  color: var(--text-on-primary, #fff);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -460,13 +469,13 @@
 }
 
 .btn-retry:hover {
-  background: #138496;
+  background: var(--accent-hover-color, #138496);
 }
 
 .btn-remove {
   padding: 6px 12px;
-  background: #dc3545;
-  color: white;
+  background: var(--error-color, #dc3545);
+  color: var(--text-on-primary, #fff);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -475,14 +484,14 @@
 }
 
 .btn-remove:hover {
-  background: #c82333;
+  background: var(--error-color-dark, #c82333);
 }
 
 .info-section {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--panel-bg, rgba(255, 255, 255, 0.95));
   padding: 20px;
   border-radius: 12px;
-  color: #333;
+  color: var(--text-color, #333);
 }
 
 .info-section h3 {

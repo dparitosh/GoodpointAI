@@ -15,7 +15,7 @@
   flex: 1 1 auto;
   overflow: auto;
   max-height: 100%;
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
 }
 
@@ -31,7 +31,7 @@
 
 .e2etrace-data-table-container th, 
 .e2etrace-data-table-container td {
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--border-color);
   padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
@@ -44,7 +44,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 1px 0 #e0e4ea;
+  box-shadow: 0 1px 0 var(--border-color);
 }
 
 .e2etrace-data-table-container tr:nth-child(even) td {
@@ -63,7 +63,7 @@
 .e2etrace-data-table-container input[type="text"] {
   background: var(--input-bg);
   color: var(--text-color);
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--border-color);
   border-radius: 3px;
   padding: 0.3rem 0.5rem;
   font-size: 0.8rem;
@@ -77,7 +77,7 @@
 
 .e2etrace-properties-toggle {
   background: #007bff;
-  color: white;
+  color: var(--text-on-primary);
   border: none;
   border-radius: 3px;
   padding: 0.2rem 0.5rem;
@@ -93,8 +93,8 @@
 .e2etrace-properties-list {
   margin: 0.5rem 0 0 0;
   padding: 0.5rem;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--background-color-offset);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   list-style: none;
   max-height: 200px;
@@ -105,7 +105,7 @@
 .e2etrace-properties-list li {
   margin-bottom: 0.25rem;
   padding: 0.2rem 0;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .e2etrace-properties-list li:last-child {
@@ -115,8 +115,8 @@
 /* Pagination and controls styling */
 .e2etrace-data-table-container > div:first-child {
   padding: 0.75rem 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e4ea;
+  background: var(--background-color-offset);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -125,8 +125,8 @@
 }
 
 .e2etrace-data-table-container button:hover:not(:disabled) {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: var(--background-color-offset);
+  border-color: var(--border-color);
 }
 
 .e2etrace-data-table-container button:disabled {

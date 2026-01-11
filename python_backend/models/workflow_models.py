@@ -5,7 +5,7 @@ Each workflow instance represents a unique source-target migration pipeline
 with its own configuration, state, and execution history.
 """
 
-from sqlalchemy import Column, String, Integer, DateTime, JSON, Enum as SQLEnum, Text, Float, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, JSON, Enum as SQLEnum, Text, Float, Boolean, Index, CheckConstraint
 from sqlalchemy.sql import func
 from datetime import datetime
 from enum import Enum
@@ -94,6 +94,26 @@ class WorkflowInstance(Base):
     schedule_enabled = Column(Boolean, default=False)
     schedule_cron = Column(String(100), nullable=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Table constraints for data integrity
+    __table_args__ = (
+        # Composite index for source-target pair lookups
+        Index('ix_workflow_source_target', 'source_id', 'target_id'),
+        # Check constraint to ensure source and target are different
+        CheckConstraint('source_id != target_id', name='ck_different_source_target'),
+        # Check constraint for valid source types
+        CheckConstraint(
+            "source_type IN ('teamcenter', 'windchill', 'catia', 'nx', 'creo', 'enovia', 'aras', 'solidworks', 'inventor')",
+            name='ck_valid_source_type'
+        ),
+        # Check constraint for valid target types
+        CheckConstraint(
+            "target_type IN ('neo4j', 'cloud_plm', 'opensearch', 'warehouse', 'datalake', 's3', 'azure_blob', 'postgresql')",
+            name='ck_valid_target_type'
+        ),
+        # Check constraint for progress percentage
+        CheckConstraint('progress_percentage >= 0 AND progress_percentage <= 100', name='ck_valid_progress'),
+    )
 
 
 # Pydantic Models for API

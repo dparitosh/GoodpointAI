@@ -3,6 +3,11 @@
 
 Write-Host "Starting GraphTrace Backend Server..." -ForegroundColor Green
 
+    # Opt into repo-local `.env` loading for local development.
+    if (-not $env:GRAPH_TRACE_LOAD_DOTENV) {
+        $env:GRAPH_TRACE_LOAD_DOTENV = "true"
+    }
+
 # Check if Python is installed
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "Error: Python is not installed or not in PATH" -ForegroundColor Red
@@ -31,6 +36,7 @@ if (-not (Test-Path ".env")) {
     Write-Host "NEO4J_PASSWORD=your-password" -ForegroundColor Cyan
     Write-Host "NEO4J_DATABASE=neo4j" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "GRAPH_TRACE_ALLOWED_LOCAL_ROOTS=D:\\path\\to\\your\\import\\folder" -ForegroundColor Cyan
 }
 
 # Install/upgrade dependencies

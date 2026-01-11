@@ -9,7 +9,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "smoke:analytics": "node scripts/smoke-analytics.mjs"
   },
   "dependencies": {
     "cytoscape": "^3.32.0",

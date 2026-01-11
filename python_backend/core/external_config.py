@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
-from typing import List
+from typing import List, Optional
 
 # Load environment variables
 # In installed/service deployments, configuration should be stored in the DB.
@@ -244,6 +244,162 @@ plm_config = PLMConfig()
 filesystem_config = FileSystemConfig()
 database_config = DatabaseConfig()
 api_gateway_config = APIGatewayConfig()
+
+
+# ============================================================================
+# Admin Config Integration
+# ============================================================================
+
+def get_llm_config_with_db_fallback(provider: "Optional[str]" = None, db_session=None) -> dict:
+    """
+    Get LLM configuration with database-first fallback to environment.
+    
+    This function checks the admin config database first, then falls back
+    to the environment-based LLMConfig class.
+    
+    Args:
+        provider: Optional provider name. If None, returns active provider.
+        db_session: Optional SQLAlchemy session for database access.
+    
+    Returns:
+        Dict with LLM configuration
+    """
+    # Try database first
+    if db_session is not None:
+        try:
+            from services.admin_config_service import AdminConfigService
+            config_service = AdminConfigService(db_session)
+            
+            if provider:
+                return config_service.get_llm_provider_config(provider)
+            else:
+                return config_service.get_active_llm_provider()
+        except Exception as e:
+            logger.debug("DB LLM config not available: %s", e)
+    
+    # Fall back to environment-based config
+    if provider == "openai" or (not provider and llm_config.openai_api_key):
+        return {
+            "provider": "openai",
+            "api_key": llm_config.openai_api_key,
+            "model": llm_config.openai_model,
+            "embedding_model": llm_config.openai_embedding_model,
+        }
+    elif provider == "anthropic" or (not provider and llm_config.anthropic_api_key):
+        return {
+            "provider": "anthropic",
+            "api_key": llm_config.anthropic_api_key,
+            "model": llm_config.anthropic_model,
+        }
+    elif provider in ("azure_openai", "azure-openai") or (not provider and llm_config.azure_openai_key):
+        return {
+            "provider": "azure_openai",
+            "api_key": llm_config.azure_openai_key,
+            "endpoint": llm_config.azure_openai_endpoint,
+            "model": llm_config.azure_openai_deployment,
+            "api_version": llm_config.azure_openai_api_version,
+        }
+    elif provider == "ollama":
+        return {
+            "provider": "ollama",
+            "api_key": "",
+            "endpoint": llm_config.ollama_base_url,
+            "model": llm_config.ollama_model,
+        }
+    
+    return {"provider": "none", "api_key": "", "model": ""}
+
+
+def get_embedding_config_with_db_fallback(db_session=None) -> dict:
+    """
+    Get embedding configuration with database-first fallback to environment.
+    
+    Args:
+        db_session: Optional SQLAlchemy session for database access.
+    
+    Returns:
+        Dict with embedding configuration
+    """
+    # Try database first
+    if db_session is not None:
+        try:
+            from services.admin_config_service import AdminConfigService
+            config_service = AdminConfigService(db_session)
+            return config_service.get_embedding_config()
+        except Exception as e:
+            logger.debug("DB embedding config not available: %s", e)
+    
+    # Fall back to environment-based config
+    if llm_config.openai_api_key:
+        return {
+            "provider": "openai",
+            "model": llm_config.openai_embedding_model,
+            "api_key": llm_config.openai_api_key,
+            "dimension": 1536,
+        }
+    
+    return {
+        "provider": "sentence_transformers",
+        "model": "all-MiniLM-L6-v2",
+        "api_key": "",
+        "dimension": 384,
+    }
+
+
+def get_database_config_with_db_fallback(db_type: str, db_session=None) -> dict:
+    """
+    Get database connection configuration with database-first fallback.
+    
+    Args:
+        db_type: Type of database (postgresql, neo4j, mongodb, redis)
+        db_session: Optional SQLAlchemy session for database access.
+    
+    Returns:
+        Dict with database configuration
+    """
+    # Try database first
+    if db_session is not None:
+        try:
+            from services.admin_config_service import AdminConfigService
+            config_service = AdminConfigService(db_session)
+            return config_service.get_connection_config(db_type)
+        except Exception as e:
+            logger.debug("DB connection config not available: %s", e)
+    
+    # Fall back to environment-based config
+    if db_type in ("postgresql", "postgres"):
+        return {
+            "type": "postgresql",
+            "host": database_config.postgres_host,
+            "port": database_config.postgres_port,
+            "database": database_config.postgres_database,
+            "username": database_config.postgres_user,
+            "password": database_config.postgres_password,
+        }
+    elif db_type == "neo4j":
+        return {
+            "type": "neo4j",
+            "uri": database_config.neo4j_uri,
+            "username": database_config.neo4j_user,
+            "password": database_config.neo4j_password,
+            "database": database_config.neo4j_database,
+        }
+    elif db_type == "mongodb":
+        return {
+            "type": "mongodb",
+            "uri": database_config.mongodb_uri,
+            "database": database_config.mongodb_database,
+        }
+    elif db_type == "redis":
+        return {
+            "type": "redis",
+            "host": database_config.redis_host,
+            "port": database_config.redis_port,
+            "password": database_config.redis_password,
+            "database": database_config.redis_db,
+        }
+    
+    return {"type": db_type}
 
 
 def ensure_directories():

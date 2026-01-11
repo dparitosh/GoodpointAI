@@ -6,6 +6,7 @@ import { E2ETraceThemeProvider } from './contexts/e2etrace-theme-context.jsx';
 import { E2ETraceLayoutProvider } from './contexts/e2etrace-layout-context.jsx';
 import { GraphFilterProvider } from './contexts/e2etrace-graph-filter-context.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import ToastContainer from './components/ToastContainer.jsx';
 import router from './routes';
 import './i18n/index.js';
 
@@ -28,7 +29,9 @@ import './i18n/index.js';
   window.location.replace(`${baseUrl}#${routePath}${search || ''}`);
 })();
 
-// Stylesheets
+// Stylesheets - Global styles for consistency
+import './styles/global.css';
+import './styles/buttons.css';
 import './e2etrace-global.css';
 import './styles/xstate-design-system.css';
 
@@ -39,6 +42,7 @@ function App() {
         <E2ETraceLayoutProvider>
           <GraphFilterProvider>
             <RouterProvider router={router} />
+            <ToastContainer />
           </GraphFilterProvider>
         </E2ETraceLayoutProvider>
       </E2ETraceThemeProvider>

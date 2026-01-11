@@ -4,7 +4,15 @@ import writeXlsxFile from 'write-excel-file';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function readExcelArrayBufferToAoa(arrayBuffer) {
-  const rows = await readXlsxFile(arrayBuffer);
+  // Backward compatible signature: (arrayBuffer) or (arrayBuffer, sheet)
+  const sheet = arguments.length > 1 ? arguments[1] : undefined;
+  let rows;
+  try {
+    rows = sheet != null ? await readXlsxFile(arrayBuffer, { sheet }) : await readXlsxFile(arrayBuffer);
+  } catch (_err) {
+    // Fall back to default sheet behavior if the library rejects options.
+    rows = await readXlsxFile(arrayBuffer);
+  }
   const aoa = Array.isArray(rows) ? rows : [];
   const maxLen = aoa.reduce((m, r) => Math.max(m, Array.isArray(r) ? r.length : 0), 0);
 
@@ -14,6 +22,18 @@ export async function readExcelArrayBufferToAoa(arrayBuffer) {
     while (out.length < maxLen) out.push('');
     return out;
   });
+}
+
+export async function getExcelSheetNames(arrayBuffer) {
+  try {
+    const sheets = await readXlsxFile(arrayBuffer, { getSheets: true });
+    const list = Array.isArray(sheets) ? sheets : [];
+    return list
+      .map((s) => (typeof s === 'string' ? s : s?.name))
+      .filter((n) => typeof n === 'string' && n.trim() !== '');
+  } catch (_err) {
+    return [];
+  }
 }
 
 export function jsonToAoa(items) {

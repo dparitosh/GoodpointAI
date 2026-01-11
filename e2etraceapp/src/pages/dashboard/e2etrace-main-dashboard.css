@@ -15,7 +15,7 @@
   flex: 1 1 0;
   min-height: 0;
   min-width: 0;
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 10px 10px 0 0;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
   overflow: hidden;
@@ -28,11 +28,11 @@
   height: 60vh;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--panel-bg);
 }
 
 .graph-panel {
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border-color);
   padding: 1rem 1rem 1rem 2rem;
 }
 
@@ -42,21 +42,21 @@
 
 .resizer {
   width: 8px;
-  background: #e0e0e0;
+  background: var(--border-color);
   cursor: col-resize;
   z-index: 10;
   transition: background 0.2s;
 }
 .resizer:hover {
-  background: #b0b0b0;
+  background: var(--text-muted);
 }
 
 .bottom-panel {
   width: 100%;
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 0 0 10px 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
   margin-top: 1.5rem;
   padding: 1.5rem 2rem;
   display: flex;
@@ -69,7 +69,7 @@
   flex-direction: column;
   gap: 2rem;
   padding: 2rem;
-  background: #f4f6fa;
+  background: var(--background-color-offset);
   min-height: 100vh;
 }
 
@@ -84,7 +84,7 @@
 }
 
 .dashboard-widget {
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   flex: 1 1 0;
@@ -103,10 +103,10 @@
 .dashboard-widget-header {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #2d3a4a;
-  background: #f7f9fb;
+  color: var(--text-color-headings);
+  background: var(--surface-color);
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .dashboard-widget-content {
@@ -135,7 +135,7 @@
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 1.2em;
-  color: #888;
+  color: var(--text-muted);
 }
 
 /* Enhanced styles for the graph explorer dashboard */
@@ -188,8 +188,8 @@
 
 .graph-toolbar button {
   padding: 0.25rem 0.5rem;
-  border: 1px solid #ced4da;
-  background: #fff;
+  border: 1px solid var(--border-color);
+  background: var(--panel-bg);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.8rem;
@@ -199,19 +199,19 @@
 }
 
 .graph-toolbar button:hover {
-  background: #f8f9fa;
-  border-color: #007bff;
+  background: var(--background-color-offset);
+  border-color: var(--accent-color);
 }
 
 .graph-toolbar button:active {
-  background: #e9ecef;
+  background: var(--background-color-offset);
 }
 
 .graph-toolbar select {
   padding: 0.25rem 0.5rem;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background: #fff;
+  background: var(--panel-bg);
   font-size: 0.8rem;
   height: 30px;
 }
@@ -258,8 +258,8 @@
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #007bff;
+  border: 3px solid var(--border-color);
+  border-top: 3px solid var(--accent-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -277,9 +277,9 @@
 
 /* Data Table Section Enhancements */
 .dashboard-data-table-section {
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 8px;
-  border: 1px solid #e0e4ea;
+  border: 1px solid var(--border-color);
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   min-height: 300px;
   max-height: 500px;
@@ -295,10 +295,10 @@
 .dashboard-data-table-header {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
   padding: 1rem 1rem 0.5rem 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e4ea;
+  background: var(--background-color-offset);
+  border-bottom: 1px solid var(--border-color);
   border-radius: 8px 8px 0 0;
   flex-shrink: 0;
 }

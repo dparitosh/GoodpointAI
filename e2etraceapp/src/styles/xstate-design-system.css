@@ -5,35 +5,35 @@
 
 :root {
   /* Colors - Primary */
-  --xstate-primary: #0078D4;
-  --xstate-primary-hover: #005a9e;
-  --xstate-primary-light: rgba(0, 120, 212, 0.1);
+  --xstate-primary: var(--accent-color, #0078D4);
+  --xstate-primary-hover: var(--accent-hover-color, #005a9e);
+  --xstate-primary-light: var(--cy-selected-bg, rgba(0, 120, 212, 0.1));
   
   /* Colors - Text */
-  --xstate-text-primary: #2c3e50;
-  --xstate-text-secondary: #586069;
-  --xstate-text-muted: #6c757d;
-  --xstate-text-white: #ffffff;
+  --xstate-text-primary: var(--text-color, #1a2a3a);
+  --xstate-text-secondary: var(--text-secondary, #4a5f75);
+  --xstate-text-muted: var(--text-muted, #7a8fa3);
+  --xstate-text-white: var(--text-on-secondary-button-bg, #ffffff);
   
-  /* Colors - Background */
-  --xstate-bg-primary: #ffffff;
-  --xstate-bg-secondary: #f7fafc;
-  --xstate-bg-tertiary: #f8f9fa;
-  --xstate-bg-dark: #020617;
+  /* Colors - Background (Blue-Tinted) */
+  --xstate-bg-primary: var(--background-color, #f0f4f8);
+  --xstate-bg-secondary: var(--background-alt, #e8eef4);
+  --xstate-bg-tertiary: var(--background-color-offset, #dce4ed);
+  --xstate-bg-dark: var(--dark-bg-primary, #020617);
   
   /* Colors - Border */
-  --xstate-border-light: #e1e4e8;
-  --xstate-border-medium: #d1d5da;
-  --xstate-border-dark: #3e3e42;
+  --xstate-border-light: var(--border-color, #c8d4e0);
+  --xstate-border-medium: var(--border-color-strong, #b0c0d0);
+  --xstate-border-dark: var(--dark-border-color, #3e3e42);
   
   /* Colors - Status */
-  --xstate-success: #28a745;
-  --xstate-success-light: rgba(40, 167, 69, 0.1);
-  --xstate-warning: #ffc107;
-  --xstate-warning-light: rgba(255, 193, 7, 0.1);
-  --xstate-error: #dc3545;
-  --xstate-error-light: rgba(220, 53, 69, 0.1);
-  --xstate-info: #17a2b8;
+  --xstate-success: var(--success-color, #28a745);
+  --xstate-success-light: var(--success-color-light, rgba(40, 167, 69, 0.1));
+  --xstate-warning: var(--warning-color-dark, var(--warning-color, #ffc107));
+  --xstate-warning-light: var(--warning-color-light, rgba(255, 193, 7, 0.1));
+  --xstate-error: var(--error-color, #dc3545);
+  --xstate-error-light: var(--error-color-light, rgba(220, 53, 69, 0.1));
+  --xstate-info: var(--info-color, #17a2b8);
   --xstate-info-light: rgba(23, 162, 184, 0.1);
   
   /* Spacing */
@@ -59,13 +59,13 @@
   --xstate-shadow-hover: 0 8px 16px rgba(0, 0, 0, 0.15);
   
   /* Typography */
-  --xstate-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --xstate-font-size-xs: 11px;
-  --xstate-font-size-sm: 12px;
-  --xstate-font-size-base: 13px;
-  --xstate-font-size-md: 14px;
-  --xstate-font-size-lg: 16px;
-  --xstate-font-size-xl: 18px;
+  --xstate-font-family: var(--font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+  --xstate-font-size-xs: var(--font-size-xs, 11px);
+  --xstate-font-size-sm: var(--font-size-sm, 12px);
+  --xstate-font-size-base: var(--font-size-base, 13px);
+  --xstate-font-size-md: var(--font-size-base, 14px);
+  --xstate-font-size-lg: var(--font-size-lg, 16px);
+  --xstate-font-size-xl: var(--font-size-xl, 18px);
   --xstate-font-weight-normal: 400;
   --xstate-font-weight-medium: 500;
   --xstate-font-weight-semibold: 600;
@@ -248,15 +248,15 @@
 
 /* Dark Mode */
 [data-theme="dark"] {
-  --xstate-bg-primary: #020617;
-  --xstate-bg-secondary: #0f172a;
-  --xstate-bg-tertiary: #1e293b;
-  --xstate-text-primary: #e4e6eb;
-  --xstate-text-secondary: #94a3b8;
-  --xstate-text-muted: #64748b;
-  --xstate-border-light: #3e3e42;
-  --xstate-border-medium: #4a5568;
-  --xstate-border-dark: #2d3748;
+  --xstate-bg-primary: var(--background-color, #020617);
+  --xstate-bg-secondary: var(--panel-bg, #0f172a);
+  --xstate-bg-tertiary: var(--background-color-offset, #1e293b);
+  --xstate-text-primary: var(--text-color, #e4e6eb);
+  --xstate-text-secondary: var(--text-secondary, #94a3b8);
+  --xstate-text-muted: var(--text-muted, #64748b);
+  --xstate-border-light: var(--border-color, #3e3e42);
+  --xstate-border-medium: var(--border-color-strong, #4a5568);
+  --xstate-border-dark: var(--dark-border-color, #2d3748);
 }
 
 /* Utility Classes */

@@ -50,6 +50,10 @@ class LineageRelationType(str, Enum):
     PROCESSED_BY = "PROCESSED_BY"
 
 
+# Security: Set of allowed relationship types for Cypher queries
+ALLOWED_RELATIONSHIP_TYPES = frozenset(e.value for e in LineageRelationType)
+
+
 class LineageNode(BaseModel):
     id: str
     type: LineageNodeType
@@ -129,10 +133,18 @@ class LineageService:
     
     async def create_lineage_relationship(self, relationship: LineageRelationship) -> Optional[Dict[str, Any]]:
         """Create a lineage relationship in Neo4j"""
+        # Security: Validate relationship type against allowed enum values to prevent Cypher injection
+        rel_type = relationship.type.value
+        if rel_type not in ALLOWED_RELATIONSHIP_TYPES:
+            logger.warning("Invalid relationship type rejected: %s", rel_type)
+            raise ValueError(f"Invalid relationship type: {rel_type}")
+        
+        # Use APOC to safely create dynamic relationship types, or use parameterized approach
+        # Since we validated against enum, the f-string is now safe
         query = f"""
         MATCH (source:LineageNode {{id: $source_id}})
         MATCH (target:LineageNode {{id: $target_id}})
-        CREATE (source)-[r:{relationship.type.value} {{
+        CREATE (source)-[r:{rel_type} {{
             properties: $properties,
             timestamp: $timestamp,
             workflow_id: $workflow_id
@@ -642,3 +654,117 @@ async def get_workflow_lineage_graph(
             }
     
     return {"workflow_id": workflow_id, "nodes": [], "relationships": []}
+
+
+# Request model for Cypher queries
+class CypherQueryRequest(BaseModel):
+    cypher: str = Field(..., description="Cypher query to execute (read-only)")
+    parameters: Optional[Dict[str, Any]] = Field(default=None, description="Query parameters")
+
+
+# Set of safe read-only Cypher clauses
+SAFE_CYPHER_PREFIXES = frozenset({
+    "MATCH", "OPTIONAL MATCH", "RETURN", "WITH", "UNWIND", "CALL", "PROFILE", "EXPLAIN"
+})
+
+# Dangerous write clauses that should be blocked (as whole words at statement boundaries)
+BLOCKED_CYPHER_CLAUSES = frozenset({
+    "CREATE", "MERGE", "DELETE", "DETACH DELETE", "SET", "REMOVE", "DROP", "FOREACH"
+})
+
+
+def is_safe_cypher_query(query: str) -> bool:
+    """Check if a Cypher query is safe to execute (read-only)"""
+    import re
+    normalized = query.strip().upper()
+    
+    # Check for blocked write clauses using word boundaries
+    # This prevents false positives like 'created_at' matching 'CREATE'
+    for clause in BLOCKED_CYPHER_CLAUSES:
+        # Use word boundary regex to match whole keywords only
+        pattern = r'\b' + clause + r'\b'
+        if re.search(pattern, normalized):
+            return False
+    
+    # Must start with a safe prefix
+    return any(normalized.startswith(prefix) for prefix in SAFE_CYPHER_PREFIXES)
+
+
+@router.post("/cypher", summary="Execute Cypher Query")
+async def execute_cypher_query(
+    request: CypherQueryRequest,
+    driver: neo4j.AsyncDriver = Depends(get_driver)
+):
+    """
+    Execute a read-only Cypher query against the Neo4j lineage graph.
+    
+    This endpoint is intended for analytics and reporting purposes.
+    Write operations (CREATE, MERGE, DELETE, SET, etc.) are blocked.
+    """
+    if not request.cypher or not request.cypher.strip():
+        return {"success": False, "error": "Empty query provided", "results": []}
+    
+    if not is_safe_cypher_query(request.cypher):
+        return {
+            "success": False,
+            "error": "Query rejected: Only read-only queries (MATCH, RETURN, etc.) are allowed",
+            "results": []
+        }
+    
+    try:
+        import asyncio
+        import os
+
+        query_timeout_s = float(os.getenv("GRAPH_TRACE_NEO4J_QUERY_TIMEOUT_S", "5") or 5)
+
+        async with driver.session(database="neo4j") as session:
+            async def _run_query():
+                result = await session.run(
+                    request.cypher,
+                    **(request.parameters or {})
+                )
+                return await result.data()
+
+            records = await asyncio.wait_for(_run_query(), timeout=query_timeout_s)
+            
+            # Convert Neo4j nodes/relationships to serializable dicts
+            serializable_records = []
+            for record in records:
+                serialized_record: dict[str, Any] = {}
+                for key, value in record.items():
+                    if hasattr(value, '__dict__') or hasattr(value, 'items'):
+                        # Neo4j Node/Relationship - extract properties
+                        if hasattr(value, '_properties'):
+                            serialized_record[key] = dict(getattr(value, '_properties'))
+                        elif hasattr(value, 'items'):
+                            serialized_record[key] = dict(value)
+                        else:
+                            serialized_record[key] = str(value)
+                    else:
+                        serialized_record[key] = value
+                serializable_records.append(serialized_record)
+            
+            return {
+                "success": True,
+                "results": serializable_records,
+                "count": len(serializable_records)
+            }
+    except TimeoutError:
+        return {
+            "success": False,
+            "error": f"Query timed out after {query_timeout_s}s",
+            "results": [],
+        }
+    except neo4j.exceptions.CypherSyntaxError as e:
+        return {
+            "success": False,
+            "error": f"Cypher syntax error: {str(e)}",
+            "results": []
+        }
+    except (neo4j.exceptions.ServiceUnavailable, neo4j.exceptions.SessionExpired, ConnectionError) as e:  # noqa: BLE001
+        logger.error("Cypher query execution failed: %s", e)
+        return {
+            "success": False,
+            "error": f"Query execution failed: {str(e)}",
+            "results": []
+        }

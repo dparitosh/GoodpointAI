@@ -6,6 +6,7 @@ Supports XML and JSON schema introspection, query execution, and data transforma
 import json
 import xml.etree.ElementTree as ET
 import hashlib
+import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
 
@@ -124,32 +125,105 @@ class GraphQLService:
         else:
             data = self.parse_json_to_dict(content)
         
-        # Generate schema hash
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        # Generate schema hash (use first 10KB for large files to speed up)
+        hash_content = content[:10240] if len(content) > 10240 else content
+        content_hash = hashlib.sha256(hash_content.encode()).hexdigest()
 
         cache_key = (name, data_format, content_hash)
         cached = self.cache.get(cache_key)
         if cached is not None:
             return cached
         
-        # Extract fields and types
-        fields, types = self._extract_schema(data)
+        # Fast entity-based schema extraction (no recursion)
+        entities, properties = self._extract_entities_iterative(data)
+
+        # If the fast-path didn't find typed entities/properties (common for plain JSON/XML
+        # without explicit type markers), fall back to full schema extraction to preserve
+        # expected dotted field paths like "user.id".
+        if not properties:
+            fields, types = self._extract_schema(data)
+            properties = fields
+            entities = types or entities
         
         result = {
             "name": name,
             "format": data_format,
             "schema_hash": content_hash,
-            "fields": fields,
-            "types": types,
+            "fields": properties,
+            "types": entities,
             "metadata": {
                 "introspected_at": _utcnow_iso(),
-                "field_count": len(fields),
-                "type_count": len(types)
+                "field_count": len(properties),
+                "type_count": len(entities)
             }
         }
 
         self.cache[cache_key] = result
         return result
+    
+    def _extract_entities_iterative(self, data: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Fast iterative entity/property extraction using BFS.
+        Uses a bounded queue - no recursion, no stack overflow.
+        Depth limit removed - just bounded by max_process count.
+        """
+        entities: Dict[str, Any] = {}
+        properties: Dict[str, Any] = {}
+        seen_types: set = set()
+        
+        # Use deque for BFS - process items breadth-first
+        from collections import deque
+        queue: deque = deque()
+        
+        # Initialize queue from data
+        if isinstance(data, list):
+            for item in data[:200]:  # Max 200 top-level items
+                if isinstance(item, dict):
+                    queue.append(item)
+        elif isinstance(data, dict):
+            queue.append(data)
+        
+        processed = 0
+        max_process = 5000  # Process up to 5000 items - enough for rich schema
+        
+        while queue and processed < max_process:
+            processed += 1
+            item = queue.popleft()
+            
+            if not isinstance(item, dict):
+                continue
+            
+            # Extract entity type from various possible markers
+            etype = item.get("_type") or item.get("type") or item.get("@type")
+            if etype and etype not in seen_types:
+                seen_types.add(etype)
+                entities[etype] = {"name": etype, "kind": "ENTITY", "properties": {}}
+                
+                # Extract all scalar properties
+                for k, v in item.items():
+                    if k in ("_children", "children", "_type", "type", "@type", "_text"):
+                        continue
+                    if not isinstance(v, (dict, list)):
+                        ptype = self._infer_type(v)
+                        properties[f"{etype}.{k}"] = {"type": ptype, "entity": etype}
+                        entities[etype]["properties"][k] = ptype
+            
+            # Queue all nested objects/arrays for processing
+            for k, v in item.items():
+                if k == "_text":  # Skip text content
+                    continue
+                if isinstance(v, dict):
+                    queue.append(v)
+                elif isinstance(v, list):
+                    # Queue list items (limited per list)
+                    for child in v[:50]:
+                        if isinstance(child, dict):
+                            queue.append(child)
+        
+        if not entities:
+            entities["Object"] = {"name": "Object", "kind": "OBJECT", "properties": {}}
+        
+        return entities, properties
     
     def _extract_schema(
         self,
@@ -157,9 +231,14 @@ class GraphQLService:
         path: str = "",
         fields: Optional[Dict[str, Any]] = None,
         types: Optional[Dict[str, Any]] = None,
+        depth: int = 0,
+        max_depth: int = 10,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         Recursively extract field definitions and type information from data structure.
+        
+        Args:
+            max_depth: Maximum recursion depth to prevent infinite loops on deeply nested data
         
         Returns:
             Tuple of (fields dict, types dict)
@@ -168,6 +247,10 @@ class GraphQLService:
             fields = {}
         if types is None:
             types = {}
+        
+        # Prevent infinite recursion on deeply nested structures
+        if depth >= max_depth:
+            return fields, types
         
         if isinstance(data, dict):
             for key, value in data.items():
@@ -190,13 +273,13 @@ class GraphQLService:
                         "fields": []
                     }
                 
-                # Recurse for nested structures
+                # Recurse for nested structures (with depth limit)
                 if isinstance(value, (dict, list)):
-                    self._extract_schema(value, field_path, fields, types)
+                    self._extract_schema(value, field_path, fields, types, depth + 1, max_depth)
         
         elif isinstance(data, list) and len(data) > 0:
             # Analyze first item for array type
-            self._extract_schema(data[0], path, fields, types)
+            self._extract_schema(data[0], path, fields, types, depth + 1, max_depth)
         
         return fields, types
     

@@ -17,8 +17,8 @@
 }
 
 .event-panel--light .event-panel__toolbar {
-  background-color: #f8f9fa;
-  border-bottom-color: #e1e4e8;
+  background-color: var(--surface-color);
+  border-bottom-color: var(--border-color);
 }
 
 .event-panel--dark .event-panel__toolbar {
@@ -40,14 +40,14 @@
 
 .event-panel--light .event-panel__clear-btn,
 .event-panel--light .event-panel__export-btn {
-  border-color: #d1d5db;
-  color: #586069;
+  border-color: var(--border-color);
+  color: var(--text-secondary);
 }
 
 .event-panel--light .event-panel__clear-btn:hover,
 .event-panel--light .event-panel__export-btn:hover {
-  background-color: #e9ecef;
-  border-color: #a8b1bd;
+  background-color: var(--background-color-offset);
+  border-color: var(--border-color);
 }
 
 .event-panel--dark .event-panel__clear-btn,
@@ -96,12 +96,12 @@
 }
 
 .event-panel--light .event-panel__event {
-  background-color: #f8f9fa;
-  border-left-color: #cbd2d9;
+  background-color: var(--surface-color);
+  border-left-color: var(--border-color);
 }
 
 .event-panel--light .event-panel__event:hover {
-  background-color: #e9ecef;
+  background-color: var(--background-color-offset);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
@@ -211,7 +211,7 @@
 .event-panel__event-timestamp {
   font-size: 11px;
   opacity: 0.6;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--font-family-mono, 'Monaco', 'Menlo', 'Ubuntu Mono', monospace);
   flex-shrink: 0;
 }
 
@@ -231,13 +231,13 @@
 }
 
 .event-panel--light .event-panel__event-nodes {
-  background-color: #e9ecef;
-  color: #495057;
+  background-color: var(--background-alt, #e9ecef);
+  color: var(--text-secondary, #495057);
 }
 
 .event-panel--dark .event-panel__event-nodes {
-  background-color: #2d2d30;
-  color: #a8b1bd;
+  background-color: var(--dark-bg-tertiary, #2d2d30);
+  color: var(--dark-text-secondary, #a8b1bd);
 }
 
 /* Empty State */

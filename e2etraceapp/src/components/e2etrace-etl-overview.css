@@ -1,8 +1,8 @@
 /* ETL Overview Component Styles */
 .etl-overview {
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 12px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
   margin-bottom: 1rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
   transition: all 0.3s ease;
@@ -19,7 +19,7 @@
   align-items: center;
   padding: 1rem 1.5rem;
   background: var(--accent-color);
-  color: white;
+  color: var(--text-on-primary);
   position: relative;
 }
 
@@ -65,7 +65,7 @@
 .tab-button {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  color: var(--text-on-primary);
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
@@ -80,15 +80,15 @@
 }
 
 .tab-button.active {
-  background: rgba(255, 255, 255, 0.9);
-  color: #495057;
-  border-color: rgba(255, 255, 255, 0.9);
+  background: var(--panel-bg);
+  color: var(--text-color);
+  border-color: var(--panel-bg);
 }
 
 .expand-button {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  color: var(--text-on-primary);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -109,7 +109,7 @@
 .clear-filter-button {
   background: rgba(220, 53, 69, 0.8);
   border: 1px solid rgba(220, 53, 69, 0.9);
-  color: white;
+  color: var(--text-on-primary);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -139,8 +139,8 @@
 }
 
 .etl-metric-card {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--background-color-offset);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem;
   transition: all 0.2s ease;
@@ -153,7 +153,7 @@
 }
 
 .etl-metric-card.clickable:hover {
-  background: #e9ecef;
+  background: var(--background-color-offset);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -178,7 +178,7 @@
 .metric-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
   line-height: 1.2;
 }
 
@@ -209,14 +209,14 @@
 
 .metric-subtitle {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
 .etl-detailed-view {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-color);
 }
 
 .detailed-section {
@@ -227,7 +227,7 @@
   margin: 0 0 1rem 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .health-bars {
@@ -246,13 +246,13 @@
   min-width: 120px;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .progress-bar {
   flex: 1;
   height: 8px;
-  background: #e9ecef;
+  background: var(--border-color);
   border-radius: 4px;
   overflow: hidden;
   position: relative;
@@ -286,7 +286,7 @@
   text-align: right;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .etl-error {
@@ -319,7 +319,7 @@
   top: 0.5rem;
   right: 0.5rem;
   background: #1976d2;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
   border-radius: 12px;
@@ -337,7 +337,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .stat-item:last-child {
@@ -346,7 +346,7 @@
 
 .stat-label {
   font-size: 0.875rem;
-  color: #495057;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -376,7 +376,7 @@
 
 .action-btn.primary {
   background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
+  color: var(--text-on-primary);
   box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
 }
 
@@ -387,14 +387,14 @@
 }
 
 .action-btn.secondary {
-  background: #f8f9fa;
-  color: #495057;
-  border: 1px solid #dee2e6;
+  background: var(--background-color-offset);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .action-btn.secondary:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: var(--background-color-offset);
+  border-color: var(--border-color);
   transform: translateY(-1px);
 }
 

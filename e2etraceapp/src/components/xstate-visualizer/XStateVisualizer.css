@@ -17,13 +17,13 @@
 }
 
 .xstate-visualizer--light {
-  background-color: #E3F2FD;
-  color: #2c3e50;
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 .xstate-visualizer--dark {
-  background-color: #020617;
-  color: #e4e6eb;
+  background-color: var(--background-color);
+  color: var(--text-color);
 }
 
 /* Graph-only variant (hero: center canvas only) */
@@ -68,9 +68,9 @@
 }
 
 .xstate-visualizer__workflow-navigator--light .xstate-visualizer__workflow-select {
-  background: #ffffff;
-  color: #2c3e50;
-  border-color: #e1e4e8;
+  background: var(--panel-bg);
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
 
 .xstate-visualizer__workflow-navigator--light .xstate-visualizer__workflow-select:focus {
@@ -79,9 +79,9 @@
 }
 
 .xstate-visualizer__workflow-navigator--dark .xstate-visualizer__workflow-select {
-  background: #0b1220;
-  color: #e4e6eb;
-  border-color: #2d2d30;
+  background: var(--panel-bg);
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
 
 .xstate-visualizer__workflow-navigator--dark .xstate-visualizer__workflow-select:focus {
@@ -116,7 +116,7 @@
 
 .xstate-visualizer__view-toggle {
   display: flex;
-  background: white;
+  background: var(--panel-bg);
   border-radius: 24px;
   padding: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -126,7 +126,7 @@
   padding: 8px 16px;
   border: none;
   background: transparent;
-  color: #586069;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -138,25 +138,25 @@
 }
 
 .xstate-visualizer__view-toggle .view-toggle-btn:hover {
-  background: #f6f8fa;
+  background: var(--surface-color);
 }
 
 .xstate-visualizer__view-toggle .view-toggle-btn.active {
   background: var(--primary-color, #0033A0);
-  color: white;
+  color: var(--text-on-primary);
   box-shadow: 0 2px 8px rgba(0, 51, 160, 0.3);
 }
 
 .xstate-visualizer--dark .xstate-visualizer__view-toggle {
-  background: #2d2d30;
+  background: var(--dark-bg-secondary, #1e293b);
 }
 
 .xstate-visualizer--dark .xstate-visualizer__view-toggle .view-toggle-btn {
-  color: #e0e0e0;
+  color: var(--dark-text-primary, #f1f5f9);
 }
 
 .xstate-visualizer--dark .xstate-visualizer__view-toggle .view-toggle-btn:hover {
-  background: #3e3e42;
+  background: var(--dark-bg-tertiary, #334155);
 }
 
 .xstate-visualizer__theme-toggle {
@@ -222,26 +222,26 @@
 }
 
 .xstate-visualizer--light .xstate-visualizer__control-btn {
-  background-color: white;
-  color: #2c3e50;
-  border: 1px solid #e1e4e8;
+  background-color: var(--panel-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
 }
 
 .xstate-visualizer--light .xstate-visualizer__control-btn:hover {
-  background-color: #f8f9fa;
+  background-color: var(--surface-color);
   border-color: #007acc;
   color: #007acc;
   box-shadow: 0 4px 12px rgba(0, 122, 204, 0.2);
 }
 
 .xstate-visualizer--dark .xstate-visualizer__control-btn {
-  background-color: #252526;
-  color: #e4e6eb;
-  border: 1px solid #3e3e42;
+  background-color: var(--panel-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
 }
 
 .xstate-visualizer--dark .xstate-visualizer__control-btn:hover {
-  background-color: #2d2d30;
+  background-color: var(--background-color-offset);
   border-color: #007acc;
   color: #64b5f6;
   box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);

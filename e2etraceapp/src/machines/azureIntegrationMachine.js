@@ -1,5 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import { API_CONFIG } from '../config/api-config.js';
+import { addErrorMessage } from './xstateHelpers.js';
 
 /**
  * Azure Cloud Integration State Machine
@@ -55,7 +56,7 @@ export const azureIntegrationMachine = createMachine({
           target: 'error',
           actions: assign({
             connectionStatus: () => 'error',
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -105,7 +106,7 @@ export const azureIntegrationMachine = createMachine({
             onError: {
               target: 'idle',
               actions: assign({
-                errors: (context, event) => [...context.errors, event.data.message],
+                errors: (context, event) => addErrorMessage(context.errors, event.data.message),
                 uploadProgress: () => 0
               })
             }
@@ -131,7 +132,7 @@ export const azureIntegrationMachine = createMachine({
             onError: {
               target: 'idle',
               actions: assign({
-                errors: (context, event) => [...context.errors, event.data.message]
+                errors: (context, event) => addErrorMessage(context.errors, event.data.message)
               })
             }
           }
@@ -160,7 +161,7 @@ export const azureIntegrationMachine = createMachine({
             onError: {
               target: 'idle',
               actions: assign({
-                errors: (context, event) => [...context.errors, event.data.message]
+                errors: (context, event) => addErrorMessage(context.errors, event.data.message)
               })
             }
           }
@@ -191,7 +192,7 @@ export const azureIntegrationMachine = createMachine({
             onError: {
               target: 'idle',
               actions: assign({
-                errors: (context, event) => [...context.errors, event.data.message]
+                errors: (context, event) => addErrorMessage(context.errors, event.data.message)
               })
             }
           }
@@ -217,7 +218,7 @@ export const azureIntegrationMachine = createMachine({
             onError: {
               target: 'idle',
               actions: assign({
-                errors: (context, event) => [...context.errors, event.data.message]
+                errors: (context, event) => addErrorMessage(context.errors, event.data.message)
               })
             }
           }

@@ -1,5 +1,11 @@
 # GraphTrace Installation & Setup Guide
 
+> This document is kept for backwards compatibility.
+> For the curated release docs, start at `docs/README.md` and then:
+> - `docs/installation/INSTALL_WINDOWS.md`
+> - `docs/installation/DEPENDENCIES.md`
+> - `docs/installation/CONFIGURATION.md`
+
 ## Prerequisites
 
 - **Python 3.8+** (Tested with 3.12.1)

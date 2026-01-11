@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 import { cytoscapeStylesheet } from '../e2etrace-cytoscape-stylesheet';
 import CytoscapeTooltip from '../../../components/e2etrace-cytoscape-tooltip';
@@ -13,6 +13,8 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
       console.error('Graph container ref is null');
       return;
     }
+
+    let createdCy = null;
 
     try {
       console.log('Creating Cytoscape instance with elements:', elements);
@@ -29,10 +31,10 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
             return node.degree() * 2000;
           },
           nodeOverlap: 20,
-          idealEdgeLength: function(edge) {
+          idealEdgeLength: function(_edge) {
             return 100;
           },
-          edgeElasticity: function(edge) {
+          edgeElasticity: function(_edge) {
             return 100;
           },
           nestingFactor: 5,
@@ -56,16 +58,16 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
           sweep: undefined,
           clockwise: true,
           sort: undefined,
-          animateFilter: function(node, i) {
+          animateFilter: function(_node, _i) {
             return true;
           },
           ready: undefined,
           stop: undefined,
-          transform: function(node, position) {
+          transform: function(_node, position) {
             return position;
           }
         },
-        wheelSensitivity: 0.1,
+        // Note: wheelSensitivity default (1) is recommended for cross-platform compatibility
         motionBlur: false,
         pixelRatio: 'auto',
         textureOnViewport: false,
@@ -88,6 +90,8 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
         motionBlurOpacity: 0.2,
         // pixelRatio/motionBlur/textureOnViewport/hideEdgesOnViewport are already set above
       });
+
+      createdCy = cy;
 
       // Enhanced interaction handling
       cy.on('tap', 'node', function(evt) {
@@ -151,16 +155,16 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
     }
 
     return () => {
-      if (cyInstance) {
-        cyInstance.removeAllListeners();
-        cyInstance.destroy();
+      if (createdCy) {
+        createdCy.removeAllListeners?.();
+        createdCy.destroy();
       }
       if (cyRef) cyRef.current = null;
     };
   }, [elements, cyRef]);
 
   // Enhanced search functionality
-  const highlightSearchResults = (searchTerm) => {
+  const highlightSearchResults = useCallback((searchTerm) => {
     if (!cyInstance || !searchTerm) {
       cyInstance?.elements().removeClass('search-highlight search-dimmed');
       return;
@@ -186,14 +190,14 @@ const Graph = ({ elements = [], isLoading, cyRef }) => {
       // Fit to highlighted elements
       cyInstance.fit(matchingElements, 50);
     }
-  };
+  }, [cyInstance]);
 
   // Expose search functionality
   useEffect(() => {
     if (cyInstance && cyRef) {
       cyRef.current.highlightSearchResults = highlightSearchResults;
     }
-  }, [cyInstance, cyRef]);
+  }, [cyInstance, cyRef, highlightSearchResults]);
 
   if (error) {
     return (

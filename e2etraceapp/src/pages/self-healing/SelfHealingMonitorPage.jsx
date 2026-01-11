@@ -18,6 +18,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from '../../hooks/useToast';
+import { LoadingSpinner, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './SelfHealingMonitorPage.css';
 
 const normalizeArrayPayload = (data, candidates = []) => {
@@ -28,6 +30,17 @@ const normalizeArrayPayload = (data, candidates = []) => {
     }
   }
   return [];
+};
+
+const getPreferredWsHost = () => {
+  const { hostname, host, port } = window.location;
+  // On Windows/browsers that prefer IPv6, `localhost` can resolve to `::1`.
+  // If the dev server is bound to IPv4 only (e.g. 127.0.0.1), WebSocket connections
+  // via IPv6 loopback can fail. Prefer IPv4 loopback for local development.
+  if (hostname === 'localhost' || hostname === '::1') {
+    return `127.0.0.1${port ? `:${port}` : ''}`;
+  }
+  return host;
 };
 
 const SelfHealingMonitorPage = () => {
@@ -59,7 +72,8 @@ const SelfHealingMonitorPage = () => {
 
     const connectWebSocket = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${protocol}://${window.location.host}/api/self-healing/ws/monitor`;
+      const wsHost = getPreferredWsHost();
+      const wsUrl = `${protocol}://${wsHost}/api/self-healing/ws/monitor`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -216,7 +230,7 @@ const SelfHealingMonitorPage = () => {
 
       if (!response.ok) {
         const message = result?.detail || result?.error || result?.message || `Self-healing unavailable (HTTP ${response.status})`;
-        alert(message);
+        toast.error(message);
         return;
       }
 
@@ -227,7 +241,7 @@ const SelfHealingMonitorPage = () => {
       await loadDLQ();
     } catch (error) {
       console.error('Error executing task:', error);
-      alert('Failed to execute task');
+      toast.error('Failed to execute task');
     } finally {
       setLoading(false);
     }
@@ -240,10 +254,10 @@ const SelfHealingMonitorPage = () => {
         method: 'POST'
       });
       await loadDLQ();
-      alert(`Task ${taskId} removed from DLQ and ready for retry`);
+      toast.success(`Task ${taskId} removed from DLQ and ready for retry`);
     } catch (error) {
       console.error('Error retrying DLQ message:', error);
-      alert('Failed to retry task');
+      toast.error('Failed to retry task');
     }
   };
 
@@ -281,11 +295,19 @@ const SelfHealingMonitorPage = () => {
 
   return (
     <div className="self-healing-monitor-page">
+      {/* Loading overlay */}
+      {loading && (
+        <LoadingSpinner 
+          variant={SPINNER_VARIANTS.OVERLAY} 
+          message="Executing task..."
+        />
+      )}
+      
       <div className="monitor-header">
         <h1><i className="fas fa-sync-alt" aria-hidden="true" /> Self-Healing Orchestration Monitor</h1>
         <div className="ws-status">
           <span className={`ws-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
-            {wsConnected ? '● Live' : '● Disconnected'}
+            {wsConnected ? <><i className="fas fa-circle" style={{color: '#28a745'}} aria-hidden="true" /> Live</> : <><i className="fas fa-circle" style={{color: '#dc3545'}} aria-hidden="true" /> Disconnected</>}
           </span>
         </div>
       </div>
@@ -422,7 +444,7 @@ const SelfHealingMonitorPage = () => {
       <div className="monitor-grid">
         {/* Circuit Breakers */}
         <div className="monitor-section">
-          <h2>⊙ Circuit Breakers</h2>
+          <h2><i className="fas fa-power-off" aria-hidden="true" /> Circuit Breakers</h2>
           {circuitBreakers.length === 0 ? (
             <div className="empty-state">
               <p>No circuit breakers active</p>
@@ -460,7 +482,7 @@ const SelfHealingMonitorPage = () => {
 
         {/* Dead Letter Queue */}
         <div className="monitor-section">
-          <h2>⊞ Dead Letter Queue</h2>
+          <h2><i className="fas fa-inbox" aria-hidden="true" /> Dead Letter Queue</h2>
           {dlqMessages.length === 0 ? (
             <div className="empty-state">
               <p>No messages in DLQ</p>
@@ -488,13 +510,13 @@ const SelfHealingMonitorPage = () => {
                       onClick={() => retryDLQMessage(msg.task_id)}
                       className="btn-retry"
                     >
-                      ⟲ Retry
+                      <i className="fas fa-redo" aria-hidden="true" /> Retry
                     </button>
                     <button 
                       onClick={() => removeDLQMessage(msg.task_id)}
                       className="btn-remove"
                     >
-                      ✗ Remove
+                      <i className="fas fa-times" aria-hidden="true" /> Remove
                     </button>
                   </div>
                 </div>
@@ -509,27 +531,27 @@ const SelfHealingMonitorPage = () => {
         <h3>About Self-Healing Orchestration</h3>
         <div className="info-grid">
           <div className="info-card">
-            <h4>⟲ Exponential Backoff</h4>
+            <h4><i className="fas fa-redo" aria-hidden="true" /> Exponential Backoff</h4>
             <p>Automatic retry with increasing delays (1s → 2s → 4s → 8s → 16s) plus jitter to prevent thundering herd</p>
           </div>
           <div className="info-card">
-            <h4>⊙ Circuit Breaker</h4>
+            <h4><i className="fas fa-power-off" aria-hidden="true" /> Circuit Breaker</h4>
             <p>Trips after 5 consecutive failures, opens for 60s, then tries again (half-open state)</p>
           </div>
           <div className="info-card">
-            <h4>⇄ Alternative Routing</h4>
+            <h4><i className="fas fa-exchange-alt" aria-hidden="true" /> Alternative Routing</h4>
             <p>Automatically switches to backup routes when primary fails or circuit breaker trips</p>
           </div>
           <div className="info-card">
-            <h4>✓ Validation Checkpoints</h4>
+            <h4><i className="fas fa-check-circle" aria-hidden="true" /> Validation Checkpoints</h4>
             <p>Data quality validation after execution to catch issues early</p>
           </div>
           <div className="info-card">
-            <h4>⊞ Dead Letter Queue</h4>
+            <h4><i className="fas fa-inbox" aria-hidden="true" /> Dead Letter Queue</h4>
             <p>Failed tasks after all retries go to DLQ for manual intervention</p>
           </div>
           <div className="info-card">
-            <h4>⊚ Lineage Tracking</h4>
+            <h4><i className="fas fa-sitemap" aria-hidden="true" /> Lineage Tracking</h4>
             <p>Integrated with Data Lineage for failure root cause analysis</p>
           </div>
         </div>

@@ -5,6 +5,7 @@
 
 import cytoscape from 'cytoscape';
 import { colorSchemes } from '../pages/dashboard/e2etrace-cytoscape-stylesheet';
+import { getNodeColor as getCentralizedNodeColor, getNodeShape, getEdgeColor, getEdgeStyle } from '../constants/node-colors';
 
 /**
  * Enhance nodes with visual properties based on their type and data
@@ -17,6 +18,7 @@ export const enhanceNodes = (nodes, options = {}) => {
         defaultSize = 50
     } = options;
 
+    // Note: scheme is kept for backward compatibility but colors now come from centralized constants
     const scheme = colorSchemes[colorScheme] || colorSchemes.default;
 
     return nodes.map(node => {
@@ -28,9 +30,14 @@ export const enhanceNodes = (nodes, options = {}) => {
             data.group = detectNodeGroup(data);
         }
 
-        // Set background color based on group/type
+        // Set background color based on group/type - uses centralized color constants
         if (!data.backgroundColor) {
             data.backgroundColor = getNodeColor(data.group || data.type, scheme);
+        }
+
+        // Set node shape based on group/type - uses centralized shape mapping
+        if (!data.shape) {
+            data.shape = getNodeShape(data.group || data.type);
         }
 
         // Set node size based on importance or custom property
@@ -61,12 +68,10 @@ export const enhanceNodes = (nodes, options = {}) => {
  */
 export const enhanceEdges = (edges, options = {}) => {
     const { 
-        colorScheme = 'default',
+        colorScheme: _colorScheme = 'default',
         autoTyping = true,
         weightProperty = 'weight'
     } = options;
-
-    const scheme = colorSchemes[colorScheme] || colorSchemes.default;
 
     return edges.map(edge => {
         const enhanced = { ...edge };
@@ -75,6 +80,16 @@ export const enhanceEdges = (edges, options = {}) => {
         // Auto-detect edge type if not specified
         if (autoTyping && !data.type) {
             data.type = detectEdgeType(data);
+        }
+
+        // Set edge color based on type - uses centralized dynamic colors
+        if (!data.lineColor) {
+            data.lineColor = getEdgeColor(data.type || data.label);
+        }
+
+        // Set edge line style based on type
+        if (!data.lineStyle) {
+            data.lineStyle = getEdgeStyle(data.type || data.label);
         }
 
         // Set weight if not specified
@@ -94,7 +109,7 @@ export const enhanceEdges = (edges, options = {}) => {
  * Auto-detect node group based on properties and naming patterns
  */
 const detectNodeGroup = (nodeData) => {
-    const { id = '', label = '', type = '', properties = {} } = nodeData;
+    const { id = '', label = '', type = '', properties: _properties = {} } = nodeData;
     const text = `${id} ${label} ${type}`.toLowerCase();
 
     // Database patterns
@@ -154,28 +169,17 @@ const detectEdgeType = (edgeData) => {
 };
 
 /**
- * Get node color based on group and color scheme
+ * Get node color based on group
+ * IMPORTANT: Uses centralized color constants from constants/node-colors.js
+ * DO NOT define colors here - update the constants file instead
+ * 
+ * @param {string} group - Node group/type name
+ * @param {Object} scheme - Color scheme (kept for backward compatibility, not used)
+ * @returns {string} Hex color code
  */
-const getNodeColor = (group, scheme) => {
-    const colorMap = {
-        'Database': scheme.info,
-        'Teamcenter': scheme.primary,
-        'CustomDB': scheme.secondary,
-        'CSV': '#f39c12',
-        'JSON': '#9b59b6',
-        'XML': '#e67e22',
-        'PLMXML': '#e67e22',
-        'Processor': scheme.success,
-        'Transform': scheme.success,
-        'ETL': scheme.success,
-        'API': '#8e44ad',
-        'Service': '#8e44ad',
-        'Endpoint': '#8e44ad',
-        'DataQualityIssue': scheme.danger,
-        'Unknown': scheme.secondary
-    };
-
-    return colorMap[group] || scheme.primary;
+const getNodeColor = (group, _scheme) => {
+    // Delegate to centralized color function
+    return getCentralizedNodeColor(group);
 };
 
 /**
@@ -475,13 +479,14 @@ export const applyETLFilter = (cy, filterType, options = {}) => {
             });
             break;
 
-        case 'pipeline':
+        case 'pipeline': {
             // Highlight entire connected components
             const connectedComponents = getConnectedComponents(cy);
             if (options.pipelineIndex !== undefined && connectedComponents[options.pipelineIndex]) {
                 targetElements = connectedComponents[options.pipelineIndex];
             }
             break;
+        }
 
         case 'error':
             targetElements = cy.nodes().filter(node => {

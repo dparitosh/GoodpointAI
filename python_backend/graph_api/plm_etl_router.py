@@ -43,7 +43,8 @@ def _utcnow_iso() -> str:
 
 def _require_postgres() -> None:
     url = (DATABASE_URL or "").strip().lower()
-    if not (url.startswith("postgresql:") or url.startswith("postgres:")):
+    # Support postgresql+psycopg, postgresql, postgres URL schemes
+    if not (url.startswith("postgresql") or url.startswith("postgres")):
         raise HTTPException(
             status_code=503,
             detail="Postgres is required for PLM ETL. Set DATABASE_URL to a Postgres connection string.",
@@ -338,6 +339,35 @@ def _map_record(rec: Dict[str, Any], mapping: Dict[str, str]) -> Dict[str, Any]:
     return out
 
 
+def _safe_str_mapping(mapping: Dict[str, str]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for src_key, dest_key in mapping.items():
+        if isinstance(src_key, str) and isinstance(dest_key, str):
+            out[src_key] = dest_key
+    return out
+
+
+def _to_string_series(df: Any, col: str) -> None:
+    """Best-effort normalize a DataFrame column to trimmed strings.
+
+    Keeps missing values as None.
+    """
+    try:
+        import pandas as pd  # type: ignore[import-untyped]
+
+        if col not in df.columns:
+            return
+        # Use pandas' nullable string dtype, then trim.
+        s = df[col].astype("string").str.strip()
+        df[col] = s
+        df[col] = df[col].where(pd.notna(df[col]), None)
+        # Convert empty strings to None.
+        df.loc[df[col] == "", col] = None
+    except Exception:
+        # If pandas is unavailable or conversion fails, leave as-is.
+        return
+
+
 @router.post("/runs/{run_id}/transform")
 async def transform(run_id: str, payload: TransformRequest, db: Session = Depends(get_db)):
     _require_postgres()
@@ -374,62 +404,151 @@ async def transform(run_id: str, payload: TransformRequest, db: Session = Depend
     bom_written = 0
 
     if part_mapping:
-        for row in staged_parts:
-            rec_part: Dict[str, Any] = row.payload if isinstance(row.payload, dict) else {}
-            mapped = _map_record(rec_part, part_mapping)
-
-            part_number = _as_str(mapped.get("part_number"))
-            if not part_number:
-                # Skip invalid part rows; validations will catch missing keys on staged data if rule is defined.
-                continue
-
-            part = PLMPart(
-                run_id=run_id,
-                part_number=part_number,
-                name=_as_str(mapped.get("name")),
-                description=_as_str(mapped.get("description")),
-                classification=_as_str(mapped.get("classification")),
-                raw=rec_part,
-            )
-            db.add(part)
-            parts_written += 1
-
+        # Modern fast path: DataFrame-based mapping + bulk insert.
+        raw_parts: List[Dict[str, Any]] = [
+            (row.payload if isinstance(row.payload, dict) else {}) for row in staged_parts
+        ]
+        col_map = _safe_str_mapping(part_mapping)
         try:
-            db.commit()
-        except IntegrityError as exc:
-            db.rollback()
-            # If duplicates exist, we keep the run usable; caller can fix mappings/data and retry.
-            raise HTTPException(status_code=409, detail="Duplicate part_number detected for this run") from exc
+            import pandas as pd  # type: ignore[import-untyped]
+
+            df = pd.DataFrame.from_records(raw_parts)
+            df["__raw"] = raw_parts
+            if col_map:
+                df = df.rename(columns=col_map)
+
+            # Canonical columns (keep schema stable for Soda + Postgres).
+            for c in ["part_number", "name", "description", "classification"]:
+                _to_string_series(df, c)
+
+            # Drop invalid rows (no part_number).
+            if "part_number" not in df.columns:
+                df = df.iloc[0:0]
+            else:
+                df = df[df["part_number"].notna()]
+
+            df = df.where(pd.notna(df), None)
+            mapped_rows = df[["part_number", "name", "description", "classification", "__raw"]].to_dict(
+                orient="records"
+            )
+            insert_rows = [
+                {
+                    "run_id": run_id,
+                    "part_number": _as_str(r.get("part_number")),
+                    "name": _as_str(r.get("name")),
+                    "description": _as_str(r.get("description")),
+                    "classification": _as_str(r.get("classification")),
+                    "raw": r.get("__raw") if isinstance(r.get("__raw"), dict) else {},
+                }
+                for r in mapped_rows
+                if _as_str(r.get("part_number"))
+            ]
+
+            if insert_rows:
+                db.bulk_insert_mappings(PLMPart, insert_rows)
+                parts_written = len(insert_rows)
+
+            try:
+                db.commit()
+            except IntegrityError as exc:
+                db.rollback()
+                raise HTTPException(status_code=409, detail="Duplicate part_number detected for this run") from exc
+
+        except Exception:
+            # Safe fallback: original dict-by-dict mapping.
+            for rec_part in raw_parts:
+                mapped = _map_record(rec_part, part_mapping)
+                part_number = _as_str(mapped.get("part_number"))
+                if not part_number:
+                    continue
+                part = PLMPart(
+                    run_id=run_id,
+                    part_number=part_number,
+                    name=_as_str(mapped.get("name")),
+                    description=_as_str(mapped.get("description")),
+                    classification=_as_str(mapped.get("classification")),
+                    raw=rec_part,
+                )
+                db.add(part)
+                parts_written += 1
+
+            try:
+                db.commit()
+            except IntegrityError as exc:
+                db.rollback()
+                raise HTTPException(status_code=409, detail="Duplicate part_number detected for this run") from exc
 
     if bom_mapping:
-        for row in staged_bom:
-            rec_bom: Dict[str, Any] = row.payload if isinstance(row.payload, dict) else {}
-            mapped = _map_record(rec_bom, bom_mapping)
+        raw_bom: List[Dict[str, Any]] = [
+            (row.payload if isinstance(row.payload, dict) else {}) for row in staged_bom
+        ]
+        col_map = _safe_str_mapping(bom_mapping)
+        try:
+            import pandas as pd  # type: ignore[import-untyped]
 
-            parent_pn = _as_str(mapped.get("parent_part_number"))
-            child_pn = _as_str(mapped.get("child_part_number"))
-            qty_raw = mapped.get("quantity")
-            qty = None
-            if qty_raw is not None:
-                try:
-                    qty = float(qty_raw)
-                except (TypeError, ValueError):
-                    qty = None
+            df = pd.DataFrame.from_records(raw_bom)
+            df["__raw"] = raw_bom
+            if col_map:
+                df = df.rename(columns=col_map)
 
-            if not parent_pn or not child_pn:
-                continue
+            for c in ["parent_part_number", "child_part_number"]:
+                _to_string_series(df, c)
 
-            item = PLMBOMItem(
-                run_id=run_id,
-                parent_part_number=parent_pn,
-                child_part_number=child_pn,
-                quantity=qty,
-                raw=rec_bom,
+            if "quantity" in df.columns:
+                df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce")
+                df["quantity"] = df["quantity"].where(pd.notna(df["quantity"]), None)
+
+            if "parent_part_number" not in df.columns or "child_part_number" not in df.columns:
+                df = df.iloc[0:0]
+            else:
+                df = df[df["parent_part_number"].notna() & df["child_part_number"].notna()]
+
+            df = df.where(pd.notna(df), None)
+            mapped_rows = df[["parent_part_number", "child_part_number", "quantity", "__raw"]].to_dict(
+                orient="records"
             )
-            db.add(item)
-            bom_written += 1
+            insert_rows = [
+                {
+                    "run_id": run_id,
+                    "parent_part_number": _as_str(r.get("parent_part_number")),
+                    "child_part_number": _as_str(r.get("child_part_number")),
+                    "quantity": float(r["quantity"]) if r.get("quantity") is not None else None,
+                    "raw": r.get("__raw") if isinstance(r.get("__raw"), dict) else {},
+                }
+                for r in mapped_rows
+                if _as_str(r.get("parent_part_number")) and _as_str(r.get("child_part_number"))
+            ]
 
-        db.commit()
+            if insert_rows:
+                db.bulk_insert_mappings(PLMBOMItem, insert_rows)
+                bom_written = len(insert_rows)
+            db.commit()
+
+        except Exception:
+            for rec_bom in raw_bom:
+                mapped = _map_record(rec_bom, bom_mapping)
+                parent_pn = _as_str(mapped.get("parent_part_number"))
+                child_pn = _as_str(mapped.get("child_part_number"))
+                qty_raw = mapped.get("quantity")
+                qty = None
+                if qty_raw is not None:
+                    try:
+                        qty = float(qty_raw)
+                    except (TypeError, ValueError):
+                        qty = None
+                if not parent_pn or not child_pn:
+                    continue
+                item = PLMBOMItem(
+                    run_id=run_id,
+                    parent_part_number=parent_pn,
+                    child_part_number=child_pn,
+                    quantity=qty,
+                    raw=rec_bom,
+                )
+                db.add(item)
+                bom_written += 1
+
+            db.commit()
 
     run.status = "transformed"
     db.commit()
@@ -1182,3 +1301,158 @@ async def get_spark_sync_job_log(job_id: str, request: Request, tail_lines: int 
         "tail": tail,
         "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
+
+
+class DirectSyncResponse(BaseModel):
+    """Response for direct Neo4j sync (dev/local environments)."""
+    run_id: str
+    parts_synced: int
+    bom_items_synced: int
+    nodes_created: int
+    relationships_created: int
+    status: str
+    timestamp: str
+
+
+@router.post("/runs/{run_id}/sync/neo4j/direct", response_model=DirectSyncResponse)
+async def direct_sync_run_to_neo4j(
+    run_id: str,
+    db: Session = Depends(get_db),
+    driver: Any = Depends(get_optional_driver),
+):
+    """Direct Neo4j sync for dev/local environments (no Spark required).
+
+    This endpoint writes PLM parts and BOM relationships directly to Neo4j
+    using the async driver. Suitable for small datasets and development.
+
+    For production workloads with large datasets, use the Spark-based
+    /sync/neo4j endpoint instead.
+
+    Fail-closed:
+    - Requires Postgres (DATABASE_URL)
+    - Requires Neo4j driver to be configured
+    """
+
+    _require_postgres()
+
+    if driver is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Neo4j driver not configured. Set NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD.",
+        )
+
+    run = db.get(PLMIngestionRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Load parts and BOM items for this run
+    parts: List[PLMPart] = db.query(PLMPart).filter(PLMPart.run_id == run_id).all()
+    bom_items: List[PLMBOMItem] = db.query(PLMBOMItem).filter(PLMBOMItem.run_id == run_id).all()
+
+    if not parts and not bom_items:
+        raise HTTPException(
+            status_code=409,
+            detail="Nothing to sync: no plm_parts or plm_bom_items rows for this run_id",
+        )
+
+    nodes_created = 0
+    relationships_created = 0
+
+    try:
+        async with driver.session(database="neo4j") as session:
+            # Create/merge Migration run node
+            await session.run(
+                """
+                MERGE (m:MigrationRun {id: $run_id})
+                ON CREATE SET m.created_at = $ts, m.source = $source, m.target = $target
+                SET m.status = 'syncing', m.updated_at = $ts
+                """,
+                run_id=run_id,
+                ts=_utcnow_iso(),
+                source=run.source_system,
+                target=run.target_system,
+            )
+            nodes_created += 1
+
+            # Sync parts as Part nodes
+            for part in parts:
+                result = await session.run(
+                    """
+                    MERGE (p:Part {part_number: $part_number})
+                    ON CREATE SET p.created_at = $ts
+                    SET p.name = $name,
+                        p.description = $description,
+                        p.classification = $classification,
+                        p.run_id = $run_id,
+                        p.updated_at = $ts
+                    WITH p
+                    MATCH (m:MigrationRun {id: $run_id})
+                    MERGE (m)-[:CONTAINS]->(p)
+                    RETURN p.part_number as pn
+                    """,
+                    part_number=part.part_number,
+                    name=part.name,
+                    description=part.description,
+                    classification=part.classification,
+                    run_id=run_id,
+                    ts=_utcnow_iso(),
+                )
+                record = await result.single()
+                if record:
+                    nodes_created += 1
+
+            # Sync BOM items as relationships
+            for bom in bom_items:
+                result = await session.run(
+                    """
+                    MATCH (parent:Part {part_number: $parent_pn})
+                    MATCH (child:Part {part_number: $child_pn})
+                    MERGE (parent)-[r:HAS_COMPONENT]->(child)
+                    ON CREATE SET r.created_at = $ts
+                    SET r.quantity = $qty, r.run_id = $run_id, r.updated_at = $ts
+                    RETURN type(r) as rel_type
+                    """,
+                    parent_pn=bom.parent_part_number,
+                    child_pn=bom.child_part_number,
+                    qty=bom.quantity,
+                    run_id=run_id,
+                    ts=_utcnow_iso(),
+                )
+                record = await result.single()
+                if record:
+                    relationships_created += 1
+
+            # Update migration run status
+            await session.run(
+                """
+                MATCH (m:MigrationRun {id: $run_id})
+                SET m.status = 'completed',
+                    m.parts_synced = $parts_count,
+                    m.bom_items_synced = $bom_count,
+                    m.completed_at = $ts
+                """,
+                run_id=run_id,
+                parts_count=len(parts),
+                bom_count=len(bom_items),
+                ts=_utcnow_iso(),
+            )
+
+        # Update Postgres run status
+        run.status = "graph_sync"
+        db.commit()
+
+    except Neo4jError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Neo4j sync failed: {str(exc)}",
+        ) from exc
+
+    return DirectSyncResponse(
+        run_id=run_id,
+        parts_synced=len(parts),
+        bom_items_synced=len(bom_items),
+        nodes_created=nodes_created,
+        relationships_created=relationships_created,
+        status="graph_sync",
+        timestamp=_utcnow_iso(),
+    )

@@ -10,14 +10,15 @@ class NodeModel(BaseModel):
 
 class EdgeModel(BaseModel):
     id: str = Field(..., description="The unique element ID of the relationship.")
-    from_node: str = Field(..., alias="from", description="The element ID of the source node.") # 'from' is a reserved keyword, use alias
-    to_node: str = Field(..., alias="to", description="The element ID of the target node.")
+    from_node: str = Field(..., alias="from", serialization_alias="from", description="The element ID of the source node.") # 'from' is a reserved keyword, use alias
+    to_node: str = Field(..., alias="to", serialization_alias="to", description="The element ID of the target node.")
     label: str = Field(..., description="The type of the relationship.")
     properties: Dict[str, Any] = Field(..., description="A dictionary of the relationship's properties.")
     title: str = Field(..., description="A string used for tooltips in visualizations, typically a formatted summary of relationship details.")
 
     class Config:
         populate_by_name = True
+        by_alias = True  # Serialize using aliases for JSON output
 
 class RawRecordItem(BaseModel):
     elementId: str

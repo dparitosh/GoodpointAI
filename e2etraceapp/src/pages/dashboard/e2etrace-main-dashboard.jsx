@@ -1,22 +1,19 @@
-import React, { useState, useEffect, useContext, useRef, useMemo, useCallback } from 'react';
-import cytoscape from 'cytoscape';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import E2ETraceGraphContainer from './components/e2etrace-graph-container.jsx';
 import E2ETraceGraphChat from './components/e2etrace-graph-chat.jsx';
 import GraphToolbar from '../../components/e2etrace-graph-toolbar.jsx';
 import ETLOverview from '../../components/e2etrace-etl-overview.jsx';
 import EnhancedETLOverview from '../../components/e2etrace-enhanced-etl-overview.jsx';
 import Widget from '../../components/e2etrace-widget.jsx';
-import { cytoscapeStylesheet } from './e2etrace-cytoscape-stylesheet';
 import { E2ETraceDataTable } from '../../components/e2etrace-data-table';
-import { E2ETraceChatPanel } from '../../components/e2etrace-chat-panel';
 import { E2ETraceAdvancedSearch } from '../../components/e2etrace-advanced-search';
 import { E2ETraceGraphLegendDropdown } from '../../components/e2etrace-graph-legend-dropdown';
 import { e2etraceUseGraphData } from '../../hooks/e2etrace-use-graph-data';
 import { e2etraceUseDashboardState } from '../../hooks/e2etrace-use-dashboard-state';
 import { e2etraceUseLayout } from '../../contexts/e2etrace-layout-context';
 import { e2etraceUseGraphSelection } from '../../hooks/e2etrace-use-graph-selection';
-import { e2etraceCreateTableElementsFromGraph, e2etraceTransformDataForCytoscape } from '../../utils/e2etrace-graph';
-import { applySearchHighlight, applyGraphFilter, calculateGraphStats } from '../../utils/e2etrace-graph-enhancement';
+import { e2etraceTransformDataForCytoscape } from '../../utils/e2etrace-graph';
+import { applyGraphFilter, calculateGraphStats } from '../../utils/e2etrace-graph-enhancement';
 import './e2etrace-main-dashboard.css';
 import '../../components/e2etrace-advanced-search.css';
 import '../../components/e2etrace-graph-legend-dropdown.css';
@@ -36,7 +33,7 @@ export default function E2ETraceMainDashboard() {
   const cyRef = useRef(null);
 
   // Get Cytoscape layout configuration from context
-  const { layoutConfig } = e2etraceUseLayout();
+  const { layoutConfig: _layoutConfig } = e2etraceUseLayout();
 
   // Integrate graph selection logic into a custom hook
   e2etraceUseGraphSelection(cyRef, graphData, setTableElements);
@@ -180,7 +177,7 @@ export default function E2ETraceMainDashboard() {
         return {
           ...baseOptions,
           concentric: function(node) { return node.degree(); },
-          levelWidth: function(nodes) { return 2; },
+          levelWidth: function(_nodes) { return 2; },
           spacing: 30
         };
       case 'breadthfirst':

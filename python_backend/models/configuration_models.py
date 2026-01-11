@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, Index, text
+from sqlalchemy import DateTime, String, Text, Index, text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
@@ -69,4 +69,5 @@ class DataSourceConfigRecord(Base):
 
     __table_args__ = (
         Index("idx_data_source_type_status", "type", "status"),
+        UniqueConstraint("name", name="uq_data_source_name"),
     )

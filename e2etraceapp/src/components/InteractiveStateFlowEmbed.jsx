@@ -125,7 +125,7 @@ export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
       : graphData;
 
   const effectiveLoading = isSample ? false : (loading || (Boolean(selectedWorkflowId) && workflowGraphLoading));
-  const effectiveLoadError = isSample ? null : loadError;
+  const _effectiveLoadError = isSample ? null : loadError;
 
   if (effectiveLoading) {
     return (

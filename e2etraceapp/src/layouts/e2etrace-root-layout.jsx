@@ -11,61 +11,79 @@ const NAV_GROUPS = [
   {
     id: 'overview',
     titleKey: 'nav.overview',
+    icon: 'fas fa-home',
     href: '/',
     matchPrefixes: ['/'],
     items: [
-      { to: '/', labelKey: 'nav.overview', end: true },
+      { to: '/', labelKey: 'nav.overview', icon: 'fas fa-home', end: true },
     ],
   },
   {
-    id: 'workflows',
-    titleKey: 'nav.dataProcessingHub',
-    href: '/processing',
-    matchPrefixes: ['/processing', '/workflow', '/workflow-manager'],
+    id: 'search',
+    titleKey: 'nav.search',
+    icon: 'fas fa-comments',
+    href: '/search',
+    matchPrefixes: ['/search'],
     items: [
-      { to: '/processing', labelKey: 'nav.dataProcessingHub' },
+      { to: '/search', labelKey: 'nav.conversationalSearch', icon: 'fas fa-comments' },
     ],
   },
   {
     id: 'migration',
-    titleKey: 'nav.migrationTools',
-    href: '/data-config',
-    matchPrefixes: ['/data-config', '/spreadsheet', '/lineage'],
+    titleKey: 'nav.migration',
+    icon: 'fas fa-exchange-alt',
+    href: '/migration',
+    matchPrefixes: ['/migration'],
     items: [
-      { to: '/data-config', labelKey: 'nav.dataConfig' },
-      { to: '/spreadsheet', labelKey: 'nav.spreadsheet' },
-      { to: '/lineage', labelKey: 'nav.dataLineage' },
+      { to: '/migration', labelKey: 'nav.migrationWizard', icon: 'fas fa-magic' },
+    ],
+  },
+  {
+    id: 'workflows',
+    titleKey: 'nav.ruleEngine',
+    icon: 'fas fa-clipboard-check',
+    href: '/rule-engine',
+    matchPrefixes: ['/rule-engine', '/workflow'],
+    items: [
+      { to: '/rule-engine', labelKey: 'nav.ruleEngine', icon: 'fas fa-clipboard-check' },
     ],
   },
   {
     id: 'insights',
     titleKey: 'nav.insightsReports',
-    href: '/reporting',
-    matchPrefixes: ['/self-healing', '/observability', '/analytics', '/reporting'],
+    icon: 'fas fa-chart-bar',
+    href: '/analytics',
+    matchPrefixes: ['/lineage', '/self-healing', '/observability', '/analytics', '/reporting'],
     items: [
-      { to: '/reporting', labelKey: 'nav.reporting' },
-      { to: '/analytics', labelKey: 'nav.analytics' },
-      { to: '/observability', labelKey: 'nav.observability' },
-      { to: '/self-healing', labelKey: 'nav.selfHealingMonitor' },
+      { to: '/lineage', labelKey: 'nav.dataLineage', icon: 'fas fa-stream' },
+      { to: '/analytics', labelKey: 'nav.analytics', icon: 'fas fa-chart-line' },
+      { to: '/reporting', labelKey: 'nav.reporting', icon: 'fas fa-file-alt' },
+      { to: '/observability', labelKey: 'nav.observability', icon: 'fas fa-eye' },
+      { to: '/self-healing', labelKey: 'nav.selfHealingMonitor', icon: 'fas fa-heartbeat' },
     ],
   },
   {
     id: 'advanced',
     titleKey: 'nav.advancedTools',
+    icon: 'fas fa-toolbox',
     href: '/graph-explorer',
     matchPrefixes: ['/graph-explorer', '/graphexplorer', '/multimodal', '/api-docs'],
     items: [
-      { to: '/graph-explorer', labelKey: 'nav.graphExplorer' },
-      { to: '/multimodal', labelKey: 'nav.multiModalAnalyzer' },
-      { to: '/api-docs', labelKey: 'nav.apiDocs' },
+      { to: '/graph-explorer', labelKey: 'nav.graphExplorer', icon: 'fas fa-project-diagram' },
+      { to: '/multimodal', labelKey: 'nav.multiModalAnalyzer', icon: 'fas fa-brain' },
+      { to: '/api-docs', labelKey: 'nav.apiDocs', icon: 'fas fa-book' },
     ],
   },
   {
     id: 'settings',
     titleKey: 'nav.settings',
+    icon: 'fas fa-cog',
     href: '/settings',
-    matchPrefixes: ['/settings'],
-    items: [{ to: '/settings', labelKey: 'nav.preferences' }],
+    matchPrefixes: ['/settings', '/admin'],
+    items: [
+      { to: '/settings', labelKey: 'nav.preferences', icon: 'fas fa-sliders-h' },
+      { to: '/settings/admin', labelKey: 'nav.adminSettings', icon: 'fas fa-user-cog' },
+    ],
   },
 ];
 
@@ -122,7 +140,8 @@ export const E2ETraceRootLayout = () => {
               onClick={toggleTheme}
               aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             >
-              {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              <i className={theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon'} aria-hidden="true" />
+              <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
             </button>
           </div>
         </div>
@@ -138,7 +157,8 @@ export const E2ETraceRootLayout = () => {
                   className={`e2etrace-primary-tab ${isActive ? 'active' : ''}`}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  {t(group.titleKey)}
+                  <i className={group.icon} aria-hidden="true" />
+                  <span>{t(group.titleKey)}</span>
                 </NavLink>
               );
             })}
@@ -154,7 +174,8 @@ export const E2ETraceRootLayout = () => {
                   `e2etrace-secondary-tab ${isActive ? 'active' : ''}`
                 }
               >
-                {t(item.labelKey)}
+                <i className={item.icon} aria-hidden="true" />
+                <span>{t(item.labelKey)}</span>
               </NavLink>
             ))}
           </div>

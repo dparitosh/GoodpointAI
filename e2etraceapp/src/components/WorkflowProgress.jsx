@@ -41,28 +41,28 @@ const WorkflowProgress = ({ currentPage, showDetails = true, showNavigation = tr
     const stageMap = {
       [WORKFLOW_STAGES.DATA_CONFIGURATION]: {
         title: 'Data Configuration',
-        icon: '◳',
+        icon: 'fas fa-cog',
         description: 'Set up data sources, schema, and quality rules',
-        route: '/data-config',
-        pages: ['/data-config', '/spreadsheet', '/analytics']
+        route: '/admin',
+        pages: ['/admin', '/analytics']
       },
       [WORKFLOW_STAGES.DATA_PIPELINES]: {
         title: 'Data Pipelines',
-        icon: '↻',
+        icon: 'fas fa-sync-alt',
         description: 'Configure ETL processes and mappings',
-        route: '/etl',
-        pages: ['/etl', '/data-mapping']
+        route: '/migration',
+        pages: ['/migration', '/analytics']
       },
       [WORKFLOW_STAGES.DATA_FLOW]: {
         title: 'Data Flow',
-        icon: '∿',
+        icon: 'fas fa-stream',
         description: 'Visualize and monitor data flow through the system',
         route: '/',
         pages: ['/', '/graph-explorer', '/observability']
       },
       [WORKFLOW_STAGES.REPORTING]: {
         title: 'Reporting',
-        icon: '◻',
+        icon: 'fas fa-chart-pie',
         description: 'Generate reports, dashboards, and export data',
         route: '/reporting',
         pages: ['/reporting', '/export']
@@ -80,14 +80,6 @@ const WorkflowProgress = ({ currentPage, showDetails = true, showNavigation = tr
     if (completedStages.includes(stage)) return 'completed';
     if (currentStage === stage) return 'active';
     return 'pending';
-  };
-
-  const getCurrentStageFromPage = () => {
-    const stageInfo = Object.values(WORKFLOW_STAGES).find(stage => {
-      const info = getStageInfo(stage);
-      return info.pages?.includes(currentPage);
-    });
-    return stageInfo || WORKFLOW_STAGES.DATA_CONFIGURATION;
   };
 
   const progressPercentage = workflowStatus.progress?.progress || 0;

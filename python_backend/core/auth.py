@@ -53,6 +53,12 @@ def admin_password_plain() -> str:
     return _get_env("GRAPH_TRACE_ADMIN_PASSWORD") or _get_env("ADMIN_PASSWORD")
 
 
+def _is_production() -> bool:
+    """Check if running in production mode"""
+    env = _get_env("ENVIRONMENT") or _get_env("GRAPH_TRACE_ENVIRONMENT")
+    return env.lower() in ("production", "prod")
+
+
 def verify_admin_credentials(username: str, password: str) -> bool:
     if username != admin_username():
         return False
@@ -63,7 +69,14 @@ def verify_admin_credentials(username: str, password: str) -> bool:
 
     expected_plain = admin_password_plain()
     if expected_plain:
-        # Dev-friendly fallback.
+        # Security: Only allow plain-text password in non-production environments
+        if _is_production():
+            import logging
+            logging.getLogger(__name__).warning(
+                "Plain-text admin password rejected in production. Use GRAPH_TRACE_ADMIN_PASSWORD_HASH instead."
+            )
+            return False
+        # Dev-friendly fallback (non-production only)
         return password == expected_plain
 
     # No credentials configured.

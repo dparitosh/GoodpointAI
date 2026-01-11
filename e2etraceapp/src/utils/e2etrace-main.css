@@ -1,18 +1,11 @@
 /* General Layout */
 :root {
   --side-panel-width: 300px;
-  --background-color: #1a1a1a;
-  --text-color: #fff;
-  --panel-background: #242424;
-  --border-color: #333;
-  --accent-color: #646cff;
-  --button-background: #333;
-  --button-border: #555;
 }
 
 .app-container {
   display: flex;
-  font-family: sans-serif;
+  font-family: var(--font-family-base, sans-serif);
   color: var(--text-color);
   background-color: var(--background-color);
   min-height: 100vh;
@@ -25,7 +18,7 @@
   left: 0;
   height: 100vh;
   width: var(--side-panel-width);
-  background-color: var(--panel-background);
+  background-color: var(--panel-bg, var(--surface-color, #1e293b));
   border-right: 1px solid var(--border-color);
   padding: 1rem;
   transition: transform 0.3s ease-in-out;
@@ -66,9 +59,9 @@
   top: 1rem;
   left: 1rem;
   z-index: 20;
-  background: var(--button-background);
+  background: var(--secondary-button-bg, var(--surface-color, #334155));
   color: var(--text-color);
-  border: 1px solid var(--button-border);
+  border: 1px solid var(--border-color);
   border-radius: 50%;
   width: 40px;
   height: 40px;
@@ -126,14 +119,14 @@
 .placeholder-wrapper {
   padding: 2rem;
   color: var(--text-color);
-  border: 1px dashed #555;
+  border: 1px dashed var(--border-color);
   margin: 1rem;
 }
 
 .placeholder-title {
-  color: #ccc;
+  color: #cbd5e1;
 }
 
 .placeholder-text {
-  color: #ccc;
+  color: #94a3b8;
 }

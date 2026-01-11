@@ -84,7 +84,7 @@ async def introspect_schema(
     try:
         result = service.introspect_schema(
             content=request.content,
-            data_format=request.format,
+            format_=request.format,
             name=request.name
         )
         return result
@@ -232,3 +232,127 @@ async def health_check():
         "service": "graphql",
         "timestamp": "2025-11-23T16:30:00Z"
     }
+
+
+# ============================================================
+# DATABASE-BACKED GRAPHQL QUERY ENDPOINT
+# ============================================================
+
+class DatabaseQueryRequest(BaseModel):
+    """Request model for database-backed GraphQL queries."""
+    query: str = Field(..., description="GraphQL-like query string")
+    variables: Optional[Dict[str, Any]] = Field(default=None, description="Query variables")
+    limit: Optional[int] = Field(default=100, description="Max records to return")
+    offset: Optional[int] = Field(default=0, description="Offset for pagination")
+
+
+@router.post("/db-query")
+async def execute_database_query(
+    request: DatabaseQueryRequest,
+    _service: GraphQLService = Depends(get_graphql_service)  # Reserved for future use
+):
+    """
+    Execute GraphQL-like query against database-backed data.
+    
+    This endpoint fetches data from PostgreSQL and then applies
+    the GraphQL query to filter/select fields.
+    
+    Supports queries like:
+    - { workflows { id name status } }
+    - { workflows(limit: 10) { id name status created_at } }
+    """
+    from core.db_session import get_db
+    from sqlalchemy import text
+    import re
+    
+    try:
+        query_str = request.query.strip()
+        
+        # Parse the GraphQL-like query to determine what to fetch
+        # Simple parser for: { entity_name(args) { fields } }
+        match = re.match(r'\{\s*(\w+)(?:\s*\([^)]*\))?\s*\{([^}]+)\}\s*\}', query_str)
+        
+        if not match:
+            return {"data": None, "errors": [{"message": "Invalid query format. Use: { entity { fields } }"}]}
+        
+        entity = match.group(1).lower()
+        fields_str = match.group(2).strip()
+        fields = [f.strip() for f in fields_str.split() if f.strip()]
+        
+        # Map entity names to database tables
+        entity_table_map = {
+            'workflows': 'workflows',
+            'workflow': 'workflows',
+            'data_records': 'data_records',
+            'records': 'data_records',
+            'migrations': 'migrations',
+            'migration': 'migrations',
+            'uploads': 'uploads',
+            'upload': 'uploads',
+            'quality_reports': 'quality_reports',
+            'quality': 'quality_reports'
+        }
+        
+        table_name = entity_table_map.get(entity)
+        if not table_name:
+            return {
+                "data": None, 
+                "errors": [{"message": f"Unknown entity '{entity}'. Available: {list(entity_table_map.keys())}"}]
+            }
+        
+        # Build safe SQL query
+        # Validate fields against known columns (simple protection)
+        safe_fields = []
+        known_columns = {
+            'workflows': ['id', 'name', 'status', 'source_type', 'target_type', 'created_at', 'updated_at', 'description', 'config'],
+            'data_records': ['id', 'workflow_id', 'record_type', 'source_system', 'data', 'created_at'],
+            'migrations': ['id', 'name', 'status', 'source', 'target', 'created_at', 'completed_at'],
+            'uploads': ['id', 'filename', 'file_type', 'size', 'status', 'created_at'],
+            'quality_reports': ['id', 'table_name', 'overall_score', 'completeness_score', 'accuracy_score', 'created_at']
+        }
+        
+        table_columns = known_columns.get(table_name, [])
+        for field in fields:
+            # Allow common fields or * for all
+            if field == '*' or field in table_columns or field in ['id', 'created_at', 'updated_at', 'name', 'status']:
+                safe_fields.append(field)
+        
+        if not safe_fields:
+            safe_fields = table_columns[:5] if table_columns else ['*']
+        
+        select_clause = ', '.join(safe_fields) if '*' not in safe_fields else '*'
+        
+        # Execute query
+        db = next(get_db())
+        try:
+            sql = text(f"SELECT {select_clause} FROM {table_name} ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+            result = db.execute(sql, {"limit": request.limit, "offset": request.offset})
+            rows = result.fetchall()
+            
+            # Convert to list of dicts
+            columns = result.keys()
+            data = [dict(zip(columns, row)) for row in rows]
+            
+            # Convert datetime objects to ISO strings
+            for record in data:
+                for key, value in record.items():
+                    if hasattr(value, 'isoformat'):
+                        record[key] = value.isoformat()
+            
+            return {
+                "data": {entity: data},
+                "errors": [],
+                "meta": {
+                    "count": len(data),
+                    "limit": request.limit,
+                    "offset": request.offset,
+                    "table": table_name
+                }
+            }
+        finally:
+            db.close()
+    
+    except (KeyError, ValueError, TypeError) as e:  # noqa: BLE001
+        logger.error("Database query error: %s", e)
+        return {"data": None, "errors": [{"message": str(e)}]}
+

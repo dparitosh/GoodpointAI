@@ -1,5 +1,8 @@
 # GraphTrace - Quick Reference (Windows)
 
+> Looking for the release docs?
+> Start at: `docs/README.md` → `docs/booklet/BOOKLET.md`
+
 ## Quick Start (PowerShell)
 
 ```powershell

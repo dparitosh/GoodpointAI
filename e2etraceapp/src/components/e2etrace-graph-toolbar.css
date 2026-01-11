@@ -1,12 +1,11 @@
 /* Graph Toolbar Styles - XState Design System */
 .graph-toolbar {
-    background: #ffffff;
-    border: 1px solid #e1e4e8;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     padding: 0;
     margin-bottom: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
@@ -24,9 +23,9 @@
 }
 
 .toolbar-expanded {
-    border-top: 1px solid #e1e4e8;
+    border-top: 1px solid var(--border-color);
     padding: 16px;
-    background: #f7fafc;
+    background: var(--background-color-offset);
 }
 
 .toolbar-row {
@@ -52,7 +51,7 @@
 .toolbar-label {
     font-size: 13px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-color);
     white-space: nowrap;
 }
 
@@ -67,10 +66,10 @@
 .search-input {
     width: 100%;
     padding: 8px 32px 8px 12px;
-    border: 1px solid #d1d5da;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 13px;
-    background: white;
+    background: var(--panel-bg);
     transition: all 0.2s ease;
     font-family: inherit;
 }
@@ -87,7 +86,7 @@
     background: none;
     border: none;
     font-size: 1.2rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 3px;
@@ -95,18 +94,18 @@
 }
 
 .search-clear:hover {
-    background: #f8f9fa;
-    color: #495057;
+    background: var(--background-color-offset);
+    color: var(--text-secondary);
 }
 
 /* Layout Select */
 .layout-select, .scheme-select {
     padding: 0.5rem;
-    border: 1px solid #ced4da;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.875rem;
-    background: white;
-    color: #495057;
+    background: var(--panel-bg);
+    color: var(--text-secondary);
     min-width: 140px;
     transition: all 0.2s ease;
 }
@@ -122,8 +121,8 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    background: white;
-    border: 1px solid #ced4da;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 0.25rem;
 }
@@ -135,7 +134,7 @@
     border-radius: 4px;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #495057;
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
     min-width: 2rem;
@@ -145,17 +144,17 @@
 }
 
 .zoom-controls button:hover {
-    background: #f8f9fa;
+    background: var(--background-color-offset);
     color: #007bff;
 }
 
 .zoom-controls button:active {
-    background: #e9ecef;
+    background: var(--background-color-offset);
 }
 
 .zoom-level {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     padding: 0 0.5rem;
     min-width: 3rem;
     text-align: center;
@@ -164,27 +163,27 @@
 
 /* Expand Toggle */
 .expand-toggle {
-    background: #f8f9fa;
-    border: 1px solid #ced4da;
+    background: var(--background-color-offset);
+    border: 1px solid var(--border-color);
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     font-size: 0.75rem;
-    color: #495057;
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .expand-toggle:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
+    background: var(--background-color-offset);
+    border-color: var(--border-color);
 }
 
 /* Graph Stats */
 .graph-stats {
     display: flex;
     gap: 1rem;
-    background: white;
-    border: 1px solid #e9ecef;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 0.5rem 0.75rem;
 }
@@ -197,15 +196,15 @@
 
 .stat-label {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-secondary);
     font-weight: 600;
 }
 
 .stat-value {
     font-size: 0.875rem;
-    color: #495057;
+    color: var(--text-secondary);
     font-weight: 700;
-    background: #f8f9fa;
+    background: var(--background-color-offset);
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
 }
@@ -214,8 +213,8 @@
 .filter-section {
     flex-direction: column;
     align-items: flex-start;
-    background: white;
-    border: 1px solid #e9ecef;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 0.75rem;
     min-width: 0;
@@ -234,19 +233,19 @@
     align-items: center;
     gap: 0.375rem;
     font-size: 0.75rem;
-    color: #495057;
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background: var(--background-color-offset);
+    border: 1px solid var(--border-color);
     transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .filter-checkbox:hover {
-    background: #e9ecef;
-    border-color: #ced4da;
+    background: var(--background-color-offset);
+    border-color: var(--border-color);
 }
 
 .filter-checkbox input[type="checkbox"] {
@@ -271,7 +270,7 @@
 /* Clear Filters Button */
 .clear-filters-btn {
     background: #dc3545;
-    color: white;
+    color: var(--text-on-primary);
     border: none;
     padding: 0.5rem 1rem;
     border-radius: 6px;
@@ -356,24 +355,24 @@
 /* Dark theme support */
 @media (prefers-color-scheme: dark) {
     .graph-toolbar {
-        background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-        border-color: #4a5568;
-        color: #e2e8f0;
+        background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-primary) 100%);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-primary);
     }
     
     .toolbar-expanded {
-        background: rgba(26, 32, 44, 0.5);
-        border-color: #4a5568;
+        background: var(--dark-bg-primary);
+        border-color: var(--dark-border-color);
     }
     
     .toolbar-label {
-        color: #a0aec0;
+        color: var(--dark-text-secondary);
     }
     
     .search-input, .layout-select, .scheme-select {
-        background: #2d3748;
-        border-color: #4a5568;
-        color: #e2e8f0;
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-primary);
     }
     
     .search-input:focus, .layout-select:focus, .scheme-select:focus {
@@ -382,47 +381,47 @@
     }
     
     .zoom-controls {
-        background: #2d3748;
-        border-color: #4a5568;
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
     }
     
     .zoom-controls button {
-        color: #a0aec0;
+        color: var(--dark-text-secondary);
     }
     
     .zoom-controls button:hover {
-        background: #4a5568;
-        color: #63b3ed;
+        background: var(--dark-border-color);
+        color: var(--dark-text-link);
     }
     
     .expand-toggle {
-        background: #4a5568;
-        border-color: #718096;
-        color: #a0aec0;
+        background: var(--dark-border-color);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-secondary);
     }
     
     .expand-toggle:hover {
-        background: #718096;
+        background: var(--dark-border-color);
     }
     
     .graph-stats, .filter-section {
-        background: #2d3748;
-        border-color: #4a5568;
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
     }
     
     .stat-value {
-        background: #1a202c;
-        color: #e2e8f0;
+        background: var(--dark-bg-primary);
+        color: var(--dark-text-primary);
     }
     
     .filter-checkbox {
-        background: #4a5568;
-        border-color: #718096;
-        color: #a0aec0;
+        background: var(--dark-border-color);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-secondary);
     }
     
     .filter-checkbox:hover {
-        background: #718096;
+        background: var(--dark-border-color);
     }
 }
 
@@ -451,7 +450,7 @@
 .graph-toolbar button:focus,
 .graph-toolbar input:focus,
 .graph-toolbar select:focus {
-    outline: 2px solid #007bff;
+    outline: 2px solid var(--accent-color);
     outline-offset: 2px;
 }
 

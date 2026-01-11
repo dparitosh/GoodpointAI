@@ -199,18 +199,34 @@ async def download_file(file_path: str):
     """Download file from server"""
     try:
         from fastapi.responses import FileResponse
+        from core.external_config import filesystem_config
         
-        path = Path(file_path)
+        # Security: Prevent path traversal attacks
+        # Resolve the base path and requested path to their absolute forms
+        base_path = Path(filesystem_config.data_root).resolve()
         
-        if not path.exists():
+        # If file_path is relative, join with base; if absolute, use as-is but validate
+        if file_path.startswith("./") or not Path(file_path).is_absolute():
+            requested_path = (base_path / file_path).resolve()
+        else:
+            requested_path = Path(file_path).resolve()
+        
+        # Security check: Ensure the resolved path is within the allowed base directory
+        try:
+            requested_path.relative_to(base_path)
+        except ValueError as exc:
+            logger.warning("Path traversal attempt blocked: %s", file_path)
+            raise HTTPException(status_code=403, detail="Access denied: path traversal detected") from exc
+        
+        if not requested_path.exists():
             raise HTTPException(status_code=404, detail="File not found")
         
-        if not path.is_file():
+        if not requested_path.is_file():
             raise HTTPException(status_code=400, detail="Path is not a file")
         
         return FileResponse(
-            path=str(path),
-            filename=path.name,
+            path=str(requested_path),
+            filename=requested_path.name,
             media_type="application/octet-stream"
         )
         
@@ -223,20 +239,35 @@ async def download_file(file_path: str):
 async def delete_file(file_path: str):
     """Delete file from server"""
     try:
-        path = Path(file_path)
+        from core.external_config import filesystem_config
         
-        if not path.exists():
+        # Security: Prevent path traversal attacks
+        base_path = Path(filesystem_config.data_root).resolve()
+        
+        if file_path.startswith("./") or not Path(file_path).is_absolute():
+            requested_path = (base_path / file_path).resolve()
+        else:
+            requested_path = Path(file_path).resolve()
+        
+        # Security check: Ensure the resolved path is within the allowed base directory
+        try:
+            requested_path.relative_to(base_path)
+        except ValueError as exc:
+            logger.warning("Path traversal attempt blocked on delete: %s", file_path)
+            raise HTTPException(status_code=403, detail="Access denied: path traversal detected") from exc
+        
+        if not requested_path.exists():
             raise HTTPException(status_code=404, detail="File not found")
         
-        if path.is_file():
-            path.unlink()
-        elif path.is_dir():
-            shutil.rmtree(path)
+        if requested_path.is_file():
+            requested_path.unlink()
+        elif requested_path.is_dir():
+            shutil.rmtree(requested_path)
         
         return {
             "status": "success",
             "message": "File deleted",
-            "path": file_path
+            "path": str(requested_path.relative_to(base_path))
         }
         
     except Exception as e:

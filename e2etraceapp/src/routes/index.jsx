@@ -1,6 +1,11 @@
-import { Navigate, createHashRouter } from 'react-router-dom';
+/**
+ * Application Routes - GraphTrace Enterprise
+ * Clean routing structure with TCS corporate pages
+ */
+import { Navigate, Outlet, createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
 import LandingPage from '../pages/landing/LandingPage.jsx';
+import MigrationPage from '../pages/migration/MigrationPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
@@ -8,12 +13,11 @@ import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
 import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
 import MultiModalAnalyzerPage from '../pages/multimodal/MultiModalAnalyzerPage.jsx';
 import OpenApiDocsPage from '../pages/api-docs/OpenApiDocsPage.jsx';
-import { E2ETraceAnalyticsPage } from '../pages/analytics/analytics/e2etrace-analytics-page.jsx';
-import ReportingPage from '../pages/reporting/ReportingPage.jsx';
-import DataConfigPage from '../pages/data-config/DataConfigPage.jsx';
-import EChartsSpreadsheetPage from '../pages/spreadsheet/EChartsSpreadsheetPage.jsx';
+import EnterpriseAnalyticsHub from '../pages/analytics/EnterpriseAnalyticsHub.jsx';
+import ConversationalSearchPage from '../pages/search/ConversationalSearchPage.jsx';
 import E2ETracePropertyPalette from '../pages/settings/settings/e2etrace-property-palette.jsx';
-import DataProcessingHubPage from '../pages/processing/DataProcessingHubPage.jsx';
+import AdminSettingsPage from '../pages/settings/AdminSettingsPage.jsx';
+import RuleEnginePage from '../pages/rule-engine/RuleEnginePage.jsx';
 import RouteErrorPage from '../pages/errors/RouteErrorPage.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 
@@ -38,25 +42,35 @@ const router = createHashRouter([
         handle: { crumb: 'nav.overview' }
       },
 
-      // Data Configuration (used by Landing "Get Started" and WorkflowProgress)
+      // Conversational Search - AI-powered search across all data sources
       {
-        path: 'data-config',
-        element: <DataConfigPage />,
-        handle: { crumb: 'nav.dataConfig' },
+        path: 'search',
+        element: <ConversationalSearchPage />,
+        handle: { crumb: 'nav.search' },
       },
 
-      // ECharts Spreadsheet (used by WorkflowProgress)
+      // PLM Data Migration Wizard - Primary workflow entry point
       {
-        path: 'spreadsheet',
-        element: <EChartsSpreadsheetPage />,
-        handle: { crumb: 'nav.spreadsheet' },
+        path: 'migration',
+        element: <MigrationPage />,
+        handle: { crumb: 'nav.migration' },
       },
 
-      // Data Processing Hub
+
+      // Data Mapping - now consolidated into Migration Wizard (Step 3)
+      {
+        path: 'data-mapping',
+        element: <Navigate to="/migration" replace />,
+        handle: { crumb: 'nav.dataMapping' },
+      },
+
+
+
+      // Processing Hub - Redirects to Analytics (SODA merged)
       {
         path: 'processing',
-        element: <DataProcessingHubPage />,
-        handle: { crumb: 'nav.dataProcessingHub' },
+        element: <Navigate to="/analytics?tab=quality-reports" replace />,
+        handle: { crumb: 'nav.analytics' },
       },
 
       // Settings
@@ -66,11 +80,36 @@ const router = createHashRouter([
         handle: { crumb: 'nav.settings' },
       },
       
+      // Settings/Admin alias (for nested URL structure)
+      {
+        path: 'settings/admin',
+        element: <AdminSettingsPage />,
+        handle: { crumb: 'nav.adminSettings' },
+      },
+      
+      // Admin Configuration Center
+      {
+        path: 'admin',
+        element: <AdminSettingsPage />,
+        handle: { crumb: 'nav.adminSettings' },
+      },
+      
       // Graph Explorer (Graph Features)
       {
         path: 'graph-explorer',
-        element: <GraphExplorerPage />,
+        element: <Outlet />,
         handle: { crumb: 'nav.graphExplorer' },
+        children: [
+          {
+            index: true,
+            element: <GraphExplorerPage />,
+          },
+          {
+            path: 'workflow/:workflowId',
+            element: <WorkflowDetailPage />,
+            handle: { crumb: 'nav.workflowDetail' },
+          },
+        ],
       },
 
       // Legacy alias (clean-env compatibility)
@@ -79,24 +118,24 @@ const router = createHashRouter([
         element: <Navigate to="/graph-explorer" replace />,
       },
 
-      // Reports & Dashboards (clean-env compatibility)
+      // Reports & Dashboards - Merged into Enterprise Analytics Hub
       {
         path: 'reporting',
-        element: <ReportingPage />,
-        handle: { crumb: 'nav.reporting' },
+        element: <Navigate to="/analytics?tab=reports" replace />,
+        handle: { crumb: 'nav.analytics' },
       },
       
-      // Data Quality Dashboard (SODA)
+      // Data Quality Dashboard (SODA) - Now in Analytics
       {
         path: 'data-quality',
-        element: <Navigate to="/processing?tab=quality" replace />,
-        handle: { crumb: 'nav.dataProcessingHub' },
+        element: <Navigate to="/analytics?tab=quality-reports" replace />,
+        handle: { crumb: 'nav.analytics' },
       },
 
       // Legacy alias
       {
         path: 'dataquality',
-        element: <Navigate to="/processing?tab=quality" replace />,
+        element: <Navigate to="/analytics?tab=quality-reports" replace />,
       },
       
       // Observability Dashboard
@@ -112,18 +151,18 @@ const router = createHashRouter([
         element: <Navigate to="/observability" replace />,
       },
 
-      // Analytics Dashboard
+      // Analytics Dashboard - Enterprise Hub with GraphQL Query Builder
       {
         path: 'analytics',
-        element: <E2ETraceAnalyticsPage />,
+        element: <EnterpriseAnalyticsHub />,
         handle: { crumb: 'nav.analytics' },
       },
       
-      // Workflow Manager - Multi-instance workflow management
+      // Workflow Manager - redirects to Analytics
       {
         path: 'workflow-manager',
-        element: <Navigate to="/processing?tab=workflows" replace />,
-        handle: { crumb: 'nav.dataProcessingHub' },
+        element: <Navigate to="/analytics" replace />,
+        handle: { crumb: 'nav.analytics' },
       },
       
       // Workflow Detail - Individual workflow instance view
@@ -152,6 +191,13 @@ const router = createHashRouter([
         path: 'multimodal',
         element: <MultiModalAnalyzerPage />,
         handle: { crumb: 'nav.multiModalAnalyzer' },
+      },
+
+      // PLM Rule Engine - Data Quality & ETL Rules
+      {
+        path: 'rule-engine',
+        element: <RuleEnginePage />,
+        handle: { crumb: 'nav.ruleEngine' },
       },
 
       // API Docs (OpenAPI/Swagger)

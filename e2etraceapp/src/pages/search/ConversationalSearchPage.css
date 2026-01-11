@@ -1,0 +1,110 @@
+/**
+ * Conversational Search Page Styles
+ */
+
+.conversational-search-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: calc(100vh - 120px);
+  background: var(--dark-bg-primary, #0f172a);
+}
+
+/* Header */
+.search-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, var(--dark-bg-primary, #0f172a) 0%, var(--dark-bg-secondary, #1e293b) 100%);
+  border-bottom: 1px solid var(--dark-border-subtle, rgba(255, 255, 255, 0.1));
+}
+
+.search-page-header .header-content h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--dark-text-heading, #ffffff);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-page-header .header-content h1 i {
+  color: var(--primary-color, #0066CC);
+}
+
+.search-page-header .header-content p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--dark-text-secondary, #cbd5e1);
+}
+
+/* Tabs */
+.search-page-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--dark-border-color, #475569);
+  border-radius: 6px;
+  color: var(--dark-text-secondary, #cbd5e1);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.search-tab:hover {
+  background: var(--dark-bg-elevated, #283548);
+  color: var(--dark-text-primary, #f1f5f9);
+}
+
+.search-tab.active {
+  background: var(--primary-color, #0066CC);
+  border-color: var(--primary-color, #0066CC);
+  color: var(--text-on-primary, #ffffff);
+}
+
+.search-tab i {
+  font-size: 0.875rem;
+}
+
+/* Content */
+.search-page-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.search-container {
+  height: 100%;
+  padding: 1rem;
+}
+
+.config-container {
+  padding: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .search-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .search-page-tabs {
+    width: 100%;
+  }
+
+  .search-tab {
+    flex: 1;
+    justify-content: center;
+  }
+}

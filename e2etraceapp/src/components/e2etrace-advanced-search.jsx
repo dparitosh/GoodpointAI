@@ -30,7 +30,7 @@ export function E2ETraceAdvancedSearch({ onSearch }) {
           title="Clear Search"
           onClick={handleClear}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#888' }}
-        >✕</button>
+        ><i className="fas fa-times" aria-hidden="true" /></button>
       )}
     </div>
   );

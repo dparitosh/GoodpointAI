@@ -38,7 +38,7 @@
 }
 
 .inspector-panel--light .inspector-panel__header {
-  border-bottom-color: #e1e4e8;
+  border-bottom-color: var(--border-color);
 }
 
 .inspector-panel--dark .inspector-panel__header {
@@ -93,8 +93,8 @@
 }
 
 .inspector-panel--light .inspector-panel__tabs {
-  border-bottom-color: #e1e4e8;
-  background-color: #f8f9fa;
+  border-bottom-color: var(--border-color);
+  background-color: var(--surface-color);
 }
 
 .inspector-panel--dark .inspector-panel__tabs {
@@ -119,12 +119,12 @@
 }
 
 .inspector-panel--light .inspector-panel__tab {
-  color: #586069;
+  color: var(--text-secondary);
 }
 
 .inspector-panel--light .inspector-panel__tab:hover {
-  background-color: #e9ecef;
-  color: #2c3e50;
+  background-color: var(--background-color-offset);
+  color: var(--text-color);
 }
 
 .inspector-panel--light .inspector-panel__tab--active {
@@ -218,13 +218,13 @@
 }
 
 .inspector-panel--light .inspector-panel__property-value {
-  background-color: #f8f9fa;
-  border: 1px solid #e1e4e8;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
 }
 
 .inspector-panel--light .inspector-panel__property-value:hover {
-  background-color: #e9ecef;
-  border-color: #cbd2d9;
+  background-color: var(--background-color-offset);
+  border-color: var(--border-color);
 }
 
 .inspector-panel--dark .inspector-panel__property-value {
@@ -247,8 +247,8 @@
 }
 
 .inspector-panel--light .inspector-panel__property-input {
-  background-color: #ffffff;
-  color: #2c3e50;
+  background-color: var(--panel-bg);
+  color: var(--text-color);
 }
 
 .inspector-panel--dark .inspector-panel__property-input {
@@ -273,8 +273,8 @@
 }
 
 .inspector-panel--light .inspector-panel__relationship {
-  background-color: #f8f9fa;
-  border: 1px solid #e1e4e8;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
 }
 
 .inspector-panel--light .inspector-panel__relationship:hover {
@@ -418,7 +418,7 @@
 }
 
 .inspector-panel--light .inspector-panel__history-item {
-  background-color: #f8f9fa;
+  background-color: var(--surface-color);
   border-left-color: #cbd2d9;
 }
 

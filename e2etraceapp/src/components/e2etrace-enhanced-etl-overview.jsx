@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { saveAs } from 'file-saver';
 import { sheetsToXlsxBlob } from '../utils/spreadsheet-utils.js';
-import { applyETLFilter, highlightPerformanceIssues, calculatePipelineMetrics } from '../utils/e2etrace-graph-enhancement.js';
+import { applyETLFilter, calculatePipelineMetrics } from '../utils/e2etrace-graph-enhancement.js';
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api';
 import './e2etrace-enhanced-etl-overview.css';
 
@@ -65,12 +65,12 @@ const generatePerformanceTrends = () => {
 };
 
 const EnhancedETLOverview = ({ 
-  graphStats, 
-  selectedNodeCount, 
-  filteredNodeCount, 
+  graphStats: _graphStats, 
+  selectedNodeCount: _selectedNodeCount, 
+  filteredNodeCount: _filteredNodeCount, 
   loadingError,
   graphData,
-  onElementClick,
+  onElementClick: _onElementClick,
   onFilterApply,
   cytoscapeRef
 }) => {
@@ -103,7 +103,7 @@ const EnhancedETLOverview = ({
     };
 
     loadPerformanceData();
-  }, [timeRange, graphData]);
+  }, [timeRange]);
 
   // Enhanced ETL metrics with time-series data
   const etlMetrics = useMemo(() => {
@@ -191,7 +191,7 @@ const EnhancedETLOverview = ({
       nodeTypeDistribution,
       performanceTrends
     };
-  }, [graphData, timeRange, timeSeriesData, performanceMetrics]);
+  }, [graphData, timeSeriesData, performanceMetrics]);
 
   // ECharts configurations
   const getTimeSeriesChartOption = () => ({
@@ -451,7 +451,7 @@ const EnhancedETLOverview = ({
         <span className="metric-title">{title}</span>
         {trend && (
           <span className={`metric-trend ${trend > 0 ? 'positive' : 'negative'}`}>
-            {trend > 0 ? '↗' : '↘'} {Math.abs(trend)}%
+            {trend > 0 ? <i className="fas fa-arrow-up" aria-hidden="true" /> : <i className="fas fa-arrow-down" aria-hidden="true" />} {Math.abs(trend)}%
           </span>
         )}
       </div>
@@ -502,7 +502,7 @@ const EnhancedETLOverview = ({
             onClick={exportToExcel}
             title="Export to Excel"
           >
-            ◳ Excel
+            <i className="fas fa-file-excel" aria-hidden="true" /> Excel
           </button>
           <button 
             className="expand-button"
@@ -517,7 +517,7 @@ const EnhancedETLOverview = ({
               onClick={clearAllFilters}
               title="Clear Filters"
             >
-              ✕
+              <i className="fas fa-times" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -586,7 +586,7 @@ const EnhancedETLOverview = ({
                     <div className="summary-values">
                       <span className="current-value">{trend.current} {trend.unit}</span>
                       <span className={`trend-indicator ${trend.trend}`}>
-                        {trend.trend === 'up' ? '↗' : '↘'}
+                        {trend.trend === 'up' ? <i className="fas fa-arrow-up" aria-hidden="true" /> : <i className="fas fa-arrow-down" aria-hidden="true" />}
                       </span>
                     </div>
                   </div>
@@ -618,11 +618,11 @@ const EnhancedETLOverview = ({
               <h4>Export Options</h4>
               <div className="export-buttons">
                 <button className="export-btn excel" onClick={exportToExcel}>
-                  ◳ Export to Excel
+                  <i className="fas fa-file-excel" aria-hidden="true" /> Export to Excel
                   <span>Complete ETL metrics with charts data</span>
                 </button>
                 <button className="export-btn pdf" onClick={() => window.print()}>
-                  ◻ Export to PDF
+                  <i className="fas fa-file-pdf" aria-hidden="true" /> Export to PDF
                   <span>Print current dashboard view</span>
                 </button>
                 <button className="export-btn json" onClick={() => {
@@ -630,7 +630,7 @@ const EnhancedETLOverview = ({
                   const dataBlob = new Blob([dataStr], {type: 'application/json'});
                   saveAs(dataBlob, `ETL_Data_${new Date().toISOString().split('T')[0]}.json`);
                 }}>
-                  ▦ Export Raw Data
+                  <i className="fas fa-file-code" aria-hidden="true" /> Export Raw Data
                   <span>JSON format for API integration</span>
                 </button>
               </div>

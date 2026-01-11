@@ -124,12 +124,12 @@ const MultiModalAnalyzerPage = () => {
 
   const getFileIcon = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
-    if (['pdf'].includes(ext)) return '◳';
-    if (['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(ext)) return '◻';
-    if (['xls', 'xlsx', 'csv', 'xlsm'].includes(ext)) return '◳';
-    if (['doc', 'docx'].includes(ext)) return '✎';
-    if (['dwg', 'dxf', 'step', 'igs', 'iges', 'stp'].includes(ext)) return '⚙';
-    return '◻';
+    if (['pdf'].includes(ext)) return <i className="fas fa-file-pdf" aria-hidden="true" />;
+    if (['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tiff'].includes(ext)) return <i className="fas fa-file-image" aria-hidden="true" />;
+    if (['xls', 'xlsx', 'csv', 'xlsm'].includes(ext)) return <i className="fas fa-file-excel" aria-hidden="true" />;
+    if (['doc', 'docx'].includes(ext)) return <i className="fas fa-file-word" aria-hidden="true" />;
+    if (['dwg', 'dxf', 'step', 'igs', 'iges', 'stp'].includes(ext)) return <i className="fas fa-drafting-compass" aria-hidden="true" />;
+    return <i className="fas fa-file" aria-hidden="true" />;
   };
 
   return (
@@ -137,7 +137,7 @@ const MultiModalAnalyzerPage = () => {
       <div className="multimodal-header">
         <div className="multimodal-header__grid">
           <div className="multimodal-header__text">
-            <h1>↯ Multi-Modal Data Analyzer</h1>
+            <h1><i className="fas fa-brain" aria-hidden="true" /> Multi-Modal Data Analyzer</h1>
             <p className="multimodal-header__subtitle">
               Use vision AI to extract text, metadata, and insights from documents and drawings.
             </p>
@@ -176,7 +176,7 @@ const MultiModalAnalyzerPage = () => {
           <div className="multimodal-left-row">
             {/* Vision Model Selection */}
             <div className="config-section">
-              <h3>⚙ Configuration</h3>
+              <h3><i className="fas fa-cog" aria-hidden="true" /> Configuration</h3>
               
               <div className="config-group">
                 <label>Vision Model:</label>
@@ -287,7 +287,7 @@ const MultiModalAnalyzerPage = () => {
                       <div className="file-size">{formatFileSize(file.size)}</div>
                     </div>
                     <button className="clear-btn" onClick={(e) => { e.stopPropagation(); clearFile(); }}>
-                      ✗
+                      <i className="fas fa-times" aria-hidden="true" />
                     </button>
                   </div>
                 )}
@@ -306,7 +306,7 @@ const MultiModalAnalyzerPage = () => {
                 onClick={analyzeFile}
                 disabled={!file || analyzing}
               >
-                {analyzing ? '⟲ Analyzing...' : '▶ Analyze File'}
+                {analyzing ? <><i className="fas fa-spinner fa-spin" aria-hidden="true" /> Analyzing...</> : <><i className="fas fa-play" aria-hidden="true" /> Analyze File</>}
               </button>
             </div>
           </div>
@@ -315,7 +315,7 @@ const MultiModalAnalyzerPage = () => {
 
         {/* Right Panel: Results */}
         <div className="multimodal-right-panel">
-          <h3>◳ Analysis Results</h3>
+          <h3><i className="fas fa-clipboard-list" aria-hidden="true" /> Analysis Results</h3>
 
           {analyzing && (
             <div className="analyzing-state">
@@ -327,7 +327,7 @@ const MultiModalAnalyzerPage = () => {
 
           {error && (
             <div className="error-state">
-              <div className="error-icon">✗</div>
+              <div className="error-icon"><i className="fas fa-times-circle" aria-hidden="true" /></div>
               <h4>Analysis Failed</h4>
               <p>{error}</p>
             </div>
@@ -337,7 +337,7 @@ const MultiModalAnalyzerPage = () => {
             <div className="results-container">
               {/* File Info */}
               <div className="result-section">
-                <h4>⊞ File Information</h4>
+                <h4><i className="fas fa-file-alt" aria-hidden="true" /> File Information</h4>
                 <div className="info-grid">
                   <div className="info-item">
                     <span className="info-label">Filename:</span>
@@ -367,7 +367,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Extracted Text */}
               {result.extracted_text && result.extracted_text.length > 0 && (
                 <div className="result-section">
-                  <h4>✎ Extracted Text ({result.extracted_text.length} characters)</h4>
+                  <h4><i className="fas fa-align-left" aria-hidden="true" /> Extracted Text ({result.extracted_text.length} characters)</h4>
                   <div className="text-content">
                     {result.extracted_text}
                   </div>
@@ -377,7 +377,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Vision Analysis */}
               {result.vision_analysis && (
                 <div className="result-section">
-                  <h4>◉ Vision AI Analysis</h4>
+                  <h4><i className="fas fa-eye" aria-hidden="true" /> Vision AI Analysis</h4>
                   <div className="analysis-content">
                     {result.vision_analysis}
                   </div>
@@ -387,7 +387,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Metadata */}
               {result.metadata && Object.keys(result.metadata).length > 0 && (
                 <div className="result-section">
-                  <h4>⚙ Metadata</h4>
+                  <h4><i className="fas fa-cog" aria-hidden="true" /> Metadata</h4>
                   <div className="metadata-grid">
                     {Object.entries(result.metadata).map(([key, value]) => (
                       <div key={key} className="metadata-item">
@@ -404,7 +404,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Images Found */}
               {result.images_analyzed && result.images_analyzed.length > 0 && (
                 <div className="result-section">
-                  <h4>◻ Images Analyzed ({result.images_analyzed.length})</h4>
+                  <h4><i className="fas fa-images" aria-hidden="true" /> Images Analyzed ({result.images_analyzed.length})</h4>
                   <div className="images-list">
                     {result.images_analyzed.map((img, idx) => (
                       <div key={idx} className="image-analysis-item">
@@ -421,7 +421,7 @@ const MultiModalAnalyzerPage = () => {
               {/* Excel/Structured Data */}
               {result.structured_data && (
                 <div className="result-section">
-                  <h4>◳ Structured Data</h4>
+                  <h4><i className="fas fa-table" aria-hidden="true" /> Structured Data</h4>
                   <div className="structured-data">
                     <pre>{JSON.stringify(result.structured_data, null, 2)}</pre>
                   </div>
@@ -432,7 +432,7 @@ const MultiModalAnalyzerPage = () => {
 
           {!result && !analyzing && !error && (
             <div className="empty-state">
-              <div className="empty-icon">⊙</div>
+              <div className="empty-icon"><i className="fas fa-cloud-upload-alt" aria-hidden="true" /></div>
               <p>Upload a file to begin analysis</p>
               <small>Drag and drop or click the upload area</small>
             </div>

@@ -37,6 +37,238 @@ class RateLimitConfig(BaseModel):
     requests_per_hour: int = 1000
 
 
+class GenericRouteConfig(BaseModel):
+    """Route configuration for generic API gateway"""
+    path: str
+    method: str = "GET"
+    target_url: str
+    rate_limit: Optional[int] = None
+    auth_required: bool = False
+    transformation: Optional[Dict[str, Any]] = None
+
+
+class ProxyRequest(BaseModel):
+    """Proxy request configuration"""
+    method: str = "GET"
+    path: str
+    headers: Optional[Dict[str, str]] = Field(default_factory=dict)
+    body: Optional[Any] = None
+    query_params: Optional[Dict[str, str]] = Field(default_factory=dict)
+
+
+class RateLimitSetting(BaseModel):
+    """Rate limit setting for an endpoint"""
+    endpoint: str
+    requests_per_minute: int = 60
+    burst_size: int = 10
+
+
+class TransformationConfig(BaseModel):
+    """Request/response transformation configuration"""
+    route_pattern: str
+    type: str = Field(..., description="'request' or 'response'")
+    transformation: Dict[str, Any]
+
+
+# In-memory storage for generic gateway (in production, use database)
+_gateway_routes: Dict[str, Dict[str, Any]] = {}
+_rate_limits: Dict[str, Dict[str, Any]] = {}
+_transformations: List[Dict[str, Any]] = []
+
+
+# ============================================================================
+# GENERIC GATEWAY ENDPOINTS (Frontend-compatible)
+# ============================================================================
+
+@router.get("/routes")
+async def list_routes(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """List all registered routes (generic gateway)"""
+    routes = list(_gateway_routes.values())
+    total_count = len(routes)
+    response.headers["X-Total-Count"] = str(total_count)
+    routes_page = routes[skip : skip + limit]
+    
+    return {
+        "status": "success",
+        "routes": routes_page,
+        "count": len(routes_page),
+        "total": total_count
+    }
+
+
+@router.post("/routes")
+async def register_route(config: GenericRouteConfig):
+    """Register a new route in the generic gateway"""
+    import uuid
+    
+    route_id = str(uuid.uuid4())
+    route_data = {
+        "id": route_id,
+        "path": config.path,
+        "method": config.method,
+        "target_url": config.target_url,
+        "rate_limit": config.rate_limit,
+        "auth_required": config.auth_required,
+        "transformation": config.transformation,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": "active"
+    }
+    
+    _gateway_routes[route_id] = route_data
+    logger.info("Registered route: %s %s -> %s", config.method, config.path, config.target_url)
+    
+    return {
+        "status": "success",
+        "message": "Route registered",
+        "route": route_data
+    }
+
+
+@router.delete("/routes/{route_id}")
+async def delete_route(route_id: str):
+    """Delete a route from the gateway"""
+    if route_id not in _gateway_routes:
+        raise HTTPException(status_code=404, detail="Route not found")
+    
+    del _gateway_routes[route_id]
+    return {"status": "success", "message": "Route deleted"}
+
+
+@router.post("/proxy")
+async def proxy_request(request: ProxyRequest):
+    """Proxy a request through the gateway"""
+    import httpx
+    
+    # Find matching route
+    matching_route = None
+    for route in _gateway_routes.values():
+        if route["path"] == request.path or request.path.startswith(route["path"]):
+            matching_route = route
+            break
+    
+    if not matching_route:
+        # If no route registered, allow passthrough with warning
+        logger.warning("No route found for path: %s, allowing passthrough", request.path)
+    
+    target_url = matching_route["target_url"] if matching_route else request.path
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=request.headers or {},
+                params=request.query_params or {},
+                json=request.body if request.body else None
+            )
+            
+            return {
+                "status": "success",
+                "request": {
+                    "method": request.method,
+                    "path": request.path,
+                    "target": target_url
+                },
+                "response": {
+                    "status_code": response.status_code,
+                    "headers": dict(response.headers),
+                    "body": response.text[:1000] if response.text else None
+                }
+            }
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Gateway timeout") from None
+    except httpx.ConnectError as e:
+        raise HTTPException(status_code=502, detail=f"Bad gateway: {str(e)}") from e
+    except Exception as e:
+        logger.error("Proxy request failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/rate-limits")
+async def get_rate_limits():
+    """Get all rate limit configurations"""
+    return {
+        "status": "success",
+        "rate_limits": _rate_limits
+    }
+
+
+@router.post("/rate-limit")
+async def set_rate_limit(config: RateLimitSetting):
+    """Set rate limit for an endpoint"""
+    _rate_limits[config.endpoint] = {
+        "endpoint": config.endpoint,
+        "requests_per_minute": config.requests_per_minute,
+        "burst_size": config.burst_size,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    return {
+        "status": "success",
+        "message": "Rate limit configured",
+        "endpoint": config.endpoint,
+        "limit": _rate_limits[config.endpoint]
+    }
+
+
+@router.post("/transformation")
+async def add_transformation(config: TransformationConfig):
+    """Add request/response transformation rule"""
+    if config.type not in ("request", "response"):
+        raise HTTPException(status_code=400, detail="Type must be 'request' or 'response'")
+    
+    transformation_data = {
+        "id": len(_transformations) + 1,
+        "route_pattern": config.route_pattern,
+        "type": config.type,
+        "transformation": config.transformation,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    _transformations.append(transformation_data)
+    
+    return {
+        "status": "success",
+        "message": "Transformation added",
+        **transformation_data
+    }
+
+
+@router.get("/transformations")
+async def list_transformations():
+    """List all transformations"""
+    return {
+        "status": "success",
+        "transformations": _transformations
+    }
+
+
+@router.get("/metrics")
+async def get_gateway_metrics(
+    time_range: str = Query("1h", description="Time range for metrics")
+):
+    """Get gateway metrics (mock implementation)"""
+    # In production, this would integrate with actual metrics system
+    return {
+        "status": "success",
+        "time_range": time_range,
+        "metrics": {
+            "total_requests": len(_gateway_routes) * 100,  # Mock data
+            "successful_requests": len(_gateway_routes) * 95,
+            "failed_requests": len(_gateway_routes) * 5,
+            "average_latency_ms": 45.2,
+            "routes_count": len(_gateway_routes),
+            "rate_limits_active": len(_rate_limits),
+            "transformations_active": len(_transformations)
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
 # ============================================================================
 # KONG API GATEWAY ENDPOINTS
 # ============================================================================

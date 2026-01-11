@@ -1,6 +1,9 @@
 """
 Neo4j GraphRAG Service - Hybrid search combining graph context and vector similarity.
 Provides semantic search capabilities bridging Neo4j and OpenSearch.
+
+Configuration is loaded from the admin config database with fallback to
+environment variables and config store for backward compatibility.
 """
 
 import logging
@@ -23,33 +26,89 @@ def _utcnow_iso() -> str:
     return _utcnow().isoformat()
 
 
+def _get_neo4j_config_from_admin(db_session=None) -> Dict[str, Any]:
+    """Load Neo4j configuration from admin config service."""
+    if db_session is None:
+        return {}
+    try:
+        from services.admin_config_service import AdminConfigService
+        config_service = AdminConfigService(db_session)
+        return config_service.get_connection_config("neo4j")
+    except Exception as e:
+        logger.debug("Admin config not available for Neo4j: %s", e)
+        return {}
+
+
+def _get_embedding_config_from_admin(db_session=None) -> Dict[str, Any]:
+    """Load embedding configuration from admin config service."""
+    if db_session is None:
+        return {}
+    try:
+        from services.admin_config_service import AdminConfigService
+        config_service = AdminConfigService(db_session)
+        return config_service.get_embedding_config()
+    except Exception as e:
+        logger.debug("Admin config not available for embeddings: %s", e)
+        return {}
+
+
 class Neo4jGraphRAGService:
     """
     Service for Neo4j GraphRAG operations.
     Orchestrates vector search, document retrieval, and tool metadata.
     """
     
-    def __init__(self):
-        """Initialize GraphRAG service with configuration from environment."""
+    def __init__(self, db_session=None):
+        """
+        Initialize GraphRAG service with configuration.
+        
+        Configuration priority:
+        1. Admin config database (if available)
+        2. Encrypted config store
+        3. Environment variables
+        4. Default values
+        """
+        # Try to load from admin config first
+        admin_neo4j_config = _get_neo4j_config_from_admin(db_session)
+        admin_embed_config = _get_embedding_config_from_admin(db_session)
+        
+        # Fall back to encrypted config store
         neo4j_payload = get_encrypted_config_payload("neo4j") or {}
-        self.neo4j_uri = str(
-            neo4j_payload.get("uri")
-            or os.getenv("NEO4J_URI")
-            or "neo4j://127.0.0.1:7687"
+        
+        # Build Neo4j connection settings with priority
+        self.neo4j_uri = (
+            admin_neo4j_config.get("connection_string")
+            or f"neo4j://{admin_neo4j_config.get('host', '')}:{admin_neo4j_config.get('port', 7687)}"
+            if admin_neo4j_config.get("host")
+            else str(
+                neo4j_payload.get("uri")
+                or os.getenv("NEO4J_URI")
+                or "neo4j://127.0.0.1:7687"
+            )
         )
-        self.neo4j_user = str(
-            neo4j_payload.get("username")
-            or os.getenv("NEO4J_USER")
-            or os.getenv("NEO4J_USERNAME")
-            or "neo4j"
+        self.neo4j_user = (
+            admin_neo4j_config.get("username")
+            or str(
+                neo4j_payload.get("username")
+                or os.getenv("NEO4J_USER")
+                or os.getenv("NEO4J_USERNAME")
+                or "neo4j"
+            )
         )
-        # No insecure/hardcoded default password.
-        self.neo4j_password = str(
-            neo4j_payload.get("password")
-            or os.getenv("NEO4J_PASSWORD")
-            or ""
+        self.neo4j_password = (
+            admin_neo4j_config.get("password")
+            or str(
+                neo4j_payload.get("password")
+                or os.getenv("NEO4J_PASSWORD")
+                or ""
+            )
         )
-        self.embed_dimension = int(os.getenv("GRAPH_RAG_EMBED_DIMENSION", "1536"))
+        
+        # Embedding configuration from admin config
+        self.embed_dimension = (
+            admin_embed_config.get("dimension")
+            or int(os.getenv("GRAPH_RAG_EMBED_DIMENSION", "1536"))
+        )
         self.vector_index_name = (os.getenv("GRAPH_RAG_VECTOR_INDEX") or "").strip()
         self.embeddings_url = (os.getenv("EMBEDDINGS_URL") or "").strip()
         self.driver = None

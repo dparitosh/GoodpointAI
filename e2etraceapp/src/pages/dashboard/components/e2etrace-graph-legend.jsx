@@ -41,7 +41,7 @@ export const E2ETraceGraphLegend = ({ stylesheet }) => {
                             className={`e2etrace-legend-shape ${style.shape}`}
                             style={{ backgroundColor: style.backgroundColor, borderColor: style.backgroundColor }}
                         >
-                            {style.shape === 'diamond' && '◆'} {/* Simple representation for diamond */}
+                            {style.shape === 'diamond' && <i className="fas fa-square" style={{transform: 'rotate(45deg)'}} aria-hidden="true" />} {/* Simple representation for diamond */}
                             {/* Add more specific shape representations if needed */}
                         </div>
                         <span>{group}</span>

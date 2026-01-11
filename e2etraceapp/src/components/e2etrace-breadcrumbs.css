@@ -27,7 +27,7 @@
 
 .e2etrace-breadcrumb-link:hover {
   background-color: var(--accent-color);
-  color: white;
+  color: var(--text-on-primary);
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 122, 204, 0.2);
 }

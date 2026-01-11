@@ -372,7 +372,7 @@ class ETLEngine {
   }
 
   async loadToNeo4j(data, config) {
-    const { nodeLabel, properties } = config;
+    const { nodeLabel, properties: _properties } = config;
     let recordCount = 0;
     
     for (const record of data) {
@@ -438,7 +438,7 @@ class ETLEngine {
   // ============= MISSING TRANSFORMER METHODS =============
 
   async normalizeData(data, config) {
-    const { schema = {}, autoDetectTypes = true } = config;
+    const { schema: _schema = {}, autoDetectTypes = true } = config;
     const normalizedData = [];
 
     for (const record of data) {
@@ -478,14 +478,13 @@ class ETLEngine {
   }
 
   async cleanseData(data, config) {
-    const { rules = [], aggressive = false } = config;
+    const { rules: _rules = [], aggressive = false } = config;
     const cleansedData = [];
     const issues = [];
 
     for (let i = 0; i < data.length; i++) {
       const record = data[i];
       const cleansedRecord = { ...record };
-      let hasIssues = false;
 
       // Remove duplicates (if aggressive mode)
       if (aggressive) {
@@ -545,11 +544,13 @@ class ETLEngine {
 
         switch (ruleType) {
           case 'unique':
-            const duplicates = data.filter((r, idx) => idx !== i && r[field] === value);
-            if (duplicates.length > 0) {
-              recordErrors.push(`${message}: Duplicate value '${value}' found`);
+            {
+              const duplicates = data.filter((r, idx) => idx !== i && r[field] === value);
+              if (duplicates.length > 0) {
+                recordErrors.push(`${message}: Duplicate value '${value}' found`);
+              }
+              break;
             }
-            break;
           
           case 'email':
             if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
@@ -564,16 +565,18 @@ class ETLEngine {
             break;
           
           case 'range':
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-              if (rule.min !== undefined && numValue < rule.min) {
-                recordErrors.push(`${message}: Value ${numValue} is below minimum ${rule.min}`);
+            {
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue)) {
+                if (rule.min !== undefined && numValue < rule.min) {
+                  recordErrors.push(`${message}: Value ${numValue} is below minimum ${rule.min}`);
+                }
+                if (rule.max !== undefined && numValue > rule.max) {
+                  recordErrors.push(`${message}: Value ${numValue} is above maximum ${rule.max}`);
+                }
               }
-              if (rule.max !== undefined && numValue > rule.max) {
-                recordErrors.push(`${message}: Value ${numValue} is above maximum ${rule.max}`);
-              }
+              break;
             }
-            break;
         }
       }
 
@@ -640,14 +643,14 @@ class ETLEngine {
 
       // Check required fields
       for (const field of schema.required || []) {
-        if (!record.hasOwnProperty(field) || record[field] === null || record[field] === undefined) {
+        if (!Object.prototype.hasOwnProperty.call(record, field) || record[field] === null || record[field] === undefined) {
           recordErrors.push(`Missing required field: ${field}`);
         }
       }
 
       // Check field types
       for (const [field, expectedType] of Object.entries(schema.types || {})) {
-        if (record.hasOwnProperty(field) && record[field] !== null) {
+        if (Object.prototype.hasOwnProperty.call(record, field) && record[field] !== null) {
           const actualType = typeof record[field];
           if (actualType !== expectedType) {
             recordErrors.push(`Field ${field} should be ${expectedType}, got ${actualType}`);

@@ -194,7 +194,7 @@ async def get_data_quality_metrics(
         WITH COUNT(n) as totalNodes
         MATCH (n) WHERE n IS NOT NULL
         WITH totalNodes, COUNT(n) as validNodes
-        MATCH (n) WHERE EXISTS(n.id)
+        MATCH (n) WHERE n.id IS NOT NULL
         WITH totalNodes, validNodes, COUNT(n) as nodesWithId
         OPTIONAL MATCH (n) WHERE n.status = 'duplicate'
         WITH totalNodes, validNodes, nodesWithId, COUNT(n) as duplicateNodes

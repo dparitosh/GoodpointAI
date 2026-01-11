@@ -1,6 +1,7 @@
 import { createMachine, assign, interpret } from 'xstate';
 import { ETLEngine } from './etl-engine.js';
 import { API_CONFIG } from '../config/api-config.js';
+import { addError, MAX_ERRORS } from '../machines/xstateHelpers.js';
 
 /**
  * AGENTIC ETL ORCHESTRATOR - Modular Cognition Pattern Implementation
@@ -126,14 +127,14 @@ const etlOrchestrationMachine = createMachine({
       activeJobs: [],
       errors: []
     }),
-    deployAnalysisAgent: (context, event) => {
+    deployAnalysisAgent: (context, _event) => {
       console.log('Deploying Analysis Agent for pipeline:', context.currentPipeline?.name);
     },
     storeAnalysis: assign({
       metrics: (context, event) => ({ ...context.metrics, analysis: event.results })
     }),
     captureError: assign({
-      errors: (context, event) => [...context.errors, event.error]
+      errors: (context, event) => addError(context.errors, event.error)
     }),
     cleanup: assign({
       currentPipeline: null,
@@ -277,7 +278,7 @@ class AgenticETLAgent {
     const { data, transformations } = task;
     
     // Apply intelligent transformation ordering
-    const optimizedTransformations = this.optimizeTransformations(transformations, _data);
+    const optimizedTransformations = this.optimizeTransformations(transformations, data);
     
     let transformedData = data;
     const transformationResults = [];
@@ -315,12 +316,11 @@ class AgenticETLAgent {
   // LOADING AGENT - Optimized loading strategies
   async loadData(task) {
     const { data, targets } = task;
-    const results = [];
     
     // Parallel loading for independent targets
     const loadPromises = targets.map(async (target) => {
       try {
-        const result = await this.etlEngine.load(target.type, _data, target.config);
+        const result = await this.etlEngine.load(target.type, data, target.config);
         return {
           targetId: target.id,
           success: true,
@@ -349,11 +349,11 @@ class AgenticETLAgent {
     const { data, thresholds } = task;
     
     const qualityMetrics = {
-      completeness: this.calculateCompleteness(_data),
-      accuracy: this.calculateAccuracy(_data),
-      consistency: this.calculateConsistency(_data),
-      validity: this.calculateValidity(_data),
-      uniqueness: this.calculateUniqueness(_data)
+      completeness: this.calculateCompleteness(data),
+      accuracy: this.calculateAccuracy(data),
+      consistency: this.calculateConsistency(data),
+      validity: this.calculateValidity(data),
+      uniqueness: this.calculateUniqueness(data)
     };
     
     const qualityIssues = [];
@@ -379,18 +379,18 @@ class AgenticETLAgent {
 
   // HELPER METHODS for Pareto Analysis
   assessDataQuality(_data) {
-    if (!_data || data.length === 0) return 0;
+    if (!_data || _data.length === 0) return 0;
     
-    const completeness = data.filter(row => 
+    const completeness = _data.filter(row => 
       Object.values(row).every(val => val !== null && val !== undefined && val !== '')
-    ).length / data.length;
+    ).length / _data.length;
     
     return completeness * 100;
   }
 
   calculateBusinessValue(_data, metadata) {
     // Simple business value calculation based on metadata
-    const baseValue = data.length; // Volume
+    const baseValue = _data?.length || 0; // Volume
     const typeValue = metadata?.type === 'critical' ? 2 : 1;
     const freshnessValue = metadata?.lastUpdated ? 
       Math.max(1, 2 - (Date.now() - new Date(metadata.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)) : 1;
@@ -411,7 +411,7 @@ class AgenticETLAgent {
   generateRecommendations(rankedSources) {
     return rankedSources.map((source, index) => ({
       sourceId: source.sourceId,
-      priority: _index < rankedSources.length * 0.2 ? 'high' : 
+      priority: index < rankedSources.length * 0.2 ? 'high' : 
                 index < rankedSources.length * 0.5 ? 'medium' : 'low',
       recommendation: index < rankedSources.length * 0.2 
         ? 'Process immediately - high value, low complexity'
@@ -432,7 +432,7 @@ class AgenticETLAgent {
   }
 
   calculateQualityScore(_data) {
-    if (!_data || data.length === 0) return 0;
+    if (!_data || _data.length === 0) return 0;
     
     const completeness = this.calculateCompleteness(_data);
     const consistency = this.calculateConsistency(_data);
@@ -441,10 +441,10 @@ class AgenticETLAgent {
   }
 
   calculateCompleteness(_data) {
-    if (!_data || data.length === 0) return 100;
+    if (!_data || _data.length === 0) return 100;
     
-    const totalFields = data.length * Object.keys(_data[0] || {}).length;
-    const completedFields = data.reduce((sum, row) => 
+    const totalFields = _data.length * Object.keys(_data[0] || {}).length;
+    const completedFields = _data.reduce((sum, row) => 
       sum + Object.values(row).filter(val => val !== null && val !== undefined && val !== '').length, 0
     );
     
@@ -457,7 +457,7 @@ class AgenticETLAgent {
   }
 
   calculateConsistency(_data) {
-    if (!_data || data.length === 0) return 100;
+    if (!_data || _data.length === 0) return 100;
     
     // Check type consistency for each field
     const fields = Object.keys(_data[0] || {});
@@ -787,7 +787,7 @@ export class AgenticETLOrchestrator {
     };
   }
 
-  calculateParetoEfficiency(results) {
+  calculateParetoEfficiency(_results) {
     // Measure if we achieved 80% value with 20% effort
     // This is a simplified calculation
     return 0.8; // Placeholder

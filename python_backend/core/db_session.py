@@ -61,6 +61,9 @@ def init_db() -> None:
         "models.plm_models",
         "models.quality_models",
         "models.report_models",
+        "models.pipeline_config_models",
+        "models.admin_config_models",
+        "models.rule_engine_models",
     ):
         importlib.import_module(module_name)
 

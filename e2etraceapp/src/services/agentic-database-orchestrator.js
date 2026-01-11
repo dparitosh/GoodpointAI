@@ -254,7 +254,7 @@ class AgenticDatabaseOrchestrator extends AgenticOrchestrator {
     return { success: true, data: results, message: 'Cross-database join completed' };
   }
 
-  async optimizeQueryDistribution(sources, joinCriteria) {
+  async optimizeQueryDistribution(sources, _joinCriteria) {
     // Intelligent query optimization across multiple databases
     console.log('Optimizing query distribution across sources:', sources);
     

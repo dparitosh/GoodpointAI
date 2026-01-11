@@ -26,34 +26,24 @@ export const xstateStylesheet = [
       'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       'text-wrap': 'wrap',
       'text-max-width': '110px',
-      'cursor': 'pointer',
-      'shadow-blur': 8,
-      'shadow-color': 'rgba(0,0,0,0.12)',
-      'shadow-opacity': 0.5,
-      'shadow-offset-x': 0,
-      'shadow-offset-y': 2,
       'corner-radius': 12,
       'padding': 8,
       'background-opacity': 0.95,
     }
   },
 
-  // === NODE HOVER EFFECTS (XSTATE GLOW) ===
+  // === NODE HOVER EFFECTS (via .hover class - apply programmatically) ===
   {
-    selector: 'node:hover',
+    selector: 'node.hover',
     style: {
-      'shadow-blur': 20,
-      'shadow-color': '#007acc',
-      'shadow-opacity': 0.6,
       'border-color': '#007acc',
       'border-width': 3,
       'z-index': 999,
-      'transform': 'scale(1.05)',
       'background-opacity': 1,
     }
   },
 
-  // === NODE SELECTION EFFECTS (PULSE ANIMATION) ===
+  // === NODE SELECTION EFFECTS ===
   {
     selector: 'node:selected',
     style: {
@@ -63,9 +53,6 @@ export const xstateStylesheet = [
       'overlay-color': '#0098ff',
       'overlay-opacity': 0.15,
       'z-index': 9999,
-      'shadow-blur': 30,
-      'shadow-color': '#0098ff',
-      'shadow-opacity': 0.8,
       'background-opacity': 1,
     }
   },
@@ -88,7 +75,7 @@ export const xstateStylesheet = [
     selector: 'node[type="CSV"], node[group="CSV"]',
     style: {
       'background-color': '#ffba5a',
-      'color': 'white',
+      'color': '#1a2a3a',
       'border-color': '#e6a240',
     }
   },
@@ -221,8 +208,9 @@ export const xstateStylesheet = [
     }
   },
 
+  // Compound hover (via .hover class - apply programmatically)
   {
-    selector: 'node.compound:hover',
+    selector: 'node.compound.hover',
     style: {
       'background-opacity': 0.25,
       'border-color': '#42a5f5',
@@ -237,7 +225,7 @@ export const xstateStylesheet = [
       'line-color': '#cbd2d9',
       'target-arrow-color': '#cbd2d9',
       'target-arrow-shape': 'triangle',
-      'target-arrow-size': 12,
+      'arrow-scale': 1.2,
       'curve-style': 'bezier',
       'control-point-step-size': 60,
       'label': 'data(label)',
@@ -258,17 +246,15 @@ export const xstateStylesheet = [
     }
   },
 
+  // Edge hover (via .hover class - apply programmatically)
   {
-    selector: 'edge:hover',
+    selector: 'edge.hover',
     style: {
       'opacity': 1,
       'line-color': '#007acc',
       'target-arrow-color': '#007acc',
       'width': 'mapData(weight, 0, 10, 3, 6)',
       'z-index': 999,
-      'shadow-blur': 10,
-      'shadow-color': '#007acc',
-      'shadow-opacity': 0.4,
     }
   },
 
@@ -280,9 +266,6 @@ export const xstateStylesheet = [
       'width': 'mapData(weight, 0, 10, 4, 8)',
       'opacity': 1,
       'z-index': 9999,
-      'shadow-blur': 15,
-      'shadow-color': '#0098ff',
-      'shadow-opacity': 0.6,
     }
   },
 
@@ -359,9 +342,6 @@ export const xstateStylesheet = [
     style: {
       'border-width': 4,
       'border-color': '#ffc107',
-      'shadow-blur': 25,
-      'shadow-color': '#ffc107',
-      'shadow-opacity': 0.9,
       'z-index': 9998,
       'overlay-padding': 10,
       'overlay-color': '#ffc107',
@@ -401,7 +381,6 @@ export const xstateStylesheet = [
       'border-width': 2,
       'border-color': '#7f8c8d',
       'corner-radius': 10,
-      'cursor': 'pointer',
     }
   },
 
@@ -422,7 +401,6 @@ export const xstateStylesheet = [
     selector: 'node[status="healthy"], node.healthy',
     style: {
       'border-color': '#4caf50',
-      'shadow-color': '#4caf50',
     }
   },
 
@@ -430,7 +408,6 @@ export const xstateStylesheet = [
     selector: 'node[status="warning"], node.warning',
     style: {
       'border-color': '#ffc107',
-      'shadow-color': '#ffc107',
     }
   },
 
@@ -438,7 +415,6 @@ export const xstateStylesheet = [
     selector: 'node[status="error"], node.error',
     style: {
       'border-color': '#f44336',
-      'shadow-color': '#f44336',
     }
   },
 
@@ -471,7 +447,6 @@ export const xstateStylesheetDark = [
           ...rule.style,
           'color': '#e4e6eb',
           'border-color': '#3e3e42',
-          'shadow-color': 'rgba(0,0,0,0.4)',
           'background-opacity': 0.9,
         }
       };

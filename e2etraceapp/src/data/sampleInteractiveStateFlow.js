@@ -1,6 +1,7 @@
 export const SAMPLE_WORKFLOW_ID = 'demo';
 
 export const getSampleInteractiveStateFlow = () => {
+  // Explicit positions prevent Cytoscape edge endpoint warnings from node overlap
   const nodes = [
     {
       id: 'start',
@@ -14,6 +15,7 @@ export const getSampleInteractiveStateFlow = () => {
       },
       status: 'healthy',
       size: 60,
+      position: { x: 100, y: 200 },
     },
     {
       id: 'extract',
@@ -26,6 +28,7 @@ export const getSampleInteractiveStateFlow = () => {
         source: 'Teamcenter (sample)',
       },
       size: 70,
+      position: { x: 250, y: 200 },
     },
     {
       id: 'transform',
@@ -38,6 +41,7 @@ export const getSampleInteractiveStateFlow = () => {
         rules: 'Mapping v1',
       },
       size: 70,
+      position: { x: 400, y: 200 },
     },
     {
       id: 'quality',
@@ -50,6 +54,7 @@ export const getSampleInteractiveStateFlow = () => {
         checks: 12,
       },
       size: 70,
+      position: { x: 550, y: 200 },
     },
     {
       id: 'load',
@@ -62,6 +67,7 @@ export const getSampleInteractiveStateFlow = () => {
         target: 'Neo4j',
       },
       size: 70,
+      position: { x: 700, y: 200 },
     },
     {
       id: 'complete',
@@ -75,6 +81,7 @@ export const getSampleInteractiveStateFlow = () => {
       },
       status: 'healthy',
       size: 60,
+      position: { x: 850, y: 200 },
     },
     {
       id: 'agent',
@@ -87,6 +94,7 @@ export const getSampleInteractiveStateFlow = () => {
         capabilities: ['route selection', 'retry', 'validation'],
       },
       size: 65,
+      position: { x: 475, y: 80 },
     },
   ];
 

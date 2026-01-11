@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getNodeColor } from '../../constants/node-colors';
 import './TreeNavigator.css';
 
 /**
@@ -45,7 +46,7 @@ export const TreeNavigator = ({ nodes = [], onNodeClick, selectedNodeId, theme =
               }}
               aria-label={isExpanded ? 'Collapse' : 'Expand'}
             >
-              ▶
+              <i className={`fas fa-chevron-${isExpanded ? 'down' : 'right'}`} aria-hidden="true" />
             </button>
           )}
           {!hasChildren && <span className="tree-navigator__spacer" />}
@@ -94,31 +95,12 @@ export const TreeNavigator = ({ nodes = [], onNodeClick, selectedNodeId, theme =
   );
 };
 
-// Helper function to get color based on node type (ETL/Data Migration)
+/**
+ * Get color for node type - delegates to centralized constants
+ * IMPORTANT: DO NOT define colors here - update constants/node-colors.js instead
+ */
 const getColorForType = (type) => {
-  const colorMap = {
-    // Data Sources - TCS Blues
-    'Database': '#1976D2',
-    'Teamcenter': '#1976D2',
-    'CustomDB': '#1976D2',
-    'CSV': '#FB8C00',
-    'JSON': '#7B1FA2',
-    'XML': '#E53935',
-    'PLMXML': '#E53935',
-    // Processing/Transform
-    'Processor': '#42A5F5',
-    'Transform': '#42A5F5',
-    'ETL': '#42A5F5',
-    // Services
-    'API': '#5E35B1',
-    'Service': '#5E35B1',
-    'Endpoint': '#5E35B1',
-    // Issues
-    'DataQualityIssue': '#D32F2F',
-    // Default
-    'default': '#78909C'
-  };
-  return colorMap[type] || colorMap['default'];
+  return getNodeColor(type);
 };
 
 export default TreeNavigator;

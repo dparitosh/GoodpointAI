@@ -278,3 +278,75 @@ async def execute_custom_query_endpoint(
     except Exception as e:
         logger.error("Unexpected error in /api/query: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}") from e
+
+
+from pydantic import BaseModel as PydanticBaseModel
+
+
+class ValidateConnectionRequest(PydanticBaseModel):
+    """Request model for connection validation"""
+    uri: str
+    user: str
+    password: str
+
+
+class ValidateConnectionResponse(PydanticBaseModel):
+    """Response model for connection validation"""
+    success: bool
+    message: str
+    database: Optional[str] = None
+    version: Optional[str] = None
+
+
+@router.post(
+    "/graph/validate-connection",
+    response_model=ValidateConnectionResponse,
+    summary="Validate Neo4j Connection",
+    description="Validates Neo4j connection credentials before establishing a session.",
+)
+async def validate_neo4j_connection(request: ValidateConnectionRequest):
+    """Validate Neo4j connection with provided credentials"""
+    try:
+        # Create a temporary driver to test the connection
+        test_driver = neo4j.AsyncGraphDatabase.driver(
+            request.uri,
+            auth=(request.user, request.password)
+        )
+        
+        try:
+            # Test the connection by running a simple query
+            async with test_driver.session(database="neo4j") as session:
+                result = await session.run("RETURN 1 as test")
+                await result.consume()
+            
+            # Get server info
+            server_info = await test_driver.get_server_info()
+            version = getattr(server_info, 'agent', 'unknown')
+            
+            return ValidateConnectionResponse(
+                success=True,
+                message="Connection validated successfully",
+                database="neo4j",
+                version=version
+            )
+        finally:
+            await test_driver.close()
+            
+    except neo4j.exceptions.AuthError as auth_err:
+        logger.warning("Neo4j authentication failed: %s", auth_err)
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed: Invalid username or password"
+        ) from auth_err
+    except neo4j.exceptions.ServiceUnavailable as svc_err:
+        logger.warning("Neo4j service unavailable: %s", svc_err)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Neo4j service unavailable: {str(svc_err)}"
+        ) from svc_err
+    except Exception as e:
+        logger.error("Connection validation failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Connection validation failed: {str(e)}"
+        ) from e

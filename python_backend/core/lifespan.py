@@ -4,9 +4,7 @@ from contextlib import asynccontextmanager
 import neo4j
 from fastapi import FastAPI
 from services.advanced_migration_engine import migration_engine
-from core.crypto import decrypt_json, encrypt_json
 from core.db_session import SessionLocal, init_db, redacted_database_url, verify_database_connectivity
-from models.configuration_models import EncryptedConfig, DataSourceConfigRecord
 from .config import (
     NEO4J_URI,
     NEO4J_USER,
@@ -25,51 +23,49 @@ from .config import (
 logger = logging.getLogger(__name__)
 
 
-def _migrate_postgres_port_5432_to_5433() -> None:
-    """One-time/idempotent migration for local dev: update saved data sources from 5432 -> 5433.
-
-    Only touches data sources whose decrypted connection payload has port 5432, and only for
-    SQL/Postgres-like source types.
+def _get_neo4j_config_from_admin_center() -> dict:
     """
-    db = SessionLocal()
-    updated = 0
+    Load Neo4j configuration from Admin Configuration Center.
+    Falls back to environment variables if admin config is not available.
+    
+    Returns:
+        Dict with uri, username, password, database keys
+    """
     try:
-        rows = db.query(DataSourceConfigRecord).all()
-        for row in rows:
-            if (row.type or "").lower() not in {"database", "postgres", "postgresql"}:
-                continue
-
-            try:
-                connection = decrypt_json(row.connection_ciphertext)
-            except ValueError as exc:
-                # Likely missing/invalid encryption key in this environment.
-                logger.warning("Skipping port migration for data source %s: %s", row.id, exc)
-                continue
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Skipping port migration for data source %s: %s", row.id, exc)
-                continue
-
-            if not isinstance(connection, dict):
-                continue
-
-            port = connection.get("port")
-            if str(port) != "5432":
-                continue
-
-            connection["port"] = "5433"
-            try:
-                row.connection_ciphertext = encrypt_json(connection)
-            except ValueError as exc:
-                logger.warning("Failed to re-encrypt migrated connection for %s: %s", row.id, exc)
-                continue
-
-            updated += 1
-
-        if updated:
-            db.commit()
-            logger.info("Migrated %s data source(s) from port 5432 to 5433", updated)
-    finally:
-        db.close()
+        from services.admin_config_service import AdminConfigService
+        from models.admin_config_models import ConnectionConfig
+        
+        db = SessionLocal()
+        try:
+            # Query admin config for neo4j connection
+            neo4j_config = db.query(ConnectionConfig).filter(
+                ConnectionConfig.connection_type == "neo4j",
+                ConnectionConfig.is_default == True
+            ).first()
+            
+            if neo4j_config and neo4j_config.host:
+                # Build URI from host/port
+                port = neo4j_config.port or 7687
+                uri = f"neo4j://{neo4j_config.host}:{port}"
+                
+                return {
+                    "uri": uri,
+                    "username": neo4j_config.username or NEO4J_USER,
+                    "password": neo4j_config.password or NEO4J_PASSWORD,
+                    "database": neo4j_config.database or NEO4J_DATABASE,
+                }
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Admin config not available for Neo4j, using env: %s", exc)
+    
+    # Fallback to environment variables
+    return {
+        "uri": NEO4J_URI,
+        "username": NEO4J_USER,
+        "password": NEO4J_PASSWORD,
+        "database": NEO4J_DATABASE,
+    }
 
 
 async def _neo4j_health_loop(driver: neo4j.AsyncDriver) -> None:
@@ -134,36 +130,12 @@ async def lifespan_manager(app: FastAPI):
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 logger.warning("DB config seeding failed (non-fatal): %s", exc)
 
-        # Prefer DB-stored encrypted Neo4j config when available.
-        neo4j_uri = NEO4J_URI
-        neo4j_user = NEO4J_USER
-        neo4j_password = NEO4J_PASSWORD
-        neo4j_database = NEO4J_DATABASE
-
-        if app.state.db_ok:
-            try:
-                db = SessionLocal()
-                try:
-                    row = db.get(EncryptedConfig, "neo4j")
-                    if row is not None:
-                        payload = decrypt_json(row.ciphertext)
-                        if isinstance(payload, dict):
-                            neo4j_uri = str(payload.get("uri") or neo4j_uri)
-                            neo4j_user = str(payload.get("username") or neo4j_user)
-                            neo4j_password = str(payload.get("password") or neo4j_password)
-                            neo4j_database = str(payload.get("database") or neo4j_database)
-                finally:
-                    db.close()
-            except ValueError as exc:
-                logger.warning("Neo4j config exists but cannot be decrypted (encryption key missing?): %s", exc)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Failed to load Neo4j config from DB; falling back to env: %s", exc)
-
-            # Dev-convenience migration: some environments run Postgres on 5433.
-            try:
-                _migrate_postgres_port_5432_to_5433()
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Data source port migration failed (non-fatal): %s", exc)
+        # Load Neo4j config from Admin Configuration Center (single source of truth)
+        neo4j_cfg = _get_neo4j_config_from_admin_center()
+        neo4j_uri = neo4j_cfg["uri"]
+        neo4j_user = neo4j_cfg["username"]
+        neo4j_password = neo4j_cfg["password"]
+        neo4j_database = neo4j_cfg["database"]
 
         logger.info("Attempting to create Neo4j driver for %s as user %s...", neo4j_uri, neo4j_user)
         temp_driver = neo4j.AsyncGraphDatabase.driver(

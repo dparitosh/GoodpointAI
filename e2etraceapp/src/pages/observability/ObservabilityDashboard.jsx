@@ -66,10 +66,10 @@ export const ObservabilityDashboard = () => {
 
   const getAlertIcon = (level) => {
     switch (level) {
-      case 'error': return '●';
-      case 'warning': return '●';
-      case 'info': return '●';
-      default: return '○';
+      case 'error': return <i className="fas fa-exclamation-circle" style={{color: '#DA1E28'}} aria-hidden="true" />;
+      case 'warning': return <i className="fas fa-exclamation-triangle" style={{color: '#FF832B'}} aria-hidden="true" />;
+      case 'info': return <i className="fas fa-info-circle" style={{color: '#0078D4'}} aria-hidden="true" />;
+      default: return <i className="fas fa-circle" style={{color: '#888'}} aria-hidden="true" />;
     }
   };
 
@@ -96,7 +96,7 @@ export const ObservabilityDashboard = () => {
             <option value={300000}>Refresh: 5min</option>
           </select>
           <button onClick={fetchAllMetrics} className="refresh-btn">
-            ↻ Refresh Now
+            <i className="fas fa-sync" aria-hidden="true" /> Refresh Now
           </button>
         </div>
       </div>
@@ -114,7 +114,7 @@ export const ObservabilityDashboard = () => {
             <div className="metric-card">
               <div className="metric-header">
                 <h3>Data Quality Score</h3>
-                <span className="metric-icon">✓</span>
+                <span className="metric-icon"><i className="fas fa-check-circle" aria-hidden="true" /></span>
               </div>
               <div className="metric-value" style={{ color: getQualityScoreColor(qualityMetrics?.qualityScore || 0) }}>
                 {qualityUnavailable ? 'N/A' : `${qualityMetrics?.qualityScore?.toFixed(1) ?? 'N/A'}%`}
@@ -156,7 +156,7 @@ export const ObservabilityDashboard = () => {
             <div className="metric-card">
               <div className="metric-header">
                 <h3>Active Alerts</h3>
-                <span className="metric-icon">◉</span>
+                <span className="metric-icon"><i className="fas fa-bell" aria-hidden="true" /></span>
               </div>
               <div className="metric-value">
                 {alerts.length}
@@ -202,7 +202,7 @@ export const ObservabilityDashboard = () => {
             <h2>Recent Alerts</h2>
             {alerts.length === 0 ? (
               <div className="no-alerts">
-                <span>✓</span>
+                <span><i className="fas fa-check-circle" style={{color: '#28a745'}} aria-hidden="true" /></span>
                 <p>No active alerts - System healthy</p>
               </div>
             ) : (

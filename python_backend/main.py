@@ -42,6 +42,7 @@ from graph_api.agentic_graph_router import router as agentic_graph_router
 from graph_api.agentic_config_router import router as agentic_config_router
 from graph_api.plm_workflow_router import router as plm_workflow_router
 from graph_api.plm_etl_router import router as plm_etl_router
+from graph_api.etl_router import router as etl_router
 from graph_api.workflow_manager_router import router as workflow_manager_router
 from graph_api.azure_integration_router import router as azure_integration_router
 from graph_api.aws_integration_router import router as aws_integration_router
@@ -57,6 +58,10 @@ from graph_api.compat_router import router as compat_router
 from graph_api.auth_router import router as auth_router
 from graph_api.opensearch_router import router as opensearch_router
 from graph_api.reports_router import router as reports_router
+from graph_api.rule_engine_router import router as rule_engine_router
+from routers.pipeline_config_router import router as pipeline_config_router
+from routers.conversational_search_router import router as conversational_search_router
+from routers.admin_config_router import router as admin_config_router
 
 from core.auth import auth_required, get_request_principal
 from core.config_store import get_encrypted_config_payload
@@ -66,6 +71,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 logger.info("Loaded FastAPI app module from %s", __file__)
+
+# Load repo-local `.env` early (for local dev) when explicitly enabled.
+# The VS Code tasks set GRAPH_TRACE_LOAD_DOTENV=true.
+try:
+    import core.external_config as _external_config  # noqa: F401
+except Exception:  # pylint: disable=broad-exception-caught
+    # Non-fatal: app can still start with environment/DB-backed config.
+    pass
 
 
 def _best_effort_seed_config() -> None:
@@ -270,6 +283,7 @@ app.include_router(agentic_graph_router)
 app.include_router(agentic_config_router)
 app.include_router(plm_workflow_router)
 app.include_router(plm_etl_router)
+app.include_router(etl_router)
 app.include_router(workflow_manager_router)
 app.include_router(azure_integration_router)
 app.include_router(aws_integration_router)
@@ -284,6 +298,10 @@ app.include_router(multimodal_router)
 app.include_router(compat_router)
 app.include_router(auth_router)
 app.include_router(opensearch_router)
+app.include_router(rule_engine_router)
+app.include_router(pipeline_config_router)
+app.include_router(conversational_search_router)
+app.include_router(admin_config_router)
 
 
 @app.get("/health", tags=["Health"], summary="Health check endpoint")

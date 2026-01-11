@@ -19,29 +19,19 @@ export const cytoscapeStylesheet = [
             'shape': 'ellipse',
             'z-index': 10,
             'opacity': 1,
-            'transition-property': 'background-color, line-color, target-arrow-color, width, height, border-color, shadow-blur, shadow-opacity',
+            'transition-property': 'background-color, line-color, target-arrow-color, width, height, border-color',
             'transition-duration': '0.3s',
             'transition-timing-function': 'ease-in-out',
             'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             'text-wrap': 'wrap',
             'text-max-width': '100px',
-            'text-overflow-wrap': 'ellipsis',
-            'cursor': 'pointer',
-            'shadow-blur': 6,
-            'shadow-color': 'rgba(0,0,0,0.2)',
-            'shadow-opacity': 0.4,
-            'shadow-offset-x': 2,
-            'shadow-offset-y': 2,
         }
     },
     
-    // === NODE HOVER EFFECTS ===
+    // === NODE HOVER EFFECTS (via .hover class - apply programmatically) ===
     {
-        selector: 'node:hover',
+        selector: 'node.hover',
         style: {
-            'shadow-blur': 20,
-            'shadow-color': '#007bff',
-            'shadow-opacity': 0.8,
             'border-color': '#007bff',
             'border-width': 3,
             'z-index': 999,
@@ -58,125 +48,83 @@ export const cytoscapeStylesheet = [
             'overlay-color': '#ff6b35',
             'overlay-opacity': 0.2,
             'z-index': 9999,
-            'shadow-blur': 25,
-            'shadow-color': '#ff6b35',
-            'shadow-opacity': 1,
         }
     },
     
-    // === NODE GROUPING BY TYPE ===
+    // NOTE: Node type colors and shapes are now FULLY DYNAMIC
+    // Colors come from data(backgroundColor) set by e2etrace-graph-enhancement.js
+    // Shapes are set via data(shape) using the centralized color system in constants/node-colors.js
+    // No more hardcoded node type styles needed!
     
-    // Database Systems
+    // Dynamic shape support - shapes determined by node type hash
     {
-        selector: 'node[group="Database"], node[group="Teamcenter"], node[group="CustomDB"]',
-        style: {
-            'shape': 'barrel',
-            'background-color': '#4a90e2',
-            'color': 'white',
-            'text-outline-color': '#2c5aa0',
-            'border-color': '#2c5aa0',
-            'width': 65,
-            'height': 45,
-        }
+        selector: 'node[shape="ellipse"]',
+        style: { 'shape': 'ellipse' }
+    },
+    {
+        selector: 'node[shape="rectangle"]',
+        style: { 'shape': 'rectangle' }
+    },
+    {
+        selector: 'node[shape="round-rectangle"]',
+        style: { 'shape': 'round-rectangle', 'corner-radius': 8 }
+    },
+    {
+        selector: 'node[shape="diamond"]',
+        style: { 'shape': 'diamond' }
+    },
+    {
+        selector: 'node[shape="hexagon"]',
+        style: { 'shape': 'hexagon' }
+    },
+    {
+        selector: 'node[shape="octagon"]',
+        style: { 'shape': 'octagon' }
+    },
+    {
+        selector: 'node[shape="triangle"]',
+        style: { 'shape': 'triangle' }
+    },
+    {
+        selector: 'node[shape="star"]',
+        style: { 'shape': 'star' }
+    },
+    {
+        selector: 'node[shape="barrel"]',
+        style: { 'shape': 'barrel' }
+    },
+    {
+        selector: 'node[shape="pentagon"]',
+        style: { 'shape': 'pentagon' }
+    },
+    {
+        selector: 'node[shape="vee"]',
+        style: { 'shape': 'vee' }
+    },
+    {
+        selector: 'node[shape="rhomboid"]',
+        style: { 'shape': 'rhomboid' }
     },
     
-    // File Systems
+    // Error/Critical nodes still get special treatment
     {
-        selector: 'node[group="CSV"]',
+        selector: 'node.error, node[status="error"]',
         style: {
-            'shape': 'round-rectangle',
-            'background-color': '#f39c12',
-            'color': 'white',
-            'text-outline-color': '#d68910',
-            'border-color': '#d68910',
-            'width': 55,
-            'height': 35,
-            'corner-radius': 8,
-        }
-    },
-    
-    {
-        selector: 'node[group="JSON"]',
-        style: {
-            'shape': 'hexagon',
-            'background-color': '#9b59b6',
-            'color': 'white',
-            'text-outline-color': '#7d3c98',
-            'border-color': '#7d3c98',
-            'width': 55,
-            'height': 55,
-        }
-    },
-    
-    {
-        selector: 'node[group="XML"], node[group="PLMXML"]',
-        style: {
-            'shape': 'pentagon',
-            'background-color': '#e67e22',
-            'color': 'white',
-            'text-outline-color': '#d35400',
-            'border-color': '#d35400',
-            'width': 55,
-            'height': 55,
-        }
-    },
-    
-    // Processing Systems
-    {
-        selector: 'node[group="Processor"], node[group="Transform"], node[group="ETL"]',
-        style: {
-            'shape': 'diamond',
-            'background-color': '#27ae60',
-            'color': 'white',
-            'text-outline-color': '#1e8449',
-            'border-color': '#1e8449',
-            'width': 55,
-            'height': 55,
-        }
-    },
-    
-    // API and Service Nodes
-    {
-        selector: 'node[group="API"], node[group="Service"], node[group="Endpoint"]',
-        style: {
-            'shape': 'octagon',
-            'background-color': '#8e44ad',
-            'color': 'white',
-            'text-outline-color': '#7d3c98',
-            'border-color': '#7d3c98',
-            'width': 50,
-            'height': 50,
-        }
-    },
-    
-    // Data Quality Issues - Critical nodes
-    {
-        selector: 'node[group="DataQualityIssue"], node.error',
-        style: {
-            'background-color': '#e74c3c',
-            'shape': 'star',
             'border-width': 3,
-            'border-color': '#c0392b',
-            'width': 55,
-            'height': 55,
-            'font-size': '10px',
-            'color': 'white',
-            'text-outline-color': '#c0392b',
-            'shadow-color': '#e74c3c',
-            'shadow-blur': 12,
-            'shadow-opacity': 0.7,
+            'border-color': '#FF0000',
         }
     },
     
     // === RELATIONSHIP AND EDGE STYLING ===
+    // Edge colors are now DYNAMIC - set via data(lineColor) from enhancement
     {
         selector: 'edge',
         style: {
             'width': 'mapData(weight, 0, 10, 2, 6)',
-            'line-color': '#666',
-            'target-arrow-color': '#666',
+            'line-color': 'data(lineColor)',
+            'target-arrow-color': 'data(lineColor)',
             'target-arrow-shape': 'triangle',
-            'target-arrow-size': 'mapData(weight, 0, 10, 10, 15)',
+            'arrow-scale': 1.2,
             'curve-style': 'bezier',
             'control-point-step-size': 40,
             'label': 'data(label)',
@@ -184,7 +132,7 @@ export const cytoscapeStylesheet = [
             'color': '#444',
             'text-outline-width': 1,
             'text-outline-color': 'white',
-            'opacity': 0.7,
+            'opacity': 0.8,
             'transition-property': 'line-color, target-arrow-color, opacity, width',
             'transition-duration': '0.2s',
             'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -196,17 +144,40 @@ export const cytoscapeStylesheet = [
         }
     },
     
+    // Fallback for edges without lineColor data
     {
-        selector: 'edge:hover',
+        selector: 'edge[!lineColor]',
+        style: {
+            'line-color': '#7f8c8d',
+            'target-arrow-color': '#7f8c8d',
+        }
+    },
+    
+    // Dynamic line styles based on data
+    {
+        selector: 'edge[lineStyle="dashed"]',
+        style: {
+            'line-style': 'dashed',
+            'line-dash-pattern': [8, 4],
+        }
+    },
+    {
+        selector: 'edge[lineStyle="dotted"]',
+        style: {
+            'line-style': 'dotted',
+            'line-dash-pattern': [2, 4],
+        }
+    },
+    
+    // Edge hover (via .hover class - apply programmatically)
+    {
+        selector: 'edge.hover',
         style: {
             'opacity': 1,
             'line-color': '#007bff',
             'target-arrow-color': '#007bff',
             'width': 'mapData(weight, 0, 10, 4, 8)',
             'z-index': 999,
-            'shadow-blur': 8,
-            'shadow-color': '#007bff',
-            'shadow-opacity': 0.5,
         }
     },
     
@@ -218,61 +189,22 @@ export const cytoscapeStylesheet = [
             'width': 'mapData(weight, 0, 10, 5, 10)',
             'opacity': 1,
             'z-index': 9999,
-            'shadow-blur': 12,
-            'shadow-color': '#ff6b35',
-            'shadow-opacity': 0.7,
         }
     },
     
-    // === RELATIONSHIP TYPE STYLING ===
-    {
-        selector: 'edge[type="dataflow"], edge.dataflow',
-        style: {
-            'line-color': '#2ecc71',
-            'target-arrow-color': '#2ecc71',
-            'line-style': 'solid',
-        }
-    },
+    // NOTE: Relationship type colors are now DYNAMIC
+    // Colors come from data(lineColor) set by e2etrace-graph-enhancement.js
+    // using the centralized color system in constants/node-colors.js
     
-    {
-        selector: 'edge[type="dependency"], edge.dependency',
-        style: {
-            'line-color': '#e74c3c',
-            'target-arrow-color': '#e74c3c',
-            'line-style': 'dashed',
-            'line-dash-pattern': [8, 4],
-        }
-    },
-    
-    {
-        selector: 'edge[type="inheritance"], edge.inheritance',
-        style: {
-            'line-color': '#9b59b6',
-            'target-arrow-color': '#9b59b6',
-            'target-arrow-shape': 'triangle-backcurve',
-        }
-    },
-    
-    {
-        selector: 'edge[type="composition"], edge.composition',
-        style: {
-            'line-color': '#f39c12',
-            'target-arrow-color': '#f39c12',
-            'target-arrow-shape': 'diamond',
-        }
-    },
-    
+    // Critical edges still get special treatment (override)
     {
         selector: 'edge.critical, edge[priority="high"]',
         style: {
-            'line-color': '#dc3545',
-            'target-arrow-color': '#dc3545',
+            'line-color': '#FF0000',
+            'target-arrow-color': '#FF0000',
             'width': 6,
             'z-index': 100,
             'line-style': 'solid',
-            'shadow-blur': 8,
-            'shadow-color': '#dc3545',
-            'shadow-opacity': 0.5,
         }
     },
     
@@ -282,9 +214,6 @@ export const cytoscapeStylesheet = [
         style: {
             'border-width': 5,
             'border-color': '#17a2b8',
-            'shadow-blur': 25,
-            'shadow-color': '#17a2b8',
-            'shadow-opacity': 0.9,
             'z-index': 9998,
             'overlay-padding': 8,
             'overlay-color': '#17a2b8',
@@ -313,9 +242,6 @@ export const cytoscapeStylesheet = [
         style: {
             'border-width': 4,
             'border-color': '#ffc107',
-            'shadow-blur': 15,
-            'shadow-color': '#ffc107',
-            'shadow-opacity': 0.7,
             'z-index': 9997,
         }
     },
@@ -343,7 +269,7 @@ export const cytoscapeStylesheet = [
     {
         selector: 'node.cluster-child',
         style: {
-            'parent-opacity': 0.9,
+            'opacity': 0.9,
         }
     },
     
@@ -365,7 +291,6 @@ export const cytoscapeStylesheet = [
             'border-width': 2,
             'border-color': '#7f8c8d',
             'corner-radius': 8,
-            'cursor': 'pointer',
         }
     },
     
@@ -386,7 +311,6 @@ export const cytoscapeStylesheet = [
         selector: 'node[status="healthy"], node.healthy',
         style: {
             'border-color': '#27ae60',
-            'shadow-color': '#27ae60',
         }
     },
     
@@ -394,7 +318,6 @@ export const cytoscapeStylesheet = [
         selector: 'node[status="warning"], node.warning',
         style: {
             'border-color': '#f39c12',
-            'shadow-color': '#f39c12',
         }
     },
     
@@ -402,7 +325,6 @@ export const cytoscapeStylesheet = [
         selector: 'node[status="error"], node.error',
         style: {
             'border-color': '#e74c3c',
-            'shadow-color': '#e74c3c',
         }
     },
     

@@ -46,16 +46,31 @@ class ConnectionService {
     try {
       this.emit('connecting', { uri, user });
       
-      // TODO: Establish actual Neo4j connection via backend API
-      // For now, connection is handled by backend
+      // Validate connection via backend API
+      const response = await fetch('/api/graph/validate-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uri, user, password })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Connection failed' }));
+        throw new Error(error.detail || 'Connection validation failed');
+      }
+      
+      const result = await response.json();
+      
       this.connectionInfo = {
         config: { uri, user, auto_connect: false },
-        status: 'connected'
+        status: 'connected',
+        database: result.database || 'neo4j',
+        version: result.version || 'unknown'
       };
       
-      this.emit('connected', { uri, user });
+      this.emit('connected', { uri, user, ...result });
       return true;
     } catch (error) {
+      this.connectionInfo.status = 'disconnected';
       this.emit('connection-error', { error: error.message });
       return false;
     }
@@ -66,12 +81,64 @@ class ConnectionService {
     this.emit('disconnected', {});
   }
 
+  /**
+   * Connect using backend's stored Neo4j credentials
+   * Uses the configuration saved in Data Sources settings
+   */
+  async connectViaBackend() {
+    try {
+      this.emit('connecting', {});
+      
+      // Get Neo4j config which also tests the connection
+      const response = await fetch('/api/config/neo4j');
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Failed to get Neo4j config' }));
+        throw new Error(error.detail || 'Failed to retrieve Neo4j configuration');
+      }
+      
+      const result = await response.json();
+      
+      if (result.connection_status !== 'connected') {
+        // Use detailed error message from backend if available
+        const errorMessage = result.error_message || this._getConnectionErrorMessage(result.error_type);
+        throw new Error(errorMessage);
+      }
+      
+      this.connectionInfo = {
+        config: { uri: result.uri || '', user: result.username || '', auto_connect: true },
+        status: 'connected',
+        database: result.database || 'neo4j'
+      };
+      
+      this.emit('connected', result);
+      return true;
+    } catch (error) {
+      this.connectionInfo.status = 'disconnected';
+      this.emit('connection-error', { error: error.message });
+      throw error;
+    }
+  }
+
   getConnectionInfo() {
     return this.connectionInfo;
   }
 
+  /**
+   * Get user-friendly error message based on error type
+   */
+  _getConnectionErrorMessage(errorType) {
+    const errorMessages = {
+      'no_config': 'Neo4j connection not configured. Please set up Neo4j in Data Configuration.',
+      'service_unavailable': 'Neo4j service is not running. Please start Neo4j in Neo4j Desktop or ensure the service is running.',
+      'auth_failed': 'Neo4j authentication failed. Please check your username and password in Data Configuration.',
+      'unknown': 'Neo4j connection failed. Please check your configuration.'
+    };
+    return errorMessages[errorType] || 'Neo4j connection failed. Please check your configuration in Data Sources.';
+  }
+
   // Graph data operations
-  async loadGraphData(filters) {
+  async loadGraphData(_filters) {
     try {
       // Backend exposes GET /api/graph for default graph payload.
       // Filters are currently ignored (kept for API compatibility).
@@ -96,22 +163,18 @@ class ConnectionService {
   }
 
   async executeQuery(query) {
-    try {
-      // Execute Cypher query via backend
-      const response = await fetch('/api/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Query execution failed');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      throw error;
+    // Execute Cypher query via backend
+    const response = await fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      throw new Error('Query execution failed');
     }
+
+    return await response.json();
   }
 }
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
+import { getNodeColor } from '../../constants/node-colors';
 import './StateFlowDiagram.css';
 
 // Register layout
@@ -31,25 +32,34 @@ export const StateFlowDiagram = ({
       cyRef.current.destroy();
     }
 
+    // Check if nodes have preset positions (to prevent edge endpoint overlap warnings)
+    const hasPresetPositions = nodes.some(node => node.position);
+
     // Convert nodes and edges to Cytoscape format
     const elements = [
-      ...nodes.map(node => ({
-        data: {
-          id: node.id,
-          label: node.label || node.id,
-          type: node.type || node.group,
-          group: node.group,
-          backgroundColor: node.backgroundColor || getColorForType(node.type),
-          properties: node.properties,
-          status: node.status,
-          parent: node.parent // For compound nodes
-        },
-        classes: [
-          node.type?.toLowerCase().replace(/\s+/g, '-') || 'default',
-          node.status || 'default',
-          node.parent ? 'child-node' : 'root-node'
-        ].join(' ')
-      })),
+      ...nodes.map(node => {
+        const backgroundColor = node.backgroundColor || getColorForType(node.type);
+        return {
+          data: {
+            id: node.id,
+            label: node.label || node.id,
+            type: node.type || node.group,
+            group: node.group,
+            backgroundColor,
+            textColor: getReadableTextColor(backgroundColor, theme),
+            properties: node.properties,
+            status: node.status,
+            parent: node.parent // For compound nodes
+          },
+          // Use preset position if available
+          ...(node.position ? { position: node.position } : {}),
+          classes: [
+            node.type?.toLowerCase().replace(/\s+/g, '-') || 'default',
+            node.status || 'default',
+            node.parent ? 'child-node' : 'root-node'
+          ].join(' ')
+        };
+      }),
       ...edges.map(edge => ({
         data: {
           id: edge.id || `${edge.source}-${edge.target}`,
@@ -67,12 +77,15 @@ export const StateFlowDiagram = ({
       }))
     ];
 
+    // Use 'preset' layout if nodes have positions, otherwise use the specified layout
+    const effectiveLayout = hasPresetPositions ? { name: 'preset', fit: true, padding: 50 } : getLayoutConfig(layout);
+
     // Initialize Cytoscape
     const cy = cytoscape({
       container: containerRef.current,
       elements,
       style: getStylesheet(theme),
-      layout: getLayoutConfig(layout),
+      layout: effectiveLayout,
       minZoom: 0.3,
       maxZoom: 3,
       boxSelectionEnabled: true,
@@ -123,7 +136,7 @@ export const StateFlowDiagram = ({
       connectedNodes.addClass('connected-neighbor');
     });
 
-    cy.on('mouseout', 'node', (evt) => {
+    cy.on('mouseout', 'node', () => {
       setHoveredNode(null);
       cy.elements().removeClass('highlighted-edge connected-neighbor');
     });
@@ -149,7 +162,7 @@ export const StateFlowDiagram = ({
         cyRef.current.destroy();
       }
     };
-  }, [nodes, edges, theme, layout]);
+  }, [nodes, edges, theme, layout, onNodeClick, onNodeDoubleClick]);
 
   // Sync selected node
   useEffect(() => {
@@ -217,35 +230,35 @@ export const StateFlowDiagram = ({
           className="toolbar-btn"
           title="Zoom In"
         >
-          ➕
+          <i className="fas fa-plus" aria-hidden="true" />
         </button>
         <button 
           onClick={handleZoomOut}
           className="toolbar-btn"
           title="Zoom Out"
         >
-          ➖
+          <i className="fas fa-minus" aria-hidden="true" />
         </button>
         <button 
           onClick={handleFitToScreen}
           className="toolbar-btn"
           title="Fit to Screen"
         >
-          ⊡
+          <i className="fas fa-expand" aria-hidden="true" />
         </button>
         <button 
           onClick={handleResetLayout}
           className="toolbar-btn"
           title="Reset Layout"
         >
-          ⟲
+          <i className="fas fa-sync" aria-hidden="true" />
         </button>
         <button 
           onClick={handleExportPNG}
           className="toolbar-btn"
           title="Export PNG"
         >
-          ▣
+          <i className="fas fa-download" aria-hidden="true" />
         </button>
       </div>
 
@@ -317,6 +330,36 @@ const getLayoutConfig = (layoutType) => {
   return configs[layoutType] || configs.fcose;
 };
 
+const getReadableTextColor = (backgroundColor, theme) => {
+  const fallback = theme === 'dark' ? '#e0e0e0' : '#24292e';
+  if (!backgroundColor || typeof backgroundColor !== 'string') return fallback;
+
+  // Handle #RGB / #RRGGBB only (most node colors are hex)
+  const hex = backgroundColor.trim();
+  const match = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex);
+  if (!match) return fallback;
+
+  let r, g, b;
+  if (match[1].length === 3) {
+    r = parseInt(match[1][0] + match[1][0], 16);
+    g = parseInt(match[1][1] + match[1][1], 16);
+    b = parseInt(match[1][2] + match[1][2], 16);
+  } else {
+    r = parseInt(match[1].slice(0, 2), 16);
+    g = parseInt(match[1].slice(2, 4), 16);
+    b = parseInt(match[1].slice(4, 6), 16);
+  }
+
+  const srgbToLinear = (c) => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const L = 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+
+  // If the background is light, use dark text; otherwise use white.
+  return L > 0.55 ? '#1a2a3a' : '#ffffff';
+};
+
 // XState-inspired stylesheet
 const getStylesheet = (theme) => {
   const isDark = theme === 'dark';
@@ -328,7 +371,7 @@ const getStylesheet = (theme) => {
       style: {
         'background-color': 'data(backgroundColor)',
         'label': 'data(label)',
-        'color': isDark ? '#e0e0e0' : '#24292e',
+        'color': 'data(textColor)',
         'text-valign': 'center',
         'text-halign': 'center',
         'font-size': '14px',
@@ -403,6 +446,7 @@ const getStylesheet = (theme) => {
         'border-width': '2px',
         'border-style': 'dashed',
         'border-color': isDark ? '#555' : '#ccc',
+        'color': isDark ? '#e0e0e0' : '#24292e',
         'text-valign': 'top',
         'text-halign': 'center',
         'font-size': '12px',
@@ -470,43 +514,10 @@ const getStylesheet = (theme) => {
   ];
 };
 
-// Helper: Get color for node type (PLM Data Migration AI Factory)
+/**
+ * Get color for node type - delegates to centralized constants
+ * IMPORTANT: DO NOT define colors here - update constants/node-colors.js instead
+ */
 const getColorForType = (type) => {
-  const colorMap = {
-    // PLM Sources - TCS Blue shades
-    'plm_source': '#0033A0',      // TCS Blue - Teamcenter, Windchill
-    'cad_source': '#00539B',      // TCS Dark Blue - CATIA, NX, Creo
-    
-    // AI Agents - TCS Purple
-    'ai_agent': '#6A1B9A',        // Purple - AI Orchestration Layer
-    
-    // Extract - Light blue
-    'extract': '#42A5F5',         // Light Blue - Extraction processes
-    
-    // Transform - TCS Orange
-    'transform': '#FB8C00',       // Orange - Transformations
-    
-    // Quality (SODA) - TCS Green
-    'quality': '#43A047',         // Green - Quality checks
-    
-    // Load - TCS Indigo
-    'load': '#5E35B1',            // Indigo - Loading stages
-    
-    // Target Systems - TCS Dark
-    'target': '#263238',          // Dark - Target systems
-    
-    // Legacy support
-    'Database': '#1976D2',
-    'CSV': '#FB8C00',
-    'JSON': '#7B1FA2',
-    'XML': '#E53935',
-    'Processor': '#42A5F5',
-    'ETL': '#42A5F5',
-    'API': '#5E35B1',
-    'Service': '#5E35B1',
-    'Quality': '#43A047',
-    'DataQualityIssue': '#D32F2F',
-    'default': '#78909C'
-  };
-  return colorMap[type] || colorMap['default'];
+  return getNodeColor(type);
 };

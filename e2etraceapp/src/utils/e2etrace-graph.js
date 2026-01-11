@@ -105,6 +105,7 @@ export function e2etraceTransformDataForCytoscape(graphData, options = {}) {
                     type: nodeData.type || nodeData.group,
                     group: nodeData.group,
                     backgroundColor: nodeData.backgroundColor,
+                    shape: nodeData.shape,  // Node shape from enhancement
                     size: nodeData.size,
                     status: nodeData.status,
                     importance: nodeData.importance,
@@ -193,6 +194,8 @@ export function e2etraceTransformDataForCytoscape(graphData, options = {}) {
                     type: edgeData.type,
                     weight: edgeData.weight || 1,
                     description: edgeData.description,
+                    lineColor: edgeData.lineColor,  // Edge color from enhancement
+                    lineStyle: edgeData.lineStyle,  // Edge style from enhancement
                     properties: edgeData.properties || {},
                     tooltip: formatTooltipText(edgeData.properties),
                 },

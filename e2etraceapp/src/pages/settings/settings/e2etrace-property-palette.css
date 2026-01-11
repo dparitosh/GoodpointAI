@@ -10,7 +10,7 @@
 
 .e2etrace-property-palette-container h2 {
     text-align: center;
-    color: #111;
+    color: var(--text-color, #111);
     margin-bottom: 24px;
     border-bottom: none;
 }

@@ -90,11 +90,55 @@ async def index_document(request: IndexRequest, db: Session = Depends(get_db)):
 
 @router.post("/search/{index}")
 async def search(index: str, request: SearchRequest, db: Session = Depends(get_db)):
-    service = get_service(db)
+    """Search an OpenSearch index.
+    
+    Returns empty results if OpenSearch is not configured.
+    """
     try:
-        return service.search(index=index, query=request.query)
+        service = get_service(db)
+        # Wrap query in proper OpenSearch body format
+        body = {"query": request.query}
+        return service.search(index=index, query=body)
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # OpenSearch not configured - return empty results instead of error
+        logger.info("OpenSearch not configured, returning empty results for %s", index)
+        return {
+            "hits": {
+                "total": {"value": 0, "relation": "eq"},
+                "max_score": None,
+                "hits": []
+            },
+            "took": 0,
+            "timed_out": False,
+            "_shards": {"total": 0, "successful": 0, "skipped": 0, "failed": 0},
+            "_mock": True,
+            "_message": str(exc)
+        }
     except Exception as exc:
+        # If OpenSearch is configured but unreachable (timeout/connection error),
+        # degrade gracefully so the UI can still function.
+        try:
+            from opensearchpy.exceptions import ConnectionError as OSConnectionError  # type: ignore
+            from opensearchpy.exceptions import ConnectionTimeout as OSConnectionTimeout  # type: ignore
+            from opensearchpy.exceptions import TransportError as OSTransportError  # type: ignore
+        except Exception:  # pragma: no cover
+            OSConnectionError = ()  # type: ignore
+            OSConnectionTimeout = ()  # type: ignore
+            OSTransportError = ()  # type: ignore
+
+        if isinstance(exc, (OSConnectionError, OSConnectionTimeout, OSTransportError, TimeoutError, ConnectionError)):
+            logger.info("OpenSearch unreachable, returning empty results for %s: %s", index, exc)
+            return {
+                "hits": {
+                    "total": {"value": 0, "relation": "eq"},
+                    "max_score": None,
+                    "hits": []
+                },
+                "took": 0,
+                "timed_out": True,
+                "_shards": {"total": 0, "successful": 0, "skipped": 0, "failed": 0},
+                "_mock": True,
+                "_message": str(exc)
+            }
         logger.error("OpenSearch search failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

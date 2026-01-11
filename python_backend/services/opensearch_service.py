@@ -1,3 +1,13 @@
+"""
+OpenSearch Service - Best-effort OpenSearch client wrapper.
+
+Configuration is loaded from the admin config database with fallback to
+environment variables for backward compatibility.
+
+- Uses admin config DB first, then env vars for configuration.
+- Degrades gracefully when OpenSearch is not configured or unreachable.
+"""
+
 import os
 import logging
 from datetime import datetime, timezone
@@ -6,18 +16,46 @@ from typing import Any, Dict, Optional, List
 logger = logging.getLogger(__name__)
 
 
+def _get_opensearch_config_from_admin(db_session=None) -> Dict[str, Any]:
+    """Load OpenSearch configuration from admin config service."""
+    try:
+        from services.admin_config_service import AdminConfigService
+        config_service = AdminConfigService(db_session)
+        return config_service.get_connection_config("opensearch")
+    except Exception as e:
+        logger.debug("Admin config not available for OpenSearch: %s", e)
+        return {}
+
+
 class OpenSearchService:
     """Best-effort OpenSearch client wrapper.
 
-    - Uses env vars for configuration.
+    - Uses admin config DB first, then env vars for configuration.
     - Degrades gracefully when OpenSearch is not configured or unreachable.
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, db_session=None):
         cfg = config or {}
+        
+        # Try to load from admin config first
+        if not cfg and db_session:
+            admin_config = _get_opensearch_config_from_admin(db_session)
+            if admin_config:
+                cfg = admin_config
 
         # Prefer explicit config; fall back to environment variables.
-        self.endpoint = str(cfg.get("url") or cfg.get("endpoint") or os.getenv("OPENSEARCH_URL") or "").strip()
+        self.endpoint = str(
+            cfg.get("url") or cfg.get("endpoint") 
+            or cfg.get("connection_string")
+            or os.getenv("OPENSEARCH_URL") 
+            or ""
+        ).strip()
+        
+        # Build endpoint from host/port if not directly provided
+        if not self.endpoint and cfg.get("host"):
+            protocol = "https" if cfg.get("ssl_enabled") else "http"
+            self.endpoint = f"{protocol}://{cfg.get('host')}:{cfg.get('port', 9200)}"
+        
         self.hosts_env = str(cfg.get("hosts") or os.getenv("OPENSEARCH_HOSTS") or "").strip()
         self.username = str(cfg.get("username") or os.getenv("OPENSEARCH_USERNAME") or "").strip()
         self.password = str(cfg.get("password") or os.getenv("OPENSEARCH_PASSWORD") or "").strip()
@@ -32,7 +70,7 @@ class OpenSearchService:
         else:
             self.verify_certs = bool(verify_raw)
 
-        timeout_raw = cfg.get("timeout_s")
+        timeout_raw = cfg.get("timeout_s") or cfg.get("pool_timeout")
         if timeout_raw is None:
             self.timeout_s = float((os.getenv("OPENSEARCH_TIMEOUT_S") or "5").strip() or 5)
         else:

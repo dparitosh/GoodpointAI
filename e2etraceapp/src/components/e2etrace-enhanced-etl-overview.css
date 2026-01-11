@@ -1,8 +1,8 @@
 /* Enhanced ETL Overview Component Styles */
 .enhanced-etl-overview {
-  background: #fff;
+  background: var(--panel-bg);
   border-radius: 12px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
   margin-bottom: 1rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
   transition: all 0.3s ease;
@@ -19,7 +19,7 @@
   align-items: center;
   padding: 1rem 1.5rem;
   background: var(--accent-color);
-  color: white;
+  color: var(--text-on-primary);
   position: relative;
 }
 
@@ -36,9 +36,9 @@
 }
 
 .time-range-selector select {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--panel-bg);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #495057;
+  color: var(--text-color);
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
   font-size: 0.875rem;
@@ -54,7 +54,7 @@
 .tab-button {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  color: var(--text-on-primary);
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
@@ -69,15 +69,15 @@
 }
 
 .tab-button.active {
-  background: rgba(255, 255, 255, 0.9);
-  color: #495057;
-  border-color: rgba(255, 255, 255, 0.9);
+  background: var(--panel-bg);
+  color: var(--text-color);
+  border-color: var(--panel-bg);
 }
 
 .export-button {
   background: rgba(40, 167, 69, 0.8);
   border: 1px solid rgba(40, 167, 69, 0.9);
-  color: white;
+  color: var(--text-on-primary);
   padding: 0.5rem 1rem;
   border-radius: 6px;
   cursor: pointer;
@@ -97,7 +97,7 @@
 .expand-button {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  color: var(--text-on-primary);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -118,7 +118,7 @@
 .clear-filter-button {
   background: rgba(220, 53, 69, 0.8);
   border: 1px solid rgba(220, 53, 69, 0.9);
-  color: white;
+  color: var(--text-on-primary);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -153,10 +153,10 @@
 }
 
 .chart-container {
-  background: #f8f9fa;
+  background: var(--background-color-offset);
   border-radius: 8px;
   padding: 1rem;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
@@ -176,7 +176,7 @@
   margin: 0 0 1rem 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .export-buttons {
@@ -208,17 +208,17 @@
 
 .export-btn.excel {
   background: linear-gradient(135deg, #28a745, #20c997);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .export-btn.pdf {
   background: linear-gradient(135deg, #dc3545, #e83e8c);
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .export-btn.json {
   background: linear-gradient(135deg, var(--accent-color), var(--accent-hover-color));
-  color: white;
+  color: var(--text-on-primary);
 }
 
 .export-btn:hover {
@@ -227,10 +227,10 @@
 }
 
 .export-preview {
-  background: #f8f9fa;
+  background: var(--background-color-offset);
   border-radius: 8px;
   padding: 1.5rem;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
 }
 
 .preview-content {
@@ -244,7 +244,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 0;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--border-color);
   font-size: 0.875rem;
 }
 
@@ -253,7 +253,7 @@
 }
 
 .preview-item strong {
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 /* Dashboard Content */
@@ -296,8 +296,8 @@
 
 /* Metric Cards */
 .etl-metric-card {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--background-color-offset);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem;
   transition: all 0.2s ease;
@@ -310,7 +310,7 @@
 }
 
 .etl-metric-card.clickable:hover {
-  background: #e9ecef;
+  background: var(--background-color-offset);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -331,7 +331,7 @@
 .metric-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
   line-height: 1.2;
 }
 
@@ -362,7 +362,7 @@
 
 .metric-subtitle {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -371,7 +371,7 @@
   top: 0.5rem;
   right: 0.5rem;
   background: #007bff;
-  color: white;
+  color: var(--text-on-primary);
   font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
   border-radius: 12px;
@@ -382,14 +382,14 @@
 .performance-summary {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid #e9ecef;
+  border-top: 1px solid var(--border-color);
 }
 
 .performance-summary h4 {
   margin: 0 0 1rem 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
 }
 
 .summary-grid {
@@ -399,16 +399,16 @@
 }
 
 .summary-item {
-  background: #f8f9fa;
+  background: var(--background-color-offset);
   border-radius: 8px;
   padding: 1rem;
-  border-left: 4px solid #6f42c1;
+  border-left: 4px solid var(--accent-color);
 }
 
 .summary-metric {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-secondary);
   margin-bottom: 0.5rem;
 }
 
@@ -421,7 +421,7 @@
 .current-value {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #6f42c1;
+  color: var(--accent-color);
 }
 
 .trend-indicator {
@@ -509,7 +509,7 @@
   }
   
   .etl-header {
-    background: #f8f9fa !important;
+    background: var(--background-color-offset) !important;
     color: #000 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;

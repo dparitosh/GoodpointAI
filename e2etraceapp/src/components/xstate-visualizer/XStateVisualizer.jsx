@@ -9,6 +9,7 @@ import { E2ETraceCytoscapeGraph } from '../../pages/dashboard/e2etrace-cytoscape
 import { xstateStylesheet, xstateStylesheetDark } from './xstate-cytoscape-stylesheet';
 import { useAdvancedCytoscapeInteractions } from '../../hooks/useAdvancedCytoscapeInteractions';
 import { useE2ETraceTheme } from '../../contexts/e2etrace-theme-context.jsx';
+import { getNodeColor } from '../../constants/node-colors';
 import './XStateVisualizer.css';
 
 /**
@@ -19,6 +20,7 @@ import './XStateVisualizer.css';
 export const XStateVisualizer = ({
   graphData,
   onNodeUpdate,
+  theme: themeOverride,
   embedded = false,
   enabledViewModes = ['stateflow', 'graph'],
   uiVariant = 'full', // 'full' | 'graph-only'
@@ -29,13 +31,16 @@ export const XStateVisualizer = ({
   workflowNavigatorHint = '',
 }) => {
   const themeContext = useE2ETraceTheme?.();
-  const theme = themeContext?.theme === 'dark' ? 'dark' : 'light';
+  const normalizedThemeOverride = String(themeOverride || '').toLowerCase();
+  const theme = normalizedThemeOverride === 'dark' || normalizedThemeOverride === 'light'
+    ? normalizedThemeOverride
+    : (themeContext?.theme === 'dark' ? 'dark' : 'light');
   const [selectedNode, setSelectedNode] = useState(null);
   const [events, setEvents] = useState([]);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [detailDrawerNode, setDetailDrawerNode] = useState(null);
   const [viewMode, setViewMode] = useState('stateflow'); // 'graph' | 'stateflow'
-  const [layoutMode, setLayoutMode] = useState('hierarchical');
+  const [_layoutMode, _setLayoutMode] = useState('hierarchical');
   const cyRef = useRef(null);
 
   const normalizedEnabledViewModes = useMemo(() => {
@@ -122,7 +127,14 @@ export const XStateVisualizer = ({
     fit: true,
     padding: 50,
     nodeDimensionsIncludeLabels: true,
-    randomize: false,
+    // Prevent invalid-edge-endpoint warnings by avoiding node overlap.
+    // When randomize is false, Cytoscape may start many nodes at (0,0) and
+    // fcose can end up with overlapping nodes in small graphs.
+    randomize: true,
+    avoidOverlap: true,
+    avoidOverlapPadding: 24,
+    nodeOverlap: 24,
+    spacingFactor: 1.2,
     nodeRepulsion: 4500,
     idealEdgeLength: 150,
     edgeElasticity: 0.45,
@@ -379,14 +391,14 @@ export const XStateVisualizer = ({
                 onClick={() => cyRef.current?.fit()}
                 title="Fit to screen"
               >
-                ⊡
+                <i className="fas fa-expand" aria-hidden="true" />
               </button>
               <button
                 className="xstate-visualizer__control-btn"
                 onClick={() => cyRef.current?.layout(layoutConfig).run()}
                 title="Reset layout"
               >
-                ⟲
+                <i className="fas fa-sync" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -406,7 +418,7 @@ export const XStateVisualizer = ({
               onClick={() => setViewMode('stateflow')}
               title="State Flow Diagram - XState Style"
             >
-              ⇄ State Flow
+              <i className="fas fa-exchange-alt" aria-hidden="true" /> State Flow
             </button>
           ) : null}
           {normalizedEnabledViewModes.includes('graph') ? (
@@ -415,7 +427,7 @@ export const XStateVisualizer = ({
               onClick={() => setViewMode('graph')}
               title="Graph View"
             >
-              ◆ Graph
+              <i className="fas fa-project-diagram" aria-hidden="true" /> Graph
             </button>
           ) : null}
         </div>
@@ -482,14 +494,14 @@ export const XStateVisualizer = ({
                   onClick={() => cyRef.current?.fit()}
                   title="Fit to screen"
                 >
-                  ⊡
+                  <i className="fas fa-expand" aria-hidden="true" />
                 </button>
                 <button 
                   className="xstate-visualizer__control-btn"
                   onClick={() => cyRef.current?.layout(layoutConfig).run()}
                   title="Reset layout"
                 >
-                  ⟲
+                  <i className="fas fa-sync" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -514,48 +526,14 @@ export const XStateVisualizer = ({
   );
 };
 
-// Helper function to get color based on node type (PLM Data Migration AI Factory)
+/**
+ * Get color for node type - delegates to centralized constants
+ * IMPORTANT: DO NOT define colors here - update constants/node-colors.js instead
+ * @param {string} type - Node type/group name
+ * @returns {string} Hex color code
+ */
 const getColorForType = (type) => {
-  const colorMap = {
-    // PLM Sources - TCS Blue shades
-    'plm_source': '#0033A0',      // TCS Blue - Teamcenter, Windchill
-    'cad_source': '#00539B',      // TCS Dark Blue - CATIA, NX, Creo
-    
-    // AI Agents - TCS Purple
-    'ai_agent': '#6A1B9A',        // Purple - AI Orchestration Layer
-    
-    // Extract - Light blue
-    'extract': '#42A5F5',         // Light Blue - Extraction processes
-    
-    // Transform - TCS Orange
-    'transform': '#FB8C00',       // Orange - Transformations
-    
-    // Quality (SODA) - TCS Green
-    'quality': '#43A047',         // Green - Quality checks
-    
-    // Load - TCS Indigo
-    'load': '#5E35B1',            // Indigo - Loading stages
-    
-    // Target Systems - TCS Dark
-    'target': '#263238',          // Dark - Target systems
-    
-    // Legacy support
-    'Database': '#1976D2',
-    'Teamcenter': '#1976D2',
-    'CustomDB': '#1976D2',
-    'CSV': '#FB8C00',
-    'JSON': '#7B1FA2',
-    'XML': '#E53935',
-    'PLMXML': '#E53935',
-    'Processor': '#42A5F5',
-    'ETL': '#42A5F5',
-    'API': '#5E35B1',
-    'Service': '#5E35B1',
-    'Endpoint': '#5E35B1',
-    'DataQualityIssue': '#D32F2F',
-    'default': '#78909C'
-  };
-  return colorMap[type] || colorMap['default'];
+  return getNodeColor(type);
 };
 
 export default XStateVisualizer;

@@ -9,7 +9,7 @@ const ETLOverview = ({
   filteredNodeCount, 
   loadingError,
   graphData,
-  onElementClick,
+  onElementClick: _onElementClick,
   onFilterApply,
   cytoscapeRef
 }) => {
@@ -192,7 +192,7 @@ const ETLOverview = ({
         <span className="metric-title">{title}</span>
         {trend && (
           <span className={`metric-trend ${trend > 0 ? 'positive' : 'negative'}`}>
-            {trend > 0 ? '↗' : '↘'} {Math.abs(trend)}%
+            {trend > 0 ? <i className="fas fa-arrow-up" aria-hidden="true" /> : <i className="fas fa-arrow-down" aria-hidden="true" />} {Math.abs(trend)}%
           </span>
         )}
       </div>
@@ -271,7 +271,7 @@ const ETLOverview = ({
               onClick={clearAllFilters}
               title="Clear Filters"
             >
-              ✕
+              <i className="fas fa-times" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -470,14 +470,14 @@ const ETLOverview = ({
                   onClick={handlePerformanceHighlight}
                   title="Highlight performance bottlenecks"
                 >
-                  ◳ Find Bottlenecks
+                  <i className="fas fa-search" aria-hidden="true" /> Find Bottlenecks
                 </button>
                 <button 
                   className="analysis-btn secondary"
                   onClick={clearAllFilters}
                   title="Clear all filters and highlights"
                 >
-                  ↻ Reset View
+                  <i className="fas fa-sync" aria-hidden="true" /> Reset View
                 </button>
                 <button 
                   className="analysis-btn secondary"

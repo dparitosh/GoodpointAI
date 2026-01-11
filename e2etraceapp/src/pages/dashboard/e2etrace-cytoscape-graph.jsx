@@ -22,7 +22,7 @@ try {
 }
 
 // Memoize the component to prevent re-renders when props haven't changed.
-export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRef }) => {
+export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRef, onReady }) => {
   const containerRef = useRef(null);
   const tippyRef = useRef(null);
   const popperRef = useRef(null);
@@ -64,12 +64,17 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
       elements,
       style: stylesheet,
       layout,
-      wheelSensitivity: 0.2,
+      // Note: wheelSensitivity default (1) is recommended for cross-platform compatibility
       minZoom: 0.2,
       maxZoom: 2.5,
       pixelRatio: 'auto',
     });
     if (cyRef) cyRef.current = cy;
+
+    // Notify parent that cy is ready
+    if (onReady && typeof onReady === 'function') {
+      onReady(cy);
+    }
 
     // Expand/collapse for compound nodes (if any)
     try {
@@ -79,7 +84,7 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
         animate: true,
         undoable: false,
       });
-    } catch (e) {
+    } catch (_e) {
       // If plugin isn't available, skip silently.
       expandCollapseApiRef.current = null;
     }
@@ -105,7 +110,10 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
     };
 
     const showTooltipFor = (ele) => {
-      if (!ele || ele.destroyed()) return;
+      // Check if element exists and is not destroyed
+      if (!ele) return;
+      // ele.destroyed() may not exist in all cytoscape versions - use safe check
+      if (typeof ele.removed === 'function' && ele.removed()) return;
       const ref = ele.popperRef && ele.popperRef();
       if (!ref) return;
 
@@ -161,7 +169,7 @@ export const E2ETraceCytoscapeGraph = memo(({ elements, stylesheet, layout, cyRe
       cy.destroy();
       if (cyRef) cyRef.current = null;
     };
-  }, [elements, stylesheet, layout, cyRef]);
+  }, [elements, stylesheet, layout, cyRef, onReady]);
 
   return (
     <div

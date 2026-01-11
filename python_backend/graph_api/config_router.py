@@ -43,6 +43,17 @@ class WorkflowDefaultsConfig(BaseModel):
     source_endpoints: dict[str, str] = {}
     target_endpoints: dict[str, str] = {}
 
+
+class FilesystemAccessConfig(BaseModel):
+    """Server-controlled allowlist for local file access (dev / on-prem).
+
+    This is intentionally NOT part of the user-entered data source record.
+    Data sources may reference local file paths, but the backend must decide
+    which roots are permitted to be read.
+    """
+
+    allowed_local_roots: list[str] = []
+
 @router.get(
     "/neo4j",
     summary="Get Neo4j Configuration",
@@ -72,11 +83,16 @@ async def get_neo4j_config(db: Session = Depends(get_db)):
         username = os.getenv("NEO4J_USER") or os.getenv("NEO4J_USERNAME") or "neo4j"
         database = os.getenv("NEO4J_DATABASE", "neo4j")
 
+    # Test connection and get detailed result
+    connection_result = await test_neo4j_connection(db=db)
+    
     return {
         "uri": uri,
         "username": username,
         "database": database,
-        "connection_status": "connected" if await test_neo4j_connection(db=db) else "disconnected",
+        "connection_status": "connected" if connection_result.connected else "disconnected",
+        "error_type": connection_result.error_type,
+        "error_message": connection_result.error_message,
     }
 
 @router.post(
@@ -333,6 +349,81 @@ async def update_system_configuration(
     return ConfigResponse(
         status="success",
         message="System configuration updated successfully",
+        timestamp=datetime.now().isoformat(),
+    )
+
+
+@router.get(
+    "/filesystem",
+    summary="Get Filesystem Access Configuration",
+    description="Get the server-controlled allowlist for local file access (stored in system_configuration).",
+)
+async def get_filesystem_access_config(db: Session = Depends(get_db)):
+    row = db.get(EncryptedConfig, "system_configuration")
+    payload: dict = {}
+    if row is not None:
+        try:
+            decrypted = decrypt_json(row.ciphertext)
+            payload = decrypted if isinstance(decrypted, dict) else {}
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to decrypt stored system_configuration: %s", exc)
+
+    fs_cfg = payload.get("filesystem") if isinstance(payload, dict) else None
+    if not isinstance(fs_cfg, dict):
+        fs_cfg = {}
+
+    roots = fs_cfg.get("allowed_local_roots")
+    if isinstance(roots, list):
+        cleaned = [str(p).strip() for p in roots if str(p).strip()]
+    else:
+        cleaned = []
+    return {"allowed_local_roots": cleaned}
+
+
+@router.post(
+    "/filesystem",
+    response_model=ConfigResponse,
+    summary="Update Filesystem Access Configuration",
+    description="Update the server-controlled allowlist for local file access (stored in system_configuration).",
+)
+async def update_filesystem_access_config(config: FilesystemAccessConfig, db: Session = Depends(get_db)):
+    # Load existing system_configuration (or start from empty object).
+    current: dict = {}
+    row = db.get(EncryptedConfig, "system_configuration")
+    if row is not None:
+        try:
+            decrypted = decrypt_json(row.ciphertext)
+            current = decrypted if isinstance(decrypted, dict) else {}
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.error("Failed to decrypt stored system_configuration for filesystem update: %s", exc)
+            current = {}
+
+    cleaned = [str(p).strip() for p in (config.allowed_local_roots or []) if str(p).strip()]
+    # De-dupe while preserving order.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for p in cleaned:
+        if p in seen:
+            continue
+        seen.add(p)
+        unique.append(p)
+
+    fs_cfg = current.get("filesystem")
+    if not isinstance(fs_cfg, dict):
+        fs_cfg = {}
+    fs_cfg["allowed_local_roots"] = unique
+    current["filesystem"] = fs_cfg
+
+    if row is None:
+        row = EncryptedConfig(key="system_configuration", ciphertext=encrypt_json(current))
+        db.add(row)
+    else:
+        row.ciphertext = encrypt_json(current)
+    db.commit()
+
+    return ConfigResponse(
+        status="success",
+        message="Filesystem access configuration updated successfully",
         timestamp=datetime.now().isoformat(),
     )
 
@@ -670,10 +761,26 @@ async def test_opensearch_connection(db: Session | None = None, config: dict[str
         logger.error("OpenSearch connection test failed: %s", exc)
         return False
 
-async def test_neo4j_connection(db: Session | None = None) -> bool:
+class Neo4jConnectionResult:
+    """Result of Neo4j connection test with detailed error info."""
+    def __init__(self, connected: bool, error_type: str | None = None, error_message: str | None = None):
+        self.connected = connected
+        self.error_type = error_type  # 'no_config', 'service_unavailable', 'auth_failed', 'unknown'
+        self.error_message = error_message
+    
+    def to_dict(self) -> dict:
+        return {
+            "connected": self.connected,
+            "error_type": self.error_type,
+            "error_message": self.error_message
+        }
+
+
+async def test_neo4j_connection(db: Session | None = None) -> Neo4jConnectionResult:
     """Internal helper to test current Neo4j connection.
 
     Prefer DB-stored config when available.
+    Returns Neo4jConnectionResult with detailed error information.
     """
     try:
         uri = None
@@ -703,7 +810,11 @@ async def test_neo4j_connection(db: Session | None = None) -> bool:
             database = os.getenv("NEO4J_DATABASE")
 
         if not uri or not username or not password:
-            return False
+            return Neo4jConnectionResult(
+                connected=False,
+                error_type="no_config",
+                error_message="Neo4j connection not configured. Please set up Neo4j in Data Configuration."
+            )
 
         uri_str: str = uri
         username_str: str = username
@@ -715,8 +826,26 @@ async def test_neo4j_connection(db: Session | None = None) -> bool:
             await session.run("RETURN 1")
         
         await test_driver.close()
-        return True
+        return Neo4jConnectionResult(connected=True)
         
-    except (neo4j.exceptions.Neo4jError, neo4j.exceptions.DriverError, OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ConnectionRefusedError) as exc:
+        logger.error("Neo4j service unavailable: %s", exc)
+        return Neo4jConnectionResult(
+            connected=False,
+            error_type="service_unavailable",
+            error_message="Neo4j service is not running. Please start Neo4j in Neo4j Desktop or ensure the service is running."
+        )
+    except neo4j.exceptions.AuthError as exc:
+        logger.error("Neo4j authentication failed: %s", exc)
+        return Neo4jConnectionResult(
+            connected=False,
+            error_type="auth_failed",
+            error_message="Neo4j authentication failed. Please check your username and password in Data Configuration."
+        )
+    except (neo4j.exceptions.Neo4jError, neo4j.exceptions.DriverError, ValueError, RuntimeError) as exc:
         logger.error("Neo4j connection test failed: %s", exc)
-        return False
+        return Neo4jConnectionResult(
+            connected=False,
+            error_type="unknown",
+            error_message=f"Neo4j connection failed: {str(exc)}"
+        )

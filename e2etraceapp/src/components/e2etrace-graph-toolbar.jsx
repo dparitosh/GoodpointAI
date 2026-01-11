@@ -117,7 +117,7 @@ const GraphToolbar = ({
                     concentric: function(node) {
                         return node.degree();
                     },
-                    levelWidth: function(nodes) {
+                    levelWidth: function(_nodes) {
                         return 2;
                     },
                     spacing: 30,

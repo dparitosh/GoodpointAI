@@ -4,6 +4,9 @@ REM Usage: start-backend.bat
 
 echo Starting GraphTrace Backend Server...
 
+REM Opt into repo-local `.env` loading for local development.
+if "%GRAPH_TRACE_LOAD_DOTENV%"=="" set GRAPH_TRACE_LOAD_DOTENV=true
+
 REM Check if Python is installed
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -33,6 +36,7 @@ if not exist ".env" (
     echo NEO4J_USER=neo4j
     echo NEO4J_PASSWORD=your-password
     echo NEO4J_DATABASE=neo4j
+    echo GRAPH_TRACE_ALLOWED_LOCAL_ROOTS=D:\path\to\your\import\folder
     echo.
 )
 

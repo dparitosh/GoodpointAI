@@ -1,5 +1,4 @@
 import { API_CONFIG, WORKFLOW_STAGES, getWorkflowProgress, executeBatchOperations } from '@config/api-config.js';
-import { e2etraceFetchWithRetry } from '../api/e2etrace-api.js';
 
 /**
  * Workflow Management Service
@@ -143,7 +142,7 @@ class WorkflowService {
   }
 
   // Stage 3: Data Flow
-  async executeDataFlow(config = {}) {
+  async executeDataFlow(_config = {}) {
     if (!this.isStageCompleted(WORKFLOW_STAGES.DATA_PIPELINES)) {
       throw new Error('Data Pipelines must be completed before executing Data Flow');
     }
@@ -189,7 +188,7 @@ class WorkflowService {
   }
 
   // Stage 4: Reporting
-  async executeReporting(config = {}) {
+  async executeReporting(_config = {}) {
     if (!this.isStageCompleted(WORKFLOW_STAGES.DATA_FLOW)) {
       throw new Error('Data Flow must be completed before executing Reporting');
     }

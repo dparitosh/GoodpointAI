@@ -1,5 +1,6 @@
 import { createMachine, assign } from 'xstate';
 import { API_CONFIG } from '../config/api-config.js';
+import { addErrorMessage } from './xstateHelpers.js';
 
 /**
  * API Gateway State Machine
@@ -35,7 +36,10 @@ export const apiGatewayMachine = createMachine({
         GET_RATE_LIMITS: 'fetchingRateLimits',
         SET_RATE_LIMIT: 'settingRateLimit',
         ADD_TRANSFORMATION: 'addingTransformation',
-        GET_METRICS: 'fetchingMetrics'
+        GET_METRICS: 'fetchingMetrics',
+        CLEAR_ERRORS: {
+          actions: assign({ errors: () => [] })
+        }
       }
     },
     
@@ -51,7 +55,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -74,7 +78,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -108,7 +112,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -142,7 +146,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -165,7 +169,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -199,7 +203,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -230,7 +234,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
@@ -249,7 +253,7 @@ export const apiGatewayMachine = createMachine({
         onError: {
           target: 'error',
           actions: assign({
-            errors: (context, event) => [...context.errors, event.data.message]
+            errors: (context, event) => addErrorMessage(context.errors, event.data.message)
           })
         }
       }
