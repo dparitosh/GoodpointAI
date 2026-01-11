@@ -1,0 +1,172 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Frontend Development Server",
+			"type": "shell",
+			"command": "npm run dev -- --host 127.0.0.1 --port 5173",
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"--app-dir",
+				"${workspaceFolder}/agentic-restored/python_backend",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8011",
+				"--reload"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server (No Reload)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"--app-dir",
+				"${workspaceFolder}/agentic-restored/python_backend",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8011"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server (No Reload, Port 8011)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"--app-dir",
+				"${workspaceFolder}/agentic-restored/python_backend",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8011"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server (Postgres)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"--app-dir",
+				"${workspaceFolder}/agentic-restored/python_backend",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8011",
+				"--reload"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server (OpenSearch)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8008"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true",
+					"OPENSEARCH_URL": "http://localhost:9200",
+					"OPENSEARCH_TIMEOUT_S": "30"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start Backend Server (Auth Required)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"uvicorn",
+				"main:app",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"8003",
+				"--reload"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true",
+					"GRAPH_TRACE_AUTH_REQUIRED": "true",
+					"GRAPH_TRACE_JWT_SECRET": "${env:GRAPH_TRACE_JWT_SECRET}",
+					"GRAPH_TRACE_ADMIN_USERNAME": "${env:GRAPH_TRACE_ADMIN_USERNAME}",
+					"GRAPH_TRACE_ADMIN_PASSWORD": "${env:GRAPH_TRACE_ADMIN_PASSWORD}"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+
+	]
+}
