@@ -1,0 +1,5 @@
+﻿# EXTERNAL_INTEGRATIONS_API_REFERENCE.md
+
+> This document has moved.
+> Please see: [docs/reference/EXTERNAL_INTEGRATIONS_API_REFERENCE.md](docs/reference/EXTERNAL_INTEGRATIONS_API_REFERENCE.md)
+
