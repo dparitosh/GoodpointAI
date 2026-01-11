@@ -1,0 +1,478 @@
+/* Graph Toolbar Styles - XState Design System */
+.graph-toolbar {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    padding: 0;
+    margin-bottom: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.graph-toolbar.expanded {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Main Toolbar Row */
+.toolbar-main {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.toolbar-expanded {
+    border-top: 1px solid var(--border-color);
+    padding: 16px;
+    background: var(--background-color-offset);
+}
+
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.toolbar-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Toolbar Sections */
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.toolbar-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+}
+
+/* Search Container */
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 250px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--panel-bg);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #0078D4;
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+}
+
+.search-clear {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+}
+
+.search-clear:hover {
+    background: var(--background-color-offset);
+    color: var(--text-secondary);
+}
+
+/* Layout Select */
+.layout-select, .scheme-select {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.875rem;
+    background: var(--panel-bg);
+    color: var(--text-secondary);
+    min-width: 140px;
+    transition: all 0.2s ease;
+}
+
+.layout-select:focus, .scheme-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* Zoom Controls */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.25rem;
+}
+
+.zoom-controls button {
+    background: none;
+    border: none;
+    padding: 0.375rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zoom-controls button:hover {
+    background: var(--background-color-offset);
+    color: #007bff;
+}
+
+.zoom-controls button:active {
+    background: var(--background-color-offset);
+}
+
+.zoom-level {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    padding: 0 0.5rem;
+    min-width: 3rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Expand Toggle */
+.expand-toggle {
+    background: var(--background-color-offset);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.expand-toggle:hover {
+    background: var(--background-color-offset);
+    border-color: var(--border-color);
+}
+
+/* Graph Stats */
+.graph-stats {
+    display: flex;
+    gap: 1rem;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 700;
+    background: var(--background-color-offset);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+}
+
+/* Filter Sections */
+.filter-section {
+    flex-direction: column;
+    align-items: flex-start;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.75rem;
+    min-width: 0;
+}
+
+.filter-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    max-width: 100%;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: var(--background-color-offset);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.filter-checkbox:hover {
+    background: var(--background-color-offset);
+    border-color: var(--border-color);
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #007bff;
+}
+
+.filter-checkbox input[type="checkbox"]:checked + span {
+    font-weight: 600;
+    color: #007bff;
+}
+
+/* Status-specific styling */
+.status-healthy { color: #28a745; }
+.status-warning { color: #ffc107; }
+.status-error { color: #dc3545; }
+.status-running { color: #17a2b8; }
+.status-stopped { color: #6c757d; }
+.status-disabled { color: #868e96; }
+
+/* Clear Filters Button */
+.clear-filters-btn {
+    background: #dc3545;
+    color: var(--text-on-primary);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clear-filters-btn:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+}
+
+.clear-filters-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .toolbar-main {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .toolbar-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.375rem;
+    }
+    
+    .search-container {
+        min-width: auto;
+    }
+    
+    .zoom-controls {
+        justify-content: center;
+    }
+    
+    .graph-stats {
+        justify-content: center;
+    }
+    
+    .filter-checkboxes {
+        justify-content: center;
+    }
+    
+    .toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .graph-toolbar {
+        margin: 0 -0.5rem 1rem -0.5rem;
+        border-radius: 0;
+    }
+    
+    .toolbar-main, .toolbar-expanded {
+        padding: 0.75rem;
+    }
+    
+    .filter-section {
+        padding: 0.5rem;
+    }
+    
+    .filter-checkboxes {
+        gap: 0.25rem;
+    }
+    
+    .filter-checkbox {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+    .graph-toolbar {
+        background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-primary) 100%);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-primary);
+    }
+    
+    .toolbar-expanded {
+        background: var(--dark-bg-primary);
+        border-color: var(--dark-border-color);
+    }
+    
+    .toolbar-label {
+        color: var(--dark-text-secondary);
+    }
+    
+    .search-input, .layout-select, .scheme-select {
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-primary);
+    }
+    
+    .search-input:focus, .layout-select:focus, .scheme-select:focus {
+        border-color: #63b3ed;
+        box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.1);
+    }
+    
+    .zoom-controls {
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
+    }
+    
+    .zoom-controls button {
+        color: var(--dark-text-secondary);
+    }
+    
+    .zoom-controls button:hover {
+        background: var(--dark-border-color);
+        color: var(--dark-text-link);
+    }
+    
+    .expand-toggle {
+        background: var(--dark-border-color);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-secondary);
+    }
+    
+    .expand-toggle:hover {
+        background: var(--dark-border-color);
+    }
+    
+    .graph-stats, .filter-section {
+        background: var(--dark-bg-secondary);
+        border-color: var(--dark-border-color);
+    }
+    
+    .stat-value {
+        background: var(--dark-bg-primary);
+        color: var(--dark-text-primary);
+    }
+    
+    .filter-checkbox {
+        background: var(--dark-border-color);
+        border-color: var(--dark-border-color);
+        color: var(--dark-text-secondary);
+    }
+    
+    .filter-checkbox:hover {
+        background: var(--dark-border-color);
+    }
+}
+
+/* Animation for toolbar expansion */
+.graph-toolbar {
+    overflow: hidden;
+    transition: max-height 0.3s ease, box-shadow 0.3s ease;
+}
+
+.toolbar-expanded {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Focus styles for accessibility */
+.graph-toolbar button:focus,
+.graph-toolbar input:focus,
+.graph-toolbar select:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .graph-toolbar {
+        border-width: 2px;
+        border-color: #000;
+    }
+    
+    .toolbar-label {
+        color: #000;
+        font-weight: 700;
+    }
+    
+    .search-input, .layout-select, .scheme-select {
+        border-width: 2px;
+        border-color: #000;
+    }
+    
+    .zoom-controls {
+        border-width: 2px;
+        border-color: #000;
+    }
+}

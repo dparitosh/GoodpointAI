@@ -1,0 +1,162 @@
+@import './styles/theme.css';
+
+/* Global Box Sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* === THEME DEFINITIONS === */
+[data-theme='light'] {
+  /* Spacing */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem;  /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem;    /* 16px */
+  --space-5: 1.25rem; /* 20px */
+  --space-6: 1.5rem;  /* 24px */
+
+  /* Font Sizes */
+  --font-size-sm: 0.875rem; /* 14px */
+  --font-size-md: 1rem;    /* 16px */
+  --font-size-h6: 1.125rem; /* 18px */
+
+  /* Font Weights */
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* Border Radii */
+  --border-radius-sm: 4px;
+  --border-radius-lg: 8px;
+
+  /* Base Colors */
+  --background-color: #F8F8F8; /* A very light, almost off-white for a clean feel */
+  --panel-bg: #FFFFFF;
+  --background-color-offset: #F0F0F0; /* Slightly darker than background for subtle contrast */
+  --header-bg: #FFFFFF;
+  --text-color: #212121;
+  --text-muted-color: #757575;
+  /* Bridge tokens used across the app (global.css, page CSS, component CSS) */
+  --text-secondary: var(--sidebar-text-color);
+  --text-muted: var(--text-muted-color);
+  --text-color-headings: #212121;
+  --text-on-success-bg: #FFFFFF;
+  --text-on-secondary-button-bg: #FFFFFF;
+
+  /* Borders */
+  --border-color: #E0E0E0;
+  --border-color-weak: #EEEEEE; /* Lighter border for subtle separators */
+  --border-color-strong: #B0B0B0; /* Stronger border for inputs */
+
+  /* Accent & Status Colors - TCS Brand */
+  --accent-color: #0033A0;
+  --accent-hover-color: #002B8A;
+  --success-color: #24A148;
+  --success-color-light: #E8F5E9;
+  --success-color-dark: #1B7D34;
+  --critical-color: #DA1E28;
+  --warning-color-light: #FFF4E5;
+  --warning-color-dark: #FF832B;
+  --error-color-light: #FFEBEE;
+  --error-color-dark: #C41E3A;
+
+  /* Button Colors */
+  --button-bg: #EFEFEF;
+  --button-hover-bg: #D6D6D6;
+  --button-text-color: #212121;
+  --button-disabled-bg: #E0E0E0;
+  --secondary-button-bg: #607D8B;
+
+  /* Input Colors */
+  --input-padding: 0.5rem 0.75rem;
+  --input-bg: #FFFFFF;
+
+  /* Cytoscape Colors - TCS Brand */
+  --cy-node-text-color: #212121;
+  --cy-critical-color: #DA1E28;
+  --cy-selected-color: #0066CC;
+  --cy-selected-bg: rgba(0, 102, 204, 0.1);
+  --cy-parent-bg: rgba(0, 102, 204, 0.03);
+  --cy-parent-border: #C0C0C0;
+  --cy-node-text-on-dark-bg: white;
+  --cy-node-text-on-light-bg: black;
+
+  /* Sidebar Colors */
+  --sidebar-width: 240px;
+  --sidebar-background-color: #FFFFFF;
+  --sidebar-text-color: #424242;
+  --sidebar-icon-color: #757575;
+  --sidebar-hover-background-color: #F5F5F5;
+  --sidebar-hover-text-color: #212121;
+  --sidebar-active-background-color: #E0E0E0;
+  --sidebar-active-text-color: var(--accent-color);
+}
+
+[data-theme='dark'] {
+  /* Prefer the shared dark palette from theme.css for consistency */
+  --background-color: var(--dark-bg-primary, #0f172a);
+  --background-color-offset: var(--dark-bg-secondary, #1e293b);
+  --panel-bg: var(--dark-bg-card, #1e293b);
+  --header-bg: var(--dark-bg-card, #1e293b);
+
+  --text-color: var(--dark-text-primary, #f1f5f9);
+  --text-muted-color: var(--dark-text-muted, #94a3b8);
+  /* Bridge tokens used across the app (global.css, page CSS, component CSS) */
+  --text-secondary: var(--dark-text-secondary, #cbd5e1);
+  --text-muted: var(--dark-text-muted, #94a3b8);
+  --text-color-headings: var(--dark-text-heading, #ffffff);
+  --text-on-success-bg: #FFFFFF;
+  --text-on-secondary-button-bg: #FFFFFF;
+
+  /* Borders */
+  --border-color: var(--dark-border-color, #475569);
+  --border-color-weak: #2a2d30;
+  --border-color-strong: #55585d; /* Stronger border for inputs */
+
+  /* Accent & Status Colors */
+  --accent-color: #4DA3FF;
+  --accent-hover-color: #2E86E6;
+  --success-color: #28a745;
+  --success-color-light: #1E88E5; /* Example: a blue for success in dark mode */
+  --success-color-dark: #1565C0;
+  --critical-color: #ffaa97;
+  --warning-color-light: #FFD54F;
+  --warning-color-dark: #FFA000;
+  --error-color-light: #EF5350;
+  --error-color-dark: #D32F2F;
+
+  /* Button Colors */
+  --button-bg: #3c3f44; /* Dark button background */
+  --button-hover-bg: #4d5157; /* Slightly lighter button hover */
+  --button-text-color: #f5f6f6; /* Light button text */
+  --button-disabled-bg: #2a2d30;
+  --secondary-button-bg: #6c757d; /* Grey for secondary buttons */
+
+  /* Input Colors */
+  --input-padding: 0.5rem 0.75rem;
+  --input-bg: #2a2d30; /* Darker input background */
+
+  /* Cytoscape Colors */
+  --cy-node-text-color: #f5f6f6;
+  --cy-critical-color: #ffaa97; /* Lighter red for dark mode */
+  --cy-selected-color: #8fe3e8;
+  --cy-selected-bg: rgba(143, 227, 232, 0.15);
+  --cy-parent-bg: rgba(255, 255, 255, 0.08);
+  --cy-parent-border: #6f757e;
+  --cy-node-text-on-dark-bg: white;
+  --cy-node-text-on-light-bg: black;
+
+  /* Sidebar Colors */
+  --sidebar-width: 240px;
+  --sidebar-background-color: #212325;
+  --sidebar-text-color: #a8acb2;
+  --sidebar-icon-color: #a8acb2;
+  --sidebar-hover-background-color: #2a2d30;
+  --sidebar-hover-text-color: #f5f6f6;
+  --sidebar-active-background-color: #3c3f44;
+  --sidebar-active-text-color: #8fe3e8;
+}
+
+/* === GLOBAL RESETS & BASE STYLES === */
+root {
+  width: 100%;
+}

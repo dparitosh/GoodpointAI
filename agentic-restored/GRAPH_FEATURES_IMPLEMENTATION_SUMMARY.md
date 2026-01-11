@@ -1,0 +1,5 @@
+﻿# GRAPH_FEATURES_IMPLEMENTATION_SUMMARY.md
+
+> This document has moved.
+> Please see: [docs/reference/GRAPH_FEATURES_IMPLEMENTATION_SUMMARY.md](docs/reference/GRAPH_FEATURES_IMPLEMENTATION_SUMMARY.md)
+
