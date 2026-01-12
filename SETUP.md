@@ -19,8 +19,8 @@
 ### Windows (easiest)
 1. Download from https://www.postgresql.org/download/windows/
 2. Run installer, use these settings:
-   - **Port**: `5432` (default)
-   - **Password**: Set a password (e.g., `postgres123`) — **WRITE THIS DOWN**
+   - **Port**: `5433` (default)
+   - **Password**: Set a password (e.g., `tcs12345`) — **WRITE THIS DOWN**
    - **Locale**: Default
 3. Complete installation
 
@@ -71,10 +71,10 @@ Create a new file called `.env` with this **minimal** content:
 ```env
 # PostgreSQL - REQUIRED (update password to match your PostgreSQL password)
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+POSTGRES_PORT=5433
 POSTGRES_DATABASE=graphtrace
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD_HERE
+POSTGRES_PASSWORD=tcs12345
 
 # Neo4j - OPTIONAL (can configure later in UI)
 # NEO4J_URI=neo4j://localhost:7687
