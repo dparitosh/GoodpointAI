@@ -101,14 +101,14 @@ class WorkflowInstance(Base):
         Index('ix_workflow_source_target', 'source_id', 'target_id'),
         # Check constraint to ensure source and target are different
         CheckConstraint('source_id != target_id', name='ck_different_source_target'),
-        # Check constraint for valid source types
+        # Check constraint for valid source types (PLM systems + generic types)
         CheckConstraint(
-            "source_type IN ('teamcenter', 'windchill', 'catia', 'nx', 'creo', 'enovia', 'aras', 'solidworks', 'inventor')",
+            "source_type IN ('teamcenter', 'windchill', 'catia', 'nx', 'creo', 'enovia', 'aras', 'solidworks', 'inventor', 'filesystem', 'database', 'api', 'plm', 'odata', 'rest')",
             name='ck_valid_source_type'
         ),
         # Check constraint for valid target types
         CheckConstraint(
-            "target_type IN ('neo4j', 'cloud_plm', 'opensearch', 'warehouse', 'datalake', 's3', 'azure_blob', 'postgresql')",
+            "target_type IN ('neo4j', 'cloud_plm', 'opensearch', 'warehouse', 'datalake', 's3', 'azure_blob', 'postgresql', 'database', 'api')",
             name='ck_valid_target_type'
         ),
         # Check constraint for progress percentage
