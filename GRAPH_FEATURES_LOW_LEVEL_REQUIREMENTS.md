@@ -1,5 +1,0 @@
-﻿# GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md
-
-> This document has moved.
-> Please see: [docs/reference/GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md](docs/reference/GRAPH_FEATURES_LOW_LEVEL_REQUIREMENTS.md)
-
