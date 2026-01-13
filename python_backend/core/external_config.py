@@ -2,13 +2,15 @@
 External Integration Configuration
 Manages all external service connections and credentials
 """
+import json
 import logging
 import os
 from pathlib import Path
+from typing import Any, List, Optional
+
 from dotenv import load_dotenv
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
-from typing import List, Optional
 
 # Load environment variables
 # In installed/service deployments, configuration should be stored in the DB.
@@ -160,6 +162,23 @@ class PLMConfig(BaseSettings):
     aras_password: str = Field(default="", validation_alias="ARAS_PASSWORD")
 
 
+def _parse_watch_folders(v: Any) -> List[str]:
+    """Parse watch_folders from env var, handling empty strings gracefully."""
+    if v is None or v == "":
+        return ["./data/watch"]
+    if isinstance(v, list):
+        return v
+    if isinstance(v, str):
+        try:
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            # If it's not JSON, treat as comma-separated
+            return [folder.strip() for folder in v.split(",") if folder.strip()]
+    return ["./data/watch"]
+
+
 class FileSystemConfig(BaseSettings):
     """File System Configuration"""
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
@@ -175,8 +194,14 @@ class FileSystemConfig(BaseSettings):
     json_input_path: str = Field(default="./data/json/input", validation_alias="JSON_INPUT_PATH")
     csv_input_path: str = Field(default="./data/csv/input", validation_alias="CSV_INPUT_PATH")
     
-    # Folder monitoring
+    # Folder monitoring - uses validator to handle empty strings and various formats
     watch_folders: List[str] = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
+    
+    @field_validator("watch_folders", mode="before")
+    @classmethod
+    def validate_watch_folders(cls, v: Any) -> List[str]:
+        """Handle empty strings, JSON arrays, or comma-separated values."""
+        return _parse_watch_folders(v)
     
     # File size limits (in MB)
     max_upload_size_mb: int = Field(default=100, validation_alias="MAX_UPLOAD_SIZE_MB")
