@@ -37,7 +37,7 @@ def reload_dotenv(*, override: bool = True) -> str:
 
 class AzureConfig(BaseSettings):
     """Azure Cloud Services Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # Storage
     storage_account_name: str = Field(default="", validation_alias="AZURE_STORAGE_ACCOUNT")
     storage_account_key: str = Field(default="", validation_alias="AZURE_STORAGE_KEY")
@@ -69,7 +69,7 @@ class AzureConfig(BaseSettings):
 
 class AWSConfig(BaseSettings):
     """AWS Cloud Services Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # General
     access_key_id: str = Field(default="", validation_alias="AWS_ACCESS_KEY_ID")
     secret_access_key: str = Field(default="", validation_alias="AWS_SECRET_ACCESS_KEY")
@@ -94,7 +94,7 @@ class AWSConfig(BaseSettings):
 
 class ODataConfig(BaseSettings):
     """OData Service Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # SAP OData
     sap_odata_url: str = Field(default="", validation_alias="SAP_ODATA_URL")
     sap_username: str = Field(default="", validation_alias="SAP_USERNAME")
@@ -112,7 +112,7 @@ class ODataConfig(BaseSettings):
 
 class LLMConfig(BaseSettings):
     """LLM Service Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # OpenAI
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4-turbo-preview", validation_alias="OPENAI_MODEL")
@@ -135,7 +135,7 @@ class LLMConfig(BaseSettings):
 
 class PLMConfig(BaseSettings):
     """PLM System Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # Teamcenter
     teamcenter_url: str = Field(default="", validation_alias="TEAMCENTER_URL")
     teamcenter_username: str = Field(default="", validation_alias="TEAMCENTER_USERNAME")
@@ -181,7 +181,7 @@ def _parse_watch_folders(v: Any) -> List[str]:
 
 class FileSystemConfig(BaseSettings):
     """File System Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # Data directories
     data_root: str = Field(default="./data", validation_alias="DATA_ROOT_PATH")
     upload_dir: str = Field(default="./data/uploads", validation_alias="UPLOAD_DIR")
@@ -195,7 +195,7 @@ class FileSystemConfig(BaseSettings):
     csv_input_path: str = Field(default="./data/csv/input", validation_alias="CSV_INPUT_PATH")
     
     # Folder monitoring - uses validator to handle empty strings and various formats
-    watch_folders: List[str] = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
+    watch_folders: Any = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
     
     @field_validator("watch_folders", mode="before")
     @classmethod
@@ -210,7 +210,7 @@ class FileSystemConfig(BaseSettings):
 
 class DatabaseConfig(BaseSettings):
     """Database Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # SQLAlchemy (primary app DB)
     sqlalchemy_database_url: str = Field(default="", validation_alias="DATABASE_URL")
     sqlite_db_path: str = Field(default="", validation_alias="SQLITE_DB_PATH")
@@ -242,7 +242,7 @@ class DatabaseConfig(BaseSettings):
 
 class APIGatewayConfig(BaseSettings):
     """API Gateway Configuration"""
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", extra="ignore", protected_namespaces=())
     # Generic API Gateway
     gateway_url: str = Field(default="", validation_alias="API_GATEWAY_URL")
     gateway_api_key: str = Field(default="", validation_alias="API_GATEWAY_KEY")

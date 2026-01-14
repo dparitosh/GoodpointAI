@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from core.db_session import DATABASE_URL, SessionLocal, init_db
 
 
 logger = logging.getLogger(__name__)
+
+
+def _is_production() -> bool:
+    env = (os.getenv("ENVIRONMENT") or os.getenv("GRAPH_TRACE_ENVIRONMENT") or "").strip().lower()
+    return env in {"prod", "production"}
 
 
 def main() -> int:
@@ -15,8 +21,9 @@ def main() -> int:
     logger.info("DB schema ensured (create_all)")
 
     # If the encryption key has changed (common in local dev when env vars aren't persisted),
-    # previously encrypted rows become undecryptable. For local SQLite only, reset encrypted
-    # tables and re-seed defaults so the app can start cleanly.
+    # previously encrypted rows become undecryptable.
+    # - For local SQLite only: reset encrypted tables and re-seed defaults.
+    # - For Postgres/other DBs: fail-fast in production to avoid a half-broken install.
     try:
         from core.crypto import decrypt_json
         from models.configuration_models import DataSourceConfigRecord, EncryptedConfig
@@ -37,13 +44,20 @@ def main() -> int:
                         db.query(EncryptedConfig).delete()
                         db.commit()
                     else:
-                        logger.warning(
-                            "Encrypted config cannot be decrypted with current key; NOT resetting because DB is not SQLite: %s",
-                            exc,
+                        msg = (
+                            "Encrypted config cannot be decrypted with current key and DB is not SQLite. "
+                            "This usually means GRAPH_TRACE_CONFIG_ENCRYPTION_KEY changed between deployments."
                         )
+                        if _is_production():
+                            logger.error("%s Refusing to continue in production: %s", msg, exc)
+                            return 5
+                        logger.warning("%s Continuing (development mode only): %s", msg, exc)
         finally:
             db.close()
     except Exception as exc:  # pylint: disable=broad-exception-caught
+        if _is_production():
+            logger.error("Encrypted-config sanity check failed in production: %s", exc)
+            return 5
         logger.warning("Encrypted-config sanity check skipped (non-fatal): %s", exc)
 
     try:
@@ -55,6 +69,9 @@ def main() -> int:
         else:
             logger.info("No default config keys needed seeding")
     except Exception as exc:  # pylint: disable=broad-exception-caught
+        if _is_production():
+            logger.error("Required seeding failed in production: %s", exc)
+            return 5
         logger.warning("Seeding skipped (non-fatal): %s", exc)
 
     return 0

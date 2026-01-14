@@ -320,6 +320,7 @@ class PipelineTemplateResponse(PipelineTemplateBase):
 
 class SearchConfigBase(BaseModel):
     """Base model for search configuration"""
+    model_config = ConfigDict(protected_namespaces=())
     name: str
     description: Optional[str] = None
     search_mode: str
@@ -338,6 +339,7 @@ class SearchConfigCreate(SearchConfigBase):
 
 class SearchConfigUpdate(BaseModel):
     """Update search configuration request"""
+    model_config = ConfigDict(protected_namespaces=())
     name: Optional[str] = None
     description: Optional[str] = None
     search_mode: Optional[str] = None

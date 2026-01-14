@@ -473,6 +473,7 @@ class LLMProviderResponse(LLMProviderBase):
 
 class EmbeddingModelBase(BaseModel):
     """Base model for embedding model"""
+    model_config = ConfigDict(protected_namespaces=())
     provider: str = Field(..., description="Provider: openai, huggingface, sentence_transformers")
     name: str = Field(..., description="Display name")
     description: Optional[str] = None

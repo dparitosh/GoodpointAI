@@ -84,6 +84,7 @@ def seed_opensearch_indices(fixtures: dict[str, Any], force: bool = False) -> in
 
     # Connect to OpenSearch
     os_url = os.getenv("OPENSEARCH_URL", "http://localhost:9200")
+    timeout_s = float((os.getenv("OPENSEARCH_TIMEOUT_S") or "10").strip() or 10)
     try:
         client = OpenSearch(
             hosts=[os_url],
@@ -91,6 +92,7 @@ def seed_opensearch_indices(fixtures: dict[str, Any], force: bool = False) -> in
             use_ssl=False,
             verify_certs=False,
             ssl_show_warn=False,
+            timeout=timeout_s,
         )
         info = client.info()
         logger.info("Connected to OpenSearch %s", info.get("version", {}).get("number", "unknown"))

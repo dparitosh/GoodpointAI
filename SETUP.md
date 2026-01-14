@@ -14,6 +14,34 @@
 
 ---
 
+## Windows Server (C:\App) Notes
+
+If you're installing on a Windows Server (manual install) and placing the app under `C:\App`, use a stable encryption key.
+
+**Recommended folder layout**
+
+- Repo root: `C:\App\goodpoint` (or any folder name you prefer)
+- Backend: `C:\App\goodpoint\python_backend`
+
+**PowerShell script execution**
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Production-style deployments (recommended on servers)**
+
+GraphTrace stores some configuration encrypted at rest in Postgres. If the encryption key changes between deploys, startup/seeding can fail.
+
+Set these as **Machine-level** environment variables (run PowerShell as Administrator):
+
+```powershell
+[Environment]::SetEnvironmentVariable("ENVIRONMENT", "production", "Machine")
+[Environment]::SetEnvironmentVariable("GRAPH_TRACE_CONFIG_ENCRYPTION_KEY", "<stable secret>", "Machine")
+```
+
+Then open a new PowerShell window before running bootstrap.
+
 ## Step 1: Install PostgreSQL (If Not Installed)
 
 ### Windows (easiest)
@@ -53,7 +81,7 @@ CREATE DATABASE graphtrace;
 **Alternative** (if psql is not in PATH):
 ```powershell
 # Find psql location (usually here)
-& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -h localhost
+& "C:\Program Files\PostgreSQL\<version>\bin\psql.exe" -U postgres -h localhost
 ```
 
 ---
@@ -63,7 +91,10 @@ CREATE DATABASE graphtrace;
 Navigate to the backend folder and create your configuration:
 
 ```powershell
-cd d:\Download\graphTrace-feature-xstate-agentic-integration\agentic-restored\python_backend
+cd <repo-root>\python_backend
+
+# Example (Windows Server)
+# cd C:\App\goodpoint\python_backend
 ```
 
 Create a new file called `.env` with this **minimal** content:
@@ -74,7 +105,7 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5433
 POSTGRES_DATABASE=graphtrace
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=tcs12345
+POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD_HERE
 
 # Neo4j - OPTIONAL (can configure later in UI)
 # NEO4J_URI=neo4j://localhost:7687
@@ -89,7 +120,7 @@ POSTGRES_PASSWORD=tcs12345
 ```powershell
 @"
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+POSTGRES_PORT=5433
 POSTGRES_DATABASE=graphtrace
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD_HERE
@@ -103,10 +134,13 @@ notepad .env
 
 ## Step 4: Run Bootstrap
 
-From the `agentic-restored` folder:
+From the repo root folder:
 
 ```powershell
-cd d:\Download\graphTrace-feature-xstate-agentic-integration\agentic-restored
+cd <repo-root>
+
+# Example (Windows Server)
+# cd C:\App\goodpoint
 
 # Run the bootstrap script
 .\bootstrap.ps1
@@ -116,7 +150,7 @@ This will:
 1. Create Python virtual environment
 2. Install Python dependencies
 3. Generate encryption key
-4. Initialize database schema
+4. Initialize database schema + seed required defaults
 5. Install frontend dependencies
 
 **Expected output:**
@@ -145,6 +179,41 @@ This opens two new PowerShell windows:
 ---
 
 ## Troubleshooting
+
+### Problem: seeded schema / seeding fails during deployment
+
+**Most common cause:** the encryption key changed between environments/deployments.
+
+GraphTrace stores some configuration encrypted at rest in Postgres. In production deployments, set a **stable** encryption key:
+
+```powershell
+$env:ENVIRONMENT = "production"
+$env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY = "<a stable secret shared across deploys>"
+```
+
+Then rerun bootstrap (or the installer below).
+
+If you already have encrypted rows written with the wrong key and want to reset them (destructive):
+
+```powershell
+cd <repo-root>\python_backend
+.\venv\Scripts\Activate.ps1
+python -m scripts.reset_encrypted_config --yes --confirm-db graphtrace
+python -m scripts.install_seeded_schema --force
+```
+
+### Problem: OpenSearch/Neo4j timeouts during seeding
+
+Seeding OpenSearch indices and Neo4j schema is **optional** and depends on those services being up.
+The default install path avoids these steps.
+
+To seed only sample workflow records (no OpenSearch/Neo4j):
+
+```powershell
+cd <repo-root>\python_backend
+.\venv\Scripts\Activate.ps1
+python -m scripts.seed_unstructured_workflows --workflows-only
+```
 
 ### Problem: "password authentication failed"
 
@@ -175,7 +244,7 @@ Or use full path:
 & "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -h localhost
 ```
 
-### Problem: "connection refused" on port 5432
+### Problem: "connection refused" on port 5433
 
 **Cause:** PostgreSQL service not running.
 
@@ -211,7 +280,7 @@ pip install cryptography
 If something is broken and you want to start over:
 
 ```powershell
-cd d:\Download\graphTrace-feature-xstate-agentic-integration\agentic-restored
+cd <repo-root>
 
 # Remove virtual environment
 Remove-Item -Recurse -Force python_backend\venv -ErrorAction SilentlyContinue
@@ -238,7 +307,7 @@ Copy this to `python_backend\.env` and fill in your password:
 
 ```env
 POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
+POSTGRES_PORT=5433
 POSTGRES_DATABASE=graphtrace
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=

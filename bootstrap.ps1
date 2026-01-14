@@ -324,9 +324,9 @@ if (-not $SkipBackend) {
       }
     }
 
-    # Initialize database schema and seed default configuration
-    Write-Host "Initializing database schema..." -ForegroundColor Yellow
-    $schemaResult = python -m scripts.init_db_schema 2>&1
+    # Initialize database schema and seed required configuration
+    Write-Host "Initializing database schema + seeding required defaults..." -ForegroundColor Yellow
+    $schemaResult = python -m scripts.install_seeded_schema 2>&1
     if ($LASTEXITCODE -eq 0) {
       Write-Host "Database schema initialized and seeded successfully." -ForegroundColor Green
     } else {
@@ -357,6 +357,10 @@ if (-not $SkipBackend) {
       Write-Host ""
       Write-Host "5. Re-run bootstrap after fixing:" -ForegroundColor White
       Write-Host "   .\bootstrap.ps1 -SkipEnvSetup" -ForegroundColor Gray
+      Write-Host ""
+      Write-Host "6. If seeding fails with encryption key errors (common in prod):" -ForegroundColor White
+      Write-Host "   Set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY to a stable value and re-run." -ForegroundColor Gray
+      Write-Host "   (In production mode, GraphTrace will refuse to seed without an explicit key.)" -ForegroundColor Gray
       Write-Host ""
       Write-Host "For more help, see: docs\reference\SETUP.md" -ForegroundColor Yellow
       Write-Host ""
