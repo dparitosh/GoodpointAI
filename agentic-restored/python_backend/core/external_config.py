@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import List, Optional
+from sqlalchemy.exc import SQLAlchemyError
 
 # Load environment variables
 # In installed/service deployments, configuration should be stored in the DB.
@@ -188,8 +189,6 @@ class DatabaseConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
     # SQLAlchemy (primary app DB)
     sqlalchemy_database_url: str = Field(default="", validation_alias="DATABASE_URL")
-    sqlite_db_path: str = Field(default="", validation_alias="SQLITE_DB_PATH")
-    sqlite_db_filename: str = Field(default="app.db", validation_alias="SQLITE_DB_FILENAME")
 
     # PostgreSQL
     postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
@@ -274,7 +273,7 @@ def get_llm_config_with_db_fallback(provider: "Optional[str]" = None, db_session
                 return config_service.get_llm_provider_config(provider)
             else:
                 return config_service.get_active_llm_provider()
-        except Exception as e:
+        except (ImportError, AttributeError, SQLAlchemyError, RuntimeError, TypeError, ValueError) as e:
             logger.debug("DB LLM config not available: %s", e)
     
     # Fall back to environment-based config
@@ -326,7 +325,7 @@ def get_embedding_config_with_db_fallback(db_session=None) -> dict:
             from services.admin_config_service import AdminConfigService
             config_service = AdminConfigService(db_session)
             return config_service.get_embedding_config()
-        except Exception as e:
+        except (ImportError, AttributeError, SQLAlchemyError, RuntimeError, TypeError, ValueError) as e:
             logger.debug("DB embedding config not available: %s", e)
     
     # Fall back to environment-based config
@@ -363,7 +362,7 @@ def get_database_config_with_db_fallback(db_type: str, db_session=None) -> dict:
             from services.admin_config_service import AdminConfigService
             config_service = AdminConfigService(db_session)
             return config_service.get_connection_config(db_type)
-        except Exception as e:
+        except (ImportError, AttributeError, SQLAlchemyError, RuntimeError, TypeError, ValueError) as e:
             logger.debug("DB connection config not available: %s", e)
     
     # Fall back to environment-based config

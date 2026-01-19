@@ -21,5 +21,14 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
+    // Smoke tests hit a running backend (FastAPI) and are not unit-test deterministic.
+    // Keep them opt-in via dedicated scripts (e.g., `npm run smoke:analytics`).
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      '**/*smoke*.test.{js,jsx,ts,tsx}',
+    ],
   },
 });

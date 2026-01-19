@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError, SQLAlchemyError
+from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import Session
 from neo4j.exceptions import Neo4jError
 from sqlalchemy import text
@@ -28,6 +29,8 @@ from sqlalchemy import text
 from core.db_session import DATABASE_URL, get_db
 from models.plm_models import PLMBOMItem, PLMIngestionRun, PLMPart, PLMStagedRecord
 from models.quality_models import DataQualityResult, DataQualityRule, DataQualityScanReport, DataQualityGateResult
+
+from services.soda_external_runner import is_soda_external_runner_configured, run_soda_scan_external
 
 def get_optional_driver(request: Request) -> Any:
     # Optional dependency: do not fail the request if Neo4j isn't configured.
@@ -63,7 +66,7 @@ def _require_soda() -> Any:
         from soda.scan import Scan  # type: ignore
 
         return Scan
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (ImportError, ModuleNotFoundError) as exc:
         raise HTTPException(
             status_code=503,
             detail="Soda Core is not installed. Install `soda-core-postgres` to use Soda gate endpoints.",
@@ -114,7 +117,8 @@ def _count_rows_for_run(db: Session, qualified_table: str, run_id: str) -> int:
             {"run_id": run_id},
         ).fetchone()
         return int(row[0]) if row else 0
-    except Exception:
+    except (OperationalError, ProgrammingError):
+        db.rollback()
         # Some tables may not be run-scoped; fall back to total row count.
         row = db.execute(text(f"SELECT COUNT(*) FROM {qualified_table}")).fetchone()
         return int(row[0]) if row else 0
@@ -363,7 +367,7 @@ def _to_string_series(df: Any, col: str) -> None:
         df[col] = df[col].where(pd.notna(df[col]), None)
         # Convert empty strings to None.
         df.loc[df[col] == "", col] = None
-    except Exception:
+    except (ImportError, ModuleNotFoundError, AttributeError, KeyError, TypeError, ValueError):
         # If pandas is unavailable or conversion fails, leave as-is.
         return
 
@@ -445,7 +449,7 @@ async def transform(run_id: str, payload: TransformRequest, db: Session = Depend
             ]
 
             if insert_rows:
-                db.bulk_insert_mappings(PLMPart, insert_rows)
+                db.bulk_insert_mappings(sa_inspect(PLMPart), insert_rows)
                 parts_written = len(insert_rows)
 
             try:
@@ -454,8 +458,9 @@ async def transform(run_id: str, payload: TransformRequest, db: Session = Depend
                 db.rollback()
                 raise HTTPException(status_code=409, detail="Duplicate part_number detected for this run") from exc
 
-        except Exception:
+        except (ImportError, ModuleNotFoundError, AttributeError, KeyError, TypeError, ValueError, SQLAlchemyError):
             # Safe fallback: original dict-by-dict mapping.
+            db.rollback()
             for rec_part in raw_parts:
                 mapped = _map_record(rec_part, part_mapping)
                 part_number = _as_str(mapped.get("part_number"))
@@ -520,11 +525,12 @@ async def transform(run_id: str, payload: TransformRequest, db: Session = Depend
             ]
 
             if insert_rows:
-                db.bulk_insert_mappings(PLMBOMItem, insert_rows)
+                db.bulk_insert_mappings(sa_inspect(PLMBOMItem), insert_rows)
                 bom_written = len(insert_rows)
             db.commit()
 
-        except Exception:
+        except (ImportError, ModuleNotFoundError, AttributeError, KeyError, TypeError, ValueError, SQLAlchemyError):
+            db.rollback()
             for rec_bom in raw_bom:
                 mapped = _map_record(rec_bom, bom_mapping)
                 parent_pn = _as_str(mapped.get("parent_part_number"))
@@ -876,7 +882,20 @@ async def soda_gate_scan_for_run(
     """
 
     _require_postgres()
-    Scan = _require_soda()
+
+    # Try internal Soda first (fast path). If it isn't importable (e.g. Python 3.12
+    # distutils removal), fall back to an external Soda runner (configured via
+    # Admin Connection Settings or env).
+    soda_mode = "internal"
+    Scan = None
+    try:
+        Scan = _require_soda()
+    except HTTPException as exc:
+        if exc.status_code == 503 and is_soda_external_runner_configured(db):
+            soda_mode = "external"
+            Scan = None
+        else:
+            raise
 
     run = db.get(PLMIngestionRun, run_id)
     if run is None:
@@ -936,15 +955,25 @@ async def soda_gate_scan_for_run(
             f"    database: {url.database}\n"
         )
 
+        data_source_name = str(payload.data_source_name or "postgres").strip() or "postgres"
         checks_yaml_wrapped = _wrap_sodacl_checks(schema, table, checks_yaml)
 
-        scan = Scan()
-        scan.set_data_source_name(str(payload.data_source_name or "postgres").strip() or "postgres")
-        scan.add_configuration_yaml_str(config_yaml)
-        scan.add_sodacl_yaml_str(checks_yaml_wrapped)
+        if soda_mode == "external":
+            exit_code, scan_results = run_soda_scan_external(
+                data_source_name=data_source_name,
+                config_yaml=config_yaml,
+                checks_yaml=checks_yaml_wrapped,
+                db=db,
+            )
+        else:
+            assert Scan is not None
+            scan = Scan()
+            scan.set_data_source_name(data_source_name)
+            scan.add_configuration_yaml_str(config_yaml)
+            scan.add_sodacl_yaml_str(checks_yaml_wrapped)
 
-        exit_code = scan.execute()
-        scan_results: Dict[str, Any] = scan.get_scan_results() or {}
+            exit_code = scan.execute()
+            scan_results = scan.get_scan_results() or {}
         checks = scan_results.get("checks") or []
 
         issues = _issues_from_soda_checks(checks)
@@ -1108,8 +1137,8 @@ def _tail_text_file(path: Path, *, max_lines: int = 200, max_bytes: int = 64 * 1
     except OSError:
         return ""
 
-    text = chunk.decode("utf-8", errors="replace")
-    lines = text.splitlines()
+    decoded_text = chunk.decode("utf-8", errors="replace")
+    lines = decoded_text.splitlines()
     if len(lines) <= max_lines:
         return "\n".join(lines)
     return "\n".join(lines[-max_lines:])

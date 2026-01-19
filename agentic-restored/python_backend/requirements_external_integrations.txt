@@ -56,8 +56,16 @@ langchain-openai==0.2.9
 langchain-community==0.3.8
 tiktoken==0.8.0
 
+# Optional local embeddings (heavy)
+# Only needed if you want to generate embeddings in-process instead of via EMBEDDINGS_URL.
+sentence-transformers>=2.6.0,<4.0.0
+
 # Ollama Local LLM
 ollama==0.4.4
+
+# MCP (Model Context Protocol)
+# Used when running/authoring MCP servers and clients (e.g., FastMCP + stdio transport).
+mcp[cli]>=1.2.0,<2.0.0
 
 # PLM System Integrations
 zeep==4.2.1  # SOAP client for PLM APIs

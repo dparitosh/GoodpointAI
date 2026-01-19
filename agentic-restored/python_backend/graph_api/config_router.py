@@ -734,28 +734,18 @@ async def test_opensearch_connection(db: Session | None = None, config: dict[str
         if not url:
             return False
 
-        from urllib.parse import urlparse
-        from opensearchpy import OpenSearch  # type: ignore
+        from services.opensearch_service import OpenSearchService
 
-        parsed = urlparse(url)
-        host = parsed.hostname
-        if not host:
-            return False
-        port = parsed.port or (443 if parsed.scheme == "https" else 9200)
-
-        use_ssl = parsed.scheme == "https"
-        http_auth = None
-        if username or password:
-            http_auth = (username or "", password or "")
-
-        client = OpenSearch(
-            hosts=[{"host": host, "port": port}],
-            http_auth=http_auth,
-            use_ssl=use_ssl,
-            verify_certs=verify_certs,
-            timeout=timeout_s,
+        service = OpenSearchService(
+            config={
+                "url": url,
+                "username": username,
+                "password": password,
+                "verify_certs": verify_certs,
+                "timeout_s": timeout_s,
+            }
         )
-        _ = client.info()
+        _ = service.info()
         return True
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.error("OpenSearch connection test failed: %s", exc)

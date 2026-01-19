@@ -35,6 +35,7 @@ from graph_api.analytics_router import router as analytics_router
 from graph_api.reporting_services import router as reporting_router
 from graph_api.graphql_router import router as graphql_router
 from graph_api.graphql_catalogue_router import router as graphql_catalogue_router
+from graph_api.graphql_tools_router import router as graphql_tools_router
 from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
 from graph_api.agentic_router import router as agentic_router
 from graph_api.quality_router import router as quality_router
@@ -59,6 +60,7 @@ from graph_api.auth_router import router as auth_router
 from graph_api.opensearch_router import router as opensearch_router
 from graph_api.reports_router import router as reports_router
 from graph_api.rule_engine_router import router as rule_engine_router
+from graph_api.mcp_migration_runs_router import router as mcp_migration_runs_router
 from routers.pipeline_config_router import router as pipeline_config_router
 from routers.conversational_search_router import router as conversational_search_router
 from routers.admin_config_router import router as admin_config_router
@@ -276,6 +278,7 @@ app.include_router(analytics_router)
 app.include_router(reporting_router)
 app.include_router(graphql_router)
 app.include_router(graphql_catalogue_router)
+app.include_router(graphql_tools_router)
 app.include_router(neo4j_graphrag_router)
 app.include_router(agentic_router)
 app.include_router(quality_router)
@@ -299,6 +302,7 @@ app.include_router(compat_router)
 app.include_router(auth_router)
 app.include_router(opensearch_router)
 app.include_router(rule_engine_router)
+app.include_router(mcp_migration_runs_router)
 app.include_router(pipeline_config_router)
 app.include_router(conversational_search_router)
 app.include_router(admin_config_router)

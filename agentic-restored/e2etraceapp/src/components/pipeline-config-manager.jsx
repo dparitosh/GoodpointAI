@@ -10,7 +10,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import './pipeline-config-manager.css';
 
-const API_BASE = 'http://localhost:8011/config';
+import { API_CONFIG } from '../config/api-config.js';
+
+// Use same-origin by default (Vite proxy in dev). Can be overridden via VITE_API_BASE_URL.
+const API_BASE = `${API_CONFIG?.API_BASE_URL || ''}/config`;
 
 // Category icons mapping (FontAwesome classes)
 const CATEGORY_ICONS = {

@@ -33,7 +33,7 @@ Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$root\python_backend\
 Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$root\python_backend\.pytest_cache"
 Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$root\python_backend\logs"
 
-# Remove SQLite leftovers (even though runtime is Postgres-by-default)
+# Remove backend runtime working data (uploads/exports/temp, etc.)
 Remove-Item -Force -Recurse -ErrorAction SilentlyContinue "$root\python_backend\data"
 
 # Frontend artifacts

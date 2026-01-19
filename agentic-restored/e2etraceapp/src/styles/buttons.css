@@ -74,6 +74,19 @@
   color: var(--accent-color, #0066CC);
 }
 
+/* Ghost Button - Minimal chrome (used in dense toolbars) */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-color, #1A1A1A);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.7);
+  transform: translateY(-1px);
+}
+
 /* Success Button */
 .btn-success {
   background: var(--success-color, #24A148);
@@ -243,6 +256,15 @@
 [data-theme="dark"] .btn-outline {
   color: var(--dark-text-primary, #f1f5f9);
   border-color: var(--dark-border-color, #475569);
+}
+
+[data-theme="dark"] .btn-ghost {
+  color: var(--dark-text-primary, #f1f5f9);
+  border-color: var(--dark-border-color, #475569);
+}
+
+[data-theme="dark"] .btn-ghost:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 [data-theme="dark"] .btn-outline:hover:not(:disabled) {

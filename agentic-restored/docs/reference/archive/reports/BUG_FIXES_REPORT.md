@@ -139,7 +139,7 @@ navigate(`/workflow/${newWorkflow.id}`); // ✓ No timeout needed
 **Implementation:** In-memory `WORKFLOWS_STORE` already implemented
 
 **Next Steps (Technical Debt):**
-- TODO: Replace with SQLite/PostgreSQL for production
+- TODO (historical): Replace in-memory store with Postgres-backed persistence
 - TODO: Add persistence to disk for dev restarts
 - TODO: Implement database migrations
 
@@ -431,7 +431,7 @@ workflow_id = f"wf_{timestamp}_{uuid.uuid4().hex[:8]}"
 ##  REMAINING TECHNICAL DEBT
 
 ### Database Integration (High Priority):
-- Replace WORKFLOWS_STORE with PostgreSQL/SQLite
+- Replace WORKFLOWS_STORE with PostgreSQL (current persistence standard)
 - Implement database migrations
 - Add connection pooling
 

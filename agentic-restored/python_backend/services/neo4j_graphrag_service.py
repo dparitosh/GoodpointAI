@@ -6,11 +6,12 @@ Configuration is loaded from the admin config database with fallback to
 environment variables and config store for backward compatibility.
 """
 
+# pylint: disable=broad-exception-caught
+
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import os
-import httpx
 
 from core.config_store import get_encrypted_config_payload
 
@@ -267,18 +268,10 @@ class Neo4jGraphRAGService:
         Expected EMBEDDINGS_URL response shape:
           {"embedding": [..floats..]}
         """
-        if not self.embeddings_url:
-            return None
-
         try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.post(self.embeddings_url, json={"text": text})
-                resp.raise_for_status()
-                payload = resp.json()
-                embedding = payload.get("embedding")
-                if not isinstance(embedding, list) or not embedding:
-                    return None
-                return embedding
+            from services.embeddings_service import get_embedding_for_text
+
+            return get_embedding_for_text(text)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Embedding request failed: %s", exc)
             return None

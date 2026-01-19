@@ -30,7 +30,7 @@ def normalize_sqlalchemy_postgres_url(database_url: str) -> str:
         return raw
     if lower.startswith("postgresql://"):
         return "postgresql+psycopg://" + raw[len("postgresql://") :]
-    # Leave other schemes (sqlite, etc) unchanged.
+    # Leave other schemes unchanged.
     return raw
 
 

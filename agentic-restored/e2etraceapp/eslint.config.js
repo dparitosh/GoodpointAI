@@ -32,6 +32,21 @@ export default [
   },
   {
     files: [
+      '**/*.{test,spec}.{js,jsx}',
+      'tests/**/*.{js,jsx}',
+      'src/test/**/*.{js,jsx}',
+    ],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        // Vitest supports Jest-compatible globals when `test.globals = true`.
+        ...globals.jest,
+      },
+    },
+  },
+  {
+    files: [
       'src/e2etrace-main.jsx',
       'src/components/LoadingSpinner.jsx',
       'src/contexts/**/*.{js,jsx}',

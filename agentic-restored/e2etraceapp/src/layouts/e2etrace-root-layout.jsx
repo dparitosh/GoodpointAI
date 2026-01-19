@@ -40,11 +40,12 @@ const NAV_GROUPS = [
   },
   {
     id: 'workflows',
-    titleKey: 'nav.ruleEngine',
-    icon: 'fas fa-clipboard-check',
-    href: '/rule-engine',
-    matchPrefixes: ['/rule-engine', '/workflow'],
+    titleKey: 'nav.workflowManagement',
+    icon: 'fas fa-project-diagram',
+    href: '/workflow-manager',
+    matchPrefixes: ['/workflow-manager', '/workflow', '/rule-engine'],
     items: [
+      { to: '/workflow-manager', labelKey: 'nav.workflowManagement', icon: 'fas fa-stream' },
       { to: '/rule-engine', labelKey: 'nav.ruleEngine', icon: 'fas fa-clipboard-check' },
     ],
   },

@@ -20,9 +20,40 @@ export async function e2etraceFetchWithRetry(url, options, retries = API_CONFIG.
 
             // Don't retry on 4xx client errors, as they are likely not transient.
             if (response.status >= 400 && response.status < 500) {
-                const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status}` }));
-                const clientError = new Error(errorData.message || errorData.detail || `Client Error: ${response.status}`);
+                const errorData = await response
+                    .json()
+                    .catch(() => ({ message: `HTTP error! status: ${response.status}` }));
+
+                // Normalize FastAPI-style {detail: ...} payloads into a readable string.
+                let message = `Client Error: ${response.status}`;
+                if (errorData && typeof errorData === 'object') {
+                    if (typeof errorData.message === 'string' && errorData.message.trim()) {
+                        message = errorData.message;
+                    } else if (typeof errorData.detail === 'string' && errorData.detail.trim()) {
+                        message = errorData.detail;
+                    } else if (errorData.detail && typeof errorData.detail === 'object') {
+                        if (typeof errorData.detail.message === 'string' && errorData.detail.message.trim()) {
+                            message = errorData.detail.message;
+                        } else {
+                            try {
+                                message = JSON.stringify(errorData.detail);
+                            } catch {
+                                message = String(errorData.detail);
+                            }
+                        }
+                    } else {
+                        try {
+                            message = JSON.stringify(errorData);
+                        } catch {
+                            message = String(errorData);
+                        }
+                    }
+                }
+
+                const clientError = new Error(message);
                 clientError.isClientError = true; // Mark as non-retryable
+                clientError.status = response.status;
+                clientError.data = errorData;
                 throw clientError;
             }
 

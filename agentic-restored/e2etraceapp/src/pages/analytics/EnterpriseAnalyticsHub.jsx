@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { getExcelSheetNames, readExcelArrayBufferToAoa } from '../../utils/spreadsheet-utils.js';
@@ -23,6 +24,16 @@ import {
   useGraphQLCatalogue
 } from '../../hooks/useGraphQL';
 import './EnterpriseAnalyticsHub.css';
+
+const normalizeAnalyticsTab = (raw) => {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v) return 'query-builder';
+  if (['quality', 'quality-reports', 'data-quality', 'dq', 'reports'].includes(v)) return 'quality-reports';
+  if (['saved', 'saved-queries', 'queries'].includes(v)) return 'saved-queries';
+  if (['natural', 'natural-language', 'nlq'].includes(v)) return 'natural-language';
+  if (['query', 'query-builder', 'builder'].includes(v)) return 'query-builder';
+  return 'query-builder';
+};
 
 const DATA_SOURCE_CONFIG = {
   postgres: { name: 'PostgreSQL', icon: 'PG', color: '#336791', endpoint: '/api/analytics/sql', queryType: 'SQL' },
@@ -88,8 +99,11 @@ const AGGREGATIONS = [
 ];
 
 const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // Core state
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTab] = useState(() => normalizeAnalyticsTab(initialTab));
   const [dataSource, setDataSource] = useState('postgres');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -127,6 +141,8 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [selectedReportIndex, setSelectedReportIndex] = useState(null);
   const [selectedQualityReport, setSelectedQualityReport] = useState(null);
   const [qualityReportDetailLoading, setQualityReportDetailLoading] = useState(false);
+  const [qualityScanTable, setQualityScanTable] = useState('workflows');
+  const [exportingQualityScanId, setExportingQualityScanId] = useState(null);
 
   // Spreadsheet Integration state
   const [spreadsheetConfig, setSpreadsheetConfig] = useState({
@@ -200,6 +216,50 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     checkConnectivity();
   }, []);
 
+  // Allow deep links like /analytics?tab=quality-reports and keep the URL in sync
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const requested = params.get('tab');
+    if (!requested) return;
+    const normalized = normalizeAnalyticsTab(requested);
+    if (normalized !== activeTab) {
+      setActiveTab(normalized);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const shouldPinTabInUrl = params.has('tab') || activeTab !== 'query-builder';
+
+    if (!shouldPinTabInUrl) {
+      if (params.has('tab')) {
+        params.delete('tab');
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : ''
+          },
+          { replace: true }
+        );
+      }
+      return;
+    }
+
+    const current = normalizeAnalyticsTab(params.get('tab'));
+    if (current !== activeTab) {
+      params.set('tab', activeTab);
+      navigate(
+        {
+          pathname: location.pathname,
+          search: `?${params.toString()}`
+        },
+        { replace: true }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   useEffect(() => {
     loadQueries(100, 0).catch(() => {});
     fetchQualityReports();
@@ -235,6 +295,93 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
       setSelectedQualityReport(null);
     } finally {
       setQualityReportDetailLoading(false);
+    }
+  };
+
+  const downloadTextFile = (content, filename, mimeType) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const csvEscape = (value) => {
+    if (value === null || value === undefined) return '';
+    const s = String(value);
+    // Escape quotes and wrap in quotes if needed
+    if (/[\n\r,"]/g.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const exportQualityReport = async (report, format) => {
+    const scanId = report?.scan_id;
+    if (!scanId) return;
+
+    setExportingQualityScanId(scanId);
+    setError(null);
+
+    try {
+      const response = await e2etraceFetchWithRetry(
+        `/api/analytics/quality/reports/${encodeURIComponent(scanId)}`
+      );
+      const detail = await response.json();
+
+      const tableName = String(detail?.table_name || report?.table_name || 'table').replace(/[^a-zA-Z0-9._-]+/g, '_');
+      const safeScanId = String(scanId).replace(/[^a-zA-Z0-9._-]+/g, '_');
+      const baseName = `dq_report_${tableName}_${safeScanId}`;
+
+      if (format === 'csv') {
+        const headers = [
+          'scan_id',
+          'table_name',
+          'source',
+          'row_count',
+          'missing_values',
+          'invalid_values',
+          'duplicate_count',
+          'freshness_last_updated',
+          'delayed_arrivals',
+          'sla_violations',
+          'overall_score',
+          'issues_count',
+          'issues_summary'
+        ];
+
+        const issuesSummary = Array.isArray(detail?.issues)
+          ? detail.issues.map((i) => i?.description || '').filter(Boolean).join('; ')
+          : '';
+
+        const values = [
+          scanId,
+          detail?.table_name ?? report?.table_name ?? '',
+          detail?.source ?? report?.source ?? '',
+          detail?.row_count ?? report?.row_count ?? '',
+          detail?.missing_values ?? report?.missing_values ?? '',
+          detail?.invalid_values ?? report?.invalid_values ?? '',
+          detail?.duplicate_count ?? report?.duplicate_count ?? '',
+          detail?.freshness?.last_updated ?? report?.freshness?.last_updated ?? '',
+          detail?.delayed_arrivals ?? report?.delayed_arrivals ?? '',
+          detail?.sla_violations ?? report?.sla_violations ?? '',
+          detail?.overall_score ?? report?.overall_score ?? '',
+          Array.isArray(detail?.issues) ? detail.issues.length : (Array.isArray(report?.issues) ? report.issues.length : ''),
+          issuesSummary
+        ];
+
+        const csv = `${headers.join(',')}\n${values.map(csvEscape).join(',')}\n`;
+        downloadTextFile(csv, `${baseName}.csv`, 'text/csv;charset=utf-8');
+        return;
+      }
+
+      downloadTextFile(JSON.stringify(detail, null, 2), `${baseName}.json`, 'application/json');
+    } catch (err) {
+      setError(`Export failed: ${err?.message || String(err)}`);
+    } finally {
+      setExportingQualityScanId(null);
     }
   };
 
@@ -1506,20 +1653,60 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                       ))}
                     </select>
                   </div>
+                  {dataSource === 'postgres' ? (
+                    <div className="quality-datasource-selector" title="Postgres scans require a table name">
+                      <span>Table:</span>
+                      <input
+                        value={qualityScanTable}
+                        onChange={(e) => setQualityScanTable(e.target.value)}
+                        className="form-select-sm"
+                        placeholder="workflows"
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : null}
                   <button onClick={fetchQualityReports} className="btn btn-secondary">Refresh Reports</button>
                   <button 
                     onClick={async () => {
                       setLoading(true);
                       try {
-                        const response = await e2etraceFetchWithRetry('/api/analytics/quality/scan', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ datasource: dataSource, scan_type: 'full' })
-                        });
-                        if (response.ok) {
-                          const result = await response.json();
-                          alert(`Scan initiated: ${result.message || 'Quality scan started'}`);
-                          setTimeout(fetchQualityReports, 2000);
+                        const isPostgres = dataSource === 'postgres';
+
+                        if (isPostgres) {
+                          const tableName = String(qualityScanTable || '').trim() || 'workflows';
+                          const response = await e2etraceFetchWithRetry(
+                            `/api/analytics/quality/scan/${encodeURIComponent(tableName)}`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({})
+                            }
+                          );
+
+                          const result = await response.json().catch(() => ({}));
+                          if (!response.ok) {
+                            throw new Error(result?.detail || `Scan failed (${response.status})`);
+                          }
+
+                          alert(`Scan completed: ${result.message || 'Quality scan completed'}`);
+                          setTimeout(fetchQualityReports, 500);
+                        } else {
+                          const response = await e2etraceFetchWithRetry('/api/analytics/quality/scan', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ datasource: dataSource, scan_type: 'full' })
+                          });
+
+                          const result = await response.json().catch(() => ({}));
+                          if (!response.ok) {
+                            throw new Error(result?.detail || `Scan failed (${response.status})`);
+                          }
+
+                          const persisted = Boolean(result?.persisted);
+                          alert(`Scan completed${persisted ? '' : ''}: ${result.message || 'Quality scan finished'}`);
+                          if (persisted) {
+                            setTimeout(fetchQualityReports, 500);
+                          }
                         }
                       } catch (err) {
                         setError('Failed to start quality scan: ' + err.message);
@@ -1528,7 +1715,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                       }
                     }}
                     className="btn btn-primary"
-                    disabled={loading || !dbStatus[dataSource]}
+                    disabled={loading || (dataSource === 'postgres' && !dbStatus.postgres)}
                   >
                     Run New Scan
                   </button>
@@ -1630,8 +1817,27 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                             <button className="btn-action" onClick={(e) => { e.stopPropagation(); setQueryText(`SELECT * FROM ${report.table_name} LIMIT 100`); setDataSource('postgres'); setActiveTab('query-builder'); }} title="Query Table">
                               <i className="fas fa-search"></i>
                             </button>
-                            <button className="btn-action" onClick={(e) => { e.stopPropagation(); }} title="Export Report">
-                              <i className="fas fa-download"></i>
+                            <button
+                              className="btn-action btn-action-text"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                exportQualityReport(report, 'json');
+                              }}
+                              disabled={exportingQualityScanId === report.scan_id}
+                              title="Export report as JSON"
+                            >
+                              JSON
+                            </button>
+                            <button
+                              className="btn-action btn-action-text"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                exportQualityReport(report, 'csv');
+                              }}
+                              disabled={exportingQualityScanId === report.scan_id}
+                              title="Export report summary as CSV"
+                            >
+                              CSV
                             </button>
                           </td>
                         </tr>

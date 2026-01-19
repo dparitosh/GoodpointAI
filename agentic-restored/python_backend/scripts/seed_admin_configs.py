@@ -8,7 +8,6 @@ Run this script after database migration to populate initial configurations.
 import os
 import sys
 import logging
-from datetime import datetime, timezone
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -119,7 +118,7 @@ def seed_system_configurations(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info(f"Created {created_count} system configurations")
+    logger.info("Created %s system configurations", created_count)
 
 
 def seed_llm_providers(db: Session):
@@ -212,7 +211,7 @@ def seed_llm_providers(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info(f"Created {created_count} LLM provider configurations")
+    logger.info("Created %s LLM provider configurations", created_count)
 
 
 def seed_embedding_models(db: Session):
@@ -300,12 +299,19 @@ def seed_embedding_models(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info(f"Created {created_count} embedding model configurations")
+    logger.info("Created %s embedding model configurations", created_count)
 
 
 def seed_connections(db: Session):
     """Seed default connection configurations."""
     logger.info("Seeding connection configurations...")
+
+    soda_python = (os.getenv("GRAPH_TRACE_SODA_EXTERNAL_PYTHON") or "").strip()
+    soda_timeout_raw = (os.getenv("GRAPH_TRACE_SODA_EXTERNAL_TIMEOUT_S") or "").strip()
+    try:
+        soda_timeout_s = int(soda_timeout_raw) if soda_timeout_raw else None
+    except ValueError:
+        soda_timeout_s = None
     
     connections = [
         {
@@ -369,6 +375,18 @@ def seed_connections(db: Session):
             "password": os.getenv("REDIS_PASSWORD", ""),
             "status": "inactive",
             "is_default": True
+        },
+        {
+            "id": "soda_external_runner",
+            "connection_type": "soda_external",
+            "name": "Soda External Runner",
+            "description": "External Python interpreter used to run Soda scans (e.g., Python 3.11 venv)",
+            "extra_options": {
+                "python_path": soda_python or None,
+                "timeout_s": soda_timeout_s,
+            },
+            "status": "active" if soda_python else "inactive",
+            "is_default": True,
         }
     ]
     
@@ -381,7 +399,7 @@ def seed_connections(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info(f"Created {created_count} connection configurations")
+    logger.info("Created %s connection configurations", created_count)
 
 
 def seed_feature_flags(db: Session):
@@ -470,7 +488,7 @@ def seed_feature_flags(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info(f"Created {created_count} feature flags")
+    logger.info("Created %s feature flags", created_count)
 
 
 def create_tables():
@@ -501,7 +519,7 @@ def main():
         logger.info("Admin configuration seeding completed successfully!")
         
     except Exception as e:
-        logger.error(f"Error seeding configurations: {e}")
+        logger.error("Error seeding configurations: %s", e)
         db.rollback()
         raise
     finally:

@@ -13,7 +13,7 @@ from enum import Enum
 
 from sqlalchemy import (
     String, Integer, DateTime, JSON, Text, Float, Boolean,
-    Index, UniqueConstraint, Enum as SQLEnum
+    Index, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import text
@@ -388,7 +388,8 @@ class SystemConfigBase(BaseModel):
 
 class SystemConfigCreate(SystemConfigBase):
     """Create system configuration"""
-    pass
+    # Keep API behavior explicit even though this is structurally identical to SystemConfigBase.
+    model_config = ConfigDict(extra="forbid")
 
 
 class SystemConfigUpdate(BaseModel):
@@ -438,7 +439,11 @@ class LLMProviderBase(BaseModel):
 
 class LLMProviderCreate(LLMProviderBase):
     """Create LLM provider"""
-    id: str = Field(..., description="Unique identifier")
+    id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Unique identifier (optional; if omitted, the server will generate one)",
+    )
 
 
 class LLMProviderUpdate(BaseModel):
@@ -491,7 +496,11 @@ class EmbeddingModelBase(BaseModel):
 
 class EmbeddingModelCreate(EmbeddingModelBase):
     """Create embedding model"""
-    id: str = Field(..., description="Unique identifier")
+    id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Unique identifier (optional; if omitted, the server will generate one)",
+    )
 
 
 class EmbeddingModelUpdate(BaseModel):
@@ -499,6 +508,9 @@ class EmbeddingModelUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     max_input_length: Optional[int] = None
+    llm_provider_id: Optional[str] = None
+    custom_endpoint: Optional[str] = None
+    custom_api_key: Optional[str] = None
     batch_size: Optional[int] = None
     normalize: Optional[bool] = None
     status: Optional[str] = None
@@ -537,7 +549,11 @@ class ConnectionConfigBase(BaseModel):
 
 class ConnectionConfigCreate(ConnectionConfigBase):
     """Create connection configuration"""
-    id: str = Field(..., description="Unique identifier")
+    id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Unique identifier (optional; if omitted, the server will generate one)",
+    )
 
 
 class ConnectionConfigUpdate(BaseModel):
@@ -551,7 +567,11 @@ class ConnectionConfigUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     use_ssl: Optional[bool] = None
+    ssl_cert_path: Optional[str] = None
     pool_size: Optional[int] = None
+    max_overflow: Optional[int] = None
+    pool_timeout: Optional[int] = None
+    extra_options: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
     is_default: Optional[bool] = None
 
@@ -579,7 +599,11 @@ class FeatureFlagBase(BaseModel):
 
 class FeatureFlagCreate(FeatureFlagBase):
     """Create feature flag"""
-    id: str
+    id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Unique identifier (optional; if omitted, the server will generate one)",
+    )
 
 
 class FeatureFlagUpdate(BaseModel):

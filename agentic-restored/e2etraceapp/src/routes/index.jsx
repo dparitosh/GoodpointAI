@@ -9,6 +9,7 @@ import MigrationPage from '../pages/migration/MigrationPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
+import WorkflowManagerPage from '../pages/workflow-manager/WorkflowManagerPage.jsx';
 import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
 import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
 import MultiModalAnalyzerPage from '../pages/multimodal/MultiModalAnalyzerPage.jsx';
@@ -121,7 +122,7 @@ const router = createHashRouter([
       // Reports & Dashboards - Merged into Enterprise Analytics Hub
       {
         path: 'reporting',
-        element: <Navigate to="/analytics?tab=reports" replace />,
+        element: <Navigate to="/analytics?tab=quality-reports" replace />,
         handle: { crumb: 'nav.analytics' },
       },
       
@@ -161,8 +162,8 @@ const router = createHashRouter([
       // Workflow Manager - redirects to Analytics
       {
         path: 'workflow-manager',
-        element: <Navigate to="/analytics" replace />,
-        handle: { crumb: 'nav.analytics' },
+        element: <WorkflowManagerPage />,
+        handle: { crumb: 'nav.workflowManagement' },
       },
       
       // Workflow Detail - Individual workflow instance view

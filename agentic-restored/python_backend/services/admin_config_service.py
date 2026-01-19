@@ -12,13 +12,14 @@ Features:
 - Change notifications (optional)
 """
 
+# pylint: disable=broad-exception-caught
+
 from __future__ import annotations
 
 import os
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
-from functools import lru_cache
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -81,7 +82,6 @@ class AdminConfigService:
     
     def __init__(self, db: Optional[Session] = None):
         self.db = db
-        self._use_db = db is not None
     
     # ------------------------------------------------------------------
     # LLM Provider Configuration
@@ -102,13 +102,14 @@ class AdminConfigService:
         if cached:
             return cached
         
-        config = {}
-        
-        if self._use_db:
+        config: Dict[str, Any] = {}
+
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import LLMProviderConfig, ConfigStatus
                 
-                db_config = self.db.query(LLMProviderConfig).filter(
+                db_config = db.query(LLMProviderConfig).filter(
                     and_(
                         LLMProviderConfig.provider == provider,
                         LLMProviderConfig.status == ConfigStatus.ACTIVE
@@ -119,16 +120,15 @@ class AdminConfigService:
                     config = {
                         "provider": db_config.provider,
                         "api_key": db_config.api_key,
-                        "model": db_config.default_model,
-                        "endpoint": db_config.endpoint_url,
+                        "model": db_config.default_chat_model or "",
+                        "endpoint": db_config.api_endpoint or "",
                         "api_version": db_config.api_version,
-                        "max_tokens": db_config.max_tokens,
-                        "temperature": db_config.temperature,
-                        "organization": db_config.organization_id,
-                        "timeout": db_config.timeout_seconds,
+                        "max_tokens": db_config.default_max_tokens,
+                        "temperature": db_config.default_temperature,
+                        "top_p": db_config.default_top_p,
                         "rate_limit_rpm": db_config.rate_limit_rpm,
                         "rate_limit_tpm": db_config.rate_limit_tpm,
-                        "extra_settings": db_config.extra_settings or {},
+                        "extra_settings": db_config.extra_config or {},
                     }
                     _config_cache.set(cache_key, config)
                     return config
@@ -194,21 +194,22 @@ class AdminConfigService:
         if cached:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import LLMProviderConfig, ConfigStatus
                 
                 # Try to get primary provider first
-                db_config = self.db.query(LLMProviderConfig).filter(
+                db_config = db.query(LLMProviderConfig).filter(
                     and_(
                         LLMProviderConfig.status == ConfigStatus.ACTIVE,
-                        LLMProviderConfig.is_primary == True
+                        LLMProviderConfig.is_default == True
                     )
                 ).first()
                 
                 # Fall back to any active provider
                 if not db_config:
-                    db_config = self.db.query(LLMProviderConfig).filter(
+                    db_config = db.query(LLMProviderConfig).filter(
                         LLMProviderConfig.status == ConfigStatus.ACTIVE
                     ).first()
                 
@@ -235,21 +236,22 @@ class AdminConfigService:
         if cached:
             return cached
         
-        providers = []
-        
-        if self._use_db:
+        providers: List[Dict[str, Any]] = []
+
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import LLMProviderConfig
                 
-                db_configs = self.db.query(LLMProviderConfig).all()
+                db_configs = db.query(LLMProviderConfig).all()
                 for cfg in db_configs:
                     providers.append({
                         "id": cfg.id,
                         "name": cfg.name,
                         "provider": cfg.provider,
-                        "model": cfg.default_model,
+                        "model": cfg.default_chat_model or "",
                         "status": cfg.status,
-                        "is_primary": cfg.is_primary,
+                        "is_default": cfg.is_default,
                     })
                 if providers:
                     _config_cache.set(cache_key, providers)
@@ -291,37 +293,41 @@ class AdminConfigService:
         if cached:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import EmbeddingModelConfig, ConfigStatus
                 
-                query = self.db.query(EmbeddingModelConfig).filter(
+                query = db.query(EmbeddingModelConfig).filter(
                     EmbeddingModelConfig.status == ConfigStatus.ACTIVE
                 )
                 if provider:
                     query = query.filter(EmbeddingModelConfig.provider == provider)
                 else:
-                    query = query.filter(EmbeddingModelConfig.is_primary == True)
+                    query = query.filter(EmbeddingModelConfig.is_default == True)
                 
                 db_config = query.first()
                 
                 # Fallback to any active embedding
                 if not db_config and not provider:
-                    db_config = self.db.query(EmbeddingModelConfig).filter(
+                    db_config = db.query(EmbeddingModelConfig).filter(
                         EmbeddingModelConfig.status == ConfigStatus.ACTIVE
                     ).first()
                 
                 if db_config:
-                    config = {
+                    config: Dict[str, Any] = {
                         "provider": db_config.provider,
                         "model": db_config.model_name,
                         "dimension": db_config.dimension,
-                        "api_key": db_config.api_key,
-                        "endpoint": db_config.endpoint_url,
-                        "max_tokens": db_config.max_tokens,
+                        # Keep these keys stable for callers even though the DB columns
+                        # are named custom_*.
+                        "api_key": db_config.custom_api_key or "",
+                        "endpoint": db_config.custom_endpoint or "",
+                        # Use max_input_length as the closest meaning to token/input limit.
+                        "max_tokens": getattr(db_config, "max_input_length", 512),
                         "batch_size": db_config.batch_size,
-                        "normalize": db_config.normalize_embeddings,
-                        "extra_settings": db_config.extra_settings or {},
+                        "normalize": bool(getattr(db_config, "normalize", True)),
+                        "extra_settings": {},
                     }
                     _config_cache.set(cache_key, config)
                     return config
@@ -378,11 +384,12 @@ class AdminConfigService:
         if cached:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import ConnectionConfig, ConfigStatus
                 
-                db_config = self.db.query(ConnectionConfig).filter(
+                db_config = db.query(ConnectionConfig).filter(
                     and_(
                         ConnectionConfig.connection_type == connection_type,
                         ConnectionConfig.status == ConfigStatus.ACTIVE
@@ -480,11 +487,12 @@ class AdminConfigService:
         if cached is not None:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import SystemConfiguration
                 
-                db_config = self.db.query(SystemConfiguration).filter(
+                db_config = db.query(SystemConfiguration).filter(
                     and_(
                         SystemConfiguration.category == category,
                         SystemConfiguration.key == key,
@@ -512,13 +520,14 @@ class AdminConfigService:
         if cached:
             return cached
         
-        configs = {}
-        
-        if self._use_db:
+        configs: Dict[str, Any] = {}
+
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import SystemConfiguration
                 
-                db_configs = self.db.query(SystemConfiguration).filter(
+                db_configs = db.query(SystemConfiguration).filter(
                     and_(
                         SystemConfiguration.category == category,
                         SystemConfiguration.enabled == True
@@ -577,13 +586,12 @@ class AdminConfigService:
         if cached is not None:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import FeatureFlag
                 
-                flag = self.db.query(FeatureFlag).filter(
-                    FeatureFlag.key == feature_key
-                ).first()
+                flag = db.query(FeatureFlag).filter(FeatureFlag.id == feature_key).first()
                 
                 if flag:
                     enabled = flag.enabled
@@ -603,15 +611,16 @@ class AdminConfigService:
         if cached:
             return cached
         
-        flags = {}
-        
-        if self._use_db:
+        flags: Dict[str, bool] = {}
+
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import FeatureFlag
                 
-                db_flags = self.db.query(FeatureFlag).all()
+                db_flags = db.query(FeatureFlag).all()
                 for flag in db_flags:
-                    flags[flag.key] = flag.enabled
+                    flags[flag.id] = flag.enabled
                 
                 if flags:
                     _config_cache.set(cache_key, flags)
@@ -641,11 +650,12 @@ class AdminConfigService:
         if cached:
             return cached
         
-        if self._use_db:
+        db = self.db
+        if db is not None:
             try:
                 from models.admin_config_models import APIKeyConfig, ConfigStatus
                 
-                db_config = self.db.query(APIKeyConfig).filter(
+                db_config = db.query(APIKeyConfig).filter(
                     and_(
                         APIKeyConfig.service_name == service,
                         APIKeyConfig.status == ConfigStatus.ACTIVE

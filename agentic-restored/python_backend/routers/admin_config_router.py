@@ -5,13 +5,17 @@ API endpoints for managing LLM providers, embedding models,
 API keys, and all system configurations centrally.
 """
 
+# pylint: disable=broad-exception-caught
+
 import logging
+import re
+import subprocess
+import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
 
 from core.db_session import get_db
 from models.admin_config_models import (
@@ -19,7 +23,6 @@ from models.admin_config_models import (
     SystemConfiguration,
     LLMProviderConfig,
     EmbeddingModelConfig,
-    APIKeyConfig,
     ConnectionConfig,
     FeatureFlag,
     AuditLog,
@@ -110,6 +113,28 @@ def invalidate_config_cache():
         logger.warning("Failed to invalidate config cache: %s", e)
 
 
+def _slugify(value: str, max_len: int) -> str:
+    """Conservative slugify for IDs (letters/numbers/underscore).
+
+    Keeps IDs stable-ish across environments while staying within DB column limits.
+    """
+    raw = (value or "").strip().lower()
+    raw = re.sub(r"[^a-z0-9]+", "_", raw)
+    raw = raw.strip("_")
+    if not raw:
+        return ""
+    return raw[:max_len]
+
+
+def _generate_config_id(prefix: str, max_len: int = 50) -> str:
+    """Generate a short unique ID that fits within the configured DB column size."""
+    token = uuid.uuid4().hex[:12]
+    # Leave room for '_' + token
+    base_max = max(1, max_len - (len(token) + 1))
+    base = _slugify(prefix, base_max) or "cfg"
+    return f"{base}_{token}"[:max_len]
+
+
 def _workspace_root() -> Path:
     # python_backend/routers -> python_backend -> agentic-restored
     return Path(__file__).resolve().parents[2]
@@ -118,6 +143,51 @@ def _workspace_root() -> Path:
 def _allowed_local_roots() -> List[Path]:
     root = _workspace_root()
     candidates = [root / "data", root / "python_backend" / "data", root.parent / "data"]
+
+    # Admin/server-controlled allowlist (stored encrypted in DB).
+    # This matches the logic used by /api/data-sources/* sampling.
+    try:
+        from core.config_store import get_encrypted_config_payload
+
+        sys_cfg = get_encrypted_config_payload("system_configuration")
+        allowed_list: list[object] = []
+        if isinstance(sys_cfg, dict):
+            roots_val = sys_cfg.get("allowed_local_roots")
+            if isinstance(roots_val, list):
+                allowed_list = roots_val
+            else:
+                fs_cfg = sys_cfg.get("filesystem")
+                if isinstance(fs_cfg, dict):
+                    roots_val2 = fs_cfg.get("allowed_local_roots")
+                    if isinstance(roots_val2, list):
+                        allowed_list = roots_val2
+
+        for item in allowed_list:
+            p = str(item).strip().strip('"')
+            if not p:
+                continue
+            try:
+                candidates.append(Path(p))
+            except Exception:
+                continue
+    except Exception:
+        # Non-fatal: fall back to env + repo-local defaults.
+        pass
+
+    # Environment allowlist (Windows-friendly delimiter).
+    import os
+
+    extra_raw = (os.getenv("GRAPH_TRACE_ALLOWED_LOCAL_ROOTS") or "").strip()
+    if extra_raw:
+        for item in extra_raw.split(";"):
+            p = item.strip().strip('"')
+            if not p:
+                continue
+            try:
+                candidates.append(Path(p))
+            except Exception:
+                continue
+
     return [p.resolve() for p in candidates if p.exists()]
 
 
@@ -137,6 +207,25 @@ def _is_under_allowed_root(path: Path) -> bool:
 
 def _get_extra_options(conn: ConnectionConfig) -> Dict[str, Any]:
     return conn.extra_options if isinstance(conn.extra_options, dict) else {}
+
+
+_PUBLIC_CONNECTION_STRING_TYPES = {"api", "rest_api", "webapi", "openapi", "odata"}
+
+
+def _connection_string_for_response(conn: ConnectionConfig) -> Optional[str]:
+    """Return connection_string for API response.
+
+    For API-like integrations, connection_string is typically a base URL and should
+    be viewable/editable. For DB-like connections, connection_string may include
+    credentials, so we keep masking.
+    """
+    raw = getattr(conn, "connection_string", None)
+    if not raw:
+        return None
+    ctype = (getattr(conn, "connection_type", "") or "").lower().strip()
+    if ctype in _PUBLIC_CONNECTION_STRING_TYPES:
+        return raw
+    return mask_secret(raw)
 
 
 def _missing_fields(fields: Dict[str, Any], required: List[str]) -> List[str]:
@@ -168,6 +257,51 @@ async def invalidate_cache():
     return {"status": "success", "message": "Configuration cache invalidated"}
 
 
+@router.get("/meta", response_model=Dict[str, Any])
+async def get_admin_config_meta() -> Dict[str, Any]:
+    """Return metadata used to render admin config UIs dynamically.
+
+    This endpoint is intentionally value-free (no secrets, no configured instances).
+    It provides JSON schema for create/update payloads and option lists for enums.
+    """
+    return {
+        "schemas": {
+            "llm_provider": {
+                "create": LLMProviderCreate.model_json_schema(),
+                "update": LLMProviderUpdate.model_json_schema(),
+            },
+            "embedding_model": {
+                "create": EmbeddingModelCreate.model_json_schema(),
+                "update": EmbeddingModelUpdate.model_json_schema(),
+            },
+            "connection": {
+                "create": ConnectionConfigCreate.model_json_schema(),
+                "update": ConnectionConfigUpdate.model_json_schema(),
+            },
+            "feature_flag": {
+                "create": FeatureFlagCreate.model_json_schema(),
+                "update": FeatureFlagUpdate.model_json_schema(),
+            },
+            "system_setting": {
+                "create": SystemConfigCreate.model_json_schema(),
+                "update": SystemConfigUpdate.model_json_schema(),
+            },
+        },
+        "enums": {
+            "llm_providers": [p.value for p in LLMProvider],
+            "embedding_providers": [p.value for p in EmbeddingProvider],
+            "config_categories": [c.value for c in ConfigCategory],
+        },
+        "ui_hints": {
+            "llm_provider": {"secret_fields": ["api_key"], "id_required": False},
+            "embedding_model": {"secret_fields": ["custom_api_key"], "id_required": False},
+            "connection": {"secret_fields": ["password", "connection_string"], "id_required": False},
+            "feature_flag": {"secret_fields": [], "id_required": False},
+            "system_setting": {"secret_fields": ["value"], "id_required": False},
+        },
+    }
+
+
 # ============================================================
 # System Configuration API
 # ============================================================
@@ -190,9 +324,9 @@ async def list_system_configs(
     configs = query.order_by(SystemConfiguration.category, SystemConfiguration.key).all()
     
     # Mask secrets if not requesting them
-    result = []
+    result: List[SystemConfigResponse] = []
     for config in configs:
-        config_dict = {
+        config_dict: Dict[str, Any] = {
             "id": config.id,
             "category": config.category,
             "key": config.key,
@@ -209,7 +343,8 @@ async def list_system_configs(
             "created_by": config.created_by,
             "updated_by": config.updated_by
         }
-        result.append(SystemConfigResponse(**config_dict))
+        # model_validate keeps static type-checkers happy with dynamic dicts.
+        result.append(SystemConfigResponse.model_validate(config_dict))
     
     return result
 
@@ -492,9 +627,11 @@ async def create_llm_provider(
     db: Session = Depends(get_db)
 ):
     """Create a new LLM provider configuration."""
-    existing = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider.id).first()
+    provider_id = (provider.id or "").strip() or _generate_config_id(f"llm_{provider.provider}")
+
+    existing = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Provider '{provider.id}' already exists")
+        raise HTTPException(status_code=400, detail=f"Provider '{provider_id}' already exists")
     
     # If setting as default, unset other defaults
     if provider.is_default:
@@ -503,15 +640,17 @@ async def create_llm_provider(
             LLMProviderConfig.is_default == True
         ).update({"is_default": False})
     
-    db_provider = LLMProviderConfig(**provider.model_dump())
+    payload = provider.model_dump()
+    payload["id"] = provider_id
+    db_provider = LLMProviderConfig(**payload)
     db.add(db_provider)
     
     # Log audit (mask API key)
-    audit_data = provider.model_dump()
+    audit_data = payload.copy()
     if audit_data.get("api_key"):
         audit_data["api_key"] = "[REDACTED]"
     log_audit(
-        db, "llm_provider", provider.id, "create",
+        db, "llm_provider", provider_id, "create",
         new_value=audit_data,
         ip_address=request.client.host if request.client else None
     )
@@ -709,20 +848,24 @@ async def create_embedding_model(
     db: Session = Depends(get_db)
 ):
     """Create a new embedding model configuration."""
-    existing = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model.id).first()
+    model_id = (model.id or "").strip() or _generate_config_id(f"emb_{model.provider}")
+
+    existing = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Embedding model '{model.id}' already exists")
+        raise HTTPException(status_code=400, detail=f"Embedding model '{model_id}' already exists")
     
     # If setting as default, unset other defaults
     if model.is_default:
         db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.is_default == True).update({"is_default": False})
     
-    db_model = EmbeddingModelConfig(**model.model_dump())
+    payload = model.model_dump()
+    payload["id"] = model_id
+    db_model = EmbeddingModelConfig(**payload)
     db.add(db_model)
     
     log_audit(
-        db, "embedding_model", model.id, "create",
-        new_value=model.model_dump(),
+        db, "embedding_model", model_id, "create",
+        new_value=payload,
         ip_address=request.client.host if request.client else None
     )
     
@@ -824,7 +967,7 @@ async def list_connections(
             connection_type=conn.connection_type,
             name=conn.name,
             description=conn.description,
-            connection_string=mask_secret(conn.connection_string) if conn.connection_string else None,
+            connection_string=_connection_string_for_response(conn),
             host=conn.host,
             port=conn.port,
             database=conn.database,
@@ -861,7 +1004,7 @@ async def get_connection(conn_id: str, db: Session = Depends(get_db)):
         connection_type=conn.connection_type,
         name=conn.name,
         description=conn.description,
-        connection_string=mask_secret(conn.connection_string) if conn.connection_string else None,
+        connection_string=_connection_string_for_response(conn),
         host=conn.host,
         port=conn.port,
         database=conn.database,
@@ -890,9 +1033,11 @@ async def create_connection(
     db: Session = Depends(get_db)
 ):
     """Create a new connection configuration."""
-    existing = db.query(ConnectionConfig).filter(ConnectionConfig.id == connection.id).first()
+    conn_id = (connection.id or "").strip() or _generate_config_id(f"conn_{connection.connection_type}")
+
+    existing = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Connection '{connection.id}' already exists")
+        raise HTTPException(status_code=400, detail=f"Connection '{conn_id}' already exists")
     
     # If setting as default, unset other defaults for same type
     if connection.is_default:
@@ -901,17 +1046,19 @@ async def create_connection(
             ConnectionConfig.is_default == True
         ).update({"is_default": False})
     
-    db_conn = ConnectionConfig(**connection.model_dump())
+    payload = connection.model_dump()
+    payload["id"] = conn_id
+    db_conn = ConnectionConfig(**payload)
     db.add(db_conn)
     
     # Log audit (mask secrets)
-    audit_data = connection.model_dump()
+    audit_data = payload.copy()
     if audit_data.get("password"):
         audit_data["password"] = "[REDACTED]"
     if audit_data.get("connection_string"):
         audit_data["connection_string"] = "[REDACTED]"
     log_audit(
-        db, "connection", connection.id, "create",
+        db, "connection", conn_id, "create",
         new_value=audit_data,
         ip_address=request.client.host if request.client else None
     )
@@ -924,7 +1071,7 @@ async def create_connection(
         connection_type=db_conn.connection_type,
         name=db_conn.name,
         description=db_conn.description,
-        connection_string=mask_secret(db_conn.connection_string) if db_conn.connection_string else None,
+        connection_string=_connection_string_for_response(db_conn),
         host=db_conn.host,
         port=db_conn.port,
         database=db_conn.database,
@@ -961,6 +1108,11 @@ async def update_connection(
     old_value = {"name": db_conn.name, "status": db_conn.status}
     
     update_data = conn_update.model_dump(exclude_unset=True)
+    # Secret-safe update: allow UI to omit/blank out without overwriting stored secret.
+    if "password" in update_data:
+        pw = update_data.get("password")
+        if pw is None or str(pw).strip() == "" or str(pw).strip() == "********":
+            update_data.pop("password", None)
     
     # If setting as default, unset other defaults for same type
     if update_data.get("is_default"):
@@ -997,7 +1149,7 @@ async def update_connection(
         connection_type=db_conn.connection_type,
         name=db_conn.name,
         description=db_conn.description,
-        connection_string=mask_secret(db_conn.connection_string) if db_conn.connection_string else None,
+        connection_string=_connection_string_for_response(db_conn),
         host=db_conn.host,
         port=db_conn.port,
         database=db_conn.database,
@@ -1084,16 +1236,28 @@ async def create_feature_flag(
     db: Session = Depends(get_db)
 ):
     """Create a new feature flag."""
-    existing = db.query(FeatureFlag).filter(FeatureFlag.id == flag.id).first()
+    # Feature-flag IDs are often referenced in code, so prefer a stable slug from the name.
+    base_id = (flag.id or "").strip() or _slugify(flag.name, 100)
+    if not base_id:
+        base_id = _generate_config_id("flag", max_len=100)
+    flag_id = base_id
+
+    existing = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Feature flag '{flag.id}' already exists")
+        # Avoid collision by appending a suffix.
+        flag_id = _generate_config_id(base_id, max_len=100)
+        existing2 = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
+        if existing2:
+            raise HTTPException(status_code=400, detail=f"Feature flag '{base_id}' already exists")
     
-    db_flag = FeatureFlag(**flag.model_dump())
+    payload = flag.model_dump()
+    payload["id"] = flag_id
+    db_flag = FeatureFlag(**payload)
     db.add(db_flag)
     
     log_audit(
-        db, "feature_flag", flag.id, "create",
-        new_value=flag.model_dump(),
+        db, "feature_flag", flag_id, "create",
+        new_value=payload,
         ip_address=request.client.host if request.client else None
     )
     
@@ -1306,8 +1470,17 @@ async def check_config_health(db: Session = Depends(get_db)):
     conn_status = {}
     connections = db.query(ConnectionConfig).filter(ConnectionConfig.status == "active").all()
     for c in connections:
+        ct = (getattr(c, "connection_type", "") or "").lower().strip()
         if c.health_status:
             conn_status[c.id] = c.health_status
+        elif ct == "soda_external":
+            extra = _get_extra_options(c)
+            python_path = str(extra.get("python_path") or extra.get("python") or "").strip()
+            if python_path:
+                conn_status[c.id] = "configured"
+            else:
+                conn_status[c.id] = "incomplete"
+                warnings.append(f"Connection '{c.name}' is missing extra_options.python_path")
         elif not c.host and not c.connection_string:
             conn_status[c.id] = "incomplete"
             warnings.append(f"Connection '{c.name}' has no host or connection string")
@@ -1363,28 +1536,69 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
             result["message"] = "Neo4j connection successful"
             
         elif conn_type == "opensearch":
-            from opensearchpy import OpenSearch
-            client = OpenSearch(
-                hosts=[{"host": conn.host, "port": conn.port}],
-                http_auth=(conn.username, conn.password) if conn.username else None,
-                use_ssl=conn.use_ssl if hasattr(conn, 'use_ssl') else False,
-                timeout=5
-            )
-            info = client.info()
+            from services.opensearch_service import OpenSearchService
+
+            # Prefer connection_string when present, else build from host/port/ssl.
+            cfg = {
+                "url": (conn.connection_string or "").strip() or None,
+                "host": conn.host,
+                "port": conn.port,
+                "ssl_enabled": bool(getattr(conn, "use_ssl", False)),
+                "username": conn.username,
+                "password": conn.password,
+                "verify_certs": True,
+                "timeout_s": 5,
+            }
+            os_service = OpenSearchService(config=cfg)
+            info = os_service.info()
             result["success"] = True
             result["message"] = f"OpenSearch connected (v{info.get('version', {}).get('number', '?')})"
             
         elif conn_type == "redis":
-            import redis
-            r = redis.Redis(
-                host=conn.host,
-                port=conn.port,
-                password=conn.password,
-                socket_timeout=5
-            )
-            r.ping()
-            result["success"] = True
-            result["message"] = "Redis connection successful"
+            try:
+                import redis  # type: ignore
+
+                r = redis.Redis(
+                    host=conn.host,
+                    port=conn.port,
+                    password=conn.password,
+                    socket_timeout=5,
+                )
+                r.ping()
+                result["success"] = True
+                result["message"] = "Redis connection successful"
+            except ImportError:
+                result["message"] = "redis is not installed. Install: pip install redis"
+
+        elif conn_type == "soda_external":
+            python_path = str(extra.get("python_path") or extra.get("python") or extra.get("python_exe") or "").strip()
+            timeout_s_raw = extra.get("timeout_s")
+            try:
+                timeout_s_i = int(timeout_s_raw) if timeout_s_raw is not None and str(timeout_s_raw).strip() != "" else 10
+            except (TypeError, ValueError):
+                timeout_s_i = 10
+
+            if not python_path:
+                result["message"] = "Missing required field: extra_options.python_path"
+            else:
+                try:
+                    proc = subprocess.run(
+                        [python_path, "-c", "from soda.scan import Scan; print('ok')"],
+                        text=True,
+                        capture_output=True,
+                        timeout=max(1, min(60, timeout_s_i)),
+                        check=False,
+                    )
+                    if proc.returncode == 0 and "ok" in (proc.stdout or ""):
+                        result["success"] = True
+                        result["message"] = "External Soda runner is configured"
+                    else:
+                        stderr = (proc.stderr or "").strip()
+                        result["message"] = f"External Soda runner failed (exit {proc.returncode}): {stderr[:300]}"
+                except FileNotFoundError:
+                    result["message"] = f"Python not found: {python_path}"
+                except subprocess.TimeoutExpired:
+                    result["message"] = f"External Soda runner test timed out after {timeout_s_i}s"
 
         elif conn_type == "local_folder":
             folder_path = str(extra.get("folder_path") or "").strip()
@@ -1393,7 +1607,11 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
             else:
                 path = Path(folder_path)
                 if not _is_under_allowed_root(path):
-                    result["message"] = "Folder path is outside allowed data directories"
+                    result["message"] = (
+                        "Folder path is outside allowed data directories. "
+                        "Configure GRAPH_TRACE_ALLOWED_LOCAL_ROOTS (Windows: ';' separated) "
+                        "or system_configuration.allowed_local_roots."
+                    )
                 elif not path.exists() or not path.is_dir():
                     result["message"] = "Folder not found"
                 else:
@@ -1449,7 +1667,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                     from azure.storage.blob import BlobServiceClient  # type: ignore
 
                     if connection_string:
-                        service = BlobServiceClient.from_connection_string(connection_string)
+                        blob_service = BlobServiceClient.from_connection_string(connection_string)
                     else:
                         # Fall back to key-based auth.
                         account_key = str(extra.get("account_key") or "").strip() or None
@@ -1457,9 +1675,9 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                             result["message"] = "Missing required field: extra_options.account_key"
                             raise RuntimeError("missing account_key")
                         url = f"https://{account_name}.blob.core.windows.net"
-                        service = BlobServiceClient(account_url=url, credential=account_key)
+                        blob_service = BlobServiceClient(account_url=url, credential=account_key)
 
-                    container_client = service.get_container_client(container)
+                    container_client = blob_service.get_container_client(container)
                     blob_prefix = str(extra.get("prefix") or "").strip()
                     if blob_prefix:
                         pager = container_client.list_blobs(name_starts_with=blob_prefix, results_per_page=1).by_page()
@@ -1498,8 +1716,8 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                     result["message"] = f"OneDrive verification failed: {str(e)}"
 
         elif conn_type == "google_drive":
-            access_token: str = str(conn.password or "").strip()
-            if not access_token:
+            gd_access_token: str = str(conn.password or "").strip()
+            if not gd_access_token:
                 result["message"] = "Access token not configured (stored in password)"
             else:
                 try:
@@ -1509,7 +1727,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                         resp = await client.get(
                             "https://www.googleapis.com/drive/v3/about",
                             params={"fields": "user,storageQuota"},
-                            headers={"Authorization": "Bearer " + access_token},
+                            headers={"Authorization": "Bearer " + gd_access_token},
                         )
                     if resp.status_code >= 200 and resp.status_code < 300:
                         result["success"] = True
@@ -1527,6 +1745,85 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
             else:
                 result["success"] = True
                 result["message"] = "PowerQuery configuration accepted"
+
+        elif conn_type in {"api", "rest_api", "webapi", "openapi", "odata"}:
+            endpoint = str(conn.connection_string or "").strip()
+            if not endpoint:
+                result["message"] = "Missing endpoint: connection_string must be set"
+            else:
+                try:
+                    import httpx
+
+                    auth_type = str(extra.get("auth_type") or "none").strip().lower()
+                    api_test_path = str(extra.get("test_path") or "").strip()
+                    timeout_s_raw = extra.get("timeout_s")
+                    try:
+                        timeout_s = float(timeout_s_raw) if timeout_s_raw is not None and timeout_s_raw != "" else 10.0
+                    except (TypeError, ValueError):
+                        timeout_s = 10.0
+
+                    # OData default: verify $metadata
+                    if conn_type == "odata" and not api_test_path:
+                        api_test_path = "/$metadata"
+
+                    # OpenAPI default: try openapi.json
+                    if conn_type == "openapi" and not api_test_path:
+                        api_test_path = "/openapi.json"
+
+                    # Generic API default: /health
+                    if conn_type in {"api", "rest_api", "webapi"} and not api_test_path:
+                        api_test_path = "/health"
+
+                    # Build full URL
+                    base = endpoint.rstrip("/")
+                    api_path_str: str = api_test_path
+                    if api_path_str and not api_path_str.startswith("/"):
+                        api_path_str = "/" + api_path_str
+                    url = base + (api_path_str or "")
+
+                    headers: Dict[str, str] = {}
+
+                    # Optional custom headers (stored by UI in extra_options.headers_json)
+                    headers_json = str(extra.get("headers_json") or "").strip()
+                    if headers_json:
+                        try:
+                            import json as _json
+                            parsed = _json.loads(headers_json)
+                            if isinstance(parsed, dict):
+                                for k, v in parsed.items():
+                                    if k is None:
+                                        continue
+                                    headers[str(k)] = str(v)
+                        except Exception:
+                            # Ignore invalid json; UI will warn
+                            pass
+
+                    auth = None
+
+                    if auth_type in {"bearer", "oauth2"}:
+                        token = str(conn.password or "").strip()
+                        if token:
+                            headers["Authorization"] = "Bearer " + token
+                    elif auth_type == "api_key":
+                        api_key = str(conn.password or "").strip()
+                        header_name = str(extra.get("api_key_header") or "X-API-Key").strip() or "X-API-Key"
+                        if api_key:
+                            headers[header_name] = api_key
+                    elif auth_type == "basic":
+                        # Basic auth uses username/password
+                        if conn.username and conn.password:
+                            auth = (str(conn.username), str(conn.password))
+
+                    async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True) as http_client:
+                        resp = await http_client.get(url, headers=headers, auth=auth)
+
+                    if 200 <= resp.status_code < 300:
+                        result["success"] = True
+                        result["message"] = f"HTTP {resp.status_code} OK"
+                    else:
+                        result["message"] = f"HTTP {resp.status_code} from {url}"
+                except Exception as e:
+                    result["message"] = f"API test failed: {str(e)}"
             
         else:
             result["message"] = f"Test not implemented for: {conn.connection_type}"
@@ -1562,10 +1859,11 @@ async def test_llm_provider(provider_id: str, db: Session = Depends(get_db)):
     try:
         if provider.provider == "openai":
             import httpx
+            api_key = str(provider.api_key or "")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     f"{provider.api_endpoint or 'https://api.openai.com/v1'}/models",
-                    headers={"Authorization": f"Bearer {provider.api_key}"}
+                    headers={"Authorization": f"Bearer {api_key}"},
                 )
                 if response.status_code == 200:
                     result["success"] = True
@@ -1575,11 +1873,12 @@ async def test_llm_provider(provider_id: str, db: Session = Depends(get_db)):
                     
         elif provider.provider == "anthropic":
             import httpx
+            api_key = str(provider.api_key or "")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     f"{provider.api_endpoint or 'https://api.anthropic.com'}/v1/messages",
                     headers={
-                        "x-api-key": provider.api_key,
+                        "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",
                         "content-type": "application/json"
                     },
@@ -1597,26 +1896,30 @@ async def test_llm_provider(provider_id: str, db: Session = Depends(get_db)):
                     
         elif provider.provider == "ollama":
             import httpx
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{provider.api_endpoint or 'http://localhost:11434'}/api/tags"
-                )
+            base_url = (provider.api_endpoint or "http://localhost:11434").rstrip("/")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(f"{base_url}/api/tags")
                 if response.status_code == 200:
                     models = response.json().get("models", [])
                     result["success"] = True
                     result["message"] = f"Ollama connected ({len(models)} models available)"
                 else:
                     result["error"] = f"Ollama returned status {response.status_code}"
+            except httpx.RequestError as e:
+                # Most common cause: Ollama isn't running locally.
+                result["error"] = f"Cannot connect to Ollama at {base_url} ({type(e).__name__}: {str(e)}). Ensure Ollama is running (e.g. start the Ollama app or run 'ollama serve')."
                     
         elif provider.provider == "azure_openai":
             if not provider.azure_resource_name:
                 result["error"] = "Azure resource name not configured"
                 return result
             import httpx
+            api_key = str(provider.api_key or "")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     f"https://{provider.azure_resource_name}.openai.azure.com/openai/deployments?api-version={provider.api_version or '2024-02-15-preview'}",
-                    headers={"api-key": provider.api_key}
+                    headers={"api-key": api_key},
                 )
                 if response.status_code == 200:
                     result["success"] = True
@@ -1646,11 +1949,12 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
         if model.provider == "sentence_transformers":
             # Local model - just check if we can import
             try:
-                from sentence_transformers import SentenceTransformer
+                import importlib
+                importlib.import_module("sentence_transformers")  # pyright: ignore[reportMissingImports]
                 result["success"] = True
                 result["message"] = f"SentenceTransformers available (model: {model.model_name})"
             except ImportError:
-                result["error"] = "sentence-transformers not installed"
+                result["error"] = "sentence-transformers not installed (install with: pip install sentence-transformers)"
                 
         elif model.provider == "openai":
             if not model.api_key:
@@ -1674,63 +1978,5 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
             
     except Exception as e:
         result["error"] = str(e)
-    
-    return result
-async def test_connection(conn_id: str, db: Session = Depends(get_db)):
-    """Test a connection configuration."""
-    conn = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
-    if not conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
-    
-    result = {"connection_id": conn_id, "connection_type": conn.connection_type}
-    
-    try:
-        if conn.connection_type == "postgres":
-            from sqlalchemy import create_engine, text
-            url = conn.connection_string or f"postgresql://{conn.username}:{conn.password}@{conn.host}:{conn.port}/{conn.database}"
-            engine = create_engine(url, pool_pre_ping=True)
-            with engine.connect() as connection:
-                connection.execute(text("SELECT 1"))
-            result["status"] = "success"
-            result["message"] = "PostgreSQL connection successful"
-            
-        elif conn.connection_type == "neo4j":
-            from neo4j import GraphDatabase
-            uri = conn.connection_string or f"neo4j://{conn.host}:{conn.port}"
-            driver = GraphDatabase.driver(uri, auth=(conn.username, conn.password))
-            with driver.session() as session:
-                session.run("RETURN 1")
-            driver.close()
-            result["status"] = "success"
-            result["message"] = "Neo4j connection successful"
-            
-        elif conn.connection_type == "opensearch":
-            from opensearchpy import OpenSearch
-            client = OpenSearch(
-                hosts=[{"host": conn.host, "port": conn.port}],
-                http_auth=(conn.username, conn.password) if conn.username else None,
-                use_ssl=conn.use_ssl
-            )
-            info = client.info()
-            result["status"] = "success"
-            result["message"] = f"OpenSearch connection successful (version: {info.get('version', {}).get('number', 'unknown')})"
-            
-        else:
-            result["status"] = "unsupported"
-            result["message"] = f"Connection test not implemented for type: {conn.connection_type}"
-        
-        # Update health status
-        conn.last_health_check = datetime.now(timezone.utc)
-        conn.health_status = result["status"]
-        db.commit()
-        
-    except Exception as e:
-        result["status"] = "failed"
-        result["message"] = str(e)
-        
-        # Update health status
-        conn.last_health_check = datetime.now(timezone.utc)
-        conn.health_status = "failed"
-        db.commit()
     
     return result

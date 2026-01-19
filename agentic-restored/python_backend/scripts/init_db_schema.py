@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 import logging
 
-from core.db_session import DATABASE_URL, SessionLocal, init_db
+from core.db_session import SessionLocal, init_db
 
 
 logger = logging.getLogger(__name__)
@@ -15,8 +16,11 @@ def main() -> int:
     logger.info("DB schema ensured (create_all)")
 
     # If the encryption key has changed (common in local dev when env vars aren't persisted),
-    # previously encrypted rows become undecryptable. For local SQLite only, reset encrypted
-    # tables and re-seed defaults so the app can start cleanly.
+    # previously encrypted rows become undecryptable.
+    #
+    # IMPORTANT: This project treats Postgres as the single source of truth for persistence.
+    # We never auto-delete encrypted configuration rows unless the operator explicitly opts
+    # into a destructive reset.
     try:
         from core.crypto import decrypt_json
         from models.configuration_models import DataSourceConfigRecord, EncryptedConfig
@@ -28,9 +32,10 @@ def main() -> int:
                 try:
                     decrypt_json(sample.ciphertext)
                 except Exception as exc:  # pylint: disable=broad-exception-caught
-                    if DATABASE_URL.startswith("sqlite:"):
+                    allow_reset = (os.getenv("GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG") or "").strip().lower() in {"1", "true", "yes"}
+                    if allow_reset:
                         logger.warning(
-                            "Encrypted config cannot be decrypted with current key; resetting local encrypted tables (SQLite only): %s",
+                            "Encrypted config cannot be decrypted with current key; resetting encrypted tables due to GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG=true: %s",
                             exc,
                         )
                         db.query(DataSourceConfigRecord).delete()
@@ -38,7 +43,8 @@ def main() -> int:
                         db.commit()
                     else:
                         logger.warning(
-                            "Encrypted config cannot be decrypted with current key; NOT resetting because DB is not SQLite: %s",
+                            "Encrypted config cannot be decrypted with current key; NOT resetting automatically. "
+                            "Set GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG=true if you intend to reset encrypted config tables: %s",
                             exc,
                         )
         finally:

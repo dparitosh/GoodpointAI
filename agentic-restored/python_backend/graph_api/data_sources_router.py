@@ -20,6 +20,118 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/data-sources", tags=["Data Sources"])
 
 
+def _admin_connection_type_to_data_source_type(conn_type: str) -> str:
+    """Map Admin Config connection types to Migration Wizard-friendly data source types."""
+    ct = (conn_type or "").lower().strip()
+    if ct in {"local_folder", "localfolder", "folder", "filesystem"}:
+        return "local_folder"
+    if ct in {"file"}:
+        return "file"
+    if ct in {"neo4j"}:
+        return "neo4j"
+    if ct in {"postgres", "postgresql", "mysql", "mssql", "sqlserver", "oracle", "database"}:
+        return "database"
+    # Anything else shows up as a generic integration.
+    return "api"
+
+
+def _fetch_admin_connections_as_data_sources(db: Session) -> List[Dict[str, Any]]:
+    """Best-effort: expose Admin Config Connections as DataSources for the Migration Wizard.
+
+    Important:
+    - Must not leak secrets
+    - Must not break unit tests where the connections table doesn't exist
+    """
+    try:
+        # Local import avoids adding hard dependency in isolated test apps.
+        from models.admin_config_models import ConnectionConfig  # pylint: disable=import-outside-toplevel
+        from sqlalchemy.exc import SQLAlchemyError  # pylint: disable=import-outside-toplevel
+
+        try:
+            rows = db.query(ConnectionConfig).all()
+        except SQLAlchemyError:
+            # Table might not exist in test DBs; treat as "no connections".
+            return []
+
+        items: List[Dict[str, Any]] = []
+        for conn in rows or []:
+            conn_type_raw = (getattr(conn, "connection_type", "") or "").lower().strip()
+            # These are operational/tooling configs, not user data sources.
+            if conn_type_raw in {"soda_external", "soda_runner"}:
+                continue
+
+            # Avoid ID collisions with real DataSourceConfigRecord ids.
+            source_id = f"conn_{getattr(conn, 'id', '')}"
+            ds_type = _admin_connection_type_to_data_source_type(conn_type_raw)
+
+            # Minimal, non-secret connection hints (the wizard mostly needs id/name/type/status).
+            connection: Dict[str, Any] = {}
+            host = getattr(conn, "host", None)
+            port = getattr(conn, "port", None)
+            database = getattr(conn, "database", None)
+            username = getattr(conn, "username", None)
+
+            if host:
+                connection["host"] = host
+            if port is not None:
+                connection["port"] = str(port)
+            if database:
+                connection["database"] = database
+            if username:
+                connection["username"] = username
+
+            # For Neo4j/API style connections, provide uri/endpoint if present.
+            conn_str = getattr(conn, "connection_string", None)
+            if conn_str:
+                if ds_type == "neo4j":
+                    connection["uri"] = conn_str
+                else:
+                    connection["endpoint"] = conn_str
+
+            # Local filesystem sources store their paths in extra_options.
+            if ds_type in {"local_folder", "file"}:
+                extra = getattr(conn, "extra_options", None)
+                if isinstance(extra, dict):
+                    if ds_type == "local_folder":
+                        folder_path = extra.get("folder_path")
+                        file_name = extra.get("file_name")
+                        if folder_path:
+                            connection["folder_path"] = str(folder_path)
+                        if file_name:
+                            connection["file_name"] = str(file_name)
+                    elif ds_type == "file":
+                        file_path = extra.get("file_path")
+                        if file_path:
+                            connection["file_path"] = str(file_path)
+
+            created_at = getattr(conn, "created_at", None)
+            updated_at = getattr(conn, "updated_at", None)
+            created_at_iso = created_at.isoformat() if isinstance(created_at, datetime) else None
+            updated_at_iso = updated_at.isoformat() if isinstance(updated_at, datetime) else None
+
+            items.append(
+                {
+                    "id": source_id,
+                    "name": getattr(conn, "name", None) or getattr(conn, "id", "connection"),
+                    "type": ds_type,
+                    "connection": _redact_connection(_filter_connection_fields(connection)),
+                    "description": getattr(conn, "description", None) or "",
+                    "status": getattr(conn, "status", None) or "active",
+                    "created_at": created_at_iso,
+                    "updated_at": updated_at_iso,
+                    "last_tested": None,
+                    "test_result": None,
+                }
+            )
+
+        # Stable ordering for UI
+        items.sort(key=lambda x: str(x.get("name") or ""))
+        return items
+    except Exception:
+        # Non-fatal; data sources still work without this integration.
+        return []
+
+
 class SampleRecordsResponse(BaseModel):
     source_id: str
     source_type: str
@@ -58,13 +170,13 @@ def _allowed_local_roots() -> List[Path]:
                         allowed_list = roots_val2
 
         for item in allowed_list:
-                p = str(item).strip().strip('"')
-                if not p:
-                    continue
-                try:
-                    candidates.append(Path(p))
-                except Exception:
-                    continue
+            p = str(item).strip().strip('"')
+            if not p:
+                continue
+            try:
+                candidates.append(Path(p))
+            except Exception:
+                continue
     except Exception:
         # Non-fatal: fall back to env + repo-local defaults.
         pass
@@ -128,18 +240,19 @@ def _parse_json_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
     text = content.decode("utf-8-sig", errors="replace")
     data = json.loads(text)
 
+    items: List[Any] = []
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
-        if isinstance(data.get("records"), list):
-            items = data.get("records")
-        elif isinstance(data.get("items"), list):
-            items = data.get("items")
+        records_val = data.get("records")
+        items_val = data.get("items")
+        if isinstance(records_val, list):
+            items = records_val
+        elif isinstance(items_val, list):
+            items = items_val
         else:
             # single object
             items = [data]
-    else:
-        items = []
 
     out: List[Dict[str, Any]] = []
     for item in items[:limit]:
@@ -189,31 +302,78 @@ async def get_data_source_sample(
     db: Session = Depends(get_db),
 ):
     record = db.get(DataSourceConfigRecord, source_id)
+    admin_conn = None
+    connection: Dict[str, Any] = {}
+
     if record is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        # Support Admin Config connections surfaced as data sources via id prefix: conn_<id>
+        if source_id.startswith("conn_"):
+            admin_id = source_id[len("conn_") :]
+            try:
+                from models.admin_config_models import ConnectionConfig  # pylint: disable=import-outside-toplevel
+            except Exception as e:
+                raise HTTPException(status_code=503, detail=f"Admin Config models unavailable: {str(e)}") from e
 
-    try:
-        connection = decrypt_json(record.connection_ciphertext)
-        if not isinstance(connection, dict):
-            connection = {}
-    except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e)) from e
-    except Exception as e:
-        # Most common case is Fernet InvalidToken (key mismatch) which stringifies to ''.
-        msg = str(e).strip() or (
-            "Failed to decrypt data source connection. The encryption key is missing or does not match the key used "
-            "when this data source was created. Configure GRAPH_TRACE_CONFIG_ENCRYPTION_KEY (or python_backend/.graphtrace.encryption_key) "
-            "and then re-save the data source connection."
-        )
-        raise HTTPException(status_code=503, detail=msg) from e
+            admin_conn = db.get(ConnectionConfig, admin_id)
+            if admin_conn is None:
+                raise HTTPException(status_code=404, detail="Data source not found")
 
-    source_type = (record.type or "").lower().strip()
+            source_type = _admin_connection_type_to_data_source_type(getattr(admin_conn, "connection_type", ""))
+            extra = getattr(admin_conn, "extra_options", None)
+            if isinstance(extra, dict):
+                # Normalize filesystem hints into the same shape as DataSourceConfigRecord connections.
+                for key in ("file_path", "folder_path", "file_name"):
+                    val = extra.get(key)
+                    if val:
+                        connection[key] = str(val)
+        else:
+            raise HTTPException(status_code=404, detail="Data source not found")
+    else:
+        try:
+            connection = decrypt_json(record.connection_ciphertext)
+            if not isinstance(connection, dict):
+                connection = {}
+        except ValueError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
+        except Exception as e:
+            # Most common case is Fernet InvalidToken (key mismatch) which stringifies to ''.
+            msg = str(e).strip() or (
+                "Failed to decrypt data source connection. The encryption key is missing or does not match the key used "
+                "when this data source was created. Configure GRAPH_TRACE_CONFIG_ENCRYPTION_KEY (or python_backend/.graphtrace.encryption_key) "
+                "and then re-save the data source connection."
+            )
+            raise HTTPException(status_code=503, detail=msg) from e
+
+        source_type = (record.type or "").lower().strip()
+
     warnings: List[str] = []
     content: bytes
     name_hint: str = ""
 
     if source_type in {"file", "local_folder"}:
         path = _resolve_local_file_path(connection)
+        if (not path or str(path) in ("", ".")) and source_type == "local_folder":
+            # Convenience: allow folder_path without file_name by sampling a deterministic first file.
+            folder_raw = (connection.get("folder_path") or "").strip()
+            if folder_raw:
+                folder = Path(folder_raw)
+                if not _is_under_allowed_root(folder):
+                    raise HTTPException(status_code=403, detail="Local folder path is outside allowed data directories")
+                if not folder.exists() or not folder.is_dir():
+                    raise HTTPException(status_code=404, detail="Local folder not found")
+                try:
+                    candidates = [
+                        p
+                        for p in sorted(folder.iterdir(), key=lambda p: p.name.lower())
+                        if p.is_file() and p.suffix.lower() in {".csv", ".json"}
+                    ]
+                except OSError as e:
+                    raise HTTPException(status_code=500, detail=str(e)) from e
+
+                if candidates:
+                    path = candidates[0]
+                    warnings.append(f"file_name not provided; sampled '{path.name}'")
+
         if not path or str(path) in ("", "."):
             raise HTTPException(status_code=400, detail="file_path or (folder_path + file_name) is required")
         if not _is_under_allowed_root(path):
@@ -510,8 +670,11 @@ async def get_data_sources(
             for item in legacy:
                 if isinstance(item, dict) and isinstance(item.get("connection"), dict):
                     item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
-            response.headers["X-Total-Count"] = str(len(legacy))
-            return legacy[skip : skip + limit]
+
+            merged = list(legacy)
+            merged.extend(_fetch_admin_connections_as_data_sources(db))
+            response.headers["X-Total-Count"] = str(len(merged))
+            return merged[skip : skip + limit]
 
         result: List[Dict[str, Any]] = []
         for row in rows:
@@ -524,7 +687,12 @@ async def get_data_sources(
             except Exception:
                 connection = {}
             result.append(_record_to_api(row, connection))
-        return result
+
+        # Also expose Admin Config Connections as DataSources so end-users can pick from the
+        # configured catalog in the Migration Wizard.
+        result.extend(_fetch_admin_connections_as_data_sources(db))
+        response.headers["X-Total-Count"] = str(len(result))
+        return result[skip : skip + limit]
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         logger.error("Error fetching data sources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch data sources") from e
@@ -873,10 +1041,25 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
         
         conninfo = f"host={host} port={port} dbname={database} user={username} password={password} connect_timeout=5"
         
-        with psycopg.connect(conninfo) as conn:
-            with conn.cursor() as cur:
+        conn: Any = psycopg.connect(conninfo)
+        if conn is None:
+            raise RuntimeError("psycopg.connect returned None")
+        try:
+            cur = conn.cursor()
+            try:
                 cur.execute("SELECT version()")
-                version = cur.fetchone()[0]
+                row = cur.fetchone()
+                version = row[0] if row else "unknown"
+            finally:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
         
         return TestConnectionResponse(
             success=True,
@@ -921,7 +1104,7 @@ async def _test_mongodb_connection(connection: Dict) -> TestConnectionResponse:
         
         # Test connection using pymongo
         try:
-            from pymongo import MongoClient
+            from pymongo import MongoClient  # type: ignore[import-not-found]  # pyright: ignore[reportMissingImports]
             
             client = MongoClient(uri, serverSelectionTimeoutMS=5000)
             # Force a connection attempt
@@ -1099,7 +1282,6 @@ async def _test_s3_connection(connection: Dict) -> TestConnectionResponse:
 
     try:
         import boto3  # type: ignore
-        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
 
         client_kwargs: Dict[str, Any] = {}
         if region:

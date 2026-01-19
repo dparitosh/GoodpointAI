@@ -166,6 +166,61 @@
 			"isBackground": true,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Start Full Stack (Frontend + Backend)",
+			"dependsOn": [
+				"Start Backend Server",
+				"Start Frontend Development Server"
+			],
+			"dependsOrder": "parallel",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Frontend: Lint",
+			"type": "shell",
+			"command": "npm run lint",
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Frontend: Test (Vitest run)",
+			"type": "shell",
+			"command": "npm test -- --run",
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Backend: Test (Pytest)",
+			"type": "shell",
+			"command": "${command:python.interpreterPath}",
+			"args": [
+				"-m",
+				"pytest"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"env": {
+					"GRAPH_TRACE_LOAD_DOTENV": "true"
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "MCP: Start Inspector",
+			"type": "shell",
+			"command": "npx @modelcontextprotocol/inspector",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
 		}
 
 	]

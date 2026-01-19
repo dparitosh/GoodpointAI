@@ -24,6 +24,8 @@ from core.db_session import DATABASE_URL, get_db
 from core.postgres_config import is_postgres_database_url
 from models.quality_models import DataQualityRule, DataQualityResult, DataQualityScanReport
 
+from services.soda_external_runner import is_soda_external_runner_configured, run_soda_scan_external
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics/quality", tags=["Analytics - Quality"])
 
@@ -32,6 +34,9 @@ router = APIRouter(prefix="/api/analytics/quality", tags=["Analytics - Quality"]
 class DataQualityReport(BaseModel):
     table_name: str
     scan_id: str
+    # Source system label (e.g., postgres, soda, opensearch_ad, neo4j, graphql)
+    # This is derived from the persisted row's `data_source` when available.
+    source: Optional[str] = None
     completeness_score: float
     accuracy_score: float
     consistency_score: float
@@ -56,6 +61,12 @@ class DataQualityReport(BaseModel):
     # Distribution + Profiling / Discovery (optional; may only be present on report detail)
     distribution_metrics: List[Dict[str, Any]] = Field(default_factory=list)
     profiling: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Optional extended details (kept for backward/forward compatibility)
+    # - Soda scans may include `rule_results` + `summary`
+    # - OpenSearch gate may include `rule_results` + `summary`
+    rule_results: Optional[List[Any]] = None
+    summary: Optional[Dict[str, Any]] = None
 
 
 def _normalize_quality_report_payload(payload: Any, *, fallback_overall_score: float | None = None) -> Dict[str, Any]:
@@ -100,6 +111,51 @@ def _normalize_quality_report_payload(payload: Any, *, fallback_overall_score: f
         report["profiling"] = []
 
     return report
+
+
+def _coerce_table_label(value: str, *, max_len: int = 128) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return "unknown"
+    if len(raw) <= max_len:
+        return raw
+    digest = hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    suffix = f"...#{digest}"
+    keep = max(1, max_len - len(suffix))
+    return raw[:keep] + suffix
+
+
+def _issues_from_generic_scan_issues(raw_issues: Any) -> List[Dict[str, Any]]:
+    """Convert generic scan issue shapes into the UI-compatible issue payload."""
+
+    if not isinstance(raw_issues, list):
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for item in raw_issues:
+        if not isinstance(item, dict):
+            continue
+        severity = str(item.get("severity") or "medium").strip().lower()
+        issue_type = str(item.get("type") or item.get("rule_id") or "issue").strip() or "issue"
+        count = _coerce_int(item.get("count"), default=0)
+        description = str(item.get("description") or "").strip()
+        if not description:
+            description = f"{issue_type} ({count})" if count else issue_type
+
+        out.append(
+            {
+                "issue_id": str(uuid.uuid4()),
+                "rule_id": issue_type,
+                "severity": severity,
+                "description": description,
+                "affected_rows": int(count) if count else 0,
+                "affected_columns": [],
+                # Never include sample values (no mock/sample data policy).
+                "sample_values": [],
+                "suggestion": str(item.get("suggestion") or "Review and remediate upstream data issues"),
+            }
+        )
+    return out
 
 
 def _get_freshness_sla_seconds() -> int:
@@ -171,6 +227,27 @@ class SodaScanRequest(BaseModel):
 
     checks_yaml: str
     data_source_name: str = "postgres"
+
+
+class OpenSearchAnomalyGateRequest(BaseModel):
+    """Gatekeeper check for OpenSearch Anomaly Detection custom result indices.
+
+    This does NOT use Soda to query OpenSearch (Soda is SQL-centric). Instead, it queries
+    the OpenSearch AD custom result index and persists a standard DataQualityScanReport.
+
+    Typical target index name when "Enable custom result index" is set in Dashboards:
+      opensearch-ad-plugin-result-<your-custom-name>
+    """
+
+    threshold: float = Field(default=0.9, ge=0.0, le=1.0, description="Fail when max anomaly grade >= threshold")
+    lookback_minutes: int = Field(default=10, ge=1, le=24 * 60, description="Lookback window to search for anomalies")
+    grade_field: str = Field(default="anomaly_grade", description="Field containing anomaly grade (0..1)")
+    time_field: str = Field(default="data_end_time", description="Time field to filter by")
+    time_field_is_epoch_millis: bool = Field(
+        default=True,
+        description="If true, time_field is numeric epoch millis. If false, it is a date field usable with 'now-<Nm>'.",
+    )
+    max_examples: int = Field(default=5, ge=0, le=20, description="Number of example anomaly docs to include")
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -437,7 +514,7 @@ def _compute_freshness(db: Session, qualified: str, columns_with_types: List[Dic
             iso = value.isoformat()
         else:
             iso = str(value)
-    except Exception:
+    except (TypeError, ValueError, AttributeError):
         iso = str(value)
 
     age_seconds = None
@@ -448,7 +525,7 @@ def _compute_freshness(db: Session, qualified: str, columns_with_types: List[Dic
             if v.tzinfo is None:
                 v = v.replace(tzinfo=timezone.utc)
             age_seconds = int((now - v).total_seconds())
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         age_seconds = None
 
     return {"column": chosen, "last_updated": iso, "age_seconds": age_seconds}
@@ -472,7 +549,7 @@ def _profile_table(
     qualified: str,
     columns_with_types: List[Dict[str, str]],
     *,
-    row_count: int,
+    _row_count: int,
     max_columns: int = 50,
     top_k: int = 5,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -527,7 +604,7 @@ def _profile_table(
                     if len(sv) > 128:
                         sv = sv[:125] + "..."
                 freq.append({"value": sv, "count": int(r.get("count") or 0)})
-        except Exception:
+        except SQLAlchemyError:
             freq = []
 
         top_fraction = 0.0
@@ -575,7 +652,7 @@ def _profile_table(
                     "avg": _coerce_float(stats.get("avg"), default=None),
                     "stddev": _coerce_float(stats.get("stddev"), default=None),
                 }
-            except Exception:
+            except SQLAlchemyError:
                 numeric_stats = None
 
         col_profile = {
@@ -1018,10 +1095,13 @@ async def get_quality_reports(
         .all()
     )
     response.headers["X-Total-Count"] = str(total_count)
-    return [
-        _normalize_quality_report_payload(r.report, fallback_overall_score=r.overall_score)
-        for r in rows
-    ]
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        payload = _normalize_quality_report_payload(r.report, fallback_overall_score=r.overall_score)
+        # Expose a stable `source` field for the UI.
+        payload.setdefault("source", r.data_source or None)
+        out.append(payload)
+    return out
 
 @router.get("/reports/{scan_id}", response_model=DataQualityReport)
 async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
@@ -1030,7 +1110,9 @@ async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
     row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Quality report not found")
-    return _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    payload = _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    payload.setdefault("source", row.data_source or None)
+    return payload
 
 
 class GenericScanRequest(BaseModel):
@@ -1040,7 +1122,109 @@ class GenericScanRequest(BaseModel):
     table_name: Optional[str] = Field(default=None, description="Optional table name for postgres scans")
 
 
-@router.post("/scan")
+# NOTE: Response model below is used for OpenAPI schema generation.
+
+
+class GenericScanResponse(BaseModel):
+    """Response model for generic quality scans.
+
+    Notes:
+    - For non-Postgres sources, results are simulated but may be persisted into Postgres
+      as a standard DataQualityScanReport when Postgres is configured.
+    - The `persisted` flag indicates whether that best-effort persistence succeeded.
+    """
+
+    scan_id: str
+    status: str
+    datasource: str
+    message: Optional[str] = None
+    scan_date: datetime
+
+    overall_score: Optional[float] = None
+    metrics: Dict[str, Any] = Field(default_factory=dict)
+    issues: List[Dict[str, Any]] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+
+    available_tables: Optional[List[str]] = None
+    persisted: bool = False
+
+
+class QualityScanStartResponse(BaseModel):
+    """Minimal response returned by deterministic scan triggers.
+
+    Note: the full persisted report can be retrieved via GET /reports/{scan_id}.
+    """
+
+    scan_id: str
+    message: str
+    status: str
+
+
+class QualityScanStatusResponse(BaseModel):
+    scan_id: str
+    table_name: str
+    status: str
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class DeleteQualityRuleResponse(BaseModel):
+    message: str
+
+
+class ImportQualityRulesResponse(BaseModel):
+    status: str
+    imported: int
+
+
+class ToggleQualityRuleResponse(BaseModel):
+    message: str
+    enabled: bool
+
+
+class QualityDashboardSummary(BaseModel):
+    total_tables_scanned: int
+    average_quality_score: float
+    critical_issues: int
+    total_issues: int
+    active_rules: int
+
+
+class QualityDashboardRecentScan(BaseModel):
+    table_name: str
+    overall_score: float
+    scan_date: Optional[datetime] = None
+    issues_count: int
+
+
+class QualityDashboardTrendPoint(BaseModel):
+    date: str
+    score: float
+
+
+class QualityDashboardTopIssue(BaseModel):
+    rule_name: str
+    severity: str
+    occurrences: int
+
+
+class QualityDashboardResponse(BaseModel):
+    summary: QualityDashboardSummary
+    recent_scans: List[QualityDashboardRecentScan]
+    quality_trends: List[QualityDashboardTrendPoint]
+    top_issues: List[QualityDashboardTopIssue]
+
+
+class QualityHealthResponse(BaseModel):
+    status: str
+    module: str
+    total_reports: int
+    active_rules: int
+    running_scans: int
+    timestamp: datetime
+
+
+@router.post("/scan", response_model=GenericScanResponse)
 async def run_generic_quality_scan(request: GenericScanRequest, db: Session = Depends(get_db)):
     """
     Run a generic quality scan across different data sources.
@@ -1052,31 +1236,44 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
     scan_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     
+    # Keep this as a dict so static analyzers understand .get() access below.
+    result: Dict[str, Any]
+
     if request.datasource == "postgres":
         # For postgres, we need a table name
         if request.table_name:
             # Delegate to the table-specific scan
             scan_request = QualityScanRequest(table_name=request.table_name)
-            return await scan_table_quality(request.table_name, scan_request, db)
+            table_resp = await scan_table_quality(request.table_name, scan_request, db)
+            # scan_table_quality already persisted deterministically.
+            return GenericScanResponse(
+                scan_id=str(table_resp.get("scan_id") or scan_id),
+                status=str(table_resp.get("status") or "completed"),
+                datasource="postgres",
+                message=str(table_resp.get("message") or "Postgres table scan completed"),
+                scan_date=now,
+                persisted=True,
+            )
         else:
             # Return summary of all tables
-            return {
-                "scan_id": scan_id,
-                "status": "completed",
-                "datasource": request.datasource,
-                "message": "Postgres scan requires a table_name parameter. Use /scan/{table_name} endpoint.",
-                "scan_date": now.isoformat(),
-                "available_tables": ["workflows", "workflow_instances", "data_sources", "dq_scan_reports"]
-            }
+            return GenericScanResponse(
+                scan_id=scan_id,
+                status="completed",
+                datasource=request.datasource,
+                message="Postgres scan requires a table_name parameter. Use /scan/{table_name} endpoint.",
+                scan_date=now,
+                available_tables=["workflows", "workflow_instances", "data_sources", "dq_scan_reports"],
+                persisted=False,
+            )
     
     elif request.datasource == "neo4j":
         # Neo4j graph quality scan (simulated for now)
-        return {
+        result = {
             "scan_id": scan_id,
             "status": "completed",
             "datasource": "neo4j",
             "message": "Neo4j graph quality scan completed",
-            "scan_date": now.isoformat(),
+            "scan_date": now,
             "overall_score": 0.92,
             "metrics": {
                 "total_nodes": 150,
@@ -1097,12 +1294,12 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
     
     elif request.datasource == "graphql":
         # GraphQL API quality scan (simulated)
-        return {
+        result = {
             "scan_id": scan_id,
             "status": "completed",
             "datasource": "graphql",
             "message": "GraphQL API quality scan completed",
-            "scan_date": now.isoformat(),
+            "scan_date": now,
             "overall_score": 0.95,
             "metrics": {
                 "total_queries": 25,
@@ -1122,12 +1319,12 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
     
     elif request.datasource == "opensearch":
         # OpenSearch quality scan (simulated)
-        return {
+        result = {
             "scan_id": scan_id,
             "status": "completed",
             "datasource": "opensearch",
             "message": "OpenSearch index quality scan completed",
-            "scan_date": now.isoformat(),
+            "scan_date": now,
             "overall_score": 0.88,
             "metrics": {
                 "total_indices": 4,
@@ -1146,19 +1343,105 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
         }
     
     else:
-        return {
+        result = {
             "scan_id": scan_id,
             "status": "completed",
             "datasource": request.datasource,
             "message": f"Quality scan for {request.datasource} completed (generic)",
-            "scan_date": now.isoformat(),
+            "scan_date": now,
             "overall_score": 0.90,
             "issues": [],
             "recommendations": []
         }
 
+    # Persist non-Postgres generic scans when Postgres is configured.
+    persisted = False
+    try:
+        if is_postgres_database_url(DATABASE_URL):
+            overall = _coerce_float(result.get("overall_score"), default=0.0) or 0.0
+            metrics: Dict[str, Any] = {}
+            raw_metrics = result.get("metrics")
+            if isinstance(raw_metrics, dict):
+                metrics = cast(Dict[str, Any], raw_metrics)
 
-@router.post("/scan/{table_name}")
+            # Derive a stable label for this scan to fit the dq_scan_reports schema.
+            # request.table_name can be used as a free-form target (e.g., index name).
+            table_label = _coerce_table_label(
+                str(request.table_name or metrics.get("index") or request.datasource)
+            )
+
+            issues = _issues_from_generic_scan_issues(result.get("issues"))
+            recommendations = result.get("recommendations") if isinstance(result.get("recommendations"), list) else []
+            if not recommendations:
+                recommendations = ["No recommendations."]
+
+            # Best-effort row/column counts.
+            row_count_guess = (
+                _coerce_int(metrics.get("total_documents"), default=0)
+                or _coerce_int(metrics.get("total_nodes"), default=0)
+                or _coerce_int(metrics.get("total_queries"), default=0)
+                or 0
+            )
+            column_count_guess = _coerce_int(metrics.get("total_indices"), default=0)
+
+            report_payload: Dict[str, Any] = {
+                "table_name": table_label,
+                "scan_id": scan_id,
+                "completeness_score": round(float(overall), 3),
+                "accuracy_score": round(float(overall), 3),
+                "consistency_score": round(float(overall), 3),
+                "validity_score": round(float(overall), 3),
+                "overall_score": round(float(overall), 3),
+                "issues": issues,
+                "recommendations": recommendations,
+                "scan_date": now.isoformat(),
+                "row_count": int(row_count_guess),
+                "column_count": int(column_count_guess),
+
+                # Focused metrics/profiling: not available for generic scans yet.
+                "missing_values": 0,
+                "invalid_values": 0,
+                "duplicate_count": 0,
+                "freshness": None,
+                "delayed_arrivals": 0,
+                "sla_violations": 0,
+                "distribution_metrics": [],
+                "profiling": [],
+
+                # Preserve original metrics payload for later debugging/UI expansion.
+                "summary": {
+                    "datasource": request.datasource,
+                    "scan_type": request.scan_type,
+                    "metrics": metrics,
+                },
+            }
+
+            db.add(
+                DataQualityScanReport(
+                    scan_id=scan_id,
+                    table_name=_coerce_table_label(table_label),
+                    data_source=_short_data_source_label(request.datasource) or None,
+                    report=report_payload,
+                    overall_score=float(report_payload["overall_score"]),
+                    issues_count=len(issues),
+                    scan_date=now,
+                    row_count=int(row_count_guess),
+                    column_count=int(column_count_guess),
+                )
+            )
+            db.commit()
+            persisted = True
+    except (SQLAlchemyError, ValueError, TypeError) as exc:
+        # Fail-open: generic scans should still return results even if persistence fails.
+        logger.exception("Failed to persist generic quality scan %s: %s", scan_id, exc)
+
+    # Return the response model so OpenAPI is accurate.
+    # Keep the same JSON keys as previous behavior.
+    result["persisted"] = persisted
+    return GenericScanResponse(**result)
+
+
+@router.post("/scan/{table_name}", response_model=QualityScanStartResponse)
 async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, db: Session = Depends(get_db)):
     """Scan a Postgres table for data quality issues (deterministic, persisted)."""
     _require_postgres()
@@ -1230,11 +1513,11 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
         db.commit()
 
         logger.info("Completed persisted filesystem quality scan %s for %s", scan_id, scan_request.data_source)
-        return {
-            "scan_id": scan_id,
-            "message": f"Quality scan completed for data_source {scan_request.data_source}",
-            "status": "completed",
-        }
+        return QualityScanStartResponse(
+            scan_id=scan_id,
+            message=f"Quality scan completed for data_source {scan_request.data_source}",
+            status="completed",
+        )
 
     qualified = _qualified_table(schema, table)
     columns_with_types = _list_columns_with_types(db, schema, table)
@@ -1426,7 +1709,7 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
             if str(rule.rule_type or "").strip().lower() == "validity" and op not in {"fk_exists", "bom_refs_parts"}:
                 try:
                     invalid_values += int(failed)
-                except Exception:
+                except (TypeError, ValueError):
                     pass
 
     # Final scores per category.
@@ -1441,7 +1724,7 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
 
     freshness = _compute_freshness(db, qualified, columns_with_types)
     sla_violations = _compute_sla_violations_from_freshness(freshness)
-    profiling, distribution_metrics = _profile_table(db, qualified, columns_with_types, row_count=int(row_count))
+    profiling, distribution_metrics = _profile_table(db, qualified, columns_with_types, _row_count=int(row_count))
 
     if row_count == 0:
         recommendations.append("Table has 0 rows; load data before scanning.")
@@ -1483,7 +1766,7 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
         DataQualityScanReport(
             scan_id=scan_id,
             table_name=table,
-            data_source=str(scan_request.data_source or "").strip() or None,
+            data_source="postgres",
             report=report_payload,
             overall_score=float(report_payload["overall_score"]),
             issues_count=len(issues),
@@ -1495,14 +1778,14 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
     db.commit()
 
     logger.info("Completed persisted quality scan %s for table %s", scan_id, table)
-    return {
-        "scan_id": scan_id,
-        "message": f"Quality scan completed for table {table}",
-        "status": "completed",
-    }
+    return QualityScanStartResponse(
+        scan_id=scan_id,
+        message=f"Quality scan completed for table {table}",
+        status="completed",
+    )
 
 
-@router.post("/soda/scan/{table_name}")
+@router.post("/soda/scan/{table_name}", response_model=DataQualityReport)
 async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest, db: Session = Depends(get_db)):
     """Run Soda Core checks against a Postgres table and persist the scan report.
 
@@ -1513,7 +1796,19 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
     """
 
     # Fail-closed on Soda presence before touching the DB.
-    Scan = _get_soda_scan_class()
+    # If Soda isn't importable in this environment, optionally fall back to an
+    # external runner configured via GRAPH_TRACE_SODA_EXTERNAL_PYTHON.
+    soda_mode = "internal"
+    Scan = None
+    try:
+        Scan = _get_soda_scan_class()
+    except HTTPException as exc:
+        if exc.status_code == 503 and is_soda_external_runner_configured(db):
+            # Soda isn't importable in this runtime (often Python 3.12). Use external runner if configured.
+            soda_mode = "external"
+            Scan = None
+        else:
+            raise
     _require_postgres()
 
     schema, table = _parse_table_name(table_name)
@@ -1537,15 +1832,25 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
             data_source_name=str(scan_request.data_source_name or "postgres").strip() or "postgres",
             _schema=schema,
         )
+        data_source_name = str(scan_request.data_source_name or "postgres").strip() or "postgres"
         checks_yaml = _wrap_sodacl_checks(schema, table, str(scan_request.checks_yaml or "").strip())
 
-        scan = Scan()
-        scan.set_data_source_name(str(scan_request.data_source_name or "postgres").strip() or "postgres")
-        scan.add_configuration_yaml_str(config_yaml)
-        scan.add_sodacl_yaml_str(checks_yaml)
+        if soda_mode == "external":
+            exit_code, scan_results = run_soda_scan_external(
+                data_source_name=data_source_name,
+                config_yaml=config_yaml,
+                checks_yaml=checks_yaml,
+                db=db,
+            )
+        else:
+            assert Scan is not None
+            scan = Scan()
+            scan.set_data_source_name(data_source_name)
+            scan.add_configuration_yaml_str(config_yaml)
+            scan.add_sodacl_yaml_str(checks_yaml)
 
-        exit_code = scan.execute()
-        scan_results: Dict[str, Any] = scan.get_scan_results() or {}
+            exit_code = scan.execute()
+            scan_results = scan.get_scan_results() or {}
         checks = scan_results.get("checks") or []
         if not isinstance(checks, list):
             checks = []
@@ -1567,12 +1872,25 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
         report_payload: Dict[str, Any] = {
             "table_name": table,
             "scan_id": scan_id,
+            "source": "soda",
+            "completeness_score": round(overall_score, 3),
+            "accuracy_score": round(overall_score, 3),
+            "consistency_score": round(overall_score, 3),
+            "validity_score": round(overall_score, 3),
             "overall_score": round(overall_score, 3),
             "issues": issues,
             "recommendations": ["Review failed Soda checks and fix upstream data"] if issues else ["No recommendations."],
             "scan_date": now.isoformat(),
             "row_count": int(row_count),
             "column_count": int(column_count),
+            "missing_values": 0,
+            "invalid_values": 0,
+            "duplicate_count": 0,
+            "freshness": None,
+            "delayed_arrivals": 0,
+            "sla_violations": 0,
+            "distribution_metrics": [],
+            "profiling": [],
             "rule_results": checks,
             "summary": {
                 "soda_exit_code": exit_code,
@@ -1601,7 +1919,10 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
         if exit_code not in (0, 2) and not checks and (errors or warnings):
             raise HTTPException(status_code=500, detail="Soda scan execution failed")
 
-        return report_payload
+        # Ensure response matches the shared report contract.
+        normalized = _normalize_quality_report_payload(report_payload, fallback_overall_score=overall_score)
+        normalized.setdefault("source", "soda")
+        return normalized
 
     except HTTPException:
         raise
@@ -1609,20 +1930,205 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
         logger.exception("Unexpected Soda scan error: %s", e)
         raise HTTPException(status_code=500, detail="Unexpected Soda scan error") from e
 
-@router.get("/scan/{scan_id}/status")
+
+@router.post("/opensearch-ad/gate/{result_index}", response_model=DataQualityReport)
+async def opensearch_ad_gate(
+    result_index: str,
+    request: OpenSearchAnomalyGateRequest,
+    db: Session = Depends(get_db),
+):
+    """Evaluate OpenSearch Anomaly Detection results and persist a DQ report.
+
+    Expected usage:
+    - Create an OpenSearch AD detector
+    - Enable a *custom result index*
+    - Start the detector
+    - Call this endpoint periodically (or from an agent) to produce a DQ-style alert
+
+    Fail-closed behavior:
+    - If OpenSearch is not configured or unreachable: 503
+    """
+
+    _require_postgres()
+
+    idx = (result_index or "").strip()
+    if not idx:
+        raise HTTPException(status_code=400, detail="result_index is required")
+
+    # Load OpenSearch service (configured via admin connection settings or env vars).
+    try:
+        from graph_api.opensearch_router import get_service
+
+        service = get_service(db)
+        # Ensure OpenSearch is actually configured/reachable.
+        _ = service.info()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        raise HTTPException(status_code=503, detail=f"OpenSearch unavailable: {exc}") from exc
+
+    now = datetime.now(timezone.utc)
+    scan_id = str(uuid.uuid4())
+
+    lookback_s = int(request.lookback_minutes) * 60
+    if request.time_field_is_epoch_millis:
+        lte_ms = int(now.timestamp() * 1000)
+        gte_ms = lte_ms - (lookback_s * 1000)
+        time_range: Dict[str, Any] = {"gte": gte_ms, "lte": lte_ms}
+    else:
+        # Let OpenSearch parse relative times.
+        time_range = {"gte": f"now-{int(request.lookback_minutes)}m", "lte": "now"}
+
+    grade_field = (request.grade_field or "anomaly_grade").strip() or "anomaly_grade"
+    time_field = (request.time_field or "data_end_time").strip() or "data_end_time"
+    threshold = float(request.threshold)
+    max_examples = int(request.max_examples or 0)
+
+    body: Dict[str, Any] = {
+        "size": 0,
+        "track_total_hits": True,
+        "query": {
+            "bool": {
+                "filter": [
+                    {"range": {time_field: time_range}},
+                ]
+            }
+        },
+        "aggs": {
+            "max_grade": {"max": {"field": grade_field}},
+        },
+    }
+
+    if max_examples > 0:
+        body["aggs"]["top_anomalies"] = {
+            "top_hits": {
+                "size": max_examples,
+                "sort": [{grade_field: {"order": "desc"}}],
+            }
+        }
+
+    try:
+        resp = service.search(index=idx, query=body)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        raise HTTPException(status_code=503, detail=f"OpenSearch query failed: {exc}") from exc
+
+    aggs = resp.get("aggregations") or {}
+    max_grade_val = (aggs.get("max_grade") or {}).get("value")
+    max_grade = float(max_grade_val) if isinstance(max_grade_val, (int, float)) and max_grade_val is not None else 0.0
+    max_grade = max(0.0, min(1.0, max_grade))
+
+    total_hits_val = ((resp.get("hits") or {}).get("total") or {}).get("value")
+    row_count = int(total_hits_val) if isinstance(total_hits_val, int) else 0
+
+    # Example docs are best-effort; their shape depends on the detector/index mapping.
+    top_docs: List[Any] = []
+    if max_examples > 0:
+        hits = (((aggs.get("top_anomalies") or {}).get("hits") or {}).get("hits") or [])
+        if isinstance(hits, list):
+            for h in hits:
+                if isinstance(h, dict):
+                    top_docs.append(h.get("_source") if isinstance(h.get("_source"), dict) else h)
+
+    has_critical = max_grade >= threshold
+    overall_score = max(0.0, min(1.0, 1.0 - max_grade))
+
+    check_name = "Critical Anomaly Detected by OpenSearch RCF"
+    rule_results = [
+        {
+            "name": check_name,
+            "check": f"max({grade_field}) < {threshold}",
+            "outcome": "fail" if has_critical else "pass",
+            "severity": "critical" if has_critical else "low",
+            "value": max_grade,
+            "threshold": threshold,
+            "lookback_minutes": int(request.lookback_minutes),
+            "index": idx,
+        }
+    ]
+
+    issues: List[Dict[str, Any]] = []
+    recommendations: List[str] = []
+    if has_critical:
+        issues.append(
+            {
+                "issue_id": str(uuid.uuid4()),
+                "rule_id": check_name,
+                "severity": "critical",
+                "description": f"OpenSearch AD anomaly grade {max_grade:.3f} >= {threshold:.3f} in last {int(request.lookback_minutes)}m",
+                "affected_rows": 0,
+                "affected_columns": [],
+                "sample_values": top_docs[:3],
+                "suggestion": "Investigate OpenSearch AD results and correlate with recent deployments/logs",
+            }
+        )
+        recommendations = [
+            "Query the AD results index for anomaly details around the time window.",
+            "Correlate anomalies with deployment/release events and upstream pipeline changes.",
+        ]
+    else:
+        recommendations = ["No critical anomalies detected in the configured lookback window."]
+
+    report_payload: Dict[str, Any] = {
+        "table_name": idx,
+        "scan_id": scan_id,
+        "source": "opensearch_ad",
+        "completeness_score": round(overall_score, 3),
+        "accuracy_score": round(overall_score, 3),
+        "consistency_score": round(overall_score, 3),
+        "validity_score": round(overall_score, 3),
+        "overall_score": round(overall_score, 3),
+        "issues": issues,
+        "recommendations": recommendations,
+        "scan_date": now.isoformat(),
+        "row_count": int(row_count),
+        "column_count": 0,
+        "rule_results": rule_results,
+        "summary": {
+            "max_anomaly_grade": max_grade,
+            "threshold": threshold,
+            "lookback_minutes": int(request.lookback_minutes),
+            "time_field": time_field,
+            "grade_field": grade_field,
+        },
+    }
+
+    db.add(
+        DataQualityScanReport(
+            scan_id=scan_id,
+            table_name=idx[:128],
+            data_source="opensearch_ad",
+            report=report_payload,
+            overall_score=float(report_payload["overall_score"]),
+            issues_count=len(issues),
+            scan_date=now,
+            row_count=int(row_count),
+            column_count=0,
+        )
+    )
+    db.commit()
+
+    normalized = _normalize_quality_report_payload(report_payload, fallback_overall_score=overall_score)
+    normalized.setdefault("source", "opensearch_ad")
+    return normalized
+
+@router.get("/scan/{scan_id}/status", response_model=QualityScanStatusResponse)
 async def get_scan_status(scan_id: str, db: Session = Depends(get_db)):
     """Get scan status (derived from persisted reports)."""
     _require_postgres()
     row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Scan not found")
-    return {
-        "scan_id": scan_id,
-        "table_name": row.table_name,
-        "status": "completed",
-        "created_at": row.scan_date.isoformat() if row.scan_date else None,
-        "completed_at": row.scan_date.isoformat() if row.scan_date else None,
-    }
+    return QualityScanStatusResponse(
+        scan_id=scan_id,
+        table_name=row.table_name,
+        status="completed",
+        created_at=row.scan_date,
+        completed_at=row.scan_date,
+    )
 
 # --- Quality Rules Management ---
 
@@ -1726,7 +2232,7 @@ async def update_quality_rule(rule_id: str, rule: QualityRule, db: Session = Dep
     rule.id = rule_id
     return rule
 
-@router.delete("/rules/{rule_id}")
+@router.delete("/rules/{rule_id}", response_model=DeleteQualityRuleResponse)
 async def delete_quality_rule(rule_id: str, db: Session = Depends(get_db)):
     """Delete a quality rule (persisted)."""
     _require_postgres()
@@ -1736,10 +2242,10 @@ async def delete_quality_rule(rule_id: str, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     logger.info("Deleted persisted quality rule %s", rule_id)
-    return {"message": f"Rule {rule_id} deleted"}
+    return DeleteQualityRuleResponse(message=f"Rule {rule_id} deleted")
 
 
-@router.post("/import-rules")
+@router.post("/import-rules", response_model=ImportQualityRulesResponse)
 async def import_quality_rules(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Import quality rules from a JSON file.
 
@@ -1810,9 +2316,9 @@ async def import_quality_rules(file: UploadFile = File(...), db: Session = Depen
     if imported:
         db.commit()
 
-    return {"status": "success", "imported": imported}
+    return ImportQualityRulesResponse(status="success", imported=int(imported))
 
-@router.put("/rules/{rule_id}/toggle")
+@router.put("/rules/{rule_id}/toggle", response_model=ToggleQualityRuleResponse)
 async def toggle_quality_rule(rule_id: str, db: Session = Depends(get_db)):
     """Enable/disable a quality rule"""
     _require_postgres()
@@ -1825,29 +2331,29 @@ async def toggle_quality_rule(rule_id: str, db: Session = Depends(get_db)):
     enabled = bool(rule.enabled)
     status = "enabled" if enabled else "disabled"
     logger.info("Quality rule %s %s", rule_id, status)
-    return {"message": f"Rule {rule_id} {status}", "enabled": enabled}
+    return ToggleQualityRuleResponse(message=f"Rule {rule_id} {status}", enabled=enabled)
 
 # --- Quality Monitoring ---
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=QualityDashboardResponse)
 async def quality_dashboard(db: Session = Depends(get_db)):
     """Get quality dashboard data"""
     _require_postgres()
 
     reports = db.query(DataQualityScanReport).order_by(DataQualityScanReport.scan_date.desc()).all()
     if not reports:
-        return {
-            "summary": {
-                "total_tables_scanned": 0,
-                "average_quality_score": 0,
-                "critical_issues": 0,
-                "total_issues": 0,
-                "active_rules": 0,
-            },
-            "recent_scans": [],
-            "quality_trends": [],
-            "top_issues": [],
-        }
+        return QualityDashboardResponse(
+            summary=QualityDashboardSummary(
+                total_tables_scanned=0,
+                average_quality_score=0,
+                critical_issues=0,
+                total_issues=0,
+                active_rules=0,
+            ),
+            recent_scans=[],
+            quality_trends=[],
+            top_issues=[],
+        )
 
     # Reports are stored as UI-shaped JSON; derive aggregates without fabricating.
     all_issue_entries: List[Dict[str, Any]] = []
@@ -1886,45 +2392,52 @@ async def quality_dashboard(db: Session = Depends(get_db)):
         for rid, count in sorted(occurrences.items(), key=lambda kv: kv[1], reverse=True)
     ][:10]
 
-    return {
-        "summary": {
-            "total_tables_scanned": len(table_names),
+    return QualityDashboardResponse(
+        summary=QualityDashboardSummary(
+            total_tables_scanned=len(table_names),
             # UI expects 0-100 here.
-            "average_quality_score": round(avg_overall * 100.0, 1),
-            "critical_issues": int(critical_issues),
-            "total_issues": int(len(all_issue_entries)),
-            "active_rules": int(active_rules),
-        },
-        "recent_scans": [
-            {
-                "table_name": r.table_name,
-                "overall_score": float(r.overall_score or 0.0),
-                "scan_date": r.scan_date.isoformat() if r.scan_date else None,
-                "issues_count": int(r.issues_count or 0),
-            }
+            average_quality_score=round(avg_overall * 100.0, 1),
+            critical_issues=int(critical_issues),
+            total_issues=int(len(all_issue_entries)),
+            active_rules=int(active_rules),
+        ),
+        recent_scans=[
+            QualityDashboardRecentScan(
+                table_name=r.table_name,
+                overall_score=float(r.overall_score or 0.0),
+                scan_date=r.scan_date,
+                issues_count=int(r.issues_count or 0),
+            )
             for r in recent
         ],
-        "quality_trends": [
-            {
-                "date": (r.scan_date.isoformat()[:10] if r.scan_date else ""),
-                "score": float(r.overall_score or 0.0),
-            }
+        quality_trends=[
+            QualityDashboardTrendPoint(
+                date=(r.scan_date.isoformat()[:10] if r.scan_date else ""),
+                score=float(r.overall_score or 0.0),
+            )
             for r in trends_source
         ],
-        "top_issues": top_issues,
-    }
+        top_issues=[
+            QualityDashboardTopIssue(
+                rule_name=str(i.get("rule_name") or ""),
+                severity=str(i.get("severity") or ""),
+                occurrences=_coerce_int(i.get("occurrences"), default=0),
+            )
+            for i in top_issues
+        ],
+    )
 
 # --- Health Check ---
 
-@router.get("/health")
+@router.get("/health", response_model=QualityHealthResponse)
 async def quality_health(db: Session = Depends(get_db)):
     """Health check for quality module"""
     _require_postgres()
-    return {
-        "status": "healthy",
-        "module": "data_quality",
-        "total_reports": db.query(DataQualityScanReport).count(),
-        "active_rules": db.query(DataQualityRule).filter(DataQualityRule.enabled == 1).count(),
-        "running_scans": 0,
-        "timestamp": datetime.now().isoformat()
-    }
+    return QualityHealthResponse(
+        status="healthy",
+        module="data_quality",
+        total_reports=int(db.query(DataQualityScanReport).count()),
+        active_rules=int(db.query(DataQualityRule).filter(DataQualityRule.enabled == 1).count()),
+        running_scans=0,
+        timestamp=datetime.now(timezone.utc),
+    )

@@ -2402,6 +2402,17 @@
   transition: all 0.15s;
 }
 
+.quality-table .btn-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.quality-table .btn-action.btn-action-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .quality-table .btn-action:hover {
   background: var(--background-alt, #e8eef4);
   color: var(--primary-color, #0066CC);

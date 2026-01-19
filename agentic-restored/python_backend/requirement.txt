@@ -11,6 +11,9 @@ aiofiles==24.1.0
 python-multipart==0.0.12
 httpx==0.27.2
 opensearch-py==3.1.0
+
+# Embeddings: by default, configure an external embeddings service via EMBEDDINGS_URL.
+# (Heavy local embedding libs are intentionally NOT included in this default runtime list.)
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 requests==2.32.3

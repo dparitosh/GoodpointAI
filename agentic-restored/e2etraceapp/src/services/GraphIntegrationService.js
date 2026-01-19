@@ -152,6 +152,98 @@ class GraphIntegrationService {
     
     return await response.json();
   }
+
+  // ------------------------------------------------------------
+  // GraphQL Tools (Connectors + Soda + OpenSearch)
+  // ------------------------------------------------------------
+
+  async listConnectors(connectionType = null) {
+    const qs = connectionType ? `?connection_type=${encodeURIComponent(connectionType)}` : '';
+    const response = await fetch(`${API_BASE}/api/graphql/tools/connectors${qs}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to list connectors: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async getDefaultConnector(connectionType) {
+    if (!connectionType) {
+      throw new Error('connectionType is required');
+    }
+
+    const response = await fetch(`${API_BASE}/api/graphql/tools/connectors/default/${encodeURIComponent(connectionType)}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get default connector: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async openSearchSearch(index, query, connectionId = null) {
+    if (!index) {
+      throw new Error('index is required');
+    }
+    if (!query || typeof query !== 'object') {
+      throw new Error('query must be an object (OpenSearch DSL)');
+    }
+
+    const body = { index, query };
+    if (connectionId) body.connection_id = connectionId;
+
+    const response = await fetch(`${API_BASE}/api/graphql/tools/opensearch/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenSearch search failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async runSodaScan(tableName, checksYaml, dataSourceName = 'postgres') {
+    if (!tableName) {
+      throw new Error('tableName is required');
+    }
+    if (!checksYaml) {
+      throw new Error('checksYaml is required');
+    }
+
+    const response = await fetch(`${API_BASE}/api/graphql/tools/soda/scan/${encodeURIComponent(tableName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checks_yaml: checksYaml, data_source_name: dataSourceName })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Soda scan failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async checkOpenSearchAnomalyGate(resultIndex, options = null) {
+    if (!resultIndex) {
+      throw new Error('resultIndex is required');
+    }
+
+    const response = await fetch(`${API_BASE}/api/graphql/tools/opensearch-ad/gate/${encodeURIComponent(resultIndex)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {})
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenSearch AD gate failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
 }
 
 // Singleton instance

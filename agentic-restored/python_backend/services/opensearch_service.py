@@ -8,6 +8,8 @@ environment variables for backward compatibility.
 - Degrades gracefully when OpenSearch is not configured or unreachable.
 """
 
+# pylint: disable=broad-exception-caught
+
 import os
 import logging
 from datetime import datetime, timezone
@@ -175,6 +177,16 @@ class OpenSearchService:
                 "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "error": str(exc),
             }
+
+    def info(self) -> Dict[str, Any]:
+        """Return OpenSearch cluster info.
+
+        Raises RuntimeError when OpenSearch is not configured.
+        """
+        client = self._build_client()
+        if client is None:
+            raise RuntimeError("OpenSearch not configured")
+        return client.info()
 
     def index_document(self, index: str, document: Dict[str, Any], doc_id: Optional[str] = None, refresh: bool = False) -> Dict[str, Any]:
         client = self._build_client()

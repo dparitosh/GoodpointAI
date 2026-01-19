@@ -1,0 +1,9 @@
+# Development/test dependencies for python_backend
+#
+# Install this for running pytest locally:
+#   pip install -r requirements-dev.txt
+
+-r requirement.txt
+
+pytest>=8.0.0,<10.0.0
+pytest-asyncio>=0.23.0,<1.0.0

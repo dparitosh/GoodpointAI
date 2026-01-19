@@ -126,8 +126,7 @@ navigate(`/workflow/${newWorkflow.id}`);  // No timeout needed
 ```
 
 **Fix Required:** Implement one of:
-- SQLite for development
-- PostgreSQL/MySQL for production
+- PostgreSQL (required)
 - Redis for in-memory cache
 - File-based JSON storage (temporary)
 

@@ -14,15 +14,14 @@ from core.postgres_config import normalize_sqlalchemy_postgres_url
 def _default_postgres_url() -> str:
     """Build a Postgres DATABASE_URL from POSTGRES_* settings.
 
-    This makes Postgres the default app DB (SQLite is not used unless explicitly configured
-    via DATABASE_URL for tests/local experiments).
+    This makes Postgres the default app DB.
     """
 
-    host = (database_config.postgres_host or "localhost").strip() or "localhost"
+    host = f"{database_config.postgres_host or 'localhost'}" or "localhost"
     port = int(database_config.postgres_port or 5432)
-    database = (database_config.postgres_database or "graphtrace").strip() or "graphtrace"
-    user = (database_config.postgres_user or "postgres").strip() or "postgres"
-    password = (database_config.postgres_password or "").strip()
+    database = f"{database_config.postgres_database or 'graphtrace'}" or "graphtrace"
+    user = f"{database_config.postgres_user or 'postgres'}" or "postgres"
+    password = f"{database_config.postgres_password or ''}"
 
     if password:
         return f"postgresql+psycopg://{user}:{quote_plus(password)}@{host}:{port}/{database}"
@@ -30,16 +29,19 @@ def _default_postgres_url() -> str:
 
 
 DATABASE_URL = (
-    (database_config.sqlalchemy_database_url or "").strip()
-    or os.getenv("DATABASE_URL", "").strip()
+    f"{database_config.sqlalchemy_database_url or ''}"
+    or os.getenv("DATABASE_URL", "")
     or _default_postgres_url()
 )
 
 DATABASE_URL = normalize_sqlalchemy_postgres_url(DATABASE_URL)
 
-connect_args = {}
+connect_args: dict[str, object] = {}
 if DATABASE_URL.startswith("sqlite:"):
-    connect_args = {"check_same_thread": False}
+    # Product requirement: Postgres is the single source of truth for persistence.
+    raise RuntimeError(
+        "SQLite is not supported. Configure Postgres via DATABASE_URL or POSTGRES_* environment variables."
+    )
 
 engine = create_engine(
     DATABASE_URL,

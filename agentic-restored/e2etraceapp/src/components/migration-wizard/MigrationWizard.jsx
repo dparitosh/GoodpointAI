@@ -6,6 +6,7 @@ import { useGraphQLTransform } from '../../hooks/useGraphQL.js';
 import { useAISuggestions, useGraphRAGHealth } from '../../hooks/useGraphRAG.js';
 import { useAgenticSystemStatus } from '../../hooks/useAgenticAI.js';
 import { XStateVisualizer } from '../xstate-visualizer/XStateVisualizer';
+import ApprovalsPanel from './ApprovalsPanel.jsx';
 import './MigrationWizard.css';
 
 /**
@@ -27,6 +28,15 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const [wizardData, setWizardData] = useState({
     // Step 0: Run identity
     workflowName: '',
+    // MCP migration run (state machine / audit trail)
+    mcpRunId: null,
+    mcpApprovalToken: '',
+    mcpApprovalTokenAction: '',
+    mcpApprovalRequired: false,
+    mcpApprovalRequiredAction: '',
+    mcpMaterializeSummary: null,
+    mcpPublishSummary: null,
+    mcpLastStagedSample: null,
     // Step 1: Sources
     sourceSystem: null,
     targetSystem: null,
@@ -61,7 +71,22 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   
   // Available data sources
   const [availableSources, setAvailableSources] = useState([]);
+  const [showAllSources, setShowAllSources] = useState(false);
   const [mappingTemplates, setMappingTemplates] = useState([]);
+
+  const visibleSources = useMemo(() => {
+    const sources = Array.isArray(availableSources) ? availableSources : [];
+    if (showAllSources) return sources;
+
+    // Default behavior: treat Admin-configured “connection settings” as the canonical catalog.
+    // Those entries are surfaced as Data Sources with ids like `conn_<id>`.
+    // Also include explicitly active sources.
+    return sources.filter((s) => {
+      const id = String(s?.id || '');
+      const status = String(s?.status || '').toLowerCase();
+      return id.startsWith('conn_') || status === 'active' || status === 'connected';
+    });
+  }, [availableSources, showAllSources]);
   
   // AI Hooks
   const graphqlTransform = useGraphQLTransform();
@@ -89,6 +114,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   // Toggle state for showing/hiding the state flow diagram
   const [showStateFlow, setShowStateFlow] = useState(true);
+
+  const [showApprovals, setShowApprovals] = useState(false);
 
   // Generate XState graph data based on current wizard state
   const stateFlowGraphData = useMemo(() => {
@@ -311,6 +338,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     setWizardData(prev => ({
       ...prev,
       [type === 'source' ? 'sourceSystem' : 'targetSystem']: source,
+      mcpRunId: null,
+      mcpApprovalToken: '',
+      mcpApprovalRequired: false,
+      mcpMaterializeSummary: null,
+      mcpLastStagedSample: null,
       discoveryStatus: 'idle',
       discoveryAccepted: false,
       discoveryRunId: null,
@@ -351,6 +383,37 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
     try {
       const plmBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/plm/etl`;
+
+      // Best-effort: create an MCP migration run for audit/state tracking.
+      // This is separate from the PLM ETL run id.
+      try {
+        if (!wizardData.mcpRunId) {
+          const mcpBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/migrations`;
+          const mcpRunResp = await e2etraceFetchWithRetry(`${mcpBaseUrl}/runs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workflow_name: wizardData.workflowName || '',
+              source_id: wizardData.sourceSystem?.id || wizardData.sourceSystem?.name || null,
+              target_id: wizardData.targetSystem?.id || wizardData.targetSystem?.name || null,
+              initial_status: 'discovery',
+              options: {
+                ui: 'MigrationWizard',
+                phase: 'discovery'
+              }
+            })
+          });
+
+          const mcpRunData = await mcpRunResp.json();
+          const mcpRunId = mcpRunData?.run_id;
+          if (mcpRunId) {
+            setWizardData(prev => ({ ...prev, mcpRunId }));
+          }
+        }
+      } catch (mcpError) {
+        // Non-fatal: wizard still works without MCP vertical slice enabled.
+        console.warn('MCP run tracking unavailable:', mcpError?.message || mcpError);
+      }
 
       // Create a lightweight discovery run
       const runResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs`, {
@@ -571,7 +634,100 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [wizardData.sourceSystem, wizardData.targetSystem]);
+  }, [wizardData.sourceSystem, wizardData.targetSystem, wizardData.mcpRunId, wizardData.workflowName]);
+
+  const stageMcpSampleBestEffort = useCallback(
+    async ({ mcpRunId, entity, records }) => {
+      const rid = String(mcpRunId || '').trim();
+      if (!rid) return null;
+      const recs = Array.isArray(records) ? records.filter((r) => r && typeof r === 'object').slice(0, 25) : [];
+      if (recs.length === 0) return null;
+
+      const mcpBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/migrations`;
+      const resp = await e2etraceFetchWithRetry(`${mcpBaseUrl}/runs/${encodeURIComponent(rid)}/stage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity: String(entity || 'part'),
+          records: recs,
+        }),
+      });
+      const data = await resp.json().catch(() => null);
+      setWizardData((prev) => ({
+        ...prev,
+        mcpLastStagedSample: recs.slice(0, 10),
+      }));
+      return data;
+    },
+    []
+  );
+
+  const transitionMcpRunBestEffort = useCallback(async ({ mcpRunId, toStatus, event, note }) => {
+    const rid = String(mcpRunId || '').trim();
+    if (!rid) return null;
+    const mcpBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/migrations`;
+    const resp = await e2etraceFetchWithRetry(`${mcpBaseUrl}/runs/${encodeURIComponent(rid)}/transition`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to_status: String(toStatus || '').trim(),
+        event: event || null,
+        note: note || null,
+      }),
+    });
+    return await resp.json().catch(() => null);
+  }, []);
+
+  const materializeMcpRunBestEffort = useCallback(
+    async ({ mcpRunId, approvalToken }) => {
+      const rid = String(mcpRunId || '').trim();
+      if (!rid) return null;
+      const tok = String(approvalToken || '').trim();
+
+      const mcpBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/migrations`;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(tok ? { 'X-MCP-Approval-Token': tok } : {}),
+      };
+
+      const resp = await e2etraceFetchWithRetry(`${mcpBaseUrl}/runs/${encodeURIComponent(rid)}/materialize`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          entities: null,
+          batch_id: null,
+        }),
+      });
+      return await resp.json().catch(() => null);
+    },
+    []
+  );
+
+  const publishMcpRunBestEffort = useCallback(
+    async ({ mcpRunId, approvalToken }) => {
+      const rid = String(mcpRunId || '').trim();
+      if (!rid) return null;
+      const tok = String(approvalToken || '').trim();
+
+      const mcpBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/migrations`;
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(tok ? { 'X-MCP-Approval-Token': tok } : {}),
+      };
+
+      const resp = await e2etraceFetchWithRetry(`${mcpBaseUrl}/runs/${encodeURIComponent(rid)}/publish`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          entities: null,
+          batch_id: null,
+          opensearch_index: null,
+        }),
+      });
+      return await resp.json().catch(() => null);
+    },
+    []
+  );
 
   const acceptDiscovery = useCallback(() => {
     setWizardData(prev => ({
@@ -813,9 +969,27 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     
     try {
       const plmBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/plm/etl`;
+
+      // Best-effort: mark MCP run as executing (audit/state tracking)
+      try {
+        if (wizardData.mcpRunId) {
+          await transitionMcpRunBestEffort({
+            mcpRunId: wizardData.mcpRunId,
+            toStatus: 'executing',
+            event: 'execute',
+            note: 'Execute step started from Migration Wizard',
+          });
+        }
+      } catch (e) {
+        console.warn('MCP run transition unavailable:', e?.message || e);
+      }
       
+      const willPublishToOpenSearch = String(wizardData.targetSystem?.id || '')
+        .toLowerCase()
+        .includes('opensearch');
+
       // STEP 1: Create migration run
-      setWizardData(prev => ({ ...prev, migrationStep: 'Step 1: Creating run...' }));
+      setWizardData(prev => ({ ...prev, migrationStep: 'Step 1: Creating run...', processedRecords: 0 }));
       const runResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -830,7 +1004,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       
       if (!runId) throw new Error('Failed to create migration run');
       
-      setWizardData(prev => ({ ...prev, runId, processedRecords: 1, totalRecords: 5 }));
+      setWizardData(prev => ({
+        ...prev,
+        runId,
+        processedRecords: 1,
+        totalRecords: willPublishToOpenSearch ? 6 : 5,
+      }));
       
       // STEP 2: Stage records (extract from source)
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 2: Staging records...', processedRecords: 2 }));
@@ -850,7 +1029,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          object_type: 'Part',
+          object_type: 'part',
           records: records
         })
       });
@@ -881,8 +1060,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         body: JSON.stringify({ part_mapping: partMapping })
       });
       
-      // STEP 4a: SODA Data Quality Scan
-      setWizardData(prev => ({ ...prev, migrationStep: 'Step 4a: Running SODA quality scan...', processedRecords: 3.5 }));
+      // STEP 4: Data Quality Scan + Validate
+      setWizardData(prev => ({ ...prev, migrationStep: 'Step 4: Running quality scan & validate...', processedRecords: 4 }));
       try {
         const sodaResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/dq/soda/scan/public.plm_parts`, {
           method: 'POST',
@@ -900,34 +1079,137 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         // Continue even if SODA is not available
       }
       
-      // STEP 4b: Validate
-      setWizardData(prev => ({ ...prev, migrationStep: 'Step 4b: Validating data...', processedRecords: 4 }));
+      // Validate
+      setWizardData(prev => ({ ...prev, migrationStep: 'Step 4: Validating data...', processedRecords: 4 }));
       await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       });
       
-      // STEP 5: Sync to Neo4j (use direct sync for dev environments)
-      setWizardData(prev => ({ ...prev, migrationStep: 'Step 5: Syncing to Neo4j...', processedRecords: 4.5 }));
+      // STEP 5: Materialize lineage to Neo4j
+      setWizardData(prev => ({ ...prev, migrationStep: 'Step 5: Materializing lineage to Neo4j...', processedRecords: 5 }));
+
+      // Prefer MCP-governed sample materialization (enables approvals + audit trail).
+      // Fall back to direct PLM sync when MCP slice isn't enabled.
       let syncResult = null;
+      let mcpMaterialize = null;
+
+      if (wizardData.mcpRunId) {
+        try {
+          setWizardData((prev) => ({
+            ...prev,
+            mcpApprovalRequired: false,
+            mcpApprovalRequiredAction: '',
+            mcpMaterializeSummary: null,
+            mcpPublishSummary: null,
+          }));
+
+          // Stage a bounded sample to the MCP run so it can be materialized.
+          await stageMcpSampleBestEffort({ mcpRunId: wizardData.mcpRunId, entity: 'part', records });
+
+          mcpMaterialize = await materializeMcpRunBestEffort({
+            mcpRunId: wizardData.mcpRunId,
+            approvalToken:
+              String(wizardData.mcpApprovalTokenAction || '').toLowerCase() === 'materialize'
+                ? wizardData.mcpApprovalToken
+                : '',
+          });
+
+          setWizardData((prev) => ({
+            ...prev,
+            mcpMaterializeSummary: mcpMaterialize,
+          }));
+        } catch (e) {
+          // Approval required: pause execution and let the operator request/approve, then retry.
+          if (e?.status === 403) {
+            setWizardData((prev) => ({
+              ...prev,
+              migrationStatus: 'awaiting_approval',
+              migrationStep: 'Waiting for approval to materialize to Neo4j',
+              mcpApprovalRequired: true,
+              mcpApprovalRequiredAction: 'materialize',
+              errors: [...prev.errors, e?.message || 'Approval required'],
+            }));
+            setShowApprovals(true);
+            return;
+          }
+
+          // If MCP materialize fails for environment reasons (e.g., Neo4j not configured), try the PLM direct sync.
+          console.warn('MCP materialize skipped:', e?.message || e);
+        }
+      }
+
+      if (!mcpMaterialize) {
+        try {
+          const syncResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/sync/neo4j/direct`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          syncResult = await syncResponse.json();
+        } catch (syncError) {
+          console.warn('Direct Neo4j sync skipped (Neo4j may not be configured):', syncError?.message || syncError);
+        }
+      }
+
+      // STEP 6: Publish to target service (OpenSearch)
+      let mcpPublish = null;
+      if (willPublishToOpenSearch && wizardData.mcpRunId) {
+        setWizardData((prev) => ({
+          ...prev,
+          migrationStep: 'Step 6: Publishing to OpenSearch...',
+          processedRecords: 6,
+        }));
+        try {
+          mcpPublish = await publishMcpRunBestEffort({
+            mcpRunId: wizardData.mcpRunId,
+            approvalToken:
+              String(wizardData.mcpApprovalTokenAction || '').toLowerCase() === 'publish'
+                ? wizardData.mcpApprovalToken
+                : '',
+          });
+          setWizardData((prev) => ({
+            ...prev,
+            mcpPublishSummary: mcpPublish,
+          }));
+        } catch (e) {
+          if (e?.status === 403) {
+            setWizardData((prev) => ({
+              ...prev,
+              migrationStatus: 'awaiting_approval',
+              migrationStep: 'Waiting for approval to publish to OpenSearch',
+              mcpApprovalRequired: true,
+              mcpApprovalRequiredAction: 'publish',
+              errors: [...prev.errors, e?.message || 'Approval required'],
+            }));
+            setShowApprovals(true);
+            return;
+          }
+          console.warn('MCP publish skipped:', e?.message || e);
+        }
+      }
+
+      // Best-effort: mark MCP run as completed
       try {
-        const syncResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/sync/neo4j/direct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        syncResult = await syncResponse.json();
-      } catch (syncError) {
-        console.warn('Direct Neo4j sync skipped (Neo4j may not be configured):', syncError.message);
+        if (wizardData.mcpRunId) {
+          await transitionMcpRunBestEffort({
+            mcpRunId: wizardData.mcpRunId,
+            toStatus: 'completed',
+            event: 'execute.complete',
+            note: 'Execute step completed from Migration Wizard',
+          });
+        }
+      } catch (e) {
+        console.warn('MCP run completion transition unavailable:', e?.message || e);
       }
       
       setWizardData(prev => ({
         ...prev,
         migrationStatus: 'completed',
         migrationStep: 'Complete!',
-        processedRecords: syncResult?.parts_synced || records.length,
-        totalRecords: syncResult?.parts_synced || records.length,
-        nodesCreated: syncResult?.nodes_created || 0
+        processedRecords: willPublishToOpenSearch ? 6 : 5,
+        totalRecords: willPublishToOpenSearch ? 6 : 5,
+        nodesCreated: syncResult?.nodes_created || mcpMaterialize?.sample_nodes || 0
       }));
       
       setStepStatus(prev => ({
@@ -939,6 +1221,21 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       
     } catch (error) {
       console.error('Migration failed:', error);
+
+      // Best-effort: mark MCP run as failed
+      try {
+        if (wizardData.mcpRunId) {
+          await transitionMcpRunBestEffort({
+            mcpRunId: wizardData.mcpRunId,
+            toStatus: 'failed',
+            event: 'execute.failed',
+            note: error?.message || 'Execute step failed',
+          });
+        }
+      } catch (e) {
+        console.warn('MCP run failure transition unavailable:', e?.message || e);
+      }
+
       setWizardData(prev => ({
         ...prev,
         migrationStatus: 'failed',
@@ -948,7 +1245,147 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [wizardData, onComplete]);
+  }, [
+    wizardData,
+    onComplete,
+    stageMcpSampleBestEffort,
+    materializeMcpRunBestEffort,
+    publishMcpRunBestEffort,
+    transitionMcpRunBestEffort,
+  ]);
+
+  const retryGovernedAction = useCallback(async () => {
+    const rid = String(wizardData.mcpRunId || '').trim();
+    if (!rid) return;
+
+    const requiredAction = String(wizardData.mcpApprovalRequiredAction || 'materialize').toLowerCase();
+    const willPublishToOpenSearch = String(wizardData.targetSystem?.id || '')
+      .toLowerCase()
+      .includes('opensearch');
+
+    setIsLoading(true);
+    try {
+      setWizardData((prev) => ({
+        ...prev,
+        migrationStatus: 'running',
+        migrationStep:
+          requiredAction === 'publish'
+            ? 'Retrying publish to OpenSearch...'
+            : 'Retrying materialize lineage to Neo4j...',
+      }));
+
+      if (requiredAction === 'publish') {
+        const mcpPublish = await publishMcpRunBestEffort({
+          mcpRunId: rid,
+          approvalToken:
+            String(wizardData.mcpApprovalTokenAction || '').toLowerCase() === 'publish'
+              ? wizardData.mcpApprovalToken
+              : '',
+        });
+        setWizardData((prev) => ({
+          ...prev,
+          migrationStatus: 'completed',
+          migrationStep: 'Complete!',
+          mcpApprovalRequired: false,
+          mcpApprovalRequiredAction: '',
+          mcpPublishSummary: mcpPublish,
+          processedRecords: willPublishToOpenSearch ? 6 : prev.processedRecords,
+        }));
+      } else {
+        const sample = Array.isArray(wizardData.mcpLastStagedSample) ? wizardData.mcpLastStagedSample : [];
+        await stageMcpSampleBestEffort({ mcpRunId: rid, entity: 'part', records: sample });
+        const mcpMaterialize = await materializeMcpRunBestEffort({
+          mcpRunId: rid,
+          approvalToken:
+            String(wizardData.mcpApprovalTokenAction || '').toLowerCase() === 'materialize'
+              ? wizardData.mcpApprovalToken
+              : '',
+        });
+
+        // If the selected target is OpenSearch, follow up with publish (may require its own approval).
+        if (willPublishToOpenSearch) {
+          setWizardData((prev) => ({
+            ...prev,
+            migrationStep: 'Step 6: Publishing to OpenSearch...',
+            processedRecords: 6,
+          }));
+          try {
+            const mcpPublish = await publishMcpRunBestEffort({
+              mcpRunId: rid,
+              approvalToken:
+                String(wizardData.mcpApprovalTokenAction || '').toLowerCase() === 'publish'
+                  ? wizardData.mcpApprovalToken
+                  : '',
+            });
+            setWizardData((prev) => ({
+              ...prev,
+              mcpPublishSummary: mcpPublish,
+            }));
+          } catch (e) {
+            if (e?.status === 403) {
+              setWizardData((prev) => ({
+                ...prev,
+                migrationStatus: 'awaiting_approval',
+                migrationStep: 'Waiting for approval to publish to OpenSearch',
+                mcpApprovalRequired: true,
+                mcpApprovalRequiredAction: 'publish',
+                errors: [...prev.errors, e?.message || 'Approval required'],
+              }));
+              setShowApprovals(true);
+              return;
+            }
+          }
+        }
+
+        setWizardData((prev) => ({
+          ...prev,
+          migrationStatus: 'completed',
+          migrationStep: 'Complete!',
+          mcpApprovalRequired: false,
+          mcpApprovalRequiredAction: '',
+          mcpMaterializeSummary: mcpMaterialize,
+          nodesCreated: mcpMaterialize?.sample_nodes || prev.nodesCreated || 0,
+          processedRecords: willPublishToOpenSearch ? 6 : 5,
+          totalRecords: willPublishToOpenSearch ? 6 : 5,
+        }));
+      }
+
+      setStepStatus(prev => ({
+        ...prev,
+        5: { complete: true, valid: true }
+      }));
+    } catch (e) {
+      if (e?.status === 403) {
+        setWizardData((prev) => ({
+          ...prev,
+          migrationStatus: 'awaiting_approval',
+          migrationStep: requiredAction === 'publish' ? 'Waiting for approval to publish to OpenSearch' : 'Waiting for approval to materialize to Neo4j',
+          mcpApprovalRequired: true,
+          mcpApprovalRequiredAction: requiredAction,
+          errors: [...prev.errors, e?.message || 'Approval required'],
+        }));
+      } else {
+        setWizardData((prev) => ({
+          ...prev,
+          migrationStatus: 'failed',
+          migrationStep: 'Failed',
+          errors: [...prev.errors, e?.message || 'Materialize failed'],
+        }));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    wizardData.mcpRunId,
+    wizardData.mcpLastStagedSample,
+    wizardData.mcpApprovalToken,
+    wizardData.mcpApprovalTokenAction,
+    wizardData.mcpApprovalRequiredAction,
+    wizardData.targetSystem,
+    stageMcpSampleBestEffort,
+    materializeMcpRunBestEffort,
+    publishMcpRunBestEffort,
+  ]);
 
   // Render step content
   const renderStepContent = () => {
@@ -966,6 +1403,17 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     <div className="wizard-step-content connect-step">
       <h3>Configure Data Sources</h3>
       <p className="step-description">Select source and target systems for your PLM data migration</p>
+
+      <div className="form-group" style={{ marginTop: '8px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input
+            type="checkbox"
+            checked={showAllSources}
+            onChange={(e) => setShowAllSources(e.target.checked)}
+          />
+          Show all configured sources (including legacy/test entries)
+        </label>
+      </div>
 
       <div className="run-identity">
         <div className="run-identity-header">
@@ -992,16 +1440,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <h4><i className="fas fa-database" /> Source System</h4>
           <p>Where is your data coming from?</p>
           
-          {availableSources.length === 0 ? (
+          {visibleSources.length === 0 ? (
             <div className="no-sources">
               <p>No connected data sources available.</p>
               <p className="no-sources-hint">
-                Ask an administrator to configure connections in Admin Settings, then return here.
+                Ask an administrator to configure connection settings (data sources) in Admin Settings, then return here.
               </p>
             </div>
           ) : (
             <div className="source-list">
-              {availableSources.map(source => (
+              {visibleSources.map(source => (
                 <div 
                   key={source.id}
                   className={`source-option ${wizardData.sourceSystem?.id === source.id ? 'selected' : ''}`}
@@ -1032,7 +1480,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <p>Where should the data go?</p>
           
           <div className="source-list">
-            {availableSources.map(source => (
+            {visibleSources.map(source => (
               <div 
                 key={source.id}
                 className={`source-option ${wizardData.targetSystem?.id === source.id ? 'selected' : ''} ${wizardData.sourceSystem?.id === source.id ? 'disabled' : ''}`}
@@ -1092,6 +1540,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       {wizardData.discoveryRunId && (
         <div className="discovery-meta">
           Discovery run: <strong>{wizardData.discoveryRunId}</strong>
+        </div>
+      )}
+
+      {wizardData.mcpRunId && (
+        <div className="discovery-meta">
+          MCP run: <strong>{wizardData.mcpRunId}</strong>
         </div>
       )}
 
@@ -1432,6 +1886,93 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     <div className="wizard-step-content execute-step">
       <h3>Execute Migration</h3>
       <p className="step-description">Run the migration and monitor progress</p>
+
+      {/* Governance / approvals */}
+      <div className="mcp-governance-card">
+        <div className="mcp-governance-header">
+          <h4><i className="fas fa-user-shield" /> Governance & approvals</h4>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => setShowApprovals((s) => !s)}
+            aria-expanded={showApprovals ? 'true' : 'false'}
+          >
+            <i className={`fas fa-chevron-${showApprovals ? 'up' : 'down'}`} />
+            {showApprovals ? 'Hide' : 'Show'}
+          </button>
+        </div>
+
+        {!wizardData.mcpRunId ? (
+          <div className="inline-alert info">
+            MCP run tracking is not available yet. Run Discovery first (Step 2) to create the MCP run.
+          </div>
+        ) : (
+          <div className="mcp-governance-meta">
+            <div>
+              MCP run: <code>{wizardData.mcpRunId}</code>
+            </div>
+            <div className="mcp-token-row">
+              Approval token:{' '}
+              {wizardData.mcpApprovalToken ? (
+                <>
+                  <code>{wizardData.mcpApprovalToken}</code>
+                  {wizardData.mcpApprovalTokenAction ? (
+                    <span className="muted" style={{ marginLeft: 8 }}>
+                      (for <code>{wizardData.mcpApprovalTokenAction}</code>)
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="muted">(none)</span>
+              )}
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() =>
+                  setWizardData((prev) => ({
+                    ...prev,
+                    mcpApprovalToken: '',
+                    mcpApprovalTokenAction: '',
+                  }))
+                }
+                disabled={!wizardData.mcpApprovalToken}
+                title="Clear selected token"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
+        {wizardData.mcpApprovalRequired && (
+          <div className="inline-alert warning">
+            Approval is required to{' '}
+            <strong>{wizardData.mcpApprovalRequiredAction || 'materialize'}</strong>. Request an approval below, approve it (admin), then click “Use token”.
+          </div>
+        )}
+
+        {(showApprovals || wizardData.mcpApprovalRequired) && (
+          <ApprovalsPanel
+            runId={wizardData.mcpRunId}
+            defaultAction={wizardData.mcpApprovalRequiredAction || 'materialize'}
+            defaultRequestedBy=""
+            sample={wizardData.mcpLastStagedSample}
+            impact={{
+              operation: wizardData.mcpApprovalRequiredAction || 'materialize',
+              target: (wizardData.mcpApprovalRequiredAction || 'materialize') === 'publish' ? 'opensearch' : 'neo4j',
+              note:
+                (wizardData.mcpApprovalRequiredAction || 'materialize') === 'publish'
+                  ? 'Indexes staged sample documents to OpenSearch and records publish lineage in Neo4j'
+                  : 'Writes staged sample nodes for this run to Neo4j (idempotent MERGE)'
+            }}
+            onTokenSelected={(sel) =>
+              setWizardData((prev) => ({
+                ...prev,
+                mcpApprovalToken: String(sel?.token || ''),
+                mcpApprovalTokenAction: String(sel?.action || ''),
+              }))
+            }
+          />
+        )}
+      </div>
       
       {/* Migration Summary */}
       <div className="migration-summary">
@@ -1497,15 +2038,54 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               <i className="fas fa-exchange-alt" /> Step 3: Transform
             </div>
             <div className={`migration-step-item ${wizardData.processedRecords >= 4 ? 'complete' : wizardData.processedRecords >= 3 ? 'active' : ''}`}>
-              <i className="fas fa-shield-alt" /> Step 4: SODA Scan & Validate
+              <i className="fas fa-shield-alt" /> Step 4: Quality Scan & Validate
             </div>
             <div className={`migration-step-item ${wizardData.processedRecords >= 5 ? 'complete' : wizardData.processedRecords >= 4 ? 'active' : ''}`}>
-              <i className="fas fa-project-diagram" /> Step 5: Sync to Neo4j
+              <i className="fas fa-project-diagram" /> Step 5: Materialize lineage (Neo4j)
             </div>
+            {String(wizardData.targetSystem?.id || '').toLowerCase().includes('opensearch') && (
+              <div className={`migration-step-item ${wizardData.processedRecords >= 6 ? 'complete' : wizardData.processedRecords >= 5 ? 'active' : ''}`}>
+                <i className="fas fa-search" /> Step 6: Publish/index (OpenSearch)
+              </div>
+            )}
           </div>
           <div className="spinner">
             <i className="fas fa-spinner fa-spin" />
           </div>
+        </div>
+      )}
+
+      {/* Awaiting approval */}
+      {wizardData.migrationStatus === 'awaiting_approval' && (
+        <div className="migration-failed" style={{ paddingTop: 24 }}>
+          <div className="error-icon" style={{ color: 'var(--warning-color, #ffc107)' }}>
+            <i className="fas fa-user-check" />
+          </div>
+          <h4 style={{ color: 'var(--warning-color, #ffc107)' }}>Waiting for approval</h4>
+          <p className="step-description" style={{ marginBottom: 12 }}>
+            This operation is gated (<code>{wizardData.mcpApprovalRequiredAction || 'materialize'}</code>). Select an approved token above, then retry.
+          </p>
+          <button
+            className="btn btn-primary"
+            onClick={retryGovernedAction}
+            disabled={
+              !wizardData.mcpRunId ||
+              !String(wizardData.mcpApprovalToken || '').trim() ||
+              String(wizardData.mcpApprovalTokenAction || '').toLowerCase() !==
+                String(wizardData.mcpApprovalRequiredAction || 'materialize').toLowerCase() ||
+              isLoading
+            }
+            title={
+              !wizardData.mcpApprovalToken
+                ? 'Select an approved token first'
+                : String(wizardData.mcpApprovalTokenAction || '').toLowerCase() !==
+                  String(wizardData.mcpApprovalRequiredAction || 'materialize').toLowerCase()
+                  ? 'Selected token action does not match required action'
+                  : 'Retry governed action'
+            }
+          >
+            <i className="fas fa-play" /> Retry
+          </button>
         </div>
       )}
       

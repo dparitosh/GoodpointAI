@@ -34,7 +34,7 @@ python_backend/mapping_templates.json
 e2etraceapp/dist/
 e2etraceapp/.vite/
 
-# Runtime data (SQLite default DB)
+# Runtime working data (uploads/exports/temp)
 python_backend/data/
 
 # Local-only encryption key (do not commit)
