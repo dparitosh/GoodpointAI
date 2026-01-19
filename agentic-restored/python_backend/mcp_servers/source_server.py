@@ -67,7 +67,7 @@ def _require_mcp():
         return getattr(mod, "FastMCP")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         raise RuntimeError(
-            "MCP Python SDK is not installed. Install optional deps (see requirements_external_integrations.txt)."
+            "MCP Python SDK is not installed. Install optional deps (see requirements.txt)."
         ) from exc
 
 

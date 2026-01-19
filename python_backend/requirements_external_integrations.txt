@@ -78,40 +78,10 @@ pyyaml==6.0.2
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-cryptography==44.0.0
+# Deprecated: use requirements.txt
+#
+# This file remains only for backwards compatibility with older scripts/docs.
+# The single source of truth is now: requirements.txt
 
-# Monitoring & Logging
-prometheus-client==0.21.0
-sentry-sdk==2.18.0
+-r requirements.txt
 
-# Task Queue & Background Jobs
-celery==5.4.0
-kombu==5.4.2
-
-# Testing
-pytest==8.3.4
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-
-# Search / Retrieval
-opensearch-py==3.1.0
-
-# Data quality (optional)
-soda-core-postgres>=3.0.0,<4.0.0
-
-# Spark / Distributed Compute (Optional)
-# NOTE: PySpark is intentionally NOT part of the default FastAPI runtime.
-# Use these only in a separate Spark job environment (spark-submit / Databricks / EMR / K8s).
-# Keep the version aligned with your Spark cluster; this range is chosen for upgrade safety.
-pyspark>=3.5.0,<4.0.0
-
-# Neo4j + openCypher with Spark
-# openCypher execution happens in Neo4j; Spark interacts via the Neo4j Spark Connector (JVM package),
-# which is configured at spark-submit time (not installed via pip). See SPARK_NEO4J_OPENCYPHER_RECIPE.md.
-
-# Utilities
-python-dateutil==2.9.0
-tenacity==9.0.0
-schedule==1.2.2
-cachetools==5.5.0

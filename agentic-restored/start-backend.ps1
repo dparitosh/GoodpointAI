@@ -42,7 +42,7 @@ if (-not (Test-Path ".env")) {
 # Install/upgrade dependencies
 Write-Host "Installing/updating dependencies..." -ForegroundColor Yellow
 python -m pip install --upgrade pip
-python -m pip install -r requirement.txt
+python -m pip install -r requirements.txt
 
 # Ensure encryption key exists for DB-backed encrypted configuration.
 # We prefer an explicit session env var so .env is not required for installs.

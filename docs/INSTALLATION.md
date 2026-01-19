@@ -65,7 +65,7 @@ python -m pip install --upgrade pip
 ### Install backend dependencies
 
 ```powershell
-pip install -r agentic-restored/python_backend/requirement.txt
+pip install -r agentic-restored/python_backend/requirements.txt
 ```
 
 ### Initialize schema (Postgres)

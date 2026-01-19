@@ -1,9 +1,6 @@
-# Development/test dependencies for python_backend
+# Deprecated: use requirements.txt
 #
-# Install this for running pytest locally:
-#   pip install -r requirements-dev.txt
+# This file remains only for backwards compatibility with older scripts/docs.
+# The single source of truth is now: requirements.txt
 
--r requirement.txt
-
-pytest>=8.0.0,<10.0.0
-pytest-asyncio>=0.23.0,<1.0.0
+-r requirements.txt

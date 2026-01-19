@@ -515,7 +515,7 @@ if (-not $SkipDependencies) {
         
         # Install requirements
         Write-Host "    Installing Python packages..." -ForegroundColor Gray
-        python -m pip install -r requirement.txt --quiet
+        python -m pip install -r requirements.txt --quiet
         
         Write-Success "Backend dependencies installed"
         

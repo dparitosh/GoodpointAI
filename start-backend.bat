@@ -43,7 +43,7 @@ if not exist ".env" (
 REM Install/upgrade dependencies
 echo Installing/updating dependencies...
 python -m pip install --upgrade pip
-python -m pip install -r requirement.txt
+python -m pip install -r requirements.txt
 
 REM Set PYTHONPATH
 set PYTHONPATH=%~dp0python_backend

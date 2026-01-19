@@ -32,7 +32,7 @@ if (-not $SkipBackend) {
     & ".\venv\Scripts\Activate.ps1"
 
     python -m pip install --upgrade pip
-    python -m pip install -r requirement.txt
+    python -m pip install -r requirements.txt
 
     $keyFile = Join-Path (Get-Location) ".graphtrace.encryption_key"
     if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {

@@ -203,7 +203,7 @@ def _extract_frontend_nav_targets() -> tuple[set[str], dict[str, set[str]]]:
 def _load_backend_routes() -> list[BackendRoute]:
     """Import FastAPI app and list registered routes.
 
-    This expects dependencies in `python_backend/requirement.txt` to be installed.
+    This expects backend dependencies in `python_backend/requirements.txt` to be installed.
     """
 
     sys.path.insert(0, str(BACKEND_ROOT))
