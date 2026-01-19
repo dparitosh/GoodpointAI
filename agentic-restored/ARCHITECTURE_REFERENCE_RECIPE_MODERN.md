@@ -1,5 +1,0 @@
-﻿# ARCHITECTURE_REFERENCE_RECIPE_MODERN.md
-
-> This document has moved.
-> Please see: [docs/reference/ARCHITECTURE_REFERENCE_RECIPE_MODERN.md](docs/reference/ARCHITECTURE_REFERENCE_RECIPE_MODERN.md)
-

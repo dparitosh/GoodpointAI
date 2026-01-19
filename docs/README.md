@@ -1,22 +1,19 @@
-# GraphTrace Documentation
+# Documentation
 
-Start here.
+This folder contains the **current** documentation set for the repository.
 
-## Recommended reading order
+## Start here
 
-1. **Booklet (single entrypoint)**: [booklet/BOOKLET.md](booklet/BOOKLET.md)
-2. **Install (Windows)**: [installation/INSTALL_WINDOWS.md](installation/INSTALL_WINDOWS.md)
-3. **Dependencies / prerequisites**: [installation/DEPENDENCIES.md](installation/DEPENDENCIES.md)
-4. **Configuration (UI + env vars)**: [installation/CONFIGURATION.md](installation/CONFIGURATION.md)
-5. **End-user guide (step-by-step workflows)**: [user-guide/END_USER_GUIDE.md](user-guide/END_USER_GUIDE.md)
+1. Installation: [`INSTALLATION.md`](INSTALLATION.md)
+2. Step-by-step execution runbook: [`EXECUTION_GUIDE.md`](EXECUTION_GUIDE.md)
+3. End user guide: [`USER_GUIDE.md`](USER_GUIDE.md)
 
-## Scripts
+## Key URLs (default local dev)
 
-- Scripts reference: [installation/SCRIPTS_REFERENCE.md](installation/SCRIPTS_REFERENCE.md)
-	- Includes Postgres schema/config seeding and optional Neo4j/OpenSearch fixture seeding
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8011
+- OpenAPI: http://localhost:8011/docs
 
-## Reference
+## Persistence policy
 
-- Existing reference docs are indexed in: [reference/REFERENCE_INDEX.md](reference/REFERENCE_INDEX.md)
-- OpenAPI / API docs: [reference/API_DOCS.md](reference/API_DOCS.md)
-- Cleanup proposal (no deletions): [reference/CLEANUP_CANDIDATES.md](reference/CLEANUP_CANDIDATES.md)
+PostgreSQL is the only supported persistence store for application data.
