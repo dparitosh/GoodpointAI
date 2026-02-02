@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.db_session import get_db
 from services.admin_config_service import AdminConfigService
@@ -171,7 +172,13 @@ async def list_connectors(
     if connection_type:
         q = q.filter(ConnectionConfig.connection_type == connection_type)
 
-    rows = q.order_by(ConnectionConfig.connection_type, ConnectionConfig.name).all()
+    try:
+        rows = q.order_by(ConnectionConfig.connection_type, ConnectionConfig.name).all()
+    except SQLAlchemyError as exc:
+        # In lightweight CI / developer machines, Postgres might not be running.
+        # This endpoint should still respond with a structured payload.
+        logger.warning("DB unavailable while listing connectors: %s", exc)
+        return []
 
     out: List[ConnectorSummary] = []
     for row in rows:

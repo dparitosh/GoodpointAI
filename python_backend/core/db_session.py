@@ -2,10 +2,23 @@ import os
 from urllib.parse import quote_plus
 from typing import Generator, Optional
 
-from sqlalchemy import create_engine
-from sqlalchemy import text
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.engine.url import make_url
+try:
+    from sqlalchemy import create_engine
+    from sqlalchemy import text
+    from sqlalchemy.orm import sessionmaker, Session
+    from sqlalchemy.engine.url import make_url
+except ModuleNotFoundError as exc:
+    missing = getattr(exc, "name", "")
+    if missing == "sqlalchemy":
+        import sys
+
+        raise ModuleNotFoundError(
+            "SQLAlchemy is required but not installed in the current Python environment. "
+            f"Python executable: {sys.executable}. "
+            "Install backend dependencies with: pip install -r agentic-restored/python_backend/requirements.txt "
+            "and ensure you are running the backend using the repo-root .venv."
+        ) from exc
+    raise
 
 from core.database import Base
 from core.external_config import database_config

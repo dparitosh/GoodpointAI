@@ -15,18 +15,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Navigate to backend directory
-cd /d "%~dp0python_backend"
-
-REM Check if virtual environment exists
-if not exist "venv" (
-    echo Creating virtual environment...
-    python -m venv venv
+REM Use repo-root .venv so VS Code tasks and scripts share one environment.
+for %%I in ("%~dp0..") do set "REPO_ROOT=%%~fI"
+set "VENV_DIR=%REPO_ROOT%\.venv"
+if not exist "%VENV_DIR%\Scripts\python.exe" (
+    echo Creating virtual environment at %VENV_DIR%...
+    python -m venv "%VENV_DIR%"
 )
 
-REM Activate virtual environment
 echo Activating virtual environment...
-call venv\Scripts\activate.bat
+call "%VENV_DIR%\Scripts\activate.bat"
+
+REM Navigate to backend directory
+cd /d "%REPO_ROOT%\agentic-restored\python_backend"
 
 REM Check if .env file exists
 if not exist ".env" (
@@ -45,8 +46,18 @@ echo Installing/updating dependencies...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
+REM Ensure encryption key exists (generate if missing)
+if "%GRAPH_TRACE_CONFIG_ENCRYPTION_KEY%"=="" (
+    echo Generating session encryption key...
+    for /f "delims=" %%i in ('python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"') do set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=%%i
+)
+
+REM Initialize DB schema (non-fatal if fails)
+echo Initializing database schema...
+python -m scripts.init_db_schema 2>nul
+
 REM Set PYTHONPATH
-set PYTHONPATH=%~dp0python_backend
+set PYTHONPATH=%REPO_ROOT%\agentic-restored\python_backend
 
 REM Start the server
 echo.

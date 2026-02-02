@@ -61,7 +61,13 @@ Backend dependencies are consolidated into:
 
 - `agentic-restored/python_backend/requirements.txt`
 
-Legacy files (`requirement.txt`, `requirements-dev.txt`, `requirements_external_integrations.txt`) are retained only as compatibility wrappers and forward to `requirements.txt`.
+Legacy files under the **canonical backend folder** (`agentic-restored/python_backend`) are retained only as compatibility wrappers and forward to `requirements.txt`:
+
+- `agentic-restored/python_backend/requirement.txt`
+- `agentic-restored/python_backend/requirements-dev.txt`
+- `agentic-restored/python_backend/requirements_external_integrations.txt`
+
+Note: this repository also contains a legacy duplicate backend folder at repo root (`python_backend/`). The primary application is `agentic-restored/python_backend`.
 
 ## Configuration specification
 

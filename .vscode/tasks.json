@@ -10,7 +10,10 @@
 			},
 			"isBackground": true,
 			"problemMatcher": [],
-			"group": "build"
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		},
 		{
 			"label": "Start Backend Server",
@@ -221,7 +224,57 @@
 			"isBackground": true,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Scripts: Bootstrap (PowerShell)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\bootstrap.ps1"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Scripts: Start All (PowerShell script)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\start-all.ps1"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Git: Push current branch",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"push",
+				"origin",
+				"HEAD"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Git: Push current branch (shell)",
+			"type": "shell",
+			"command": "git push origin HEAD",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
-
 	]
 }

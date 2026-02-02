@@ -26,15 +26,7 @@ Set-Location -Path "$PSScriptRoot\e2etraceapp"
 
 # Check if .env file exists
 if (-not (Test-Path ".env")) {
-    Write-Host "Warning: .env file not found. Creating default .env file..." -ForegroundColor Yellow
-    @"
-# Frontend Environment Variables
-# The VITE_ prefix is required for Vite to expose these to the client
-VITE_API_BASE_URL=http://localhost:8011
-VITE_NEO4J_URI=bolt://localhost:7687
-VITE_NEO4J_USER=neo4j
-"@ | Out-File -FilePath ".env" -Encoding UTF8
-    Write-Host "Created .env file with default values" -ForegroundColor Green
+    Write-Host "Note: .env file not found (OK). Using default settings." -ForegroundColor Yellow
 }
 
 # Check if node_modules exists

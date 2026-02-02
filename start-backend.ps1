@@ -14,18 +14,22 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Navigate to backend directory
-Set-Location -Path "$PSScriptRoot\python_backend"
+# Use repo-root .venv so VS Code tasks and scripts share one environment.
+$repoRoot = $PSScriptRoot
+$venvPath = Join-Path $repoRoot ".venv"
+$venvPython = Join-Path $venvPath "Scripts\python.exe"
+$venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
 
-# Check if virtual environment exists
-if (-not (Test-Path "venv")) {
-    Write-Host "Creating virtual environment..." -ForegroundColor Yellow
-    python -m venv venv
+if (-not (Test-Path $venvPath)) {
+    Write-Host "Creating virtual environment at $venvPath" -ForegroundColor Yellow
+    python -m venv $venvPath
 }
 
-# Activate virtual environment
 Write-Host "Activating virtual environment..." -ForegroundColor Yellow
-& ".\venv\Scripts\Activate.ps1"
+& $venvActivate
+
+# Navigate to backend directory
+Set-Location -Path "$repoRoot\agentic-restored\python_backend"
 
 # Check if .env file exists
 if (-not (Test-Path ".env")) {
@@ -41,14 +45,14 @@ if (-not (Test-Path ".env")) {
 
 # Install/upgrade dependencies
 Write-Host "Installing/updating dependencies..." -ForegroundColor Yellow
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+& $venvPython -m pip install --upgrade pip
+& $venvPython -m pip install -r requirements.txt
 
 # Ensure encryption key exists for DB-backed encrypted configuration.
 # We prefer an explicit session env var so .env is not required for installs.
 if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {
     try {
-        $key = python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+        $key = & $venvPython -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
         $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY = $key.Trim()
         Write-Host "Generated GRAPH_TRACE_CONFIG_ENCRYPTION_KEY for this session." -ForegroundColor Yellow
     } catch {
@@ -59,13 +63,13 @@ if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {
 
 # Ensure DB schema exists and seed default configuration.
 try {
-    python -m scripts.init_db_schema
+    & $venvPython -m scripts.init_db_schema
 } catch {
     Write-Host "Warning: DB schema/seed step failed (non-fatal): $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 # Set PYTHONPATH
-$env:PYTHONPATH = "$PSScriptRoot\python_backend"
+$env:PYTHONPATH = "$PSScriptRoot\agentic-restored\python_backend"
 
 # Start the server
 Write-Host ""
@@ -76,4 +80,4 @@ Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
-python -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload
+& $venvPython -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload

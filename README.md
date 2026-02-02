@@ -2,18 +2,58 @@
 
 GraphTrace is a local-first, full-stack application for **data lineage**, **PLM migration workflows**, and **analytics**.
 
-## Start here
+## Quick Start
 
-- 📦 **Installation**: [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
-- ▶️ **Step-by-step execution (runbook)**: [`docs/EXECUTION_GUIDE.md`](docs/EXECUTION_GUIDE.md)
-- 👤 **End user guide**: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
+### Prerequisites
+- **Python 3.11+** (recommended: 3.12)
+- **Node.js 18+** (recommended: 20)
+- **PostgreSQL 14+** (required for persistence)
 
-## What you run locally
+### One-command Bootstrap
+```powershell
+.\bootstrap.ps1
+```
+This creates virtual environments, installs dependencies, and initializes the database schema.
 
-- Frontend (Vite/React): http://localhost:5173
-- Backend (FastAPI): http://localhost:8011
-- OpenAPI docs: http://localhost:8011/docs
+### Start Everything
+```powershell
+.\start-all.ps1
+```
+Or use the VS Code task: **Start Full Stack (Frontend + Backend)**
+
+## Documentation
+
+- 📦 **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- ▶️ **Execution Guide**: [docs/EXECUTION_GUIDE.md](docs/EXECUTION_GUIDE.md)
+- 👤 **User Guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
+## Access Points (Local Development)
+
+| Service | URL |
+|---------|-----|
+| Frontend (UI) | http://localhost:5173 |
+| Backend API | http://localhost:8011 |
+| API Docs (Swagger) | http://localhost:8011/docs |
+| Health Check | http://localhost:8011/health |
+
+## Project Structure
+
+```
+GoodpointAI/
+├── agentic-restored/          # Main application source
+│   ├── python_backend/        # FastAPI backend
+│   └── e2etraceapp/           # React/Vite frontend
+├── docs/                      # Documentation
+├── bootstrap.ps1              # One-time setup
+├── start-all.ps1/.bat         # Start both services
+├── start-backend.ps1/.bat     # Start backend only
+└── start-frontend.ps1/.bat    # Start frontend only
+```
 
 ## Persistence
 
-This project uses **PostgreSQL** as the only supported persistence store for application data (reports, workflow state, configs when enabled). SQLite is **not supported**.
+This project uses **PostgreSQL** as the only supported persistence store. Configure the connection in `agentic-restored/python_backend/.env`:
+
+```dotenv
+DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/graphtrace"
+```

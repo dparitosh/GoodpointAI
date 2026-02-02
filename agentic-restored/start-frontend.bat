@@ -33,15 +33,8 @@ cd /d "%~dp0e2etraceapp"
 
 REM Check if .env file exists
 if not exist ".env" (
-    echo Warning: .env file not found. Creating default .env file...
-    (
-        echo # Frontend Environment Variables
-        echo # The VITE_ prefix is required for Vite to expose these to the client
-        echo VITE_API_BASE_URL=http://localhost:8011
-        echo VITE_NEO4J_URI=bolt://localhost:7687
-        echo VITE_NEO4J_USER=neo4j
-    ) > .env
-    echo Created .env file with default values
+    echo Note: .env file not found ^(OK^). Using default settings.
+    echo.
 )
 
 REM Check if node_modules exists

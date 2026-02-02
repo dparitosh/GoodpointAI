@@ -5,12 +5,14 @@
  * - Creating and managing rule sets
  * - Defining hierarchical rules with DAG dependencies
  * - Rule templates and expression builder
+ * - Decision Table editor (spreadsheet-style)
  * - Execution and result visualization
  * - Quarantine management
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_CONFIG } from '../config/api-config';
+import DecisionTableEditor from './DecisionTableEditor';
 import './RuleEngineManagement.css';
 
 const API_BASE = `${API_CONFIG?.API_BASE_URL || ''}/api/rules`;
@@ -137,77 +139,90 @@ function RuleSetsTable({ ruleSets, onEdit, onDelete, onViewRules, onExecute, loa
       <EmptyState 
         icon="fas fa-clipboard-check" 
         message="No rule sets defined yet"
+        action={<span className="empty-hint">Create a rule set to define data quality validation rules</span>}
       />
     );
   }
 
   return (
-    <table className="rule-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Category</th>
-          <th>Context</th>
-          <th>Version</th>
-          <th>Execution Mode</th>
-          <th>Rules</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
+    <div className="data-grid ruleset-grid">
+      <div className="grid-header">
+        <div className="grid-row header-row">
+          <div className="grid-cell cell-name">Rule Set</div>
+          <div className="grid-cell cell-category">Category</div>
+          <div className="grid-cell cell-context">Context</div>
+          <div className="grid-cell cell-version">Version</div>
+          <div className="grid-cell cell-mode">Execution</div>
+          <div className="grid-cell cell-count">Rules</div>
+          <div className="grid-cell cell-status">Status</div>
+          <div className="grid-cell cell-actions">Actions</div>
+        </div>
+      </div>
+      <div className="grid-body">
         {ruleSets.map(rs => (
-          <tr key={rs.id}>
-            <td className="name-cell">
-              <strong>{rs.name}</strong>
-              {rs.description && <small>{rs.description}</small>}
-            </td>
-            <td>{rs.category || 'general'}</td>
-            <td>{rs.context || '-'}</td>
-            <td>{rs.version}</td>
-            <td>
-              <span className={`execution-mode ${rs.execution_mode}`}>
+          <div key={rs.id} className="grid-row data-row">
+            <div className="grid-cell cell-name">
+              <div className="cell-content-stacked">
+                <strong className="primary-text">{rs.name}</strong>
+                {rs.description && <span className="secondary-text">{rs.description}</span>}
+              </div>
+            </div>
+            <div className="grid-cell cell-category">
+              <span className="category-tag">{rs.category || 'general'}</span>
+            </div>
+            <div className="grid-cell cell-context">
+              <span className="context-text">{rs.context || '—'}</span>
+            </div>
+            <div className="grid-cell cell-version">
+              <span className="version-badge">{rs.version}</span>
+            </div>
+            <div className="grid-cell cell-mode">
+              <span className={`execution-mode-badge ${rs.execution_mode}`}>
                 {rs.execution_mode}
               </span>
-            </td>
-            <td className="count-cell">{rs.rule_count || 0}</td>
-            <td>
+            </div>
+            <div className="grid-cell cell-count">
+              <span className="count-badge">{rs.rule_count || 0}</span>
+            </div>
+            <div className="grid-cell cell-status">
               <StatusBadge status={rs.is_active ? 'active' : 'inactive'} />
-            </td>
-            <td className="actions-cell">
-              <button 
-                className="btn-action btn-view" 
-                onClick={() => onViewRules(rs)}
-                title="View Rules"
-              >
-                <i className="fas fa-list"></i>
-              </button>
-              <button 
-                className="btn-action btn-run" 
-                onClick={() => onExecute(rs)}
-                title="Execute Rules"
-              >
-                <i className="fas fa-play"></i>
-              </button>
-              <button 
-                className="btn-action btn-edit" 
-                onClick={() => onEdit(rs)}
-                title="Edit"
-              >
-                <i className="fas fa-edit"></i>
-              </button>
-              <button 
-                className="btn-action btn-delete" 
-                onClick={() => onDelete(rs.id)}
-                title="Delete"
-              >
-                <i className="fas fa-trash"></i>
-              </button>
-            </td>
-          </tr>
+            </div>
+            <div className="grid-cell cell-actions">
+              <div className="action-group">
+                <button 
+                  className="btn-icon btn-view" 
+                  onClick={() => onViewRules(rs)}
+                  title="View Rules"
+                >
+                  <i className="fas fa-list"></i>
+                </button>
+                <button 
+                  className="btn-icon btn-run" 
+                  onClick={() => onExecute(rs)}
+                  title="Execute Rules"
+                >
+                  <i className="fas fa-play"></i>
+                </button>
+                <button 
+                  className="btn-icon btn-edit" 
+                  onClick={() => onEdit(rs)}
+                  title="Edit"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+                <button 
+                  className="btn-icon btn-delete" 
+                  onClick={() => onDelete(rs.id)}
+                  title="Delete"
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </div>
   );
 }
 
@@ -218,6 +233,7 @@ function RulesTable({ rules, onEdit, onDelete, onAddChild }) {
       <EmptyState 
         icon="fas fa-gavel" 
         message="No rules in this rule set"
+        action={<span className="empty-hint">Add rules to validate data quality</span>}
       />
     );
   }
@@ -238,96 +254,126 @@ function RulesTable({ rules, onEdit, onDelete, onAddChild }) {
     <div className="rules-hierarchy">
       {parentRules.map(rule => (
         <div key={rule.id} className="rule-card parent-rule">
-          <div className="rule-header">
-            <div className="rule-title">
-              <LevelBadge level={rule.level} />
-              <strong>{rule.name}</strong>
-              <SeverityBadge severity={rule.severity} />
+          {/* Rule Header Row */}
+          <div className="rule-row rule-header-row">
+            <div className="rule-row-left">
+              <div className="rule-badges">
+                <LevelBadge level={rule.level} />
+                <SeverityBadge severity={rule.severity} />
+              </div>
+              <div className="rule-info">
+                <strong className="rule-name">{rule.name}</strong>
+                {rule.description && <span className="rule-description">{rule.description}</span>}
+              </div>
             </div>
-            <div className="rule-actions">
-              <button 
-                className="btn-action btn-add-child" 
-                onClick={() => onAddChild(rule)}
-                title="Add Child Rule"
-              >
-                <i className="fas fa-plus"></i>
-              </button>
-              <button 
-                className="btn-action btn-edit" 
-                onClick={() => onEdit(rule)}
-                title="Edit"
-              >
-                <i className="fas fa-edit"></i>
-              </button>
-              <button 
-                className="btn-action btn-delete" 
-                onClick={() => onDelete(rule.id)}
-                title="Delete"
-              >
-                <i className="fas fa-trash"></i>
-              </button>
+            <div className="rule-row-right">
+              <div className="action-group">
+                <button 
+                  className="btn-icon btn-add-child" 
+                  onClick={() => onAddChild(rule)}
+                  title="Add Child Rule"
+                >
+                  <i className="fas fa-plus"></i>
+                </button>
+                <button 
+                  className="btn-icon btn-edit" 
+                  onClick={() => onEdit(rule)}
+                  title="Edit"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+                <button 
+                  className="btn-icon btn-delete" 
+                  onClick={() => onDelete(rule.id)}
+                  title="Delete"
+                >
+                  <i className="fas fa-trash"></i>
+                </button>
+              </div>
             </div>
           </div>
-          <div className="rule-body">
-            <div className="rule-expression">
-              <code>{rule.expression}</code>
+          
+          {/* Rule Details Row */}
+          <div className="rule-row rule-details-row">
+            <div className="rule-expression-block">
+              <span className="expression-label">Expression:</span>
+              <code className="expression-code">{rule.expression}</code>
             </div>
-            <div className="rule-meta">
-              <span className="action-badge" title="Action on Fail">
-                <i className="fas fa-exclamation-triangle"></i> {rule.action_on_fail}
+            <div className="rule-meta-inline">
+              <span className="meta-item" title="Action on Fail">
+                <i className="fas fa-exclamation-triangle"></i>
+                <span>{rule.action_on_fail}</span>
               </span>
-              <span className="type-badge" title="Expression Type">
-                <i className="fas fa-code"></i> {rule.expression_type}
+              <span className="meta-item" title="Expression Type">
+                <i className="fas fa-code"></i>
+                <span>{rule.expression_type}</span>
               </span>
+              {rule.sequence_order > 0 && (
+                <span className="meta-item" title="Sequence Order">
+                  <i className="fas fa-sort-numeric-up"></i>
+                  <span>#{rule.sequence_order}</span>
+                </span>
+              )}
             </div>
           </div>
           
           {/* Child Rules */}
           {childRulesMap[rule.id] && childRulesMap[rule.id].length > 0 && (
-            <div className="child-rules">
+            <div className="child-rules-section">
               <div className="child-rules-header">
-                <i className="fas fa-sitemap"></i> Child Rules ({childRulesMap[rule.id].length})
+                <i className="fas fa-sitemap"></i>
+                <span>Child Rules ({childRulesMap[rule.id].length})</span>
               </div>
-              {childRulesMap[rule.id].map(child => (
-                <div key={child.id} className="rule-card child-rule">
-                  <div className="rule-header">
-                    <div className="rule-title">
-                      <LevelBadge level={child.level} />
-                      <strong>{child.name}</strong>
-                      <SeverityBadge severity={child.severity} />
+              <div className="child-rules-list">
+                {childRulesMap[rule.id].map(child => (
+                  <div key={child.id} className="rule-card child-rule">
+                    <div className="rule-row rule-header-row">
+                      <div className="rule-row-left">
+                        <div className="rule-badges">
+                          <LevelBadge level={child.level} />
+                          <SeverityBadge severity={child.severity} />
+                        </div>
+                        <div className="rule-info">
+                          <strong className="rule-name">{child.name}</strong>
+                        </div>
+                      </div>
+                      <div className="rule-row-right">
+                        <div className="action-group">
+                          <button 
+                            className="btn-icon btn-edit" 
+                            onClick={() => onEdit(child)}
+                            title="Edit"
+                          >
+                            <i className="fas fa-edit"></i>
+                          </button>
+                          <button 
+                            className="btn-icon btn-delete" 
+                            onClick={() => onDelete(child.id)}
+                            title="Delete"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="rule-actions">
-                      <button 
-                        className="btn-action btn-edit" 
-                        onClick={() => onEdit(child)}
-                        title="Edit"
-                      >
-                        <i className="fas fa-edit"></i>
-                      </button>
-                      <button 
-                        className="btn-action btn-delete" 
-                        onClick={() => onDelete(child.id)}
-                        title="Delete"
-                      >
-                        <i className="fas fa-trash"></i>
-                      </button>
+                    <div className="rule-row rule-details-row">
+                      <div className="rule-expression-block">
+                        <code className="expression-code">{child.expression}</code>
+                      </div>
+                      <div className="rule-meta-inline">
+                        <span className="meta-item dependency-item" title="Dependency">
+                          <i className="fas fa-link"></i>
+                          <span>{child.dependency_condition || 'parent_pass'}</span>
+                        </span>
+                        <span className="meta-item" title="Action on Fail">
+                          <i className="fas fa-exclamation-triangle"></i>
+                          <span>{child.action_on_fail}</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="rule-body">
-                    <div className="rule-expression">
-                      <code>{child.expression}</code>
-                    </div>
-                    <div className="rule-meta">
-                      <span className="dependency-badge" title="Dependency Condition">
-                        <i className="fas fa-link"></i> {child.dependency_condition || 'parent_pass'}
-                      </span>
-                      <span className="action-badge" title="Action on Fail">
-                        <i className="fas fa-exclamation-triangle"></i> {child.action_on_fail}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -519,130 +565,391 @@ function QuarantineTable({ records, onReview, onRelease, loading }) {
   );
 }
 
-// Rule Set Form
+// Rule Set Form - Enterprise Structure
 function RuleSetForm({ ruleSet, onSave, onCancel }) {
   const [form, setForm] = useState({
     name: ruleSet?.name || '',
     description: ruleSet?.description || '',
     version: ruleSet?.version || '1.0.0',
     category: ruleSet?.category || 'general',
+    rule_type: ruleSet?.rule_type || 'simple',
     context: ruleSet?.context || '',
+    scope: ruleSet?.scope || 'global',
     target_entity_type: ruleSet?.target_entity_type || '',
     execution_mode: ruleSet?.execution_mode || 'sequential',
+    priority: ruleSet?.priority || 100,
     stop_on_critical: ruleSet?.stop_on_critical ?? true,
+    allow_override: ruleSet?.allow_override ?? true,
     timeout_seconds: ruleSet?.timeout_seconds || 3600,
+    parallel_threads: ruleSet?.parallel_threads || 4,
+    // Decision Table data (for decision_table type)
+    decision_table: ruleSet?.decision_table || null,
   });
+
+  const [activeSection, setActiveSection] = useState('basic');
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
+  // Handle decision table changes
+  const handleDecisionTableChange = useCallback((tableData) => {
+    setForm(prev => ({ ...prev, decision_table: tableData }));
+  }, []);
+
   return (
-    <div className="form-grid">
-      <div className="form-group">
-        <label>Name *</label>
-        <input
-          type="text"
-          value={form.name}
-          onChange={e => handleChange('name', e.target.value)}
-          placeholder="e.g., BOM Validation V1"
-          required
-        />
-      </div>
-      
-      <div className="form-group">
-        <label>Description</label>
-        <textarea
-          value={form.description}
-          onChange={e => handleChange('description', e.target.value)}
-          placeholder="Describe the purpose of this rule set"
-          rows={3}
-        />
-      </div>
-      
-      <div className="form-row">
-        <div className="form-group">
-          <label>Version</label>
-          <input
-            type="text"
-            value={form.version}
-            onChange={e => handleChange('version', e.target.value)}
-            placeholder="1.0.0"
-          />
-        </div>
-        
-        <div className="form-group">
-          <label>Category</label>
-          <select
-            value={form.category}
-            onChange={e => handleChange('category', e.target.value)}
+    <div className="ruleset-form enterprise-form">
+      {/* Form Section Tabs */}
+      <div className="form-section-tabs">
+        <button 
+          className={`section-tab ${activeSection === 'basic' ? 'active' : ''}`}
+          onClick={() => setActiveSection('basic')}
+        >
+          <i className="fas fa-info-circle"></i> Basic Info
+        </button>
+        <button 
+          className={`section-tab ${activeSection === 'scope' ? 'active' : ''}`}
+          onClick={() => setActiveSection('scope')}
+        >
+          <i className="fas fa-crosshairs"></i> Scope & Context
+        </button>
+        {form.rule_type === 'decision_table' && (
+          <button 
+            className={`section-tab ${activeSection === 'table' ? 'active' : ''}`}
+            onClick={() => setActiveSection('table')}
           >
-            <option value="general">General</option>
-            <option value="plm_validation">PLM Validation</option>
-            <option value="data_quality">Data Quality</option>
-            <option value="compliance">Compliance</option>
-            <option value="etl">ETL</option>
-          </select>
-        </div>
+            <i className="fas fa-table"></i> Decision Table
+          </button>
+        )}
+        <button 
+          className={`section-tab ${activeSection === 'execution' ? 'active' : ''}`}
+          onClick={() => setActiveSection('execution')}
+        >
+          <i className="fas fa-cogs"></i> Execution
+        </button>
+        <button 
+          className={`section-tab ${activeSection === 'hierarchy' ? 'active' : ''}`}
+          onClick={() => setActiveSection('hierarchy')}
+        >
+          <i className="fas fa-sitemap"></i> Hierarchy
+        </button>
       </div>
-      
-      <div className="form-row">
-        <div className="form-group">
-          <label>Context</label>
-          <input
-            type="text"
-            value={form.context}
-            onChange={e => handleChange('context', e.target.value)}
-            placeholder="e.g., Engineering_BOM"
-          />
+
+      {/* Basic Info Section */}
+      {activeSection === 'basic' && (
+        <div className="form-section">
+          <div className="section-header">
+            <h4><i className="fas fa-info-circle"></i> Basic Information</h4>
+            <p className="section-hint">Define the ruleset identity and classification</p>
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group flex-2">
+              <label className="required-label">Ruleset Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => handleChange('name', e.target.value)}
+                placeholder="e.g., BOM Validation Rules V1"
+                className="form-input"
+                required
+              />
+            </div>
+            <div className="form-group flex-1">
+              <label>Version</label>
+              <input
+                type="text"
+                value={form.version}
+                onChange={e => handleChange('version', e.target.value)}
+                placeholder="1.0.0"
+                className="form-input"
+              />
+            </div>
+          </div>
+          
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              value={form.description}
+              onChange={e => handleChange('description', e.target.value)}
+              placeholder="Describe the business purpose and coverage of this ruleset"
+              rows={3}
+              className="form-textarea"
+            />
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Category</label>
+              <select
+                value={form.category}
+                onChange={e => handleChange('category', e.target.value)}
+                className="form-select"
+              >
+                <option value="general">General</option>
+                <option value="plm_validation">PLM Validation</option>
+                <option value="data_quality">Data Quality</option>
+                <option value="compliance">Compliance</option>
+                <option value="etl">ETL Transformation</option>
+                <option value="business_rules">Business Rules</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Rule Type</label>
+              <select
+                value={form.rule_type}
+                onChange={e => handleChange('rule_type', e.target.value)}
+                className="form-select"
+              >
+                <option value="simple">SimpleRule (IF-THEN)</option>
+                <option value="decision_table">DecisionTable (Tabular Logic)</option>
+                <option value="decision_tree">DecisionTree (Branching Paths)</option>
+              </select>
+              <span className="field-hint">
+                {form.rule_type === 'simple' && 'Single condition → single action'}
+                {form.rule_type === 'decision_table' && 'Multiple conditions in table format'}
+                {form.rule_type === 'decision_tree' && 'Nested branching decisions'}
+              </span>
+            </div>
+          </div>
         </div>
-        
-        <div className="form-group">
-          <label>Target Entity Type</label>
-          <input
-            type="text"
-            value={form.target_entity_type}
-            onChange={e => handleChange('target_entity_type', e.target.value)}
-            placeholder="e.g., BOM, Item, CADModel"
-          />
+      )}
+
+      {/* Scope & Context Section */}
+      {activeSection === 'scope' && (
+        <div className="form-section">
+          <div className="section-header">
+            <h4><i className="fas fa-crosshairs"></i> Scope & Context</h4>
+            <p className="section-hint">Define where and when this ruleset applies</p>
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Scope Level</label>
+              <select
+                value={form.scope}
+                onChange={e => handleChange('scope', e.target.value)}
+                className="form-select"
+              >
+                <option value="global">Global (All Data)</option>
+                <option value="organization">Organization</option>
+                <option value="site">Site/Location</option>
+                <option value="project">Project</option>
+                <option value="custom">Custom Filter</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Context Identifier</label>
+              <input
+                type="text"
+                value={form.context}
+                onChange={e => handleChange('context', e.target.value)}
+                placeholder="e.g., Engineering_BOM, APAC_Region"
+                className="form-input"
+              />
+              <span className="field-hint">Specific context where rules apply</span>
+            </div>
+          </div>
+          
+          <div className="form-group">
+            <label>Target Entity Types</label>
+            <input
+              type="text"
+              value={form.target_entity_type}
+              onChange={e => handleChange('target_entity_type', e.target.value)}
+              placeholder="e.g., BOM, Item, CADModel, Part (comma-separated)"
+              className="form-input"
+            />
+            <span className="field-hint">Entity types this ruleset validates</span>
+          </div>
         </div>
-      </div>
-      
-      <div className="form-row">
-        <div className="form-group">
-          <label>Execution Mode</label>
-          <select
-            value={form.execution_mode}
-            onChange={e => handleChange('execution_mode', e.target.value)}
-          >
-            <option value="sequential">Sequential</option>
-            <option value="parallel">Parallel</option>
-            <option value="dag">DAG (Dependency Graph)</option>
-          </select>
-        </div>
-        
-        <div className="form-group">
-          <label>Timeout (seconds)</label>
-          <input
-            type="number"
-            value={form.timeout_seconds}
-            onChange={e => handleChange('timeout_seconds', parseInt(e.target.value))}
-            min={60}
-            max={86400}
+      )}
+
+      {/* Decision Table Section - Only for decision_table rule type */}
+      {activeSection === 'table' && form.rule_type === 'decision_table' && (
+        <div className="form-section decision-table-section">
+          <div className="section-header">
+            <h4><i className="fas fa-table"></i> Decision Table</h4>
+            <p className="section-hint">Define rules in a spreadsheet-like format. Each row represents a rule with conditions (IF) and actions (THEN).</p>
+          </div>
+          
+          <DecisionTableEditor
+            tableName={form.name || 'Decision Table'}
+            conditionColumns={form.decision_table?.columns?.filter(c => c.type === 'condition') || undefined}
+            actionColumns={form.decision_table?.columns?.filter(c => c.type !== 'condition') || undefined}
+            rows={form.decision_table?.rows || []}
+            onChange={handleDecisionTableChange}
           />
+          
+          <div className="decision-table-help">
+            <h5><i className="fas fa-lightbulb"></i> Tips for Decision Tables</h5>
+            <ul>
+              <li>Use <strong>*</strong> or leave empty for "any value" in condition columns</li>
+              <li>First matching row wins (top-to-bottom evaluation)</li>
+              <li>Configure column field mappings via the <i className="fas fa-cog"></i> button</li>
+              <li>Import existing rules from Excel using the Import button</li>
+            </ul>
+          </div>
         </div>
-      </div>
-      
-      <div className="form-group checkbox-group">
-        <label>
-          <input
-            type="checkbox"
-            checked={form.stop_on_critical}
-            onChange={e => handleChange('stop_on_critical', e.target.checked)}
-          />
-          Stop execution on critical failure
-        </label>
-      </div>
+      )}
+
+      {/* Execution Section */}
+      {activeSection === 'execution' && (
+        <div className="form-section">
+          <div className="section-header">
+            <h4><i className="fas fa-cogs"></i> Execution Configuration</h4>
+            <p className="section-hint">Configure how rules are executed</p>
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Execution Mode</label>
+              <select
+                value={form.execution_mode}
+                onChange={e => handleChange('execution_mode', e.target.value)}
+                className="form-select"
+              >
+                <option value="sequential">Sequential (Ordered)</option>
+                <option value="parallel">Parallel (Independent)</option>
+                <option value="dag">DAG (Dependency Graph)</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label>Timeout (seconds)</label>
+              <input
+                type="number"
+                value={form.timeout_seconds}
+                onChange={e => handleChange('timeout_seconds', parseInt(e.target.value))}
+                min={60}
+                max={86400}
+                className="form-input"
+              />
+            </div>
+          </div>
+
+          {/* Execution Mode Info Box */}
+          <div className={`info-box info-${form.execution_mode}`}>
+            {form.execution_mode === 'sequential' && (
+              <>
+                <div className="info-icon"><i className="fas fa-list-ol"></i></div>
+                <div className="info-content">
+                  <strong>Sequential Execution</strong>
+                  <p>Rules execute one after another in order. Use when rule outputs feed into subsequent rules (dependencies).</p>
+                </div>
+              </>
+            )}
+            {form.execution_mode === 'parallel' && (
+              <>
+                <div className="info-icon"><i className="fas fa-random"></i></div>
+                <div className="info-content">
+                  <strong>Parallel Execution</strong>
+                  <p>Rules execute simultaneously for better performance. Use only when rules are independent and don't share state.</p>
+                </div>
+              </>
+            )}
+            {form.execution_mode === 'dag' && (
+              <>
+                <div className="info-icon"><i className="fas fa-project-diagram"></i></div>
+                <div className="info-content">
+                  <strong>DAG Execution</strong>
+                  <p>Rules execute based on dependency graph. Automatically resolves execution order from rule dependencies.</p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {form.execution_mode === 'parallel' && (
+            <div className="form-group">
+              <label>Parallel Threads</label>
+              <input
+                type="number"
+                value={form.parallel_threads}
+                onChange={e => handleChange('parallel_threads', parseInt(e.target.value))}
+                min={1}
+                max={16}
+                className="form-input"
+              />
+              <span className="field-hint">Number of concurrent execution threads (1-16)</span>
+            </div>
+          )}
+          
+          <div className="form-group checkbox-row">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.stop_on_critical}
+                onChange={e => handleChange('stop_on_critical', e.target.checked)}
+              />
+              <span className="checkbox-text">Stop execution on critical failure</span>
+            </label>
+            <span className="field-hint">Halt all rules if a critical/blocker rule fails</span>
+          </div>
+        </div>
+      )}
+
+      {/* Hierarchy Section */}
+      {activeSection === 'hierarchy' && (
+        <div className="form-section">
+          <div className="section-header">
+            <h4><i className="fas fa-sitemap"></i> Hierarchy & Precedence</h4>
+            <p className="section-hint">Control rule priority and override behavior</p>
+          </div>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Priority Level</label>
+              <input
+                type="number"
+                value={form.priority}
+                onChange={e => handleChange('priority', parseInt(e.target.value))}
+                min={1}
+                max={1000}
+                className="form-input"
+              />
+              <span className="field-hint">Higher values = higher priority (overrides lower)</span>
+            </div>
+            
+            <div className="form-group">
+              <label className="checkbox-label inline-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.allow_override}
+                  onChange={e => handleChange('allow_override', e.target.checked)}
+                />
+                <span className="checkbox-text">Allow Override by Higher Priority</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Hierarchy Diagram */}
+          <div className="hierarchy-diagram">
+            <div className="hierarchy-title">Rule Precedence Stack</div>
+            <div className="hierarchy-stack">
+              <div className={`hierarchy-level ${form.priority > 500 ? 'current-level' : ''}`}>
+                <span className="level-label">Site-Specific (500+)</span>
+                <span className="level-desc">Highest priority, most specific</span>
+              </div>
+              <div className={`hierarchy-level ${form.priority > 200 && form.priority <= 500 ? 'current-level' : ''}`}>
+                <span className="level-label">Business Unit (200-500)</span>
+                <span className="level-desc">Department/team overrides</span>
+              </div>
+              <div className={`hierarchy-level ${form.priority <= 200 ? 'current-level' : ''}`}>
+                <span className="level-label">Global Defaults (1-200)</span>
+                <span className="level-desc">Base rules, lowest priority</span>
+              </div>
+            </div>
+            <div className="hierarchy-note">
+              <i className="fas fa-info-circle"></i>
+              Current priority ({form.priority}) places this ruleset at the <strong>
+                {form.priority > 500 ? 'Site-Specific' : form.priority > 200 ? 'Business Unit' : 'Global'}
+              </strong> level
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="form-actions">
         <button className="btn-secondary" onClick={onCancel}>Cancel</button>
@@ -651,14 +958,15 @@ function RuleSetForm({ ruleSet, onSave, onCancel }) {
           onClick={() => onSave(form)}
           disabled={!form.name}
         >
-          {ruleSet?.id ? 'Update Rule Set' : 'Create Rule Set'}
+          <i className="fas fa-save"></i>
+          {ruleSet?.id ? 'Update Ruleset' : 'Create Ruleset'}
         </button>
       </div>
     </div>
   );
 }
 
-// Rule Form
+// Rule Form - Enterprise IF/THEN Structure
 function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }) {
   const [form, setForm] = useState({
     rule_set_id: ruleSetId,
@@ -666,17 +974,30 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
     description: rule?.description || '',
     level: rule?.level || 'entity',
     severity: rule?.severity || 'warning',
+    priority: rule?.priority || 100,
+    // IF Section - Conditions
     expression: rule?.expression || '',
     expression_type: rule?.expression_type || 'python',
+    conditions: rule?.conditions || [{ field: '', operator: 'equals', value: '' }],
+    condition_logic: rule?.condition_logic || 'AND',
+    // THEN Section - Actions
     action_on_fail: rule?.action_on_fail || 'log',
+    action_on_pass: rule?.action_on_pass || 'none',
     transformation_expression: rule?.transformation_expression || '',
+    action_message: rule?.action_message || '',
+    // Hierarchy & Execution
     parent_rule_id: parentRuleId || rule?.parent_rule_id || null,
+    inherit_from_parent: rule?.inherit_from_parent ?? true,
     dependency_condition: rule?.dependency_condition || 'parent_pass',
     sequence_order: rule?.sequence_order || 0,
+    parallel_safe: rule?.parallel_safe ?? true,
+    is_enabled: rule?.is_enabled ?? true,
   });
   
+  const [activeSection, setActiveSection] = useState('conditions');
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [conditionMode, setConditionMode] = useState(form.expression ? 'expression' : 'builder');
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -692,6 +1013,7 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
       severity: template.default_severity,
       action_on_fail: template.default_action,
     }));
+    setConditionMode('expression');
   };
 
   const testExpression = async () => {
@@ -715,11 +1037,59 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
     setTesting(false);
   };
 
+  const addCondition = () => {
+    handleChange('conditions', [...form.conditions, { field: '', operator: 'equals', value: '' }]);
+  };
+
+  const updateCondition = (index, field, value) => {
+    const updated = [...form.conditions];
+    updated[index] = { ...updated[index], [field]: value };
+    handleChange('conditions', updated);
+  };
+
+  const removeCondition = (index) => {
+    handleChange('conditions', form.conditions.filter((_, i) => i !== index));
+  };
+
+  // Build expression from conditions for backend compatibility
+  const buildExpressionFromConditions = () => {
+    const ops = {
+      equals: '==',
+      not_equals: '!=',
+      greater_than: '>',
+      less_than: '<',
+      contains: '.contains(',
+      is_empty: '== None or len(',
+      matches: '.match(',
+    };
+    
+    const conditions = form.conditions
+      .filter(c => c.field && c.value)
+      .map(c => {
+        if (c.operator === 'contains') return `${c.field}${ops[c.operator]}'${c.value}')`;
+        if (c.operator === 'is_empty') return `${c.field}${ops[c.operator]}${c.field}) == 0`;
+        if (c.operator === 'matches') return `${c.field}${ops[c.operator]}r'${c.value}')`;
+        return `${c.field} ${ops[c.operator]} '${c.value}'`;
+      });
+    
+    return conditions.join(form.condition_logic === 'AND' ? ' and ' : ' or ');
+  };
+
+  const handleSave = () => {
+    let finalForm = { ...form };
+    if (conditionMode === 'builder') {
+      finalForm.expression = buildExpressionFromConditions();
+    }
+    onSave(finalForm);
+  };
+
   return (
-    <div className="form-grid">
+    <div className="rule-form enterprise-form">
+      {/* Template Selector */}
       {templates && templates.length > 0 && (
-        <div className="form-group template-selector">
-          <label>Start from Template</label>
+        <div className="template-selector-bar">
+          <i className="fas fa-magic"></i>
+          <span>Quick start from template:</span>
           <select onChange={e => {
             const t = templates.find(t => t.id === e.target.value);
             if (t) applyTemplate(t);
@@ -731,148 +1101,424 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
           </select>
         </div>
       )}
-      
-      <div className="form-group">
-        <label>Name *</label>
-        <input
-          type="text"
-          value={form.name}
-          onChange={e => handleChange('name', e.target.value)}
-          placeholder="e.g., R101 - Lifecycle Check"
-          required
-        />
-      </div>
-      
-      <div className="form-group">
-        <label>Description</label>
-        <textarea
-          value={form.description}
-          onChange={e => handleChange('description', e.target.value)}
-          placeholder="Describe what this rule validates"
-          rows={2}
-        />
-      </div>
-      
-      <div className="form-row">
-        <div className="form-group">
-          <label>Level</label>
-          <select
-            value={form.level}
-            onChange={e => handleChange('level', e.target.value)}
-          >
-            <option value="attribute">Attribute (Field-level)</option>
-            <option value="entity">Entity (Row-level)</option>
-            <option value="relationship">Relationship (Graph/BOM)</option>
-          </select>
+
+      {/* Rule Header */}
+      <div className="form-section rule-header-section">
+        <div className="form-row">
+          <div className="form-group flex-2">
+            <label className="required-label">Rule Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => handleChange('name', e.target.value)}
+              placeholder="e.g., R101 - Lifecycle State Must Be Released"
+              className="form-input"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Priority</label>
+            <input
+              type="number"
+              value={form.priority}
+              onChange={e => handleChange('priority', parseInt(e.target.value))}
+              min={1}
+              max={1000}
+              className="form-input"
+            />
+          </div>
+          <div className="form-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.is_enabled}
+                onChange={e => handleChange('is_enabled', e.target.checked)}
+              />
+              <span>Enabled</span>
+            </label>
+          </div>
         </div>
         
         <div className="form-group">
-          <label>Severity</label>
-          <select
-            value={form.severity}
-            onChange={e => handleChange('severity', e.target.value)}
-          >
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="critical">Critical</option>
-            <option value="blocker">Blocker</option>
-          </select>
+          <label>Description</label>
+          <textarea
+            value={form.description}
+            onChange={e => handleChange('description', e.target.value)}
+            placeholder="Describe the business logic this rule validates"
+            rows={2}
+            className="form-textarea"
+          />
+        </div>
+        
+        <div className="form-row">
+          <div className="form-group">
+            <label>Level</label>
+            <select value={form.level} onChange={e => handleChange('level', e.target.value)} className="form-select">
+              <option value="attribute">Attribute (Field-level)</option>
+              <option value="entity">Entity (Row-level)</option>
+              <option value="relationship">Relationship (Graph/BOM)</option>
+              <option value="cross_entity">Cross-Entity (Multi-record)</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Severity</label>
+            <select value={form.severity} onChange={e => handleChange('severity', e.target.value)} className="form-select severity-select">
+              <option value="info">ℹ️ Info</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="critical">🔴 Critical</option>
+              <option value="blocker">🚫 Blocker</option>
+            </select>
+          </div>
         </div>
       </div>
-      
-      <div className="form-group">
-        <label>Expression *</label>
-        <div className="expression-editor">
-          <textarea
-            value={form.expression}
-            onChange={e => handleChange('expression', e.target.value)}
-            placeholder="e.g., lifecycle_state == 'RELEASED'"
-            rows={3}
-            className="code-input"
-          />
-          <div className="expression-actions">
-            <select
-              value={form.expression_type}
-              onChange={e => handleChange('expression_type', e.target.value)}
-              className="expression-type-select"
-            >
-              <option value="python">Python</option>
-              <option value="sql">SQL</option>
-              <option value="sparksql">SparkSQL</option>
-              <option value="cypher">Cypher</option>
-            </select>
+
+      {/* Section Tabs */}
+      <div className="form-section-tabs">
+        <button 
+          className={`section-tab ${activeSection === 'conditions' ? 'active' : ''}`}
+          onClick={() => setActiveSection('conditions')}
+        >
+          <i className="fas fa-code-branch"></i> IF (Conditions)
+        </button>
+        <button 
+          className={`section-tab ${activeSection === 'actions' ? 'active' : ''}`}
+          onClick={() => setActiveSection('actions')}
+        >
+          <i className="fas fa-bolt"></i> THEN (Actions)
+        </button>
+        <button 
+          className={`section-tab ${activeSection === 'hierarchy' ? 'active' : ''}`}
+          onClick={() => setActiveSection('hierarchy')}
+        >
+          <i className="fas fa-sitemap"></i> Hierarchy
+        </button>
+        <button 
+          className={`section-tab ${activeSection === 'execution' ? 'active' : ''}`}
+          onClick={() => setActiveSection('execution')}
+        >
+          <i className="fas fa-play-circle"></i> Execution
+        </button>
+      </div>
+
+      {/* IF Section - Conditions */}
+      {activeSection === 'conditions' && (
+        <div className="form-section condition-section">
+          <div className="section-header">
+            <h4><i className="fas fa-code-branch"></i> IF — Condition Definition</h4>
+            <p className="section-hint">Define when this rule should trigger</p>
+          </div>
+
+          {/* Condition Mode Toggle */}
+          <div className="condition-mode-toggle">
             <button 
-              className="btn-secondary btn-small"
-              onClick={testExpression}
-              disabled={testing || !form.expression}
+              className={`mode-btn ${conditionMode === 'builder' ? 'active' : ''}`}
+              onClick={() => setConditionMode('builder')}
             >
-              {testing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-flask"></i>}
-              Test
+              <i className="fas fa-puzzle-piece"></i> Visual Builder
+            </button>
+            <button 
+              className={`mode-btn ${conditionMode === 'expression' ? 'active' : ''}`}
+              onClick={() => setConditionMode('expression')}
+            >
+              <i className="fas fa-code"></i> Expression Mode
             </button>
           </div>
-        </div>
-        {testResult && (
-          <div className={`test-result ${testResult.valid ? 'success' : 'error'}`}>
-            {testResult.valid ? (
-              <><i className="fas fa-check-circle"></i> Expression is valid</>
-            ) : (
-              <><i className="fas fa-times-circle"></i> {testResult.error}</>
-            )}
-          </div>
-        )}
-      </div>
-      
-      <div className="form-row">
-        <div className="form-group">
-          <label>Action on Fail</label>
-          <select
-            value={form.action_on_fail}
-            onChange={e => handleChange('action_on_fail', e.target.value)}
-          >
-            <option value="log">Log</option>
-            <option value="warn">Warn</option>
-            <option value="quarantine">Quarantine</option>
-            <option value="reject">Reject</option>
-            <option value="transform">Transform</option>
-            <option value="escalate">Escalate</option>
-          </select>
-        </div>
-        
-        <div className="form-group">
-          <label>Sequence Order</label>
-          <input
-            type="number"
-            value={form.sequence_order}
-            onChange={e => handleChange('sequence_order', parseInt(e.target.value))}
-            min={0}
-          />
-        </div>
-      </div>
-      
-      {form.action_on_fail === 'transform' && (
-        <div className="form-group">
-          <label>Transformation Expression</label>
-          <textarea
-            value={form.transformation_expression}
-            onChange={e => handleChange('transformation_expression', e.target.value)}
-            placeholder="e.g., value.strip().upper()"
-            rows={2}
-            className="code-input"
-          />
+
+          {conditionMode === 'builder' ? (
+            <div className="condition-builder">
+              <div className="condition-logic-selector">
+                <label>Match</label>
+                <select 
+                  value={form.condition_logic} 
+                  onChange={e => handleChange('condition_logic', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="AND">ALL conditions (AND)</option>
+                  <option value="OR">ANY condition (OR)</option>
+                </select>
+              </div>
+
+              <div className="conditions-list">
+                {form.conditions.map((condition, index) => (
+                  <div key={index} className="condition-row">
+                    <span className="condition-index">{index + 1}</span>
+                    <input
+                      type="text"
+                      value={condition.field}
+                      onChange={e => updateCondition(index, 'field', e.target.value)}
+                      placeholder="Field name (e.g., lifecycle_state)"
+                      className="form-input condition-field"
+                    />
+                    <select
+                      value={condition.operator}
+                      onChange={e => updateCondition(index, 'operator', e.target.value)}
+                      className="form-select condition-operator"
+                    >
+                      <option value="equals">equals</option>
+                      <option value="not_equals">not equals</option>
+                      <option value="greater_than">greater than</option>
+                      <option value="less_than">less than</option>
+                      <option value="contains">contains</option>
+                      <option value="is_empty">is empty</option>
+                      <option value="matches">matches regex</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={condition.value}
+                      onChange={e => updateCondition(index, 'value', e.target.value)}
+                      placeholder="Value"
+                      className="form-input condition-value"
+                    />
+                    <button 
+                      className="btn-icon btn-remove"
+                      onClick={() => removeCondition(index)}
+                      disabled={form.conditions.length === 1}
+                    >
+                      <i className="fas fa-times"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button className="btn-secondary btn-add-condition" onClick={addCondition}>
+                <i className="fas fa-plus"></i> Add Condition
+              </button>
+
+              {/* Preview generated expression */}
+              <div className="expression-preview">
+                <label>Generated Expression:</label>
+                <code>{buildExpressionFromConditions() || '(No conditions defined)'}</code>
+              </div>
+            </div>
+          ) : (
+            <div className="expression-editor-section">
+              <div className="expression-editor">
+                <div className="expression-type-bar">
+                  <select
+                    value={form.expression_type}
+                    onChange={e => handleChange('expression_type', e.target.value)}
+                    className="form-select"
+                  >
+                    <option value="python">Python</option>
+                    <option value="sql">SQL</option>
+                    <option value="sparksql">SparkSQL</option>
+                    <option value="cypher">Cypher (Neo4j)</option>
+                  </select>
+                  <button 
+                    className="btn-secondary btn-small"
+                    onClick={testExpression}
+                    disabled={testing || !form.expression}
+                  >
+                    {testing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-flask"></i>}
+                    Validate Expression
+                  </button>
+                </div>
+                <textarea
+                  value={form.expression}
+                  onChange={e => handleChange('expression', e.target.value)}
+                  placeholder={`# ${form.expression_type === 'python' ? 'Python expression returning True/False' : form.expression_type.toUpperCase() + ' condition'}
+# Example: lifecycle_state == 'RELEASED' and weight > 0`}
+                  rows={5}
+                  className="code-input"
+                />
+              </div>
+              {testResult && (
+                <div className={`test-result ${testResult.valid ? 'success' : 'error'}`}>
+                  {testResult.valid ? (
+                    <><i className="fas fa-check-circle"></i> Expression is valid</>
+                  ) : (
+                    <><i className="fas fa-times-circle"></i> {testResult.error}</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
-      
-      {parentRuleId && (
-        <div className="form-group">
-          <label>Dependency Condition</label>
-          <select
-            value={form.dependency_condition}
-            onChange={e => handleChange('dependency_condition', e.target.value)}
-          >
-            <option value="parent_pass">Run if parent passes</option>
-            <option value="parent_fail">Run if parent fails</option>
-            <option value="always">Always run</option>
-          </select>
+
+      {/* THEN Section - Actions */}
+      {activeSection === 'actions' && (
+        <div className="form-section action-section">
+          <div className="section-header">
+            <h4><i className="fas fa-bolt"></i> THEN — Action Definition</h4>
+            <p className="section-hint">Define what happens when conditions match</p>
+          </div>
+
+          <div className="action-panels">
+            {/* On Fail Actions */}
+            <div className="action-panel fail-panel">
+              <div className="panel-header">
+                <i className="fas fa-times-circle"></i>
+                <span>When Condition FAILS</span>
+              </div>
+              <div className="form-group">
+                <label>Action</label>
+                <select
+                  value={form.action_on_fail}
+                  onChange={e => handleChange('action_on_fail', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="log">📝 Log Only</option>
+                  <option value="warn">⚠️ Warn & Continue</option>
+                  <option value="quarantine">🔒 Quarantine Record</option>
+                  <option value="reject">❌ Reject Record</option>
+                  <option value="transform">🔄 Transform Value</option>
+                  <option value="escalate">📢 Escalate to Workflow</option>
+                </select>
+              </div>
+              
+              {form.action_on_fail === 'transform' && (
+                <div className="form-group">
+                  <label>Transformation Expression</label>
+                  <textarea
+                    value={form.transformation_expression}
+                    onChange={e => handleChange('transformation_expression', e.target.value)}
+                    placeholder="e.g., value.strip().upper()"
+                    rows={2}
+                    className="code-input"
+                  />
+                </div>
+              )}
+              
+              <div className="form-group">
+                <label>Failure Message</label>
+                <input
+                  type="text"
+                  value={form.action_message}
+                  onChange={e => handleChange('action_message', e.target.value)}
+                  placeholder="Message shown when rule fails"
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            {/* On Pass Actions */}
+            <div className="action-panel pass-panel">
+              <div className="panel-header">
+                <i className="fas fa-check-circle"></i>
+                <span>When Condition PASSES</span>
+              </div>
+              <div className="form-group">
+                <label>Action</label>
+                <select
+                  value={form.action_on_pass}
+                  onChange={e => handleChange('action_on_pass', e.target.value)}
+                  className="form-select"
+                >
+                  <option value="none">No Action (Default)</option>
+                  <option value="log">📝 Log Success</option>
+                  <option value="enrich">➕ Enrich Record</option>
+                  <option value="trigger_next">➡️ Trigger Next Rule</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hierarchy Section */}
+      {activeSection === 'hierarchy' && (
+        <div className="form-section hierarchy-section">
+          <div className="section-header">
+            <h4><i className="fas fa-sitemap"></i> Rule Hierarchy</h4>
+            <p className="section-hint">Configure parent-child relationships and inheritance</p>
+          </div>
+
+          {parentRuleId && (
+            <div className="parent-info-box">
+              <i className="fas fa-link"></i>
+              <span>This is a <strong>child rule</strong> of Parent Rule ID: {parentRuleId}</span>
+            </div>
+          )}
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Dependency Condition</label>
+              <select
+                value={form.dependency_condition}
+                onChange={e => handleChange('dependency_condition', e.target.value)}
+                className="form-select"
+              >
+                <option value="parent_pass">🟢 Run if parent PASSES</option>
+                <option value="parent_fail">🔴 Run if parent FAILS</option>
+                <option value="always">⚪ Always run (independent)</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.inherit_from_parent}
+                  onChange={e => handleChange('inherit_from_parent', e.target.checked)}
+                />
+                <span>Inherit settings from parent</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Hierarchy Visualization */}
+          <div className="hierarchy-visual">
+            <div className="hierarchy-hint">
+              <i className="fas fa-info-circle"></i>
+              <p>Child rules can <strong>override</strong> parent rule behaviors or <strong>extend</strong> them with additional checks.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execution Section */}
+      {activeSection === 'execution' && (
+        <div className="form-section execution-section">
+          <div className="section-header">
+            <h4><i className="fas fa-play-circle"></i> Execution Settings</h4>
+            <p className="section-hint">Control how this rule executes within the ruleset</p>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Sequence Order</label>
+              <input
+                type="number"
+                value={form.sequence_order}
+                onChange={e => handleChange('sequence_order', parseInt(e.target.value))}
+                min={0}
+                className="form-input"
+              />
+              <span className="field-hint">Lower numbers execute first (sequential mode)</span>
+            </div>
+            
+            <div className="form-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={form.parallel_safe}
+                  onChange={e => handleChange('parallel_safe', e.target.checked)}
+                />
+                <span>Safe for Parallel Execution</span>
+              </label>
+              <span className="field-hint">Rule has no side effects or shared state</span>
+            </div>
+          </div>
+
+          {/* Execution Mode Info */}
+          <div className="execution-info-grid">
+            <div className="exec-info-card">
+              <div className="exec-icon"><i className="fas fa-list-ol"></i></div>
+              <div className="exec-label">Sequential</div>
+              <div className="exec-desc">Respects sequence_order. Use when rules depend on prior results.</div>
+            </div>
+            <div className="exec-info-card">
+              <div className="exec-icon"><i className="fas fa-random"></i></div>
+              <div className="exec-label">Parallel</div>
+              <div className="exec-desc">Ignores order. Only safe for independent rules.</div>
+            </div>
+            <div className="exec-info-card">
+              <div className="exec-icon"><i className="fas fa-project-diagram"></i></div>
+              <div className="exec-label">DAG</div>
+              <div className="exec-desc">Automatic ordering based on declared dependencies.</div>
+            </div>
+          </div>
         </div>
       )}
       
@@ -880,9 +1526,10 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
         <button className="btn-secondary" onClick={onCancel}>Cancel</button>
         <button 
           className="btn-primary" 
-          onClick={() => onSave(form)}
-          disabled={!form.name || !form.expression}
+          onClick={handleSave}
+          disabled={!form.name || (conditionMode === 'expression' && !form.expression)}
         >
+          <i className="fas fa-save"></i>
           {rule?.id ? 'Update Rule' : 'Create Rule'}
         </button>
       </div>

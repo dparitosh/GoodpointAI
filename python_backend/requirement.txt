@@ -1,15 +1,6 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-neo4j==5.25.0
-python-dotenv==1.0.1
-pydantic==2.9.2
-pydantic-settings==2.6.0
-sqlalchemy==2.0.35
-psycopg[binary]==3.2.3
 # Deprecated: use requirements.txt
 #
 # This file remains only for backwards compatibility with older scripts/docs.
 # The single source of truth is now: requirements.txt
 
 -r requirements.txt
-python-jose[cryptography]==3.3.0

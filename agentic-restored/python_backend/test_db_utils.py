@@ -21,6 +21,8 @@ from typing import Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.engine.url import make_url
 
 
 def _pick_database_url() -> Optional[str]:
@@ -29,6 +31,19 @@ def _pick_database_url() -> Optional[str]:
         if val:
             return val
     return None
+
+
+def _masked_url(url: str) -> str:
+    """Return a safe-to-log DB URL (password removed if present)."""
+
+    try:
+        parsed = make_url(url)
+        return parsed.render_as_string(hide_password=True)
+    except Exception:
+        # Best-effort fallback: avoid printing credentials.
+        if "@" in url:
+            return "***@" + url.split("@", 1)[1]
+        return url
 
 
 def create_postgres_test_engine(*, pool_pre_ping: bool = True) -> Engine:
@@ -46,4 +61,21 @@ def create_postgres_test_engine(*, pool_pre_ping: bool = True) -> Engine:
     if not url.lower().startswith("postgres"):
         pytest.skip(f"Test DB must be Postgres (got {url.split(':', 1)[0]}).")
 
-    return create_engine(url, pool_pre_ping=pool_pre_ping)
+    # Keep this short: tests should skip quickly if Postgres isn't running.
+    engine = create_engine(
+        url,
+        pool_pre_ping=pool_pre_ping,
+        connect_args={"connect_timeout": 3},
+    )
+
+    try:
+        with engine.connect() as conn:
+            conn.exec_driver_sql("SELECT 1")
+    except OperationalError:
+        pytest.skip(
+            "Postgres test DB appears to be unreachable. "
+            f"URL={_masked_url(url)}. "
+            "Start Postgres, or unset DATABASE_URL / set GRAPH_TRACE_TEST_DATABASE_URL to a running disposable DB."
+        )
+
+    return engine
