@@ -31,13 +31,12 @@ cd /d "%REPO_ROOT%agentic-restored\python_backend"
 
 REM Check if .env file exists
 if not exist ".env" (
-    echo Warning: .env file not found. Please create one with Neo4j credentials.
+    echo Note: .env file not found ^(OK^). You can configure integrations in the UI.
     echo Example .env contents:
+    echo DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/graphtrace
     echo NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
     echo NEO4J_USER=neo4j
     echo NEO4J_PASSWORD=your-password
-    echo NEO4J_DATABASE=neo4j
-    echo GRAPH_TRACE_ALLOWED_LOCAL_ROOTS=D:\path\to\your\import\folder
     echo.
 )
 
@@ -46,10 +45,18 @@ echo Installing/updating dependencies...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
-REM Ensure encryption key exists (generate if missing)
+REM Ensure encryption key exists (load from file or generate and persist)
 if "%GRAPH_TRACE_CONFIG_ENCRYPTION_KEY%"=="" (
-    echo Generating session encryption key...
-    for /f "delims=" %%i in ('python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"') do set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=%%i
+    if exist ".graphtrace.encryption_key" (
+        echo Loading encryption key from .graphtrace.encryption_key...
+        set /p GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=<.graphtrace.encryption_key
+    ) else (
+        echo Generating and saving encryption key...
+        for /f "delims=" %%i in ('python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"') do (
+            set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY=%%i
+            echo %%i>.graphtrace.encryption_key
+        )
+    )
 )
 
 REM Initialize DB schema (non-fatal if fails)

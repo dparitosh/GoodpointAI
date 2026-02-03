@@ -57,11 +57,13 @@ psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE graphtrace;"
 
 ### Configure backend connection
 
-Edit:
+Copy the example file and edit:
 
-- `agentic-restored/python_backend/.env`
+```powershell
+copy agentic-restored\python_backend\.env.example agentic-restored\python_backend\.env
+```
 
-Set `DATABASE_URL` like:
+Then edit `agentic-restored/python_backend/.env` and set `DATABASE_URL`:
 
 ```dotenv
 DATABASE_URL="postgresql://postgres:<password>@127.0.0.1:5432/graphtrace"
@@ -70,6 +72,7 @@ DATABASE_URL="postgresql://postgres:<password>@127.0.0.1:5432/graphtrace"
 Notes:
 
 - VS Code tasks start the backend with `GRAPH_TRACE_LOAD_DOTENV=true`, so `.env` is loaded automatically.
+- The `.env.example` file contains all available configuration options with documentation.
 
 ## 2) Backend (FastAPI)
 

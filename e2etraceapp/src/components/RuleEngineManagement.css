@@ -1733,3 +1733,185 @@
   color: var(--text-secondary);
   font-size: 0.75rem;
 }
+/* ================================================================
+   EXECUTION DETAILS MODAL
+   ================================================================ */
+
+.execution-details {
+  padding: 1rem;
+}
+
+.execution-details .detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--background-color-offset, #f5f5f5);
+  border-radius: 8px;
+}
+
+.execution-details .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.execution-details .detail-item label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.execution-details .detail-item span {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.execution-details .detail-item .monospace {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  background: var(--panel-bg);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.rule-results-section,
+.errors-section {
+  margin-top: 1.5rem;
+}
+
+.rule-results-section h4,
+.errors-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rule-table.compact {
+  font-size: 0.875rem;
+}
+
+.rule-table.compact th,
+.rule-table.compact td {
+  padding: 0.5rem 0.75rem;
+}
+
+.rule-table .num-cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.error-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.error-item {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--error-color-light, #ffebee);
+  color: var(--error-color-dark, #c41e3a);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  border-left: 3px solid var(--critical-color, #da1e28);
+}
+
+/* ================================================================
+   QUARANTINE REVIEW MODAL
+   ================================================================ */
+
+.quarantine-review {
+  padding: 1rem;
+}
+
+.quarantine-review .review-header {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--background-color-offset, #f5f5f5);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.quarantine-review .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quarantine-review .detail-item label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quarantine-review .detail-item span,
+.quarantine-review .detail-item .monospace {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.quarantine-review .detail-item .monospace {
+  font-family: monospace;
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.review-section {
+  margin-bottom: 1.5rem;
+}
+
+.review-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.violation-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--warning-color-light, #fff4e5);
+  border-radius: 8px;
+  border-left: 4px solid var(--warning-color-dark, #ff832b);
+}
+
+.record-data-json {
+  margin: 0;
+  padding: 1rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  max-height: 300px;
+  color: var(--text-primary);
+}
+
+.quarantine-review .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}

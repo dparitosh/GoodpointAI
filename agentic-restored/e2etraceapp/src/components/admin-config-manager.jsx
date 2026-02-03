@@ -1665,6 +1665,33 @@ export default function AdminConfigManager() {
         fetch(`${API_BASE}/health`)
       ]);
       
+      // Check if any response failed
+      const responses = [
+        { name: 'LLM Providers', res: llmRes },
+        { name: 'Embedding Models', res: embRes },
+        { name: 'Connections', res: connRes },
+        { name: 'System Config', res: sysRes },
+        { name: 'Feature Flags', res: flagRes },
+        { name: 'Health', res: healthRes }
+      ];
+      
+      const failedResponses = responses.filter(r => !r.res.ok);
+      if (failedResponses.length > 0) {
+        const failedNames = failedResponses.map(r => r.name).join(', ');
+        const firstError = failedResponses[0];
+        let errorDetail = `Status ${firstError.res.status}`;
+        try {
+          const errorBody = await firstError.res.text();
+          if (errorBody) {
+            const parsed = JSON.parse(errorBody);
+            errorDetail = parsed.detail || parsed.message || errorDetail;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+        throw new Error(`Failed to load: ${failedNames}. ${errorDetail}`);
+      }
+      
       const [llm, emb, conn, sys, flags, health] = await Promise.all([
         llmRes.json(),
         embRes.json(),
@@ -1683,7 +1710,15 @@ export default function AdminConfigManager() {
       });
       setHealth(health);
     } catch (err) {
-      setError('Failed to load configuration data');
+      const errorMsg = err.message || 'Failed to load configuration data';
+      // Provide more helpful message for common errors
+      if (errorMsg.includes('Status 500')) {
+        setError('Backend error: Database may not be running or tables not created. Run: python -m scripts.init_db_schema');
+      } else if (errorMsg.includes('Failed to fetch')) {
+        setError('Cannot connect to backend. Ensure the server is running on port 8011.');
+      } else {
+        setError(errorMsg);
+      }
       console.error(err);
     } finally {
       setLoading(false);

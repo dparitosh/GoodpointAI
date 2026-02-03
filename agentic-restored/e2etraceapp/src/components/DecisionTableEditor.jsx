@@ -56,6 +56,41 @@ const ACTION_TYPES = [
 ];
 
 /**
+ * Convert decision table rows to rule expressions
+ * Standalone utility function that can be exported
+ * 
+ * @param {Array} rows - Table rows with cell values
+ * @param {Array} columns - Column definitions (condition and action columns)
+ * @returns {Array} Array of rule expression objects
+ */
+function generateRuleExpressions(rows, columns) {
+  const conditionCols = columns.filter(c => c.type === 'condition');
+  const actionCols = columns.filter(c => c.type !== 'condition');
+  
+  return rows.map((row, idx) => {
+    const conditions = conditionCols
+      .map(col => {
+        const value = row[col.id];
+        if (!value || value === '*') return null;
+        return `${col.field || col.name} ${col.operator} '${value}'`;
+      })
+      .filter(Boolean);
+    
+    const conditionExpr = conditions.length ? conditions.join(' and ') : 'True';
+    
+    const actionCol = actionCols.find(c => c.type === 'action');
+    const action = actionCol ? row[actionCol.id] || 'log' : 'log';
+    
+    return {
+      row_number: idx + 1,
+      condition: conditionExpr,
+      action: action,
+      raw: row
+    };
+  });
+}
+
+/**
  * DecisionTableEditor Component
  * 
  * @param {Object} props
@@ -358,30 +393,10 @@ export default function DecisionTableEditor({
     }
   }, [importFromExcel]);
 
-  // Convert to rule expression (for saving)
-  const generateRuleExpressions = useCallback(() => {
-    return tableRows.map((row, idx) => {
-      const conditions = conditionCols
-        .map(col => {
-          const value = row[col.id];
-          if (!value || value === '*') return null;
-          return `${col.field || col.name} ${col.operator} '${value}'`;
-        })
-        .filter(Boolean);
-      
-      const conditionExpr = conditions.length ? conditions.join(' and ') : 'True';
-      
-      const actionCol = actionCols.find(c => c.type === 'action');
-      const action = actionCol ? row[actionCol.id] || 'log' : 'log';
-      
-      return {
-        row_number: idx + 1,
-        condition: conditionExpr,
-        action: action,
-        raw: row
-      };
-    });
-  }, [tableRows, conditionCols, actionCols]);
+  // Convert to rule expression (for saving) - uses standalone function
+  const getRuleExpressions = useCallback(() => {
+    return generateRuleExpressions(tableRows, columns);
+  }, [tableRows, columns]);
 
   // Render cell content
   const renderCell = (row, col, rowIndex) => {

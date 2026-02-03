@@ -32,7 +32,6 @@ def _get_neo4j_config_from_admin_center() -> dict:
         Dict with uri, username, password, database keys
     """
     try:
-        from services.admin_config_service import AdminConfigService
         from models.admin_config_models import ConnectionConfig
         
         db = SessionLocal()

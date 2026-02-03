@@ -1038,6 +1038,12 @@
   margin: 0;
 }
 
+.filters-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .btn-toggle {
   display: flex;
   align-items: center;

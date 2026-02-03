@@ -3,10 +3,10 @@
 
 Write-Host "Starting GraphTrace Backend Server..." -ForegroundColor Green
 
-    # Opt into repo-local `.env` loading for local development.
-    if (-not $env:GRAPH_TRACE_LOAD_DOTENV) {
-        $env:GRAPH_TRACE_LOAD_DOTENV = "true"
-    }
+# Opt into repo-local `.env` loading for local development.
+if (-not $env:GRAPH_TRACE_LOAD_DOTENV) {
+    $env:GRAPH_TRACE_LOAD_DOTENV = "true"
+}
 
 # Check if Python is installed
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
@@ -35,12 +35,11 @@ Set-Location -Path "$repoRoot\agentic-restored\python_backend"
 if (-not (Test-Path ".env")) {
     Write-Host "Note: .env file not found (OK). You can configure integrations in the UI." -ForegroundColor Yellow
     Write-Host "Example .env contents:" -ForegroundColor Yellow
+    Write-Host "DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/graphtrace" -ForegroundColor Cyan
     Write-Host "NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io" -ForegroundColor Cyan
     Write-Host "NEO4J_USER=neo4j" -ForegroundColor Cyan
     Write-Host "NEO4J_PASSWORD=your-password" -ForegroundColor Cyan
-    Write-Host "NEO4J_DATABASE=neo4j" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "GRAPH_TRACE_ALLOWED_LOCAL_ROOTS=D:\\path\\to\\your\\import\\folder" -ForegroundColor Cyan
 }
 
 # Install/upgrade dependencies
@@ -49,15 +48,22 @@ Write-Host "Installing/updating dependencies..." -ForegroundColor Yellow
 & $venvPython -m pip install -r requirements.txt
 
 # Ensure encryption key exists for DB-backed encrypted configuration.
-# We prefer an explicit session env var so .env is not required for installs.
+# Load from key file if available, otherwise generate and persist.
+$keyFile = Join-Path (Get-Location) ".graphtrace.encryption_key"
 if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {
-    try {
-        $key = & $venvPython -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-        $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY = $key.Trim()
-        Write-Host "Generated GRAPH_TRACE_CONFIG_ENCRYPTION_KEY for this session." -ForegroundColor Yellow
-    } catch {
-        Write-Host "Warning: could not generate GRAPH_TRACE_CONFIG_ENCRYPTION_KEY (cryptography missing?)." -ForegroundColor Yellow
-        Write-Host "Set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY manually for encrypted DB config." -ForegroundColor Yellow
+    if (Test-Path $keyFile) {
+        $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY = (Get-Content $keyFile -Raw).Trim()
+        Write-Host "Loaded GRAPH_TRACE_CONFIG_ENCRYPTION_KEY from $keyFile" -ForegroundColor Yellow
+    } else {
+        try {
+            $key = & $venvPython -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+            $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY = $key.Trim()
+            Set-Content -Path $keyFile -Value $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY -Encoding ASCII
+            Write-Host "Generated and saved GRAPH_TRACE_CONFIG_ENCRYPTION_KEY to $keyFile" -ForegroundColor Yellow
+        } catch {
+            Write-Host "Warning: could not generate GRAPH_TRACE_CONFIG_ENCRYPTION_KEY (cryptography missing?)." -ForegroundColor Yellow
+            Write-Host "Set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY manually for encrypted DB config." -ForegroundColor Yellow
+        }
     }
 }
 

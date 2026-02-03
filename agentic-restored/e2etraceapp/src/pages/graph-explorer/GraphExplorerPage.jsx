@@ -171,6 +171,7 @@ const GraphExplorerPage = () => {
 
   // Schema entities fetched from /api/entities endpoint (node types with properties)
   const [schemaEntities, setSchemaEntities] = useState([]);
+  const [schemaLoading, setSchemaLoading] = useState(false);
 
   // Legend visibility
   const [showLegend, setShowLegend] = useState(true);
@@ -946,27 +947,31 @@ const GraphExplorerPage = () => {
     fetchWorkflows();
   }, []);
 
-  // Fetch schema entities (node types with properties) from backend API
-  useEffect(() => {
-    const fetchSchemaEntities = async () => {
-      try {
-        const response = await e2etraceFetchWithRetry(
-          `${API_CONFIG.ENDPOINTS.ENTITIES}?skip=0&limit=500`,
-          { method: 'GET' }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          // API returns array of {type: "node"|"relationship", label: string, properties: string[]}
-          if (Array.isArray(data)) {
-            setSchemaEntities(data);
-          }
+  // Reusable function to fetch schema entities from Neo4j
+  const fetchSchemaEntities = async () => {
+    setSchemaLoading(true);
+    try {
+      const response = await e2etraceFetchWithRetry(
+        `${API_CONFIG.ENDPOINTS.ENTITIES}?skip=0&limit=500`,
+        { method: 'GET' }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        // API returns array of {type: "node"|"relationship", label: string, properties: string[]}
+        if (Array.isArray(data)) {
+          setSchemaEntities(data);
         }
-      } catch (err) {
-        console.warn('Failed to fetch schema entities:', err.message);
-        // Non-critical - property dropdown will fall back to graph data properties
       }
-    };
-    
+    } catch (err) {
+      console.warn('Failed to fetch schema entities:', err.message);
+      // Non-critical - property dropdown will fall back to graph data properties
+    } finally {
+      setSchemaLoading(false);
+    }
+  };
+
+  // Fetch schema entities (node types with properties) from backend API on mount
+  useEffect(() => {
     fetchSchemaEntities();
   }, []);
 
@@ -1100,14 +1105,26 @@ const GraphExplorerPage = () => {
         <div className="filters-panel card">
           <div className="filters-header">
             <h2>Filters</h2>
-            <button 
-              type="button"
-              className="btn-toggle"
-              onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-            >
-              <i className={`fas ${showAdvancedSearch ? 'fa-minus' : 'fa-search-plus'}`} aria-hidden="true"></i>
-              {showAdvancedSearch ? 'Simple Search' : 'Advanced Search'}
-            </button>
+            <div className="filters-header-actions">
+              <button 
+                type="button"
+                className="btn-secondary"
+                onClick={fetchSchemaEntities}
+                disabled={schemaLoading}
+                title="Refresh node types and properties from Neo4j"
+              >
+                <i className={`fas ${schemaLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt'}`} aria-hidden="true"></i>
+                {schemaLoading ? 'Refreshing...' : 'Refresh Schema'}
+              </button>
+              <button 
+                type="button"
+                className="btn-toggle"
+                onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+              >
+                <i className={`fas ${showAdvancedSearch ? 'fa-minus' : 'fa-search-plus'}`} aria-hidden="true"></i>
+                {showAdvancedSearch ? 'Simple Search' : 'Advanced Search'}
+              </button>
+            </div>
           </div>
           
           {!showAdvancedSearch ? (

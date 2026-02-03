@@ -52,7 +52,14 @@ GoodpointAI/
 
 ## Persistence
 
-This project uses **PostgreSQL** as the only supported persistence store. Configure the connection in `agentic-restored/python_backend/.env`:
+This project uses **PostgreSQL** as the only supported persistence store.
+
+1. Copy the example config:
+   ```powershell
+   copy agentic-restored\python_backend\.env.example agentic-restored\python_backend\.env
+   ```
+
+2. Edit `agentic-restored/python_backend/.env` and set the connection:
 
 ```dotenv
 DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/graphtrace"

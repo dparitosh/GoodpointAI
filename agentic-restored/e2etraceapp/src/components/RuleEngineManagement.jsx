@@ -1675,12 +1675,16 @@ export function RuleEngineManagement() {
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showExecuteModal, setShowExecuteModal] = useState(false);
   const [showRulesPanel, setShowRulesPanel] = useState(false);
+  const [showExecutionDetailsModal, setShowExecutionDetailsModal] = useState(false);
+  const [showQuarantineReviewModal, setShowQuarantineReviewModal] = useState(false);
   
   // Selected items
   const [selectedRuleSet, setSelectedRuleSet] = useState(null);
   const [selectedRule, setSelectedRule] = useState(null);
   const [parentRuleId, setParentRuleId] = useState(null);
   const [currentRules, setCurrentRules] = useState([]);
+  const [selectedExecution, setSelectedExecution] = useState(null);
+  const [selectedQuarantineRecord, setSelectedQuarantineRecord] = useState(null);
 
   const tabs = [
     { id: 'rule-sets', label: 'Rule Sets', icon: 'fas fa-folder-open', count: ruleSets.length },
@@ -1871,6 +1875,36 @@ export function RuleEngineManagement() {
     setShowRuleModal(true);
   };
 
+  // Execution details handler
+  const handleViewExecutionDetails = (execution) => {
+    setSelectedExecution(execution);
+    setShowExecutionDetailsModal(true);
+  };
+
+  // Quarantine record review handler
+  const handleReviewQuarantine = (record) => {
+    setSelectedQuarantineRecord(record);
+    setShowQuarantineReviewModal(true);
+  };
+
+  // Release record from quarantine
+  const handleReleaseQuarantine = async (recordId) => {
+    if (!confirm('Are you sure you want to release this record from quarantine?')) return;
+    try {
+      const response = await fetch(`${API_BASE}/quarantine/${recordId}/release`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Failed to release record');
+      }
+      await loadQuarantine();
+    } catch (err) {
+      setError(err.message || 'Failed to release record from quarantine');
+    }
+  };
+
   const handleRefresh = () => {
     loadRuleSets();
     loadTemplates();
@@ -1930,7 +1964,7 @@ export function RuleEngineManagement() {
         {activeTab === 'executions' && (
           <ExecutionsTable
             executions={executions}
-            onViewDetails={(ex) => console.log('View execution:', ex)}
+            onViewDetails={handleViewExecutionDetails}
             loading={loading}
           />
         )}
@@ -1938,8 +1972,8 @@ export function RuleEngineManagement() {
         {activeTab === 'quarantine' && (
           <QuarantineTable
             records={quarantine}
-            onReview={(rec) => console.log('Review:', rec)}
-            onRelease={(id) => console.log('Release:', id)}
+            onReview={handleReviewQuarantine}
+            onRelease={handleReleaseQuarantine}
             loading={loading}
           />
         )}
@@ -2019,6 +2053,190 @@ export function RuleEngineManagement() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Execution Details Modal */}
+      {showExecutionDetailsModal && selectedExecution && (
+        <Modal
+          isOpen={true}
+          onClose={() => {
+            setShowExecutionDetailsModal(false);
+            setSelectedExecution(null);
+          }}
+          title="Execution Details"
+          size="large"
+        >
+          <div className="execution-details">
+            <div className="detail-grid">
+              <div className="detail-item">
+                <label>Execution ID</label>
+                <span className="monospace">{selectedExecution.id}</span>
+              </div>
+              <div className="detail-item">
+                <label>Rule Set</label>
+                <span>{selectedExecution.rule_set_name || selectedExecution.rule_set_id}</span>
+              </div>
+              <div className="detail-item">
+                <label>Status</label>
+                <StatusBadge status={selectedExecution.status} />
+              </div>
+              <div className="detail-item">
+                <label>Started</label>
+                <span>{selectedExecution.started_at ? new Date(selectedExecution.started_at).toLocaleString() : '-'}</span>
+              </div>
+              <div className="detail-item">
+                <label>Completed</label>
+                <span>{selectedExecution.completed_at ? new Date(selectedExecution.completed_at).toLocaleString() : '-'}</span>
+              </div>
+              <div className="detail-item">
+                <label>Duration</label>
+                <span>{selectedExecution.duration_seconds ? `${selectedExecution.duration_seconds.toFixed(2)}s` : '-'}</span>
+              </div>
+              <div className="detail-item">
+                <label>Total Records</label>
+                <span>{selectedExecution.total_records || 0}</span>
+              </div>
+              <div className="detail-item">
+                <label>Pass Rate</label>
+                <div className="pass-rate">
+                  <div 
+                    className="pass-rate-bar" 
+                    style={{ width: `${Math.max(0, selectedExecution.pass_rate || 0)}%` }}
+                  ></div>
+                  <span>{(selectedExecution.pass_rate || 0).toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>
+            
+            {selectedExecution.rule_results && selectedExecution.rule_results.length > 0 && (
+              <div className="rule-results-section">
+                <h4><i className="fas fa-list-check"></i> Rule Results</h4>
+                <table className="rule-table compact">
+                  <thead>
+                    <tr>
+                      <th>Rule</th>
+                      <th>Status</th>
+                      <th>Passed</th>
+                      <th>Failed</th>
+                      <th>Pass Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedExecution.rule_results.map((rr, idx) => (
+                      <tr key={idx}>
+                        <td>{rr.rule_name || rr.rule_id}</td>
+                        <td><StatusBadge status={rr.passed ? 'passed' : 'failed'} /></td>
+                        <td className="num-cell">{rr.passed_count || 0}</td>
+                        <td className="num-cell">{rr.failed_count || 0}</td>
+                        <td>
+                          {rr.total_checked > 0 
+                            ? `${((rr.passed_count / rr.total_checked) * 100).toFixed(1)}%`
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {selectedExecution.errors && selectedExecution.errors.length > 0 && (
+              <div className="errors-section">
+                <h4><i className="fas fa-exclamation-triangle"></i> Errors</h4>
+                <ul className="error-list">
+                  {selectedExecution.errors.map((err, idx) => (
+                    <li key={idx} className="error-item">{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Quarantine Review Modal */}
+      {showQuarantineReviewModal && selectedQuarantineRecord && (
+        <Modal
+          isOpen={true}
+          onClose={() => {
+            setShowQuarantineReviewModal(false);
+            setSelectedQuarantineRecord(null);
+          }}
+          title="Quarantine Record Review"
+          size="large"
+        >
+          <div className="quarantine-review">
+            <div className="review-header">
+              <div className="detail-item">
+                <label>Record ID</label>
+                <span className="monospace">{selectedQuarantineRecord.id}</span>
+              </div>
+              <div className="detail-item">
+                <label>Status</label>
+                <StatusBadge status={selectedQuarantineRecord.status || 'quarantined'} />
+              </div>
+              <div className="detail-item">
+                <label>Quarantined At</label>
+                <span>
+                  {selectedQuarantineRecord.created_at 
+                    ? new Date(selectedQuarantineRecord.created_at).toLocaleString() 
+                    : '-'}
+                </span>
+              </div>
+            </div>
+
+            <div className="review-section">
+              <h4><i className="fas fa-exclamation-circle"></i> Violation Details</h4>
+              <div className="violation-info">
+                <div className="detail-item">
+                  <label>Rule</label>
+                  <span>{selectedQuarantineRecord.rule_name || selectedQuarantineRecord.rule_id || '-'}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Reason</label>
+                  <span>{selectedQuarantineRecord.reason || 'Rule violation'}</span>
+                </div>
+                {selectedQuarantineRecord.severity && (
+                  <div className="detail-item">
+                    <label>Severity</label>
+                    <SeverityBadge severity={selectedQuarantineRecord.severity} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {selectedQuarantineRecord.record_data && (
+              <div className="review-section">
+                <h4><i className="fas fa-database"></i> Record Data</h4>
+                <pre className="record-data-json">
+                  {JSON.stringify(selectedQuarantineRecord.record_data, null, 2)}
+                </pre>
+              </div>
+            )}
+
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary" 
+                onClick={() => {
+                  setShowQuarantineReviewModal(false);
+                  setSelectedQuarantineRecord(null);
+                }}
+              >
+                Close
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={() => {
+                  handleReleaseQuarantine(selectedQuarantineRecord.id);
+                  setShowQuarantineReviewModal(false);
+                  setSelectedQuarantineRecord(null);
+                }}
+              >
+                <i className="fas fa-unlock"></i> Release from Quarantine
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

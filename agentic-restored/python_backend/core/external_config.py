@@ -190,8 +190,9 @@ class DatabaseConfig(BaseSettings):
     # SQLAlchemy (primary app DB)
     sqlalchemy_database_url: str = Field(default="", validation_alias="DATABASE_URL")
 
-    # PostgreSQL
-    postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
+    # PostgreSQL - fallback if DATABASE_URL not set
+    # User's PostgreSQL port is 5433
+    postgres_host: str = Field(default="127.0.0.1", validation_alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5433, validation_alias="POSTGRES_PORT")
     postgres_database: str = Field(default="graphtrace", validation_alias="POSTGRES_DATABASE")
     postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")
