@@ -1,6 +1,0 @@
-# Deprecated: use requirements.txt
-#
-# This file remains only for backwards compatibility with older scripts/docs.
-# The single source of truth is now: requirements.txt
-
--r requirements.txt

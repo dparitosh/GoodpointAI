@@ -1,8 +1,0 @@
-# Frontend (React/Vite)
-
-For installation and run instructions, see:
-
-- `../../docs/INSTALLATION.md`
-- `../../docs/EXECUTION_GUIDE.md`
-
-UI (default): http://localhost:5173

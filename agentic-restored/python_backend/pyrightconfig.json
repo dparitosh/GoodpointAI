@@ -1,6 +1,0 @@
-{
-  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/pyright/config.schema.json",
-  "include": ["**/*.py"],
-  "exclude": ["**/__pycache__", "**/.pytest_cache", "**/.venv", "**/venv"],
-  "extraPaths": ["."]
-}
