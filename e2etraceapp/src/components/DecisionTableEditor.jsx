@@ -14,7 +14,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { readExcelArrayBufferToAoa, jsonToAoa } from '../utils/spreadsheet-utils.js';
+import { readExcelArrayBufferToAoa } from '../utils/spreadsheet-utils.js';
 import writeXlsxFile from 'write-excel-file';
 import './DecisionTableEditor.css';
 

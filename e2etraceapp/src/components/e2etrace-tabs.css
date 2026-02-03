@@ -1,0 +1,5 @@
+/* e2etrace-tabs.css - Styles for tab components */
+.e2etrace-tabs {
+  display: flex;
+  gap: 0.5rem;
+}

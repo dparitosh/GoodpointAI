@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Any, Optional
 
 class NodeModel(BaseModel):
@@ -9,16 +9,14 @@ class NodeModel(BaseModel):
     title: str = Field(..., description="A string used for tooltips in visualizations, typically a formatted summary of node details.")
 
 class EdgeModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
+    
     id: str = Field(..., description="The unique element ID of the relationship.")
     from_node: str = Field(..., alias="from", serialization_alias="from", description="The element ID of the source node.") # 'from' is a reserved keyword, use alias
     to_node: str = Field(..., alias="to", serialization_alias="to", description="The element ID of the target node.")
     label: str = Field(..., description="The type of the relationship.")
     properties: Dict[str, Any] = Field(..., description="A dictionary of the relationship's properties.")
     title: str = Field(..., description="A string used for tooltips in visualizations, typically a formatted summary of relationship details.")
-
-    class Config:
-        populate_by_name = True
-        by_alias = True  # Serialize using aliases for JSON output
 
 class RawRecordItem(BaseModel):
     elementId: str
@@ -29,12 +27,12 @@ class RawRecordItem(BaseModel):
     properties: Dict[str, Any]
 
 class RawRecordModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    
     n: Optional[RawRecordItem] = None
     r: Optional[RawRecordItem] = None
     m: Optional[RawRecordItem] = None
     # Allow other arbitrary keys that a custom query might return
-    class Config:
-        extra = "allow"
 
 
 class GraphDataResponse(BaseModel):
@@ -47,6 +45,8 @@ class QueryRequest(BaseModel):
     params: Optional[Dict[str, Any]] = Field(None, description="Parameters for the Cypher query.")
 
 class QuerySummaryModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     nodes_created: Optional[int] = Field(None, alias="nodes-created")
     nodes_deleted: Optional[int] = Field(None, alias="nodes-deleted")
     relationships_created: Optional[int] = Field(None, alias="relationships-created")
@@ -59,9 +59,6 @@ class QuerySummaryModel(BaseModel):
     constraints_added: Optional[int] = Field(None, alias="constraints-added")
     constraints_removed: Optional[int] = Field(None, alias="constraints-removed")
     system_updates: Optional[int] = Field(None, alias="system-updates")
-
-    class Config:
-        populate_by_name = True # Allows using alias for field names
 
 class QueryResponse(GraphDataResponse):
     summaryInfo: Optional[QuerySummaryModel] = Field(None, description="Summary information about the query execution.")
