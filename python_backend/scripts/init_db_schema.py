@@ -57,6 +57,38 @@ def main() -> int:
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Seeding skipped (non-fatal): %s", exc)
 
+    # ---- Seed admin configurations (connections, LLM providers, feature flags) ----
+    try:
+        from scripts.seed_admin_configs import (
+            seed_connections,
+            seed_llm_providers,
+            seed_embedding_models,
+            seed_feature_flags,
+            seed_system_configurations,
+        )
+
+        db = SessionLocal()
+        try:
+            seed_system_configurations(db)
+            seed_llm_providers(db)
+            seed_embedding_models(db)
+            seed_connections(db)
+            seed_feature_flags(db)
+            logger.info("Admin configurations seeded")
+        finally:
+            db.close()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Admin config seeding skipped (non-fatal): %s", exc)
+
+    # ---- Seed pipeline configurations (file patterns, templates, Neo4j schema) ----
+    try:
+        from scripts.seed_pipeline_configs import seed_all as seed_pipeline_all
+
+        seed_pipeline_all(force=False)
+        logger.info("Pipeline configurations seeded")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Pipeline config seeding skipped (non-fatal): %s", exc)
+
     return 0
 
 

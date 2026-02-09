@@ -61,15 +61,15 @@ if (-not $SkipBackend) {
     if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {
       $key = $null
       try {
-        $key = python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>$null
+        $key = & $venvPython -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>$null
       } catch {
         $key = $null
       }
 
       if (-not $key -or $LASTEXITCODE -ne 0) {
         Write-Host "cryptography not available yet; installing cryptography..." -ForegroundColor Yellow
-        python -m pip install cryptography
-        $key = python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+        & $venvPython -m pip install cryptography
+        $key = & $venvPython -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       }
 
       if ($key) {

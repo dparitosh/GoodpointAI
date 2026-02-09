@@ -21,7 +21,7 @@ Goal: run Spark-scale transforms/exports while keeping:
 
 ## Required environment variables
 
-- `DATABASE_URL` (example format): `postgresql://user:pass@host:5432/dbname`
+- `DATABASE_URL` (example format): `postgresql://user:pass@host:5433/dbname`
 - `NEO4J_URI` (example): `bolt://localhost:7687`
 - `NEO4J_USERNAME`
 - `NEO4J_PASSWORD`
@@ -29,7 +29,7 @@ Goal: run Spark-scale transforms/exports while keeping:
 ## Run (Windows)
 
 ```powershell
-cd agentic-restored\spark_jobs
+cd spark_jobs
 python -m pip install -r requirements.txt
 
 # set env vars in your shell first

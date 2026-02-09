@@ -113,7 +113,7 @@ class AgentService(ABC):
         
         payload = {
             "id": self.agent_id,
-            "type": self.agent_type,
+            "type": self.agent_type.value,
             "name": self.agent_name,
             "service_url": f"http://localhost:{self.port}", # In container/Azure this needs to be real IP/DNS
             "capabilities": [c.model_dump() for c in self.get_capabilities()],

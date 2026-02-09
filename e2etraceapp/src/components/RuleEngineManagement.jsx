@@ -1608,9 +1608,13 @@ function ExecuteDialog({ ruleSet, onExecute, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rule_set_id: ruleSet.id,
-          data: { records: Array.isArray(data) ? data : [data] },
+          records: Array.isArray(data) ? data : [data],
         }),
       });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+        throw new Error(err.detail || `Execution failed: HTTP ${response.status}`);
+      }
       const result = await response.json();
       setResult(result);
       onExecute(result);
@@ -1746,6 +1750,7 @@ export function RuleEngineManagement() {
   const loadRuleSets = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/sets`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setRuleSets(data.items || []);
     } catch (err) {
@@ -1757,6 +1762,7 @@ export function RuleEngineManagement() {
   const loadTemplates = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/templates/`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setTemplates(data.items || []);
     } catch (err) {
@@ -1767,6 +1773,7 @@ export function RuleEngineManagement() {
   const loadExecutions = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/executions`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setExecutions(data.items || []);
     } catch (err) {
@@ -1777,6 +1784,7 @@ export function RuleEngineManagement() {
   const loadQuarantine = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/quarantine`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setQuarantine(data.items || []);
     } catch (err) {
@@ -1787,6 +1795,7 @@ export function RuleEngineManagement() {
   const loadRulesForSet = useCallback(async (ruleSetId) => {
     try {
       const response = await fetch(`${API_BASE}/sets/${ruleSetId}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setCurrentRules(data.rules || []);
     } catch (err) {
@@ -1940,7 +1949,7 @@ export function RuleEngineManagement() {
   const handleReleaseQuarantine = async (recordId) => {
     if (!confirm('Are you sure you want to release this record from quarantine?')) return;
     try {
-      const response = await fetch(`${API_BASE}/quarantine/${recordId}/release`, {
+      const response = await fetch(`${API_BASE}/quarantine/${recordId}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

@@ -51,26 +51,35 @@ class Neo4jDataService {
     return this.apiCall(this.config.ENDPOINTS.DATA_QUALITY);
   }
 
-  // Migration Operations
+  // Migration Operations (Advanced Migration Engine)
   async getMigrationPlans() {
-    return this.apiCall(this.config.ENDPOINTS.MIGRATION_PLANS);
+    // Legacy stub — returns empty list as a safe fallback
+    // Real migration is handled via MigrationWizard + Advanced Migration Engine
+    try {
+      return await this.apiCall(this.config.ENDPOINTS.MIGRATION_PLANS);
+    } catch {
+      return [];
+    }
   }
 
   async createMigrationPlan(planData) {
-    return this.apiCall(this.config.ENDPOINTS.MIGRATION_PLANS, {
+    // Use the advanced migration engine to start a session
+    return this.apiCall(this.config.ENDPOINTS.MIGRATION_ADVANCED_START, {
       method: 'POST',
       body: JSON.stringify(planData),
     });
   }
 
   async executeMigrationPlan(planId) {
-    return this.apiCall(buildEndpoint(this.config.ENDPOINTS.MIGRATION_EXECUTE, planId), {
+    // Send start event to advanced migration session
+    return this.apiCall(buildEndpoint(this.config.ENDPOINTS.MIGRATION_ADVANCED_EVENTS, planId), {
       method: 'POST',
+      body: JSON.stringify({ event: 'RESUME' }),
     });
   }
 
   async getMigrationStatus(planId) {
-    return this.apiCall(buildEndpoint(this.config.ENDPOINTS.MIGRATION_STATUS, planId));
+    return this.apiCall(buildEndpoint(this.config.ENDPOINTS.MIGRATION_ADVANCED_STATUS, planId));
   }
 
   // Data Mapping Operations

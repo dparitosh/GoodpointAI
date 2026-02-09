@@ -8,10 +8,10 @@ This folder contains a sample Apache HTTP Server (httpd) configuration for Graph
 
 ## Steps (Windows example)
 1. Build the frontend:
-   - `cd agentic-restored/e2etraceapp`
+   - `cd e2etraceapp`
    - `npm run build`
 2. Start the backend (production-style, no reload):
-   - `cd agentic-restored/python_backend`
+   - `cd python_backend`
    - `venv\Scripts\activate`
    - `python -m uvicorn main:app --host 127.0.0.1 --port 8011`
 3. Copy/edit `apache/graphtrace-httpd.conf`:

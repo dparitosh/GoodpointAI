@@ -111,7 +111,7 @@ def invalidate_config_cache():
 
 
 def _workspace_root() -> Path:
-    # python_backend/routers -> python_backend -> agentic-restored
+    # python_backend/routers -> python_backend -> repo root
     return Path(__file__).resolve().parents[2]
 
 

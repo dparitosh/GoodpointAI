@@ -46,6 +46,7 @@ class AgentTaskResponse(BaseModel):
 class AgentCapability(BaseModel):
     name: str
     description: str
+    parameters: Dict[str, Any] = {}
 
 class AgentRegistration(BaseModel):
     agent_id: str

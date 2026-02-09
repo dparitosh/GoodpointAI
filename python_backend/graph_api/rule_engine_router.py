@@ -688,6 +688,8 @@ async def execute_rule_set(
             total_failures=result.total_failures,
             overall_pass_rate=result.overall_pass_rate,
             duration_ms=result.duration_ms,
+            started_at=result.started_at,
+            completed_at=result.completed_at,
             error_message=result.error_message
         )
         db.add(execution)
@@ -710,10 +712,18 @@ async def execute_rule_set(
         
         db.commit()
         
+        # Build rule name lookup from rules_dict
+        _rule_names = {r["id"]: r["name"] for r in rules_dict}
+
         return {
             "execution_id": result.execution_id,
             "rule_set_id": request.rule_set_id,
             "status": result.status,
+            # Top-level convenience fields (mirrors summary for frontend)
+            "total_records": result.total_records,
+            "overall_pass_rate": round(result.overall_pass_rate, 2),
+            "duration_ms": result.duration_ms,
+            "duration_seconds": round(result.duration_ms / 1000.0, 3) if result.duration_ms else 0,
             "summary": {
                 "total_rules": result.total_rules,
                 "rules_passed": result.rules_passed,
@@ -728,9 +738,12 @@ async def execute_rule_set(
             "rule_results": [
                 {
                     "rule_id": rr.rule_id,
+                    "rule_name": _rule_names.get(rr.rule_id, rr.rule_id),
                     "passed": rr.passed,
                     "records_checked": rr.records_checked,
                     "records_failed": rr.records_failed,
+                    "passed_count": rr.records_checked - rr.records_failed,
+                    "total_checked": rr.records_checked,
                     "error": rr.error,
                     "failure_sample_count": len(rr.failure_samples)
                 }
@@ -811,18 +824,34 @@ async def get_execution(execution_id: str, db: Session = Depends(get_db)):
         
         rule_executions = db.query(RuleExecution).filter(RuleExecution.set_execution_id == execution_id).all()
         
+        # Build rule name lookup
+        _rule_name_map = {}
+        rule_ids = [re.rule_id for re in rule_executions if re.rule_id]
+        if rule_ids:
+            _rules = db.query(Rule.id, Rule.name).filter(Rule.id.in_(rule_ids)).all()
+            _rule_name_map = {r.id: r.name for r in _rules}
+
+        _total_records = (execution.total_records_checked if execution.total_records_checked is not None
+                          else getattr(execution, 'record_count', None)) or 0
+
         return {
             "id": execution.id,
             "rule_set_id": execution.rule_set_id,
             "rule_set_name": execution.rule_set.name if getattr(execution, "rule_set", None) else None,
             "status": execution.status,
+            # Top-level convenience fields for frontend
+            "total_records": _total_records,
+            "pass_rate": float(execution.overall_pass_rate or 0.0),
+            "overall_pass_rate": float(execution.overall_pass_rate or 0.0),
+            "duration_ms": execution.duration_ms,
+            "duration_seconds": round(float(execution.duration_ms) / 1000.0, 3) if execution.duration_ms else None,
             "summary": {
                 "total_rules": execution.total_rules,
                 "rules_passed": execution.rules_passed,
                 "rules_failed": execution.rules_failed,
                 "rules_skipped": execution.rules_skipped,
                 "rules_error": execution.rules_error,
-                "total_records": (execution.total_records_checked if execution.total_records_checked is not None else execution.record_count) or 0,
+                "total_records": _total_records,
                 "total_failures": execution.total_failures,
                 "overall_pass_rate": float(execution.overall_pass_rate or 0.0),
                 "duration_ms": execution.duration_ms
@@ -834,10 +863,15 @@ async def get_execution(execution_id: str, db: Session = Depends(get_db)):
                 {
                     "id": re.id,
                     "rule_id": re.rule_id,
+                    "rule_name": _rule_name_map.get(re.rule_id, re.rule_id),
                     "status": re.status,
+                    "passed": (re.records_failed or 0) == 0 and re.status != ExecutionStatus.ERROR.value,
                     "records_checked": re.records_checked,
                     "records_passed": re.records_passed,
                     "records_failed": re.records_failed,
+                    "passed_count": re.records_passed or 0,
+                    "failed_count": re.records_failed or 0,
+                    "total_checked": re.records_checked or 0,
                     "pass_rate": re.pass_rate,
                     "duration_ms": re.duration_ms,
                     "error_message": re.error_message,

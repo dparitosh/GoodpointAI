@@ -33,7 +33,7 @@ REM Check if .env file exists
 if not exist ".env" (
     echo Note: .env file not found ^(OK^). You can configure integrations in the UI.
     echo Example .env contents:
-    echo DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/graphtrace
+    echo DATABASE_URL=postgresql://postgres:password@127.0.0.1:5433/graphtrace
     echo NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
     echo NEO4J_USER=neo4j
     echo NEO4J_PASSWORD=your-password

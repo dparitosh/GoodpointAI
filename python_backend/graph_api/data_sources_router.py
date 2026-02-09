@@ -31,7 +31,7 @@ class SampleRecordsResponse(BaseModel):
 
 
 def _workspace_root() -> Path:
-    # python_backend/graph_api -> python_backend -> agentic-restored
+    # python_backend/graph_api -> python_backend -> repo root
     return Path(__file__).resolve().parents[2]
 
 
@@ -169,6 +169,452 @@ def _resolve_local_file_path(connection: Dict[str, Any]) -> Path:
     return Path("")
 
 
+# ---------------------------------------------------------------------------
+# System connection sampling (admin-registered connections)
+# ---------------------------------------------------------------------------
+
+_DATABASE_TYPES = {"postgres", "postgresql", "database", "mysql", "sqlserver", "mssql", "oracle"}
+_NEO4J_TYPES = {"neo4j"}
+_API_TYPES = {"rest_api", "odata", "graphql", "api"}
+_PLM_TYPES = {"teamcenter", "3dexperience", "windchill", "aras", "codebeamer", "enovia"}
+_FILE_STORAGE_TYPES = {"s3", "aws_s3", "azure_blob", "azure", "local_folder", "onedrive", "google_drive", "file"}
+
+
+async def _sample_system_connection(
+    source_id: str,
+    conn_type: str,
+    conn_dict: Dict[str, Any],
+    limit: int,
+) -> SampleRecordsResponse:
+    """Return sample records from an admin-registered system connection.
+
+    Dispatches to the appropriate sampling strategy based on *conn_type*.
+    Returns a ``SampleRecordsResponse`` with the sampled records (may be
+    empty if the underlying system is unreachable or the type is not yet
+    supported for live sampling).
+    """
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+    fmt = "json"
+
+    try:
+        if conn_type in _DATABASE_TYPES:
+            records, warnings = await _sample_postgres(conn_dict, limit)
+        elif conn_type in _NEO4J_TYPES:
+            records, warnings = await _sample_neo4j(conn_dict, limit)
+        elif conn_type in _API_TYPES:
+            records, warnings, fmt = await _sample_api_endpoint(conn_dict, conn_type, limit)
+        elif conn_type in _PLM_TYPES:
+            records, warnings, fmt = await _sample_plm_system(conn_dict, conn_type, limit)
+        elif conn_type in _FILE_STORAGE_TYPES:
+            records, warnings, fmt = _sample_file_storage(conn_dict, conn_type, limit)
+        else:
+            warnings.append(
+                f"Live sampling is not yet supported for connection type '{conn_type}'. "
+                "Discovery will use synthetic sample data."
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Sampling failed for %s (%s): %s", source_id, conn_type, exc, exc_info=True)
+        warnings.append(f"Sampling failed: {str(exc)}")
+
+    return SampleRecordsResponse(
+        source_id=source_id,
+        source_type=conn_type,
+        count=len(records),
+        format=fmt,
+        records=records,
+        warnings=warnings,
+    )
+
+
+async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
+    """Sample rows from a PostgreSQL / SQL database connection."""
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+
+    try:
+        import psycopg  # type: ignore
+    except ImportError:
+        warnings.append("psycopg driver not installed — cannot sample SQL database")
+        return records, warnings
+
+    host = conn.get("host", "localhost")
+    port = conn.get("port", "5432")
+    database = conn.get("database", "postgres")
+    username = conn.get("username", "postgres")
+    password = conn.get("password", "")
+
+    conninfo = (
+        f"host={host} port={port} dbname={database} "
+        f"user={username} password={password} connect_timeout=10"
+    )
+
+    try:
+        with psycopg.connect(conninfo) as db_conn:
+            with db_conn.cursor() as cur:
+                # Discover the first user table to sample
+                cur.execute(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+                    "ORDER BY table_name LIMIT 1"
+                )
+                row = cur.fetchone()
+                if not row:
+                    warnings.append("No public tables found in database")
+                    return records, warnings
+
+                table_name = row[0]
+                # Use quoted identifier to avoid SQL injection
+                cur.execute(
+                    f'SELECT * FROM "{table_name}" LIMIT %s',  # noqa: S608
+                    (limit,),
+                )
+                columns = [desc[0] for desc in cur.description]
+                for db_row in cur.fetchall():
+                    records.append(dict(zip(columns, db_row)))
+
+                warnings.append(f"Sampled from table: {table_name}")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"SQL sampling error: {str(exc)}")
+
+    return records, warnings
+
+
+async def _sample_neo4j(conn: Dict[str, Any], limit: int) -> tuple:
+    """Sample nodes from a Neo4j database."""
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+
+    uri = conn.get("uri") or conn.get("connection_string") or (
+        f"neo4j://{conn.get('host', 'localhost')}:{conn.get('port', '7687')}"
+    )
+    username = conn.get("username", "neo4j")
+    password = conn.get("password", "")
+    database = conn.get("database", "neo4j")
+
+    try:
+        driver = neo4j.AsyncGraphDatabase.driver(uri, auth=(username, password))
+        try:
+            async with driver.session(database=database) as session:
+                result = await session.run(
+                    "MATCH (n) RETURN properties(n) AS props LIMIT $lim",
+                    lim=limit,
+                )
+                async for record in result:
+                    props = record["props"]
+                    if isinstance(props, dict):
+                        records.append(props)
+        finally:
+            await driver.close()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"Neo4j sampling error: {str(exc)}")
+
+    return records, warnings
+
+
+async def _sample_api_endpoint(
+    conn: Dict[str, Any], api_type: str, limit: int
+) -> tuple:
+    """Sample records from a REST / OData / GraphQL endpoint."""
+    import httpx  # noqa: E402
+
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+    fmt = "json"
+
+    extra = conn.get("extra_options") or {}
+    endpoint_url = (extra.get("endpoint_url") or conn.get("endpoint") or "").strip()
+    if not endpoint_url:
+        warnings.append("endpoint_url is required for API sampling")
+        return records, warnings, fmt
+
+    auth_method = (extra.get("auth_method") or "none").lower()
+    headers: Dict[str, str] = {"Accept": "application/json"}
+
+    # Custom headers
+    try:
+        custom_hdr = extra.get("custom_headers")
+        if custom_hdr and isinstance(custom_hdr, str):
+            headers.update(json.loads(custom_hdr))
+    except Exception:
+        pass
+
+    auth = None
+    if auth_method == "basic":
+        auth = httpx.BasicAuth(conn.get("username", ""), conn.get("password", ""))
+    elif auth_method in ("bearer", "api_key"):
+        token = conn.get("password", "")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+    # OData: append $top; GraphQL: just GET the endpoint
+    url = endpoint_url
+    if api_type == "odata" and "$top" not in url.lower():
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}$top={limit}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+            if api_type == "graphql":
+                # For GraphQL, POST an introspection-like query for first N records.
+                # Without knowing the schema we send a generic query; the user may
+                # need to configure the object_types/query in extra_options.
+                graphql_query = extra.get("query") or '{ __schema { types { name } } }'
+                resp = await client.post(
+                    url,
+                    json={"query": graphql_query},
+                    headers=headers,
+                    auth=auth,
+                )
+            else:
+                resp = await client.get(url, headers=headers, auth=auth)
+
+        if resp.status_code >= 400:
+            warnings.append(f"API returned HTTP {resp.status_code}")
+            return records, warnings, fmt
+
+        body = resp.json()
+
+        # Normalise response: many APIs wrap results in value/data/results/items
+        if isinstance(body, list):
+            records = body[:limit]
+        elif isinstance(body, dict):
+            for key in ("value", "data", "results", "items", "records", "d"):
+                candidate = body.get(key)
+                if isinstance(candidate, list):
+                    records = candidate[:limit]
+                    break
+            if not records:
+                # GraphQL nested: data -> <typename> -> [...]
+                data = body.get("data")
+                if isinstance(data, dict):
+                    for v in data.values():
+                        if isinstance(v, list):
+                            records = v[:limit]
+                            break
+            if not records:
+                # Return the single object as a one-record result
+                records = [body]
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"API sampling error: {str(exc)}")
+
+    return records, warnings, fmt
+
+
+async def _sample_plm_system(
+    conn: Dict[str, Any], plm_type: str, limit: int
+) -> tuple:
+    """Sample records from a PLM system (Teamcenter, Windchill, etc.)."""
+    import httpx  # noqa: E402
+
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+    fmt = "json"
+
+    extra = conn.get("extra_options") or {}
+    server_url = (extra.get("server_url") or "").strip()
+    if not server_url:
+        warnings.append("server_url is required for PLM sampling")
+        return records, warnings, fmt
+
+    username = conn.get("username", "")
+    password = conn.get("password", "")
+    auth_method = (extra.get("auth_method") or "basic").lower()
+    api_version = extra.get("api_version", "")
+    object_types = extra.get("object_types", "")
+
+    auth = None
+    headers: Dict[str, str] = {"Accept": "application/json"}
+
+    if auth_method == "basic" and username:
+        auth = httpx.BasicAuth(username, password)
+    elif auth_method == "bearer" and password:
+        headers["Authorization"] = f"Bearer {password}"
+
+    # Build a type-specific sample endpoint.
+    # These are best-effort defaults; actual PLM APIs vary by version/config.
+    search_path = ""
+    if plm_type == "teamcenter":
+        obj_type = object_types or "Item"
+        search_path = f"/internal/aws2/query?searchString=*&maxToReturn={limit}&typeOfSearch=QUICK_SEARCH&typesToInclude={obj_type}"
+        if api_version:
+            search_path = f"/tc/{api_version}{search_path}"
+    elif plm_type == "windchill":
+        obj_type = object_types or "wt.part.WTPart"
+        search_path = f"/Windchill/servlet/odata/v6/ProdMgmt/Parts?$top={limit}"
+    elif plm_type == "3dexperience":
+        search_path = f"/resources/v1/modeler/dseng/dseng:EngItem/search?$top={limit}"
+    elif plm_type == "aras":
+        obj_type = object_types or "Part"
+        search_path = f"/server/odata/{obj_type}?$top={limit}"
+    elif plm_type == "codebeamer":
+        search_path = f"/api/v3/items/query?page=1&pageSize={limit}"
+    elif plm_type == "enovia":
+        search_path = f"/resources/v1/modeler/dseng/dseng:EngItem/search?$top={limit}"
+
+    url = server_url.rstrip("/") + search_path
+
+    try:
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+            resp = await client.get(url, headers=headers, auth=auth)
+
+        if resp.status_code >= 400:
+            warnings.append(f"PLM API returned HTTP {resp.status_code}")
+            return records, warnings, fmt
+
+        body = resp.json()
+
+        # Normalise: PLM APIs wrap items in various keys
+        if isinstance(body, list):
+            records = body[:limit]
+        elif isinstance(body, dict):
+            for key in ("member", "objects", "data", "value", "results",
+                        "items", "searchResults", "modelObjects"):
+                candidate = body.get(key)
+                if isinstance(candidate, list):
+                    records = candidate[:limit]
+                    break
+            if not records:
+                records = [body]
+
+        warnings.append(f"Sampled {len(records)} records from {plm_type} ({url})")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"PLM sampling error ({plm_type}): {str(exc)}")
+
+    return records, warnings, fmt
+
+
+def _sample_file_storage(
+    conn: Dict[str, Any], conn_type: str, limit: int
+) -> tuple:
+    """Sample records from file-based storage connections (S3, Azure Blob, local folder)."""
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+    fmt = "unknown"
+
+    extra = conn.get("extra_options") or {}
+
+    if conn_type in ("local_folder",):
+        folder = (extra.get("folder_path") or conn.get("host") or "").strip()
+        if not folder:
+            warnings.append("folder_path is required for local folder sampling")
+            return records, warnings, fmt
+        folder_path = Path(folder)
+        if not _is_under_allowed_root(folder_path):
+            warnings.append("Local folder path is outside allowed data directories")
+            return records, warnings, fmt
+        # Find the first parseable file
+        for ext in ("*.csv", "*.json", "*.xml"):
+            files = sorted(folder_path.glob(ext))
+            if files:
+                target = files[0]
+                try:
+                    content = target.read_bytes()[:512 * 1024]
+                    fmt, records = _parse_records(content, name_hint=target.name, limit=limit)
+                    warnings.append(f"Sampled from: {target.name}")
+                except Exception as exc:  # pylint: disable=broad-exception-caught
+                    warnings.append(f"Error reading {target.name}: {str(exc)}")
+                break
+        if not records:
+            warnings.append("No parseable files found in folder")
+
+    elif conn_type in ("s3", "aws_s3"):
+        try:
+            import boto3  # type: ignore
+        except ImportError:
+            warnings.append("boto3 not installed — cannot sample S3")
+            return records, warnings, fmt
+
+        bucket = (extra.get("bucket") or "").strip()
+        key = (extra.get("object_key") or "").strip()
+        if not bucket:
+            warnings.append("bucket is required for S3 sampling")
+            return records, warnings, fmt
+        if not key:
+            # List first object and sample it
+            try:
+                s3_kw: Dict[str, Any] = {}
+                region = (extra.get("region") or "").strip()
+                if region:
+                    s3_kw["region_name"] = region
+                ak = (extra.get("access_key_id") or "").strip()
+                sk = (extra.get("secret_access_key") or "").strip()
+                if ak and sk:
+                    s3_kw["aws_access_key_id"] = ak
+                    s3_kw["aws_secret_access_key"] = sk
+                s3 = boto3.client("s3", **s3_kw)
+                listing = s3.list_objects_v2(Bucket=bucket, MaxKeys=5)
+                contents = listing.get("Contents", [])
+                for obj_meta in contents:
+                    candidate_key = obj_meta.get("Key", "")
+                    if candidate_key.lower().endswith((".csv", ".json")):
+                        key = candidate_key
+                        break
+                if not key and contents:
+                    key = contents[0].get("Key", "")
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                warnings.append(f"S3 listing error: {str(exc)}")
+                return records, warnings, fmt
+
+        if key:
+            try:
+                s3_kw2: Dict[str, Any] = {}
+                region = (extra.get("region") or "").strip()
+                if region:
+                    s3_kw2["region_name"] = region
+                ak = (extra.get("access_key_id") or "").strip()
+                sk = (extra.get("secret_access_key") or "").strip()
+                if ak and sk:
+                    s3_kw2["aws_access_key_id"] = ak
+                    s3_kw2["aws_secret_access_key"] = sk
+                s3 = boto3.client("s3", **s3_kw2)
+                obj = s3.get_object(Bucket=bucket, Key=key)
+                content = obj["Body"].read(512 * 1024)
+                fmt, records = _parse_records(content, name_hint=key, limit=limit)
+                warnings.append(f"Sampled from s3://{bucket}/{key}")
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                warnings.append(f"S3 read error: {str(exc)}")
+
+    elif conn_type in ("azure_blob", "azure"):
+        cs = (conn.get("connection_string") or "").strip()
+        container = (extra.get("container_name") or "").strip()
+        blob = (extra.get("blob_name") or "").strip()
+        if not cs or not container:
+            warnings.append("connection_string and container_name are required for Azure Blob sampling")
+            return records, warnings, fmt
+        try:
+            from azure.storage.blob import BlobServiceClient  # type: ignore
+        except ImportError:
+            warnings.append("azure-storage-blob not installed")
+            return records, warnings, fmt
+
+        try:
+            service = BlobServiceClient.from_connection_string(cs)
+            if not blob:
+                container_client = service.get_container_client(container)
+                for b in container_client.list_blobs(results_per_page=5):
+                    if b.name.lower().endswith((".csv", ".json")):
+                        blob = b.name
+                        break
+                if not blob:
+                    warnings.append("No parseable blobs found in container")
+                    return records, warnings, fmt
+
+            blob_client = service.get_blob_client(container=container, blob=blob)
+            content = blob_client.download_blob().readall()[:512 * 1024]
+            fmt, records = _parse_records(content, name_hint=blob, limit=limit)
+            warnings.append(f"Sampled from {container}/{blob}")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            warnings.append(f"Azure Blob sampling error: {str(exc)}")
+
+    else:
+        warnings.append(f"File storage sampling not implemented for: {conn_type}")
+
+    return records, warnings, fmt
+
+
 @router.get(
     "/{source_id}/sample",
     response_model=SampleRecordsResponse,
@@ -180,21 +626,30 @@ async def get_data_source_sample(
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
-    # Handle System Connections
+    # Handle System Connections (registered via Admin Configuration Center)
     if source_id.startswith("conn_"):
         conn_id = source_id[5:]
         conn = db.get(ConnectionConfig, conn_id)
         if conn is None:
             raise HTTPException(status_code=404, detail="System connection not found")
-        
-        return SampleRecordsResponse(
-            source_id=source_id,
-            source_type=conn.connection_type,
-            count=0,
-            format="database",
-            records=[],
-            warnings=["Sampling not supported for system connections via this endpoint. Use Schema Discovery."]
-        )
+
+        conn_type = (conn.connection_type or "").lower().strip()
+        extra = conn.extra_options if isinstance(conn.extra_options, dict) else {}
+
+        # Build a unified connection dict that downstream helpers can consume
+        conn_dict: Dict[str, Any] = {
+            "host": conn.host,
+            "port": conn.port,
+            "database": conn.database,
+            "username": conn.username,
+            "password": conn.password,
+            "connection_string": conn.connection_string,
+            "extra_options": extra,
+            # Also flatten common extra fields for backward compatibility
+            **{k: v for k, v in extra.items() if isinstance(v, str)},
+        }
+
+        return await _sample_system_connection(source_id, conn_type, conn_dict, limit)
 
     record = db.get(DataSourceConfigRecord, source_id)
     if record is None:
@@ -376,7 +831,7 @@ class DataSourceConnection(BaseModel):
 class DataSource(BaseModel):
     id: Optional[str] = None
     name: str
-    type: str = Field(..., description="Type of data source: database, neo4j, mongodb, api, file, etc.")
+    type: str = Field(..., description="Type of data source: database, neo4j, api, file, etc.")
     connection: DataSourceConnection
     description: Optional[str] = ""
     status: str = "inactive"
@@ -865,8 +1320,6 @@ async def _test_connection(source: Dict) -> TestConnectionResponse:
             return await _test_database_connection(connection)
         elif source_type == 'postgres':
             return await _test_postgres_connection(connection)
-        elif source_type == 'mongodb':
-            return await _test_mongodb_connection(connection)
         elif source_type == 'api':
             return await _test_api_connection(connection)
         elif source_type == 'file':
@@ -977,69 +1430,6 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
         return TestConnectionResponse(
             success=False,
             message=f"PostgreSQL connection failed: {str(e)}"
-        )
-
-async def _test_mongodb_connection(connection: Dict) -> TestConnectionResponse:
-    """Test MongoDB connection"""
-    try:
-        required_fields = ['host', 'database']
-        missing_fields = [field for field in required_fields if not connection.get(field)]
-        
-        if missing_fields:
-            return TestConnectionResponse(
-                success=False,
-                message=f"Missing required fields: {', '.join(missing_fields)}"
-            )
-        
-        host = connection.get('host', 'localhost')
-        port = connection.get('port', 27017)
-        database = connection.get('database')
-        username = connection.get('username')
-        password = connection.get('password')
-        
-        # Build MongoDB URI
-        if username and password:
-            from urllib.parse import quote_plus
-            uri = f"mongodb://{quote_plus(username)}:{quote_plus(password)}@{host}:{port}/{database}"
-        else:
-            uri = f"mongodb://{host}:{port}/{database}"
-        
-        # Test connection using pymongo
-        try:
-            from pymongo import MongoClient
-            
-            client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-            # Force a connection attempt
-            client.admin.command('ping')
-            client.close()
-            
-            return TestConnectionResponse(
-                success=True,
-                message="MongoDB connection successful",
-                details={"host": host, "database": database}
-            )
-        except ImportError:
-            # pymongo not installed - try basic TCP test
-            import socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            try:
-                sock.connect((host, int(port)))
-                sock.close()
-                return TestConnectionResponse(
-                    success=True,
-                    message="MongoDB server is reachable (pymongo not installed for full test)",
-                    details={"host": host, "port": port}
-                )
-            except (socket.error, socket.timeout) as sock_err:
-                return TestConnectionResponse(
-                    success=False,
-                    message=f"Cannot reach MongoDB server: {str(sock_err)}"
-                )
-    except Exception as e:
-        return TestConnectionResponse(
-            success=False,
-            message=f"MongoDB connection failed: {str(e)}"
         )
 
 async def _test_api_connection(connection: Dict) -> TestConnectionResponse:
@@ -1359,12 +1749,6 @@ async def get_supported_types():
             "fields": ["uri", "username", "password", "database"],
             "default_port": "7687",
             "description": "Neo4j graph database"
-        },
-        "mongodb": {
-            "name": "MongoDB",
-            "fields": ["host", "port", "database", "username", "password"],
-            "default_port": "27017",
-            "description": "MongoDB document database"
         },
         "api": {
             "name": "REST API",

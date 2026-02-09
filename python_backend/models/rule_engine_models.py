@@ -25,6 +25,7 @@ class RuleLevel(str, Enum):
     ATTRIBUTE = "attribute"      # Level 1: Single field
     ENTITY = "entity"            # Level 2: Row/Object
     RELATIONSHIP = "relationship" # Level 3: Graph/BOM
+    CROSS_ENTITY = "cross_entity" # Level 4: Cross-entity validation
 
 
 class RuleSeverity(str, Enum):
@@ -336,7 +337,7 @@ class QuarantineRecord(Base):
     
     id = Column(String(64), primary_key=True)
     rule_execution_id = Column(String(64), ForeignKey("rule_executions.id", ondelete="SET NULL"), nullable=True)
-    rule_id = Column(String(64), nullable=False)
+    rule_id = Column(String(64), ForeignKey("rules.id", ondelete="SET NULL"), nullable=True)
     
     # Source information
     source_table = Column(String(128), nullable=False)
@@ -354,6 +355,9 @@ class QuarantineRecord(Base):
     resolved_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    rule = relationship("Rule", foreign_keys=[rule_id])
     
     __table_args__ = (
         Index("idx_quarantine_status", "status"),

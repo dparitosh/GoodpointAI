@@ -551,7 +551,11 @@ class ConnectionConfigUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     use_ssl: Optional[bool] = None
+    ssl_cert_path: Optional[str] = None
     pool_size: Optional[int] = None
+    max_overflow: Optional[int] = None
+    pool_timeout: Optional[int] = None
+    extra_options: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
     is_default: Optional[bool] = None
 

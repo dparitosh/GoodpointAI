@@ -87,10 +87,14 @@ const DEFAULT_CONFIG = {
     PIPELINE_STATUS: (pipelineId) => `/api/pipelines/${pipelineId}/status`,
     PIPELINE_LOGS: (pipelineId) => `/api/pipelines/${pipelineId}/logs`,
     
-    // Migration & Mapping
-    MIGRATION_PLANS: '/api/migration/plans',
+    // Migration & Mapping (Advanced Migration Engine)
+    MIGRATION_PLANS: '/api/migration/plans',  // Legacy compat — prefer MIGRATION_ADVANCED_*
     MIGRATION_EXECUTE: (planId) => `/api/migration/plans/${planId}/execute`,
     MIGRATION_STATUS: (planId) => `/api/migration/plans/${planId}/status`,
+    MIGRATION_ADVANCED_START: '/api/migration/advanced/start',
+    MIGRATION_ADVANCED_STATUS: (sessionId) => `/api/migration/advanced/${sessionId}`,
+    MIGRATION_ADVANCED_EVENTS: (sessionId) => `/api/migration/advanced/${sessionId}/events`,
+    MIGRATION_ADVANCED_HISTORY: (sessionId) => `/api/migration/advanced/${sessionId}/history`,
     MAPPINGS: '/api/mappings',
     MAPPING_VALIDATE: (mappingId) => `/api/mappings/${mappingId}/validate`,
     MAPPING_TEMPLATES: '/api/mappings/templates',

@@ -10,8 +10,11 @@ Write-Host "Starting Chat Coordinator Agent Service..." -ForegroundColor Cyan
 $env:PYTHONPATH = "$repoRoot"
 $env:GRAPH_TRACE_LOAD_DOTENV = "true"
 
+$venvPython = Join-Path $repoRoot ".venv" "Scripts" "python.exe"
+if (-not (Test-Path $venvPython)) { $venvPython = "python" }
+
 try {
-    python -m agent_services.chat_coordinator.main
+    & $venvPython -m agent_services.chat_coordinator.main
 }
 catch {
     Write-Host "Error starting Chat Coordinator Agent: $_" -ForegroundColor Red

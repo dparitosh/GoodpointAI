@@ -219,12 +219,10 @@ async def get_migration_plans(
 ):
     """Get all migration plans.
 
-    This feature is intentionally not implemented here (no mock/demo behavior).
+    Legacy stub — returns empty list. Use /api/migration/advanced/* for real migrations.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="Migration plans are not implemented in this service. Configure a real migration engine/integration.",
-    )
+    return {"items": [], "total": 0, "skip": skip, "limit": limit,
+            "message": "Legacy endpoint. Use /api/migration/advanced/start for new migrations."}
 
 @router.post("/migration/plans")
 async def create_migration_plan(plan: MigrationPlan):

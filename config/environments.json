@@ -3,8 +3,8 @@
     "debug": true,
     "log_level": "DEBUG",
     "enable_profiling": true,
-    "frontend_url": "http://localhost:5174",
-    "backend_url": "http://localhost:8000"
+    "frontend_url": "http://localhost:5173",
+    "backend_url": "http://localhost:8011"
   },
   "staging": {
     "debug": false,

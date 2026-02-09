@@ -39,8 +39,8 @@ class DataAnalystAgent(AgentService):
         self.pg_host = "localhost" # Default, often overridden by env or DB URL
         self.pg_db = "graphtrace"
         self.pg_user = "postgres"
-        self.pg_pass = "password"
-        self.pg_port = 5432
+        self.pg_pass = os.getenv("POSTGRES_PASSWORD", "")
+        self.pg_port = int(os.getenv("POSTGRES_PORT", "5433"))
         
         # Parse DATABASE_URL if present
         db_url = os.getenv("DATABASE_URL")

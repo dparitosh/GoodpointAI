@@ -702,7 +702,6 @@ function ConnectionForm({ connection, onChange }) {
               <option value="neo4j">Neo4j</option>
               <option value="opensearch">OpenSearch</option>
               <option value="redis">Redis</option>
-              <option value="mongodb">MongoDB</option>
             </optgroup>
             <optgroup label="Cloud Storage">
               <option value="s3">AWS S3</option>
@@ -740,6 +739,16 @@ function ConnectionForm({ connection, onChange }) {
         </div>
       </div>
 
+      <div className="form-group">
+        <label>Description (optional)</label>
+        <input 
+          type="text" 
+          value={connection.description || ''} 
+          onChange={e => onChange({ ...connection, description: e.target.value })}
+          placeholder="Brief description of this connection"
+        />
+      </div>
+
       {isDbLike && (
         <>
           <div className="form-row">
@@ -757,7 +766,7 @@ function ConnectionForm({ connection, onChange }) {
               <input 
                 type="number" 
                 value={connection.port || ''} 
-                onChange={e => onChange({ ...connection, port: parseInt(e.target.value) || '' })}
+                onChange={e => onChange({ ...connection, port: e.target.value ? parseInt(e.target.value, 10) || null : null })}
                 placeholder="5432"
               />
             </div>
@@ -788,6 +797,24 @@ function ConnectionForm({ connection, onChange }) {
               value={connection.password || ''} 
               onChange={e => onChange({ ...connection, password: e.target.value })}
             />
+          </div>
+          <div className="form-group">
+            <label>Connection String (optional — overrides host/port/database if set)</label>
+            <input 
+              type="text" 
+              value={connection.connection_string || ''} 
+              onChange={e => onChange({ ...connection, connection_string: e.target.value })}
+              placeholder={type === 'postgres' ? 'postgresql://user:pass@host:5432/db' : type === 'neo4j' ? 'neo4j://host:7687' : type === 'redis' ? 'redis://host:6379' : ''}
+            />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Use SSL</label>
+              <select value={connection.use_ssl ? 'true' : 'false'} onChange={e => onChange({ ...connection, use_ssl: e.target.value === 'true' })}>
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
           </div>
         </>
       )}
@@ -1407,6 +1434,13 @@ export default function AdminConfigManager() {
     setModalOpen(true);
   };
 
+  // Auto-generate a slug id from a name string
+  const generateId = (name, prefix = '') => {
+    const slug = (name || 'item').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const suffix = Date.now().toString(36);
+    return prefix ? `${prefix}_${slug}_${suffix}` : `${slug}_${suffix}`;
+  };
+
   // Save item
   const handleSave = async () => {
     try {
@@ -1414,21 +1448,45 @@ export default function AdminConfigManager() {
       
       method = isCreating ? 'POST' : 'PUT';
 
+      // For new items, auto-generate id if not already set
+      const payload = { ...editItem };
+      if (isCreating && !payload.id) {
+        switch (modalType) {
+          case 'connection':
+            payload.id = generateId(payload.name || payload.connection_type, 'conn');
+            break;
+          case 'llm':
+            payload.id = generateId(payload.name || payload.provider, 'llm');
+            break;
+          case 'embedding':
+            payload.id = generateId(payload.name || payload.provider, 'emb');
+            break;
+          case 'setting':
+            payload.id = payload.key || generateId(payload.category, 'cfg');
+            break;
+          case 'flag':
+            payload.id = generateId(payload.name, 'flag');
+            break;
+          default:
+            payload.id = generateId('item');
+        }
+      }
+
       switch (modalType) {
         case 'llm':
-          endpoint = isCreating ? `${API_BASE}/llm-providers` : `${API_BASE}/llm-providers/${editItem.id}`;
+          endpoint = isCreating ? `${API_BASE}/llm-providers` : `${API_BASE}/llm-providers/${payload.id}`;
           break;
         case 'embedding':
-          endpoint = isCreating ? `${API_BASE}/embedding-models` : `${API_BASE}/embedding-models/${editItem.id}`;
+          endpoint = isCreating ? `${API_BASE}/embedding-models` : `${API_BASE}/embedding-models/${payload.id}`;
           break;
         case 'connection':
-          endpoint = isCreating ? `${API_BASE}/connections` : `${API_BASE}/connections/${editItem.id}`;
+          endpoint = isCreating ? `${API_BASE}/connections` : `${API_BASE}/connections/${payload.id}`;
           break;
         case 'setting':
-          endpoint = isCreating ? `${API_BASE}/system` : `${API_BASE}/system/${editItem.id}`;
+          endpoint = isCreating ? `${API_BASE}/system` : `${API_BASE}/system/${payload.id}`;
           break;
         case 'flag':
-          endpoint = isCreating ? `${API_BASE}/feature-flags` : `${API_BASE}/feature-flags/${editItem.id}`;
+          endpoint = isCreating ? `${API_BASE}/feature-flags` : `${API_BASE}/feature-flags/${payload.id}`;
           break;
         default:
           return;
@@ -1437,7 +1495,7 @@ export default function AdminConfigManager() {
       const res = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editItem)
+        body: JSON.stringify(payload)
       });
       
       if (!res.ok) {

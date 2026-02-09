@@ -21,61 +21,43 @@ node_modules/
 # Python virtualenv
 .venv/
 python_backend/venv/
-agentic-restored/python_backend/venv/
 venv/
 
 # Env files (local-only)
 .env
 e2etraceapp/.env
 python_backend/.env
-agentic-restored/e2etraceapp/.env
-agentic-restored/python_backend/.env
 
 # Logs
 logs/
 python_backend/logs/
-agentic-restored/logs/
-agentic-restored/python_backend/logs/
 
 # Temporary/runtime data created by the backend
 python_backend/mapping_rules.json
 python_backend/mapping_templates.json
-agentic-restored/python_backend/mapping_rules.json
-agentic-restored/python_backend/mapping_templates.json
 
 # Frontend build artifacts
 e2etraceapp/dist/
 e2etraceapp/.vite/
-agentic-restored/e2etraceapp/dist/
-agentic-restored/e2etraceapp/.vite/
 
 # Runtime data
 python_backend/data/
-agentic-restored/python_backend/data/
 
 # Local-only encryption key (do not commit)
 python_backend/.graphtrace.encryption_key
-agentic-restored/python_backend/.graphtrace.encryption_key
 
 # Generated test artifacts
 e2etraceapp/test-results/junit.xml
 e2etraceapp/test-results/test-results.json
-agentic-restored/e2etraceapp/test-results/junit.xml
-agentic-restored/e2etraceapp/test-results/test-results.json
 
 # Playwright / UI test outputs
 e2etraceapp/playwright-report/
 e2etraceapp/test-results/
-agentic-restored/e2etraceapp/playwright-report/
-agentic-restored/e2etraceapp/test-results/
 test-results/
 
 # Local archive artifacts
 python_backend.7z
-agentic-restored/python_backend.7z
 
 # Local diagnostics outputs (generated)
 diagnostics/windows/*_report.*
 diagnostics/windows/audit_*_report.*
-agentic-restored/diagnostics/windows/*_report.*
-agentic-restored/diagnostics/windows/audit_*_report.*

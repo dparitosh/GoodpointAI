@@ -204,10 +204,6 @@ class DatabaseConfig(BaseSettings):
     neo4j_password: str = Field(default="", validation_alias="NEO4J_PASSWORD")
     neo4j_database: str = Field(default="neo4j", validation_alias="NEO4J_DATABASE")
     
-    # MongoDB
-    mongodb_uri: str = Field(default="mongodb://localhost:27017", validation_alias="MONGODB_URI")
-    mongodb_database: str = Field(default="graphtrace", validation_alias="MONGODB_DATABASE")
-    
     # Redis
     redis_host: str = Field(default="localhost", validation_alias="REDIS_HOST")
     redis_port: int = Field(default=6379, validation_alias="REDIS_PORT")
@@ -351,7 +347,7 @@ def get_database_config_with_db_fallback(db_type: str, db_session=None) -> dict:
     Get database connection configuration with database-first fallback.
     
     Args:
-        db_type: Type of database (postgresql, neo4j, mongodb, redis)
+        db_type: Type of database (postgresql, neo4j, redis)
         db_session: Optional SQLAlchemy session for database access.
     
     Returns:
@@ -383,12 +379,6 @@ def get_database_config_with_db_fallback(db_type: str, db_session=None) -> dict:
             "username": database_config.neo4j_user,
             "password": database_config.neo4j_password,
             "database": database_config.neo4j_database,
-        }
-    elif db_type == "mongodb":
-        return {
-            "type": "mongodb",
-            "uri": database_config.mongodb_uri,
-            "database": database_config.mongodb_database,
         }
     elif db_type == "redis":
         return {

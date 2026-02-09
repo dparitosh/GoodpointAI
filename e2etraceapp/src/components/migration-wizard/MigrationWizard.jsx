@@ -1591,7 +1591,6 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       database: 'fa-database',
       postgres: 'fa-database',
       neo4j: 'fa-project-diagram',
-      mongodb: 'fa-leaf',
       opensearch: 'fa-search',
       redis: 'fa-memory',
       api: 'fa-plug',

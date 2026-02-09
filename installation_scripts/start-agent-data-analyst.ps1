@@ -11,14 +11,12 @@ Write-Host "Starting Data Analyst Agent Service..." -ForegroundColor Cyan
 $env:PYTHONPATH = "$repoRoot"
 $env:GRAPH_TRACE_LOAD_DOTENV = "true"
 
-# Ensure we are using the python from the environment
-# Adjust this if using a specific venv
-# python agent_services/data_analyst/main.py
+$venvPython = Join-Path $repoRoot ".venv" "Scripts" "python.exe"
+if (-not (Test-Path $venvPython)) { $venvPython = "python" }
 
 try {
-    # Run the agent service
-    # We use python -m agent_services.data_analyst.main to resolve imports cleanly
-    python -m agent_services.data_analyst.main
+    # Run the agent service using the venv Python
+    & $venvPython -m agent_services.data_analyst.main
 }
 catch {
     Write-Host "Error starting Data Analyst Agent: $_" -ForegroundColor Red

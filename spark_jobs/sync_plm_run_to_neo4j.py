@@ -64,7 +64,7 @@ def _parse_database_url_to_jdbc(database_url: str) -> PgJdbcConfig:
     if not host:
         _die('DATABASE_URL missing host')
 
-    port = port or '5432'
+    port = port or '5433'
 
     jdbc_url = f"jdbc:postgresql://{host}:{port}/{dbname}"
     return PgJdbcConfig(url=jdbc_url, user=user, password=password)

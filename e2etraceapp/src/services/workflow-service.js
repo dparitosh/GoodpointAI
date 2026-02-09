@@ -118,7 +118,7 @@ class WorkflowService {
         },
         {
           name: 'Initialize Migration Plans',
-          endpoint: API_CONFIG.ENDPOINTS.MIGRATION_PLANS,
+          endpoint: API_CONFIG.ENDPOINTS.MIGRATION_ADVANCED_START || API_CONFIG.ENDPOINTS.MIGRATION_PLANS,
           options: { method: 'GET' }
         }
       ];

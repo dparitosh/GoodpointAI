@@ -44,7 +44,7 @@ Set-Location -Path "$repoRoot\python_backend"
 if (-not (Test-Path ".env")) {
     Write-Host "Note: .env file not found (OK). You can configure integrations in the UI." -ForegroundColor Yellow
     Write-Host "Example .env contents:" -ForegroundColor Yellow
-    Write-Host "DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/graphtrace" -ForegroundColor Cyan
+    Write-Host "DATABASE_URL=postgresql://postgres:password@127.0.0.1:5433/graphtrace" -ForegroundColor Cyan
     Write-Host "NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io" -ForegroundColor Cyan
     Write-Host "NEO4J_USER=neo4j" -ForegroundColor Cyan
     Write-Host "NEO4J_PASSWORD=your-password" -ForegroundColor Cyan

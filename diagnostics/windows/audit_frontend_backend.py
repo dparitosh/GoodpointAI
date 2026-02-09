@@ -9,7 +9,7 @@ Generates a report for:
 - Frontend navigation targets not defined in router
 
 Run from repo root (or anywhere):
-  python agentic-restored/diagnostics/windows/audit_frontend_backend.py
+  python diagnostics/windows/audit_frontend_backend.py
 
 Notes:
 - This is a best-effort static scan; dynamic endpoint construction may not be detected.

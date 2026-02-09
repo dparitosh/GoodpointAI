@@ -15,7 +15,7 @@ except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "SQLAlchemy is required but not installed in the current Python environment. "
             f"Python executable: {sys.executable}. "
-            "Install backend dependencies with: pip install -r agentic-restored/python_backend/requirements.txt "
+            "Install backend dependencies with: pip install -r python_backend/requirements.txt "
             "and ensure you are running the backend using the repo-root .venv."
         ) from exc
     raise
@@ -32,7 +32,7 @@ def _default_postgres_url() -> str:
     """
 
     host = (database_config.postgres_host or "localhost").strip() or "localhost"
-    port = int(database_config.postgres_port or 5432)
+    port = int(database_config.postgres_port or 5433)
     database = (database_config.postgres_database or "graphtrace").strip() or "graphtrace"
     user = (database_config.postgres_user or "postgres").strip() or "postgres"
     password = (database_config.postgres_password or "").strip()

@@ -62,5 +62,5 @@ This project uses **PostgreSQL** as the only supported persistence store.
 2. Edit `python_backend/.env` and set the connection:
 
 ```dotenv
-DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/graphtrace"
+DATABASE_URL="postgresql://postgres:password@127.0.0.1:5433/graphtrace"
 ```
