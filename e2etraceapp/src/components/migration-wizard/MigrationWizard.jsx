@@ -1589,11 +1589,30 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const getSourceIcon = (type) => {
     const icons = {
       database: 'fa-database',
+      postgres: 'fa-database',
       neo4j: 'fa-project-diagram',
       mongodb: 'fa-leaf',
+      opensearch: 'fa-search',
+      redis: 'fa-memory',
       api: 'fa-plug',
+      rest_api: 'fa-plug',
+      odata: 'fa-exchange-alt',
+      graphql: 'fa-code-branch',
       file: 'fa-file',
-      kafka: 'fa-stream'
+      local_folder: 'fa-folder-open',
+      s3: 'fa-cloud',
+      aws_s3: 'fa-cloud',
+      azure_blob: 'fa-cloud-upload-alt',
+      onedrive: 'fa-cloud',
+      google_drive: 'fa-cloud',
+      kafka: 'fa-stream',
+      teamcenter: 'fa-cogs',
+      '3dexperience': 'fa-cube',
+      windchill: 'fa-wind',
+      aras: 'fa-sitemap',
+      codebeamer: 'fa-tasks',
+      enovia: 'fa-cubes',
+      powerquery: 'fa-table'
     };
     return icons[type] || 'fa-database';
   };

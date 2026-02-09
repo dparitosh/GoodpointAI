@@ -877,6 +877,10 @@ async def _test_connection(source: Dict) -> TestConnectionResponse:
             return await _test_s3_connection(connection)
         elif source_type in {'azure_blob', 'azure'}:
             return await _test_azure_blob_connection(connection)
+        elif source_type in {'rest_api', 'odata', 'graphql'}:
+            return await _test_api_endpoint_connection(connection, source_type)
+        elif source_type in {'teamcenter', '3dexperience', 'windchill', 'aras', 'codebeamer', 'enovia'}:
+            return await _test_plm_connection(connection, source_type)
         else:
             return TestConnectionResponse(
                 success=False,
@@ -1237,6 +1241,105 @@ async def _test_azure_blob_connection(connection: Dict) -> TestConnectionRespons
     except Exception as e:  # pylint: disable=broad-exception-caught
         return TestConnectionResponse(success=False, message=f"Azure Blob connection failed: {str(e)}")
 
+
+async def _test_api_endpoint_connection(connection: Dict, api_type: str = "rest_api") -> TestConnectionResponse:
+    """Test REST / OData / GraphQL endpoint reachability."""
+    import httpx  # noqa: E402 — available in requirements.txt
+
+    extra = connection.get("extra_options") or {}
+    endpoint_url = (extra.get("endpoint_url") or connection.get("endpoint") or "").strip()
+    if not endpoint_url:
+        return TestConnectionResponse(success=False, message="endpoint_url is required")
+
+    auth_method = (extra.get("auth_method") or "none").lower()
+    headers: Dict[str, str] = {"Accept": "application/json"}
+
+    # Inject custom headers if provided
+    try:
+        custom = extra.get("custom_headers")
+        if custom and isinstance(custom, str):
+            import json as _json
+            headers.update(_json.loads(custom))
+    except Exception:
+        pass
+
+    # Auth
+    auth = None
+    if auth_method == "basic":
+        username = connection.get("username", "")
+        password = connection.get("password", "")
+        auth = httpx.BasicAuth(username, password)
+    elif auth_method in ("bearer", "api_key"):
+        token = connection.get("password", "")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+            resp = await client.get(endpoint_url, headers=headers, auth=auth)
+        if resp.status_code < 400:
+            return TestConnectionResponse(
+                success=True,
+                message=f"{api_type.upper()} endpoint reachable (HTTP {resp.status_code})",
+                details={"url": endpoint_url, "status": resp.status_code},
+            )
+        return TestConnectionResponse(
+            success=False,
+            message=f"Endpoint returned HTTP {resp.status_code}",
+            details={"url": endpoint_url, "status": resp.status_code},
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        return TestConnectionResponse(success=False, message=f"Cannot reach {api_type} endpoint: {str(e)}")
+
+
+async def _test_plm_connection(connection: Dict, plm_type: str) -> TestConnectionResponse:
+    """Test PLM system connection by probing the server URL."""
+    import httpx  # noqa: E402
+
+    extra = connection.get("extra_options") or {}
+    server_url = (extra.get("server_url") or "").strip()
+    if not server_url:
+        return TestConnectionResponse(success=False, message="server_url is required")
+
+    plm_labels = {
+        "teamcenter": "Siemens Teamcenter",
+        "3dexperience": "Dassault 3DEXPERIENCE",
+        "windchill": "PTC Windchill",
+        "aras": "Aras Innovator",
+        "codebeamer": "Codebeamer",
+        "enovia": "ENOVIA",
+    }
+    label = plm_labels.get(plm_type, plm_type)
+
+    username = connection.get("username", "")
+    password = connection.get("password", "")
+    auth_method = (extra.get("auth_method") or "basic").lower()
+    auth = None
+    headers: Dict[str, str] = {"Accept": "application/json"}
+
+    if auth_method == "basic" and username:
+        auth = httpx.BasicAuth(username, password)
+    elif auth_method == "bearer" and password:
+        headers["Authorization"] = f"Bearer {password}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+            resp = await client.get(server_url, headers=headers, auth=auth)
+        if resp.status_code < 400:
+            return TestConnectionResponse(
+                success=True,
+                message=f"{label} server is reachable (HTTP {resp.status_code})",
+                details={"url": server_url, "plm": plm_type, "status": resp.status_code},
+            )
+        return TestConnectionResponse(
+            success=False,
+            message=f"{label} responded with HTTP {resp.status_code}",
+            details={"url": server_url, "status": resp.status_code},
+        )
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        return TestConnectionResponse(success=False, message=f"Cannot reach {label}: {str(e)}")
+
+
 @router.get(
     "/types/supported",
     summary="Get Supported Data Source Types",
@@ -1268,6 +1371,21 @@ async def get_supported_types():
             "fields": ["endpoint", "api_key"],
             "description": "REST API endpoint"
         },
+        "rest_api": {
+            "name": "REST API",
+            "fields": ["endpoint_url", "auth_method", "username", "password", "custom_headers"],
+            "description": "Generic REST API endpoint with flexible auth"
+        },
+        "odata": {
+            "name": "OData API",
+            "fields": ["endpoint_url", "odata_version", "auth_method", "username", "password"],
+            "description": "OData V2/V4 service endpoint (SAP, Dynamics, etc.)"
+        },
+        "graphql": {
+            "name": "GraphQL API",
+            "fields": ["endpoint_url", "auth_method", "username", "password"],
+            "description": "GraphQL API endpoint"
+        },
         "file": {
             "name": "File System",
             "fields": ["file_path"],
@@ -1287,5 +1405,35 @@ async def get_supported_types():
             "name": "Azure Blob Storage",
             "fields": ["connection_string", "container_name", "blob_name"],
             "description": "Read files from Azure Blob Storage"
+        },
+        "teamcenter": {
+            "name": "Siemens Teamcenter",
+            "fields": ["server_url", "username", "password", "security_context", "api_version"],
+            "description": "Siemens Teamcenter PLM via SOA/REST gateway"
+        },
+        "3dexperience": {
+            "name": "Dassault 3DEXPERIENCE",
+            "fields": ["server_url", "username", "password", "security_context", "tenant"],
+            "description": "Dassault 3DEXPERIENCE platform (3DSpace, ENOVIA)"
+        },
+        "windchill": {
+            "name": "PTC Windchill",
+            "fields": ["server_url", "username", "password", "api_version"],
+            "description": "PTC Windchill PLM via OData/REST API"
+        },
+        "aras": {
+            "name": "Aras Innovator",
+            "fields": ["server_url", "username", "password", "database"],
+            "description": "Aras Innovator open-source PLM"
+        },
+        "codebeamer": {
+            "name": "Codebeamer (PTC)",
+            "fields": ["server_url", "username", "password", "api_version"],
+            "description": "PTC Codebeamer ALM/PLM via REST API"
+        },
+        "enovia": {
+            "name": "ENOVIA",
+            "fields": ["server_url", "username", "password", "security_context"],
+            "description": "Dassault ENOVIA collaborative platform"
         }
     }

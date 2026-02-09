@@ -697,16 +697,36 @@ function ConnectionForm({ connection, onChange }) {
           <label>Connection Type</label>
           <select value={connection.connection_type || ''} onChange={e => onChange({ ...connection, connection_type: e.target.value })}>
             <option value="">Select Type</option>
-            <option value="postgres">PostgreSQL</option>
-            <option value="neo4j">Neo4j</option>
-            <option value="opensearch">OpenSearch</option>
-            <option value="redis">Redis</option>
-            <option value="s3">AWS S3</option>
-            <option value="azure_blob">Azure Blob</option>
-            <option value="local_folder">Local Folder</option>
-            <option value="onedrive">OneDrive</option>
-            <option value="google_drive">Google Drive</option>
-            <option value="powerquery">PowerQuery Editor</option>
+            <optgroup label="Databases">
+              <option value="postgres">PostgreSQL</option>
+              <option value="neo4j">Neo4j</option>
+              <option value="opensearch">OpenSearch</option>
+              <option value="redis">Redis</option>
+              <option value="mongodb">MongoDB</option>
+            </optgroup>
+            <optgroup label="Cloud Storage">
+              <option value="s3">AWS S3</option>
+              <option value="azure_blob">Azure Blob Storage</option>
+              <option value="local_folder">Local Folder</option>
+              <option value="onedrive">OneDrive</option>
+              <option value="google_drive">Google Drive</option>
+            </optgroup>
+            <optgroup label="APIs">
+              <option value="rest_api">REST API</option>
+              <option value="odata">OData API</option>
+              <option value="graphql">GraphQL API</option>
+            </optgroup>
+            <optgroup label="PLM Systems">
+              <option value="teamcenter">Siemens Teamcenter</option>
+              <option value="3dexperience">Dassault 3DEXPERIENCE</option>
+              <option value="windchill">PTC Windchill</option>
+              <option value="aras">Aras Innovator</option>
+              <option value="codebeamer">Codebeamer (PTC)</option>
+              <option value="enovia">ENOVIA</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="powerquery">PowerQuery Editor</option>
+            </optgroup>
           </select>
         </div>
         <div className="form-group">
@@ -940,6 +960,200 @@ function ConnectionForm({ connection, onChange }) {
               type="password"
               value={connection.password || ''}
               onChange={e => onChange({ ...connection, password: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+
+      {['rest_api', 'odata', 'graphql'].includes(type) && (
+        <>
+          <div className="form-group">
+            <label>Endpoint URL</label>
+            <input
+              type="text"
+              value={extra.endpoint_url || ''}
+              onChange={e => updateExtra('endpoint_url', e.target.value)}
+              placeholder={type === 'odata' ? 'https://host/sap/opu/odata/sap/...' : type === 'graphql' ? 'https://host/graphql' : 'https://api.example.com/v1'}
+            />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Auth Method</label>
+              <select value={extra.auth_method || 'none'} onChange={e => updateExtra('auth_method', e.target.value)}>
+                <option value="none">None</option>
+                <option value="api_key">API Key</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="basic">Basic Auth</option>
+                <option value="oauth2">OAuth 2.0</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>{extra.auth_method === 'api_key' ? 'API Key' : extra.auth_method === 'bearer' ? 'Bearer Token' : 'Password / Secret'}</label>
+              <input
+                type="password"
+                value={connection.password || ''}
+                onChange={e => onChange({ ...connection, password: e.target.value })}
+              />
+            </div>
+          </div>
+          {extra.auth_method === 'basic' && (
+            <div className="form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                value={connection.username || ''}
+                onChange={e => onChange({ ...connection, username: e.target.value })}
+              />
+            </div>
+          )}
+          {extra.auth_method === 'oauth2' && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Token URL</label>
+                  <input
+                    type="text"
+                    value={extra.token_url || ''}
+                    onChange={e => updateExtra('token_url', e.target.value)}
+                    placeholder="https://auth.example.com/oauth/token"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Client ID</label>
+                  <input
+                    type="text"
+                    value={connection.username || ''}
+                    onChange={e => onChange({ ...connection, username: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Client Secret</label>
+                <input
+                  type="password"
+                  value={connection.password || ''}
+                  onChange={e => onChange({ ...connection, password: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>Scope (optional)</label>
+                <input
+                  type="text"
+                  value={extra.scope || ''}
+                  onChange={e => updateExtra('scope', e.target.value)}
+                  placeholder="read write"
+                />
+              </div>
+            </>
+          )}
+          {type === 'odata' && (
+            <div className="form-group">
+              <label>OData Version</label>
+              <select value={extra.odata_version || 'v4'} onChange={e => updateExtra('odata_version', e.target.value)}>
+                <option value="v2">V2</option>
+                <option value="v4">V4</option>
+              </select>
+            </div>
+          )}
+          <div className="form-group">
+            <label>Custom Headers (JSON, optional)</label>
+            <textarea
+              value={extra.custom_headers || ''}
+              onChange={e => updateExtra('custom_headers', e.target.value)}
+              placeholder='{"X-Custom-Header": "value"}'
+              rows={2}
+            />
+          </div>
+        </>
+      )}
+
+      {['teamcenter', '3dexperience', 'windchill', 'aras', 'codebeamer', 'enovia'].includes(type) && (
+        <>
+          <div className="form-group">
+            <label>{type === 'teamcenter' ? 'Teamcenter Server URL' : type === '3dexperience' ? '3DEXPERIENCE Platform URL' : type === 'windchill' ? 'Windchill Server URL' : type === 'aras' ? 'Aras Innovator URL' : type === 'codebeamer' ? 'Codebeamer Server URL' : 'ENOVIA Server URL'}</label>
+            <input
+              type="text"
+              value={extra.server_url || ''}
+              onChange={e => updateExtra('server_url', e.target.value)}
+              placeholder={type === 'teamcenter' ? 'https://tc-server:7001/tc' : type === '3dexperience' ? 'https://3dspace.example.com' : type === 'windchill' ? 'https://windchill.example.com/Windchill' : type === 'aras' ? 'https://aras.example.com/InnovatorServer' : type === 'codebeamer' ? 'https://codebeamer.example.com/cb' : 'https://enovia.example.com'}
+            />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                value={connection.username || ''}
+                onChange={e => onChange({ ...connection, username: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>Password</label>
+              <input
+                type="password"
+                value={connection.password || ''}
+                onChange={e => onChange({ ...connection, password: e.target.value })}
+              />
+            </div>
+          </div>
+          {(type === 'teamcenter' || type === '3dexperience' || type === 'enovia') && (
+            <div className="form-group">
+              <label>Security Context / Tenant</label>
+              <input
+                type="text"
+                value={extra.security_context || ''}
+                onChange={e => updateExtra('security_context', e.target.value)}
+                placeholder={type === 'teamcenter' ? 'dba' : 'VPLMAdmin.Company.Default'}
+              />
+            </div>
+          )}
+          <div className="form-row">
+            <div className="form-group">
+              <label>API Version (optional)</label>
+              <input
+                type="text"
+                value={extra.api_version || ''}
+                onChange={e => updateExtra('api_version', e.target.value)}
+                placeholder={type === 'teamcenter' ? '14.x' : type === 'windchill' ? '12.x' : ''}
+              />
+            </div>
+            <div className="form-group">
+              <label>Auth Method</label>
+              <select value={extra.auth_method || 'basic'} onChange={e => updateExtra('auth_method', e.target.value)}>
+                <option value="basic">Basic Auth</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="oauth2">OAuth 2.0</option>
+                <option value="sso">SSO / SAML</option>
+              </select>
+            </div>
+          </div>
+          {extra.auth_method === 'oauth2' && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Token URL</label>
+                <input
+                  type="text"
+                  value={extra.token_url || ''}
+                  onChange={e => updateExtra('token_url', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Client ID</label>
+                <input
+                  type="text"
+                  value={extra.client_id || ''}
+                  onChange={e => updateExtra('client_id', e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <div className="form-group">
+            <label>Default Object Types (comma-separated, optional)</label>
+            <input
+              type="text"
+              value={extra.object_types || ''}
+              onChange={e => updateExtra('object_types', e.target.value)}
+              placeholder="Part, Document, BOM, ChangeRequest"
             />
           </div>
         </>
