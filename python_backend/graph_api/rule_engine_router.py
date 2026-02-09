@@ -959,10 +959,22 @@ async def resolve_quarantine(
 @router.post("/validate-expression", summary="Validate rule expression")
 async def validate_expression(
     expression: str = Body(..., embed=True),
+    expression_type: str = Body(default="python", embed=True),
     test_data: dict = Body(default={}, embed=True)
 ):
     """Validate a rule expression against test data."""
     try:
+        # Today we only support validation of Python expressions.
+        # The UI may show other languages for future roadmap; fail fast with a clear message.
+        if (expression_type or "python").lower() != "python":
+            return {
+                "valid": False,
+                "result": None,
+                "error": f"Expression type '{expression_type}' is not supported for validation yet. Only 'python' is supported.",
+                "expression": expression,
+                "expression_type": expression_type,
+            }
+
         engine = RuleEngine()
         from services.rule_engine import RuleContext
         
@@ -973,14 +985,16 @@ async def validate_expression(
             "valid": success,
             "result": result if success else None,
             "error": error,
-            "expression": expression
+            "expression": expression,
+            "expression_type": expression_type,
         }
     except Exception as e:
         return {
             "valid": False,
             "result": None,
             "error": str(e),
-            "expression": expression
+            "expression": expression,
+            "expression_type": expression_type,
         }
 
 

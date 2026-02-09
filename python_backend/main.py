@@ -38,7 +38,6 @@ from graph_api.graphql_catalogue_router import router as graphql_catalogue_route
 from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
 from graph_api.agentic_router import router as agentic_router
 from graph_api.quality_router import router as quality_router
-from graph_api.agentic_graph_router import router as agentic_graph_router
 from graph_api.agentic_config_router import router as agentic_config_router
 from graph_api.plm_workflow_router import router as plm_workflow_router
 from graph_api.plm_etl_router import router as plm_etl_router
@@ -65,6 +64,7 @@ from routers.admin_config_router import router as admin_config_router
 
 from core.auth import auth_required, get_request_principal
 from core.config_store import get_encrypted_config_payload
+from services.mcp_client import MCPClient
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -189,7 +189,11 @@ async def request_timing_middleware(request: Request, call_next):
     if request.method == "GET" and request.url.path == "/health":
         db_ok = bool(getattr(app.state, "db_ok", False))
         neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
-        overall = "healthy" if (db_ok and neo4j_ok) else "degraded"
+        
+        # Check MCP Server Health
+        mcp_ok = await MCPClient().check_health()
+        
+        overall = "healthy" if (db_ok and neo4j_ok and mcp_ok) else "degraded"
         response = JSONResponse(
             status_code=200,
             content={
@@ -199,6 +203,7 @@ async def request_timing_middleware(request: Request, call_next):
                 "dependencies": {
                     "postgres": {"ok": db_ok},
                     "neo4j": {"ok": neo4j_ok},
+                    "mcp_server": {"ok": mcp_ok}
                 },
             },
         )
@@ -279,7 +284,6 @@ app.include_router(graphql_catalogue_router)
 app.include_router(neo4j_graphrag_router)
 app.include_router(agentic_router)
 app.include_router(quality_router)
-app.include_router(agentic_graph_router)
 app.include_router(agentic_config_router)
 app.include_router(plm_workflow_router)
 app.include_router(plm_etl_router)

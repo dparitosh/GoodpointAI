@@ -29,7 +29,7 @@ npm --version
 echo.
 
 REM Navigate to frontend directory
-cd /d "%~dp0agentic-restored\e2etraceapp"
+cd /d "%~dp0..\e2etraceapp"
 
 REM Check if .env file exists
 if not exist ".env" (

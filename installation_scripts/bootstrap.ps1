@@ -20,7 +20,7 @@ Assert-Command python "Install Python 3.11+ and ensure it's on PATH."
 Assert-Command node "Install Node.js 18+ (includes npm)."
 Assert-Command npm "Install Node.js 18+ (includes npm)."
 
-$root = $PSScriptRoot
+$root = Split-Path $PSScriptRoot -Parent
 
 # Keep a single shared venv at repo root so VS Code tasks and scripts run against
 # the same interpreter and installed packages.
@@ -45,7 +45,7 @@ function Ensure-Venv() {
 if (-not $SkipBackend) {
   Write-Host "[1/3] Backend: venv + deps + DB schema + seed" -ForegroundColor Cyan
   Ensure-Venv
-  Push-Location "$root\agentic-restored\python_backend"
+  Push-Location "$root\python_backend"
   try {
     & $venvPython -m pip install --upgrade pip
     & $venvPython -m pip install -r requirements.txt
@@ -92,7 +92,7 @@ if (-not $SkipBackend) {
 
 if (-not $SkipFrontend) {
   Write-Host "[2/3] Frontend: npm install" -ForegroundColor Cyan
-  Push-Location "$root\agentic-restored\e2etraceapp"
+  Push-Location "$root\e2etraceapp"
   try {
     npm install
   }
@@ -103,7 +103,7 @@ if (-not $SkipFrontend) {
 
 if ($RunDiagnostics) {
   Write-Host "[3/3] Diagnostics" -ForegroundColor Cyan
-  & "$root\agentic-restored\diagnostics\windows\diagnose-all.ps1"
+  & "$root\diagnostics\windows\diagnose-all.ps1"
 }
 
 Write-Host "Bootstrap complete." -ForegroundColor Green

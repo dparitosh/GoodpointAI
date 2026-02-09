@@ -8,8 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './conversational-search-ui.css';
-
-const API_BASE = 'http://localhost:8011/api/search';
+import API_CONFIG, { getFullUrl } from '../config/api-config';
 
 // Search mode configurations
 const SEARCH_MODES = {
@@ -281,7 +280,7 @@ function FileResultsTable({ results }) {
     if (result.url && result.url !== '#') return result.url;
     // Otherwise construct from source
     const filename = extractFileName(result.source);
-    return `http://localhost:8011/api/files/download/${encodeURIComponent(filename)}`;
+    return getFullUrl(API_CONFIG.ENDPOINTS.FILES_DOWNLOAD(filename));
   };
   
   return (
@@ -439,7 +438,7 @@ export default function ConversationalSearchUI({ onResultSelect: _onResultSelect
   
   // Check service health on mount
   useEffect(() => {
-    fetch(`${API_BASE}/health`)
+    fetch(getFullUrl(API_CONFIG.ENDPOINTS.SEARCH_HEALTH))
       .then(res => res.json())
       .then(data => setServiceHealth(data))
       .catch(() => setServiceHealth({ status: 'unknown' }));
@@ -462,7 +461,7 @@ export default function ConversationalSearchUI({ onResultSelect: _onResultSelect
     setMessages(prev => [...prev, userMessage]);
     
     try {
-      const response = await fetch(`${API_BASE}/query`, {
+      const response = await fetch(getFullUrl(API_CONFIG.ENDPOINTS.SEARCH_QUERY), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -553,14 +552,14 @@ export default function ConversationalSearchUI({ onResultSelect: _onResultSelect
         </div>
         <div className="header-status">
           {serviceHealth && (
-            <span className={`health-badge ${serviceHealth.status}`}>
-              <i className={`fas ${serviceHealth.status === 'healthy' ? 'fa-check-circle' : 'fa-exclamation-circle'}`} />
-              {serviceHealth.status}
+            <span className={`health-badge ${serviceHealth.status === 'healthy' && (!serviceHealth.opensearch?.available || !serviceHealth.graphrag?.available) ? 'degraded' : serviceHealth.status}`}>
+              <i className={`fas ${serviceHealth.status === 'healthy' && serviceHealth.opensearch?.available && serviceHealth.graphrag?.available ? 'fa-check-circle' : 'fa-exclamation-circle'}`} />
+              {serviceHealth.status === 'healthy' && (!serviceHealth.opensearch?.available || !serviceHealth.graphrag?.available) ? 'Degraded' : serviceHealth.status}
             </span>
           )}
-          {serviceHealth?.opensearch?.available && (
-            <span className="service-badge opensearch">
-              <i className="fas fa-search" /> OpenSearch
+          {serviceHealth?.opensearch?.available === false && (
+            <span className="service-badge error" title="OpenSearch Unavailable">
+              <i className="fas fa-exclamation-triangle" /> No Vector Search
             </span>
           )}
           {serviceHealth?.graphrag?.available && (

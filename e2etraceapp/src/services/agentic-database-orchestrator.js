@@ -99,7 +99,7 @@ class AgenticDatabaseOrchestrator extends AgenticOrchestrator {
   // Database Connection Management
   async getConnectionInfo(databaseType) {
     try {
-      const response = await agenticFetchWithRetry('/api/_data-sources');
+      const response = await agenticFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_SOURCES_LEGACY);
       const dataSources = await response.json();
       
       return dataSources.filter(source => 
@@ -113,7 +113,7 @@ class AgenticDatabaseOrchestrator extends AgenticOrchestrator {
 
   async testDatabaseConnection(sourceId) {
     try {
-      const response = await agenticFetchWithRetry(`/api/_data-sources/${sourceId}/test`, {
+      const response = await agenticFetchWithRetry(`${API_CONFIG.ENDPOINTS.DATA_SOURCES_LEGACY}/${sourceId}/test`, {
         method: 'POST'
       });
       return await response.json();
@@ -299,7 +299,7 @@ class AgenticDatabaseOrchestrator extends AgenticOrchestrator {
 
   async getDataSourceInfo(sourceId) {
     try {
-      const response = await agenticFetchWithRetry(`/api/_data-sources/${sourceId}`);
+      const response = await agenticFetchWithRetry(`${API_CONFIG.ENDPOINTS.DATA_SOURCES_LEGACY}/${sourceId}`);
       return await response.json();
     } catch (error) {
       console.error("Error:", error);
@@ -394,7 +394,7 @@ class AgenticDatabaseOrchestrator extends AgenticOrchestrator {
   // Get database compatibility information
   async getDatabaseCompatibilityInfo() {
     try {
-      const response = await agenticFetchWithRetry('/api/_data-sources/types/supported');
+      const response = await agenticFetchWithRetry(`${API_CONFIG.ENDPOINTS.DATA_SOURCES_LEGACY}/types/supported`);
       const supportedTypes = await response.json();
       
       return {

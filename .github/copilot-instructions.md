@@ -1,15 +1,17 @@
 # Copilot instructions for GoodpointAI (GraphTrace)
 
 ## Repo layout (use this as the source of truth)
-- **Primary app lives in `agentic-restored/`** (root-level `python_backend/` + `e2etraceapp/` are duplicates/legacy).
-- Backend: `agentic-restored/python_backend` (FastAPI + Postgres, optional Neo4j/OpenSearch)
-- Frontend: `agentic-restored/e2etraceapp` (React + Vite)
+- Backend: `python_backend/` (FastAPI + Postgres, optional Neo4j/OpenSearch)
+- Frontend: `e2etraceapp/` (React + Vite)
+- Installation scripts: `installation_scripts/` (bootstrap, start, stop)
+- Agent services: `agent_services/` (MCP-powered AI agents)
+- Documentation: `docs/` (Installation, User Guide, Architecture, App Guide)
 
 ## Big picture architecture
 - UI talks to backend via `/api/*` and `/health`.
-  - In dev, **Vite proxies** these routes to FastAPI (see `agentic-restored/e2etraceapp/vite.config.js`).
-  - API endpoints are centrally enumerated in `agentic-restored/e2etraceapp/src/config/api-config.js`.
-- Backend entrypoint is `agentic-restored/python_backend/main.py`:
+  - In dev, **Vite proxies** these routes to FastAPI (see `e2etraceapp/vite.config.js`).
+  - API endpoints are centrally enumerated in `e2etraceapp/src/config/api-config.js`.
+- Backend entrypoint is `python_backend/main.py`:
   - Routers are split across `graph_api/*_router.py` and `routers/*_router.py` and included into one `FastAPI()`.
   - Dependency readiness is tracked as `app.state.db_ok` / `app.state.neo4j_ok` (see `core/lifespan.py`), surfaced by `/health`.
 - **Postgres is the single source of truth** for persistence and admin configuration.
@@ -18,17 +20,17 @@
   - Most operator-facing settings are edited via the UI Admin page: `http://localhost:5173/#/admin`.
 
 ## Dev workflows (Windows-first)
-- Bootstrap/install: `./bootstrap.ps1` (repo root) or `agentic-restored/bootstrap.ps1`.
-- Run full stack: `./start-all.ps1` (or VS Code task “Start Full Stack (Frontend + Backend)”).
-- Backend manual: `python -m uvicorn --app-dir agentic-restored/python_backend main:app --reload --port 8011`.
-- Frontend manual: `cd agentic-restored/e2etraceapp && npm install && npm run dev -- --host 127.0.0.1 --port 5173`.
+- Bootstrap/install: `.\installation_scripts\bootstrap.ps1`.
+- Run full stack: `.\installation_scripts\start-all.ps1` (or VS Code task "Start Full Stack (Frontend + Backend)").
+- Backend manual: `python -m uvicorn --app-dir python_backend main:app --reload --port 8011`.
+- Frontend manual: `cd e2etraceapp && npm install && npm run dev -- --host 127.0.0.1 --port 5173`.
 - Tests:
-  - Backend: run pytest in `agentic-restored/python_backend` (VS Code task “Backend: Test (Pytest)”).
-  - Frontend: `npm test -- --run` in `agentic-restored/e2etraceapp` (Vitest; see `vitest.config.js`).
+  - Backend: run pytest in `python_backend` (VS Code task "Backend: Test (Pytest)").
+  - Frontend: `npm test -- --run` in `e2etraceapp` (Vitest; see `vitest.config.js`).
 
 ## Configuration rules that matter in this repo
 - Backend loads repo-local `.env` **only when** `GRAPH_TRACE_LOAD_DOTENV=true` (see `core/external_config.py`).
-- Keep `DATABASE_URL` correct in `agentic-restored/python_backend/.env` (Postgres required).
+- Keep `DATABASE_URL` correct in `python_backend/.env` (Postgres required).
 - Set `GRAPH_TRACE_CONFIG_ENCRYPTION_KEY` for decrypting DB-backed config.
   - If you changed the key and can’t decrypt old values: set `GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG=true` and run `python -m scripts.init_db_schema`.
 - Optional services:

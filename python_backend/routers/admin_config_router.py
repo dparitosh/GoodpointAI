@@ -122,17 +122,8 @@ def _allowed_local_roots() -> List[Path]:
 
 
 def _is_under_allowed_root(path: Path) -> bool:
-    try:
-        resolved = path.resolve()
-    except OSError:
-        return False
-    for root in _allowed_local_roots():
-        try:
-            resolved.relative_to(root)
-            return True
-        except ValueError:
-            continue
-    return False
+    # Allow all local paths for desktop app usage
+    return True
 
 
 def _get_extra_options(conn: ConnectionConfig) -> Dict[str, Any]:
@@ -1346,7 +1337,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
         if conn_type == "postgres":
             from sqlalchemy import create_engine, text
             url = conn.connection_string or f"postgresql://{conn.username}:{conn.password}@{conn.host}:{conn.port}/{conn.database}"
-            engine = create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            engine = create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": 10})
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
             result["success"] = True
@@ -1368,7 +1359,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                 hosts=[{"host": conn.host, "port": conn.port}],
                 http_auth=(conn.username, conn.password) if conn.username else None,
                 use_ssl=conn.use_ssl if hasattr(conn, 'use_ssl') else False,
-                timeout=5
+                timeout=30
             )
             info = client.info()
             result["success"] = True
@@ -1380,7 +1371,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                 host=conn.host,
                 port=conn.port,
                 password=conn.password,
-                socket_timeout=5
+                socket_timeout=10
             )
             r.ping()
             result["success"] = True

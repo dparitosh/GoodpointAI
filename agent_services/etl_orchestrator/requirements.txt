@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+httpx
+pydantic
+neo4j
+python-dotenv
+pandas
+sqlalchemy
+psycopg2-binary
+soda-core
+soda-core-postgres

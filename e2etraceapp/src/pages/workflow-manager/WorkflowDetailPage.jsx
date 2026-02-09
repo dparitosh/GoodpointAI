@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import API_CONFIG, { buildEndpoint } from '../../config/api-config';
 import { XStateVisualizer } from '../../components/xstate-visualizer/XStateVisualizer';
 import { LoadingSpinner, PageLoader, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './WorkflowDetailPage.css';
@@ -200,7 +201,7 @@ const WorkflowDetailPage = () => {
       setArchiveLoading(true);
       setArchiveError(null);
 
-      const res = await fetch(`/api/workflows/${workflowId}/archive?limit_reports=50`, { signal: controller.signal });
+      const res = await fetch(`${buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_ARCHIVE, { workflowId })}?limit_reports=50`, { signal: controller.signal });
       if (seq !== archiveSeqRef.current) return;
 
       if (!res.ok) {
@@ -289,7 +290,7 @@ const WorkflowDetailPage = () => {
     };
 
     const connect = (sid) => {
-      const url = buildWebSocketUrl(`/api/migration/advanced/ws/${encodeURIComponent(sid)}`);
+      const url = buildWebSocketUrl(buildEndpoint(API_CONFIG.ENDPOINTS.MIGRATION_WS, { sid }));
       let ws;
       try {
         ws = new WebSocket(url);
@@ -407,7 +408,7 @@ const WorkflowDetailPage = () => {
       // Retry briefly before declaring the workflow missing.
       let workflowRes;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        workflowRes = await fetch(`/api/workflows/${workflowId}`, { signal: controller.signal });
+        workflowRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS, { workflowId }), { signal: controller.signal });
         if (workflowRes.ok) break;
         if (workflowRes.status === 404 && attempt < 2) {
           await sleep(250 * (attempt + 1));
@@ -422,7 +423,7 @@ const WorkflowDetailPage = () => {
         
         // Load workflow-specific graph
         try {
-          const graphRes = await fetch(`/api/workflows/${workflowId}/graph`, { signal: controller.signal });
+          const graphRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_GRAPH, { workflowId }), { signal: controller.signal });
           if (!graphRes.ok) {
             throw new Error(`Workflow graph not available (${graphRes.status})`);
           }
@@ -444,11 +445,11 @@ const WorkflowDetailPage = () => {
           // Fallback to default PLM workflow if custom graph not available
           let fallbackGraph = null;
           try {
-            const availabilityRes = await fetch('/api/plm/workflow/availability', { signal: controller.signal });
+            const availabilityRes = await fetch(API_CONFIG.ENDPOINTS.PLM_AVAILABILITY, { signal: controller.signal });
             if (availabilityRes.ok) {
               const availability = await availabilityRes.json();
               if (availability?.available) {
-                const fallbackRes = await fetch('/api/plm/workflow', { signal: controller.signal });
+                const fallbackRes = await fetch(API_CONFIG.ENDPOINTS.PLM_WORKFLOW, { signal: controller.signal });
                 if (fallbackRes.ok) {
                   fallbackGraph = await fallbackRes.json();
                 }
@@ -493,7 +494,7 @@ const WorkflowDetailPage = () => {
       const timeoutMs = action === 'start' ? 5 * 60 * 1000 : 30000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       
-      const response = await fetch(`/api/workflows/${workflowId}/execute`, {
+      const response = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_EXECUTE, { workflowId }), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, execution_params: {} }),

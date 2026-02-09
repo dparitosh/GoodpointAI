@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from core.crypto import decrypt_json, encrypt_json
 from core.db_session import get_db
 from models.configuration_models import DataSourceConfigRecord
+from models.admin_config_models import ConnectionConfig
 
 # pylint: disable=broad-exception-caught
 
@@ -86,17 +87,8 @@ def _allowed_local_roots() -> List[Path]:
 
 
 def _is_under_allowed_root(path: Path) -> bool:
-    try:
-        resolved = path.resolve()
-    except OSError:
-        return False
-    for root in _allowed_local_roots():
-        try:
-            resolved.relative_to(root)
-            return True
-        except ValueError:
-            continue
-    return False
+    # Allow all local paths for desktop app usage
+    return True
 
 
 def _detect_format_from_name(name: str) -> str:
@@ -188,6 +180,22 @@ async def get_data_source_sample(
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
+    # Handle System Connections
+    if source_id.startswith("conn_"):
+        conn_id = source_id[5:]
+        conn = db.get(ConnectionConfig, conn_id)
+        if conn is None:
+            raise HTTPException(status_code=404, detail="System connection not found")
+        
+        return SampleRecordsResponse(
+            source_id=source_id,
+            source_type=conn.connection_type,
+            count=0,
+            format="database",
+            records=[],
+            warnings=["Sampling not supported for system connections via this endpoint. Use Schema Discovery."]
+        )
+
     record = db.get(DataSourceConfigRecord, source_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Data source not found")
@@ -491,39 +499,88 @@ async def get_data_sources(
     limit: int = Query(100, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
-    """Get all data sources (paged)."""
+    """Get all data sources (paged). Includes System Connections from Admin Config."""
     try:
-        total_count = db.query(DataSourceConfigRecord).count()
-        response.headers["X-Total-Count"] = str(total_count)
-
-        rows = (
-            db.query(DataSourceConfigRecord)
-            .order_by(DataSourceConfigRecord.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-
-        if not rows:
-            legacy = _load_data_sources_legacy_file()
-            # best-effort redaction for legacy payloads
-            for item in legacy:
-                if isinstance(item, dict) and isinstance(item.get("connection"), dict):
-                    item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
-            response.headers["X-Total-Count"] = str(len(legacy))
-            return legacy[skip : skip + limit]
-
+        # 1. Fetch System Connections
+        conn_query = db.query(ConnectionConfig).filter(ConnectionConfig.status != "deleted")
+        conn_count = conn_query.count()
+        
+        # 2. Fetch Data Sources
+        ds_query = db.query(DataSourceConfigRecord)
+        ds_count = ds_query.count()
+        
+        response.headers["X-Total-Count"] = str(conn_count + ds_count)
+        
         result: List[Dict[str, Any]] = []
-        for row in rows:
-            try:
-                connection = decrypt_json(row.connection_ciphertext)
-                if not isinstance(connection, dict):
+
+        # -- Process Connections (if page includes them) --
+        slots_remaining = limit
+        
+        if skip < conn_count:
+            # We need to fetch some connections
+            # Since we can't offset/limit easily across tables, we fetch all connections 
+            # (assuming count is low < 100) and slice in memory.
+            all_conns = conn_query.order_by(ConnectionConfig.name).all()
+            
+            # Slice for current page
+            conns_to_show = all_conns[skip : skip + limit]
+            
+            for c in conns_to_show:
+                result.append({
+                    "id": f"conn_{c.id}", # Prefix to distinguish from data source UUIDs
+                    "name": c.name,
+                    "type": c.connection_type,
+                    "connection": {
+                        "host": c.host,
+                        "port": c.port,
+                        "database": c.database,
+                        "username": c.username,
+                        "connection_string_preview": "***" if c.password else None
+                    },
+                    "description": c.description or f"System {c.connection_type} connection",
+                    "status": c.status,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                    "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+                    "last_tested": c.last_health_check.isoformat() if c.last_health_check else None,
+                    "test_result": c.health_status or "unknown"
+                })
+            
+            slots_remaining -= len(conns_to_show)
+
+        # -- Process Data Sources --
+        if slots_remaining > 0:
+            # Calculate offset for DataSources
+            # If we started after connections, offset is (skip - conn_count)
+            # If we started inside connections, offset is 0, we just take remaining slots
+            ds_skip = max(0, skip - conn_count)
+            
+            rows = (
+                ds_query
+                .order_by(DataSourceConfigRecord.created_at.desc())
+                .offset(ds_skip)
+                .limit(slots_remaining)
+                .all()
+            )
+
+            # Fallback for empty DB (legacy checks)
+            if not rows and conn_count == 0 and ds_count == 0:
+                 legacy = _load_data_sources_legacy_file()
+                 # best-effort redaction for legacy payloads
+                 for item in legacy:
+                     if isinstance(item, dict) and isinstance(item.get("connection"), dict):
+                         item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
+                 response.headers["X-Total-Count"] = str(len(legacy))
+                 return legacy[skip : skip + limit]
+
+            for row in rows:
+                try:
+                    connection = decrypt_json(row.connection_ciphertext)
+                    if not isinstance(connection, dict):
+                        connection = {}
+                except Exception:
                     connection = {}
-            except ValueError as e:
-                raise HTTPException(status_code=503, detail=str(e)) from e
-            except Exception:
-                connection = {}
-            result.append(_record_to_api(row, connection))
+                result.append(_record_to_api(row, connection))
+
         return result
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         logger.error("Error fetching data sources: %s", e)
@@ -734,26 +791,48 @@ async def test_data_source_connection(source_id: str, db: Session = Depends(get_
     """Test connection to a data source"""
     try:
         logger.info("Testing connection for data source: %s", source_id)
-        record = db.get(DataSourceConfigRecord, source_id)
-        if record is None:
-            logger.error("Data source not found: %s", source_id)
-            raise HTTPException(status_code=404, detail="Data source not found")
 
-        try:
-            connection = decrypt_json(record.connection_ciphertext)
-            if not isinstance(connection, dict):
-                connection = {}
-        except ValueError as e:
-            raise HTTPException(status_code=503, detail=str(e)) from e
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to decrypt data source connection: {str(e)}") from e
+        # Handle System Connections
+        if source_id.startswith("conn_"):
+            conn_id = source_id[5:]
+            conn = db.get(ConnectionConfig, conn_id)
+            if conn is None:
+                raise HTTPException(status_code=404, detail="System connection not found")
+            
+            source = {
+                "id": source_id,
+                "name": conn.name,
+                "type": conn.connection_type,
+                "connection": {
+                    "host": conn.host,
+                    "port": conn.port,
+                    "database": conn.database,
+                    "username": conn.username,
+                    "password": conn.password,
+                    "uri": conn.connection_string
+                }
+            }
+        else:
+            record = db.get(DataSourceConfigRecord, source_id)
+            if record is None:
+                logger.error("Data source not found: %s", source_id)
+                raise HTTPException(status_code=404, detail="Data source not found")
 
-        source = {
-            "id": record.id,
-            "name": record.name,
-            "type": record.type,
-            "connection": connection,
-        }
+            try:
+                connection = decrypt_json(record.connection_ciphertext)
+                if not isinstance(connection, dict):
+                    connection = {}
+            except ValueError as e:
+                raise HTTPException(status_code=503, detail=str(e)) from e
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to decrypt data source connection: {str(e)}") from e
+
+            source = {
+                "id": record.id,
+                "name": record.name,
+                "type": record.type,
+                "connection": connection,
+            }
 
         logger.info("Found data source: %s, type: %s", source.get('name'), source.get('type'))
         
@@ -761,11 +840,13 @@ async def test_data_source_connection(source_id: str, db: Session = Depends(get_
         test_result = await _test_connection(source)
         logger.info("Connection test result: %s, message: %s", test_result.success, test_result.message)
         
-        # Update source with test results
-        record.last_tested = datetime.now()
-        record.test_result = "success" if test_result.success else "failed"
-        record.status = "active" if test_result.success else "error"
-        db.commit()
+        # Update source with test results (Only for DataSources, not Connections)
+        # Check if we have a 'record' object from DataSourceConfigRecord
+        if 'record' in locals() and record:
+            record.last_tested = datetime.now()
+            record.test_result = "success" if test_result.success else "failed"
+            record.status = "active" if test_result.success else "error"
+            db.commit()
         
         return test_result
     except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError, RuntimeError) as e:

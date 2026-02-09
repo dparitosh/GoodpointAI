@@ -16,7 +16,7 @@ if errorlevel 1 (
 )
 
 REM Use repo-root .venv so VS Code tasks and scripts share one environment.
-set "REPO_ROOT=%~dp0"
+set "REPO_ROOT=%~dp0..\"
 set "VENV_DIR=%REPO_ROOT%.venv"
 if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo Creating virtual environment at %VENV_DIR%...
@@ -27,7 +27,7 @@ echo Activating virtual environment...
 call "%VENV_DIR%\Scripts\activate.bat"
 
 REM Navigate to backend directory
-cd /d "%REPO_ROOT%agentic-restored\python_backend"
+cd /d "%REPO_ROOT%python_backend"
 
 REM Check if .env file exists
 if not exist ".env" (
@@ -64,7 +64,7 @@ echo Initializing database schema...
 python -m scripts.init_db_schema 2>nul
 
 REM Set PYTHONPATH
-set PYTHONPATH=%REPO_ROOT%agentic-restored\python_backend
+set PYTHONPATH=%REPO_ROOT%python_backend
 
 REM Start the server
 echo.

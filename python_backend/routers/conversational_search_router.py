@@ -292,11 +292,19 @@ SEARCH_INDEX_CONFIGS = {
         "id_field": None,
         "boost_fields": {"title": 3, "content": 2, "description": 1},
         "category": "Unstructured"
+    },
+    "mcp_migration": {
+        "pattern": "mcp_migration_*",
+        "title_field": "record.name",
+        "content_fields": ["record.description", "record.name"],
+        "id_field": "record.id",
+        "boost_fields": {"record.name": 3},
+        "category": "Migration Data"
     }
 }
 
 # Combined index patterns for search
-ALL_SEARCH_INDICES = "plm_*,graphtrace_e2e_*,unstructured_*"
+ALL_SEARCH_INDICES = "plm_*,graphtrace_e2e_*,unstructured_*,mcp_migration_*"
 
 
 def _semantic_search(
@@ -311,6 +319,7 @@ def _semantic_search(
     Uses multi-match with cross-fields for better relevance:
     - Searches across PLM data (parts, assemblies)
     - Searches across document indices
+    - Searches across migration data (nested records)
     - Applies field boosting based on importance
     - Supports fuzzy matching for typo tolerance
     """
@@ -328,7 +337,8 @@ def _semantic_search(
                         "name^3", "title^3",
                         "part_number^2.5",
                         "description^2", "content^2", "text^2",
-                        "source_file"
+                        "source_file",
+                        "record.name^3", "record.description^2", "record.id"
                     ],
                     "type": "best_fields",
                     "fuzziness": "AUTO"
@@ -371,24 +381,31 @@ def _semantic_search(
             highlights = hit.get("highlight", {})
             
             # Determine title based on available fields
+            # Handle standard fields and nested record fields (migration data)
             title = (
                 source.get("name") or 
                 source.get("title") or 
                 source.get("part_number") or 
                 source.get("text", "")[:50] or
+                source.get("record", {}).get("name") or 
                 "Untitled"
             )
             
             # Build snippet from highlights or content
             snippet_parts = []
-            for field in ["name", "title", "description", "content", "text"]:
+            for field in ["name", "title", "description", "content", "text", "record.name", "record.description"]:
                 if field in highlights:
                     snippet_parts.extend(highlights[field][:2])
             if not snippet_parts:
                 desc = source.get("description", "")
                 content = source.get("content", "")
                 text = source.get("text", "")
-                snippet_parts = [desc or content or text or f"Part: {source.get('part_number', '')} Rev: {source.get('revision', '')}"]
+                
+                # Try nested record description
+                record = source.get("record", {})
+                nested_desc = record.get("description") or record.get("name")
+                
+                snippet_parts = [desc or content or text or nested_desc or f"Part: {source.get('part_number', '')} Rev: {source.get('revision', '')}"]
             
             # Determine category from index
             category = "Document"
@@ -398,6 +415,8 @@ def _semantic_search(
                 category = "PLM Assembly"
             elif "graphtrace" in index_name:
                 category = "Graph Document"
+            elif "mcp_migration" in index_name:
+                category = "Migration Record"
             
             # Flatten highlights to list of strings
             flat_highlights = []

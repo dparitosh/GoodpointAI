@@ -1,5 +1,5 @@
 {
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/agentic-restored/python_backend"
+    "${workspaceFolder}/python_backend"
   ]
 }

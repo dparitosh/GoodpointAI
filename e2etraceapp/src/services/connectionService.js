@@ -2,6 +2,7 @@
  * Connection Service - Manages Neo4j connections and graph data fetches
  * Coordinates active session, listeners, and backend API calls
  */
+import API_CONFIG, { getFullUrl } from '../config/api-config';
 
 class ConnectionService {
   constructor() {
@@ -47,7 +48,7 @@ class ConnectionService {
       this.emit('connecting', { uri, user });
       
       // Validate connection via backend API
-      const response = await fetch('/api/graph/validate-connection', {
+      const response = await fetch(getFullUrl(API_CONFIG.ENDPOINTS.GRAPH_VALIDATE), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uri, user, password })
@@ -90,7 +91,7 @@ class ConnectionService {
       this.emit('connecting', {});
       
       // Get Neo4j config which also tests the connection
-      const response = await fetch('/api/config/neo4j');
+      const response = await fetch(getFullUrl(API_CONFIG.ENDPOINTS.NEO4J_CONFIG));
       
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Failed to get Neo4j config' }));
@@ -142,7 +143,7 @@ class ConnectionService {
     try {
       // Backend exposes GET /api/graph for default graph payload.
       // Filters are currently ignored (kept for API compatibility).
-      const response = await fetch('/api/graph');
+      const response = await fetch(getFullUrl(API_CONFIG.ENDPOINTS.GRAPH));
       
       if (!response.ok) {
         throw new Error('Failed to load graph data');
@@ -164,7 +165,7 @@ class ConnectionService {
 
   async executeQuery(query) {
     // Execute Cypher query via backend
-    const response = await fetch('/api/query', {
+    const response = await fetch(getFullUrl(API_CONFIG.ENDPOINTS.GRAPH_QUERY), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })

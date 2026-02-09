@@ -1,382 +1,167 @@
-# End User Guide (UI / UX reference)
+# End User Guide
 
-This guide is for end users and admins using the **GoodPoint AgenticAI** (GraphTrace) web UI.
+## Getting Started
 
-The content below is derived from the actual UI routes and components in:
+| Endpoint | URL |
+| :--- | :--- |
+| **Web UI** | [http://localhost:5173](http://localhost:5173) |
+| **Backend Health** | [http://localhost:8011/health](http://localhost:8011/health) |
+| **API Docs (Swagger)** | [http://localhost:8011/docs](http://localhost:8011/docs) |
 
-- Frontend routes: `agentic-restored/e2etraceapp/src/routes/index.jsx`
-- Main layout/nav: `agentic-restored/e2etraceapp/src/layouts/e2etrace-root-layout.jsx`
+---
 
-## Access & basics
+## Navigation Bar
 
-- UI (Vite dev): http://localhost:5173
-- Backend health: http://localhost:8011/health
-- API docs (Swagger): http://localhost:8011/docs
+The top nav bar is organized into **7 primary tab groups**. Each group may contain sub-tabs.
 
-### Navigation model (what the UI looks like)
+---
 
-All pages share the same top chrome (layout `E2ETraceRootLayout`):
+### Tab 1: Overview (`/`)
+**Purpose**: Landing page and home dashboard.
 
-- **Header top bar**: GoodPoint logo + product title
-- **Workflow progress**: compact indicator (`WorkflowProgress`) showing current flow context
-- **Theme toggle**: switch **Light/Dark**
-- **Primary navigation tabs**: Overview / Search / Migration / Workflows / Insights / Advanced / Settings
-- **Secondary tabs**: context-sensitive shortcuts within the active primary group
-- **Breadcrumbs**: shown on most pages (the home page is intentionally “full-bleed” and omits the breadcrumb strip)
+| Element | Description |
+| :--- | :--- |
+| Quick Action Cards | Jump to Migration Wizard, Analytics, Graph Explorer, or Admin. |
+| System Status | At-a-glance view of backend connectivity. |
 
-If you ever get “lost”, the URL hash shows the current route, e.g. `/#/migration`.
+---
 
-## 1) Overview (Landing) — `/#/`
+### Tab 2: Search (`/search`)
+**Purpose**: Ask questions about your data in plain English.
 
-Route: `/` → `LandingPage`.
+| Sub-Tab | Description |
+| :--- | :--- |
+| **Search** (default) | Chat-style interface. Type a question (e.g., "How many failed workflows this week?"). The **Data Analyst Agent** translates it to SQL/Cypher and returns results. Click "Show Query" to see the generated SQL. |
+| **Configuration** | Manage search pipelines, index settings, and embedding model selection. Admin-level controls for tuning search behavior. |
 
-Use this page as the “home base”:
+---
 
-- It’s designed as a full-width landing/overview (no padded card wrapper)
-- Use the top navigation to jump into the main experiences (Migration, Analytics, Graph, Admin)
+### Tab 3: Migration (`/migration`)
+**Purpose**: The primary data migration workflow. Powered by the **ETL Orchestrator Agent**.
 
-## 2) Conversational Search — `/#/search`
+This is a **5-step wizard**:
 
-Route: `/search` → `ConversationalSearchPage`.
+| Step | Name | What You Do | What the Agent Does |
+| :--- | :--- | :--- | :--- |
+| 1 | **Connect** | Select a Source system (e.g., Postgres PLM DB) and a Target system (e.g., Neo4j). | Validates connectivity to both endpoints. |
+| 2 | **Schema / Discovery** | Click "Run Discovery". | Agent scans source DB metadata: tables, columns, types, foreign keys. Returns a structured schema report. |
+| 3 | **Map** | Review AI-suggested field mappings. Adjust confidence thresholds. Approve or reject mappings. | Agent uses embeddings to match source columns to target properties (e.g., `part_no` -> `ComponentID`, 92% confidence). |
+| 4 | **Validate** | Click "Run Validation". Review the report of pass/fail checks. | Agent runs SODA data quality checks: null counts, type mismatches, business rule violations. |
+| 5 | **Execute** | Click "Start Migration". Monitor the progress bar and log output. | Agent executes the ETL pipeline. Logs each batch. Pauses for human approval if configured. |
 
-The page has **two local tabs**:
+**Approvals Panel**: If a step requires human sign-off, an approval request appears. You can Approve, Reject, or copy an approval token.
 
-- **Search** (default): renders `ConversationalSearchUI`
-- **Configuration**: renders `PipelineConfigManager` (controls search/index/pipeline configuration)
+---
 
-UI elements you’ll use:
+### Tab 4: Workflows / Rule Engine (`/rule-engine`)
+**Purpose**: Define data quality rules and monitor workflow runs.
 
-- A tab strip under the page header (Search / Configuration)
-- Chat-style search interaction (Search tab)
-- Configuration controls for pipelines (Configuration tab)
+| Sub-Feature | Description |
+| :--- | :--- |
+| **Rule Sets** | Create groups of validation rules (e.g., "PLM Quality Rules"). |
+| **Individual Rules** | Define checks like "Email must match regex `.*@.*`" or "Cost > 0". Supports severity levels (Warning, Error, Blocker). |
+| **Execution History** | Run rule sets against datasets and view pass/fail results. |
+| **Quarantine** | Records that fail critical rules are quarantined for manual review. |
 
-What it searches (as stated in the UI): PostgreSQL, Neo4j Graph, and OpenSearch.
+---
 
-## 3) Migration Wizard — `/#/migration`
+### Tab 5: Insights (`/analytics` group)
+**Purpose**: Deep-dive reporting and visual analysis. Contains multiple sub-pages:
 
-Route: `/migration` → `MigrationPage` → `MigrationWizard`.
+#### Sub-Tab 5a: Analytics Hub (`/analytics`)
 
-This is the primary end-user workflow. The wizard is explicitly described as a **5-step flow**:
+| Internal Tab | Description |
+| :--- | :--- |
+| **Query Builder** | Visual drag-and-drop query builder. Select a data source (Postgres, Neo4j, OpenSearch, SODA, GraphQL, Ollama LLM), pick entities and fields, add filters, and execute. Results render in a table. |
+| **Natural Language** | Type an English question. The **Data Analyst Agent** generates and executes a query. The **Visualization Agent** auto-selects the best chart type for the returned data. |
+| **Quality Reports** | Browse historical data quality scan results. Export reports as JSON or CSV. |
 
-1. **Connect**
-2. **Discovery**
-3. **Map**
-4. **Validate**
-5. **Execute**
+#### Sub-Tab 5b: Data Lineage (`/lineage`)
 
-### 3.1 Connect step (select systems)
+| Element | Description |
+| :--- | :--- |
+| **Workflow Selector** | Pick a workflow to visualize its data flow. |
+| **Lineage Graph** | Interactive ReactFlow canvas showing Source -> Transformation -> Target nodes. Color-coded by type. |
+| **Impact Analysis Tab** | Select a node to see all downstream consumers. |
+| **Audit Trail Tab** | View change history for the selected workflow. |
 
-What you do here:
+#### Sub-Tab 5c: Reporting (`/reporting`)
 
-- Choose a **source system** and **target system** for the migration
-- Confirm that the necessary connections/configuration exist (often managed in Admin)
+| Element | Description |
+| :--- | :--- |
+| Report browser | View and export generated reports. |
 
-Expected outcome:
+#### Sub-Tab 5d: Observability (`/observability`)
 
-- The wizard is “ready” to run discovery using the selected source/target context
+| Element | Description |
+| :--- | :--- |
+| **Metric Cards** | Data Quality Score, Active Alerts, Agentic System Status. |
+| **Alerts List** | Real-time alerts with severity, message, component, and timestamp. |
+| **Refresh Controls** | Auto-refresh every 10s / 30s / 1min / 5min. |
 
-### 3.2 Discovery step (inspect what’s available)
+#### Sub-Tab 5e: Self-Healing Monitor (`/self-healing`)
 
-What you do here:
+| Element | Description |
+| :--- | :--- |
+| **Circuit Breakers** | Pipelines that have been auto-paused due to error thresholds. |
+| **Dead Letter Queue** | Failed messages queued for retry or manual intervention. |
+| **Test Task** | Trigger a test task with optional failure simulation to verify self-healing behavior. |
 
-- Run discovery against the selected source
-- Review discovered entities/objects and readiness indicators
+---
 
-Expected outcome:
+### Tab 6: Advanced (`/graph-explorer` group)
+**Purpose**: Lower-level tools for power users.
 
-- A set of discovered entities that will later be mapped/validated
+#### Sub-Tab 6a: Graph Explorer (`/graph-explorer`)
 
-### 3.3 Map step (define mappings)
+| Element | Description |
+| :--- | :--- |
+| **Graph Canvas** | Interactive Cytoscape-powered graph visualization. |
+| **Search** | Filter by entity type, relationship type, and properties. Supports Cypher operators (`CONTAINS`, `STARTS WITH`, `=~` regex, `IN`, `IS NULL`). |
+| **Generated Cypher** | View the raw Cypher query that was executed. |
+| **Workflow Scope** | Filter the graph to show only nodes related to a specific workflow. |
 
-What you do here:
+#### Sub-Tab 6b: Multi-Modal Analyzer (`/multimodal`)
 
-- Define how source entities/fields map to target entities/fields
-- Capture mapping rules and any transformations required
+| Element | Description |
+| :--- | :--- |
+| **Upload Zone** | Drag-and-drop files (PDF, images, documents). |
+| **Vision Model** | Select a model (e.g., `llava:latest`, `bakllava:latest`). |
+| **Extraction Method** | Choose Vision LLM / OCR Only / Hybrid. |
+| **Results** | Extracted structured data from the uploaded document. |
 
-Expected outcome:
+#### Sub-Tab 6c: API Docs (`/api-docs`)
 
-- A mapping configuration used for validation and execution
+| Element | Description |
+| :--- | :--- |
+| **Swagger UI** | Embedded interactive API documentation from the backend. |
 
-### 3.4 Validate step (quality/consistency checks)
+---
 
-What you do here:
+### Tab 7: Settings (`/settings` group)
+**Purpose**: Application configuration and administration.
 
-- Run validation checks before you execute
-- Review validation results (errors/warnings) and fix mapping or inputs as needed
+#### Sub-Tab 7a: Preferences (`/settings`)
+User-level display preferences (theme, language).
 
-Expected outcome:
+#### Sub-Tab 7b: Admin (`/settings/admin`)
+Admin-only configuration panel with internal tabs:
 
-- Confidence that execution will succeed and produce expected outputs
+| Admin Tab | Description |
+| :--- | :--- |
+| **LLM Providers** | Configure connections to Ollama, Azure OpenAI, or other LLM endpoints. Test connection. |
+| **Embedding Models** | Select and configure the embedding model used for semantic search and mapping. |
+| **Connection Settings** | Manage data source connections (Postgres, Neo4j, OpenSearch). Add/Edit/Delete/Test. |
+| **System Settings** | Core runtime settings (CORS origins, rate limits, log levels). |
+| **Feature Flags** | Toggle experimental features on/off. |
 
-### 3.5 Execute step (run & monitor)
+---
 
-What you do here:
+## Common Troubleshooting
 
-- Trigger the migration execution
-- Monitor progress/status and any emitted messages or results
-
-Expected outcome:
-
-- A completed workflow run (or a paused run awaiting approvals)
-
-### 3.6 Approvals panel (human-in-the-loop)
-
-The Migration Wizard integrates an approvals UI: `ApprovalsPanel`.
-
-Typical actions you will see in the approvals area:
-
-- View a list of **approval requests**
-- **Create request** (when the workflow needs an explicit human decision)
-- **Approve / Reject**
-- **Copy token** / **Use token** (when a token must be provided to continue execution)
-
-If execution pauses waiting for approval, create/approve the request and supply the token when prompted.
-
-## 4) Workflow Management — `/#/workflow-manager`
-
-Route: `/workflow-manager` → `WorkflowManagerPage`.
-
-This page is a practical “operations view” for runs stored in Postgres.
-
-### 4.1 Filters (top of the page)
-
-The filter row includes:
-
-- **Search** text box (placeholder: “name, id, description”) — press **Enter** or click **Apply**
-- **Status** dropdown: `draft`, `configured`, `running`, `paused`, `completed`, `failed`, `archived`
-- **Source type** text box (example placeholder: `postgres`)
-- **Target type** text box (example placeholder: `neo4j`)
-- Buttons: **Apply** and **Clear**
-
-### 4.2 Table + pagination
-
-Below the filters you’ll see:
-
-- A summary bar (Showing / Total / Page / Page size)
-- **Page size** selector: 10 / 25 / 50 / 100
-- Pagination buttons: **Prev** / **Next**
-- A **Refresh** button in the header to reload data
-
-Behind the scenes this page calls `GET /api/workflows` and reads `X-Total-Count` for pagination.
-
-### 4.3 Open a workflow
-
-When you open a workflow from the list, you’ll navigate to:
-
-- `/#/workflow/:workflowId` → `WorkflowDetailPage`
-
-There is also a nested detail route under Graph Explorer:
-
-- `/#/graph-explorer/workflow/:workflowId`
-
-## 5) Analytics Hub — `/#/analytics`
-
-Route: `/analytics` → `EnterpriseAnalyticsHub`.
-
-### Deep links (tabs)
-
-Analytics supports a `?tab=` query parameter and keeps it in sync with the UI.
-
-Common deep links:
-
-- Query Builder (default): `/#/analytics?tab=query-builder`
-- Natural Language: `/#/analytics?tab=natural-language`
-- Quality Reports: `/#/analytics?tab=quality-reports`
-
-### 5.1 Query Builder tab
-
-Use this to run read-only analytics queries (UI is a structured query builder).
-
-Expected elements:
-
-- A dataset/table selector and column selection
-- A run/execute action
-- Results table/grid
-
-### 5.2 Natural Language tab
-
-Use this to ask a question and have the system translate it into a query.
-
-Expected elements:
-
-- A natural-language prompt input
-- A run action
-- Rendered response + metadata
-
-Note: provider availability depends on your Admin configuration (LLM providers / embedding models).
-
-### 5.3 Quality Reports tab
-
-Use this to view and export data quality scan results.
-
-Expected elements:
-
-- A list of quality scans/reports
-- A details panel for a selected report
-- Export actions (JSON/CSV)
-
-Persistence behavior:
-
-- When Postgres is configured, exports/scans can be persisted (the backend reports a `persisted` flag and a `source` label).
-
-## 6) Data Lineage Visualizer — `/#/lineage`
-
-Route: `/lineage` → `LineageVisualizerPage`.
-
-This page combines Postgres workflows with (optional) Neo4j lineage.
-
-Key UI elements:
-
-- **Workflow dropdown** + **name search** field to find workflows
-- A connectivity indicator derived from `/health` (Postgres/Neo4j)
-- Tab strip with views such as **Lineage**, **Impact Analysis**, and **Audit Trail**
-- Graph canvas powered by ReactFlow, including:
-	- **MiniMap**
-	- **Controls** (zoom/pan)
-	- **Background** grid
-
-Common actions:
-
-- **Load lineage graph** for the selected workflow
-- **Trace record lineage** by entering a record id, direction (both/upstream/downstream), and max depth
-
-## 7) Graph Explorer — `/#/graph-explorer`
-
-Route: `/graph-explorer` → `GraphExplorerPage`.
-
-This page is an interactive Neo4j/graph view with both simple and advanced search.
-
-### 7.1 Basic controls
-
-Expect to find:
-
-- Graph rendering (Cytoscape-based)
-- Entity/relationship filters
-- Limit control (defaults to 100)
-
-### 7.2 Advanced search (Cypher-style)
-
-The advanced search UI builds a Cypher `WHERE` clause from conditions.
-
-Operators available in the UI include:
-
-- `=` / `<>`
-- `CONTAINS` / `STARTS WITH` / `ENDS WITH`
-- `=~` (regex)
-- `>` / `>=` / `<` / `<=`
-- `IN`
-- `IS NULL` / `IS NOT NULL`
-
-The page can also show the **generated Cypher** for transparency.
-
-### 7.3 Workflow filter
-
-Graph Explorer can load a list of workflows from `GET /api/workflows` and lets you scope exploration to a workflow.
-
-## 8) Observability & Monitoring — `/#/observability`
-
-Route: `/observability` → `ObservabilityDashboard`.
-
-Key UI elements:
-
-- Refresh interval dropdown (10s / 30s / 1min / 5min)
-- **Refresh Now** button
-- Metric cards for:
-	- Data Quality Score
-	- Data Issues
-	- Active Alerts
-	- Agentic System status (when available)
-- Alerts list showing severity icon, message, component, and timestamp
-
-Backend endpoints used include:
-
-- `/api/monitoring/alerts`
-- `/api/monitoring/data-quality`
-- `/api/agentic/system/status` (best-effort)
-
-## 9) Self-Healing Monitor — `/#/self-healing`
-
-Route: `/self-healing` → `SelfHealingMonitorPage`.
-
-This is a real-time monitor for self-healing orchestration.
-
-Key UI elements/actions:
-
-- A WebSocket connection to: `/api/self-healing/ws/monitor`
-- Panels for circuit breakers and dead-letter queue (DLQ)
-- Actions to execute test tasks (with optional failure simulation)
-
-## 10) Multi-Modal Analyzer — `/#/multimodal`
-
-Route: `/multimodal` → `MultiModalAnalyzerPage`.
-
-Use this page to upload documents and run vision-based extraction.
-
-Key UI elements:
-
-- Drag-and-drop upload zone + file picker
-- Configuration panel:
-	- Vision model selector (e.g. `llava:latest`, `bakllava:latest`)
-	- Extraction method radio buttons (Vision LLM / OCR Only / Hybrid)
-	- “Enable OCR Fallback” checkbox
-	- Temperature slider
-
-Backend endpoints used include:
-
-- `GET /api/multimodal/supported-formats`
-- `POST /api/multimodal/analyze-file` (multipart upload)
-
-## 11) Rule Engine — `/#/rule-engine`
-
-Route: `/rule-engine` → `RuleEngineManagement`.
-
-Use this page to manage data quality / ETL rules.
-
-Key UI elements (as implemented):
-
-- Tab navigation across rule engine modes (rule sets, rules, execution/results, quarantine, etc. — depending on active state)
-- Rule sets table with actions:
-	- View rules
-	- Execute rules
-	- Edit
-	- Delete
-- Hierarchical rule viewing (parent/child rules)
-- Status/severity/level badges to help triage outcomes
-
-## 12) Settings & Admin — `/#/settings` and `/#/admin`
-
-Routes:
-
-- `/settings` → `E2ETracePropertyPalette`
-- `/admin` and `/settings/admin` → `AdminSettingsPage` → `AdminConfigManager`
-
-### 12.1 Admin configuration tabs
-
-The Admin Config Manager has these top-level tabs:
-
-- **LLM Providers**
-- **Embedding Models**
-- **Connection Settings (Data Sources)**
-- **System Settings**
-- **Feature Flags**
-
-Common actions:
-
-- Add/edit/delete configuration items
-- **Test connection** actions for connections/providers
-- View basic **health** data (loaded from `/api/admin/config/health`)
-
-## 13) API Docs — `/#/api-docs`
-
-Route: `/api-docs` → `OpenApiDocsPage`.
-
-This page embeds the backend Swagger UI:
-
-- IFrame: `/api/docs`
-- Direct OpenAPI JSON: `/api/openapi.json`
-
-## Troubleshooting
-
-- **UI shows HTML instead of data**: the backend might not be running (Vite can serve an HTML fallback). Verify `http://localhost:8011/health`.
-- **503 errors**: many optional integrations fail closed when not configured (Neo4j/OpenSearch/LLM/Cloud connectors). Configure in Admin and retry.
-- **Local file datasource blocked**: set `GRAPH_TRACE_ALLOWED_LOCAL_ROOTS` (semicolon-delimited) to allowlist import roots.
+| Problem | Solution |
+| :--- | :--- |
+| UI shows raw HTML instead of data | Backend is not running. Check `http://localhost:8011/health`. |
+| 503 errors on optional features | Neo4j/OpenSearch/LLM not configured. Set them up in Admin tab. |
+| "Unauthorized" on API calls | Enable auth is on. Check `GRAPH_TRACE_AUTH_REQUIRED` and supply JWT. |
+| Migration Wizard stuck on "Discovering" | Check the ETL Orchestrator Agent terminal window for errors. |

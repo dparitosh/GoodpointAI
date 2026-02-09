@@ -6,7 +6,7 @@
 			"type": "shell",
 			"command": "npm run dev -- --host 127.0.0.1 --port 5173",
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+				"cwd": "${workspaceFolder}/e2etraceapp"
 			},
 			"isBackground": true,
 			"problemMatcher": [],
@@ -23,7 +23,7 @@
 				"-m",
 				"uvicorn",
 				"--app-dir",
-				"${workspaceFolder}/agentic-restored/python_backend",
+				"${workspaceFolder}/python_backend",
 				"main:app",
 				"--host",
 				"0.0.0.0",
@@ -32,7 +32,7 @@
 				"--reload"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true"
 				}
@@ -49,7 +49,7 @@
 				"-m",
 				"uvicorn",
 				"--app-dir",
-				"${workspaceFolder}/agentic-restored/python_backend",
+				"${workspaceFolder}/python_backend",
 				"main:app",
 				"--host",
 				"0.0.0.0",
@@ -57,7 +57,7 @@
 				"8011"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true"
 				}
@@ -74,7 +74,7 @@
 				"-m",
 				"uvicorn",
 				"--app-dir",
-				"${workspaceFolder}/agentic-restored/python_backend",
+				"${workspaceFolder}/python_backend",
 				"main:app",
 				"--host",
 				"0.0.0.0",
@@ -82,7 +82,7 @@
 				"8011"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true"
 				}
@@ -99,7 +99,7 @@
 				"-m",
 				"uvicorn",
 				"--app-dir",
-				"${workspaceFolder}/agentic-restored/python_backend",
+				"${workspaceFolder}/python_backend",
 				"main:app",
 				"--host",
 				"0.0.0.0",
@@ -108,7 +108,7 @@
 				"--reload"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true"
 				}
@@ -131,7 +131,7 @@
 				"8008"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true",
 					"OPENSEARCH_URL": "http://localhost:9200",
@@ -157,7 +157,7 @@
 				"--reload"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true",
 					"GRAPH_TRACE_AUTH_REQUIRED": "true",
@@ -185,7 +185,7 @@
 			"type": "shell",
 			"command": "npm run lint",
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+				"cwd": "${workspaceFolder}/e2etraceapp"
 			},
 			"problemMatcher": []
 		},
@@ -194,7 +194,7 @@
 			"type": "shell",
 			"command": "npm test -- --run",
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/e2etraceapp"
+				"cwd": "${workspaceFolder}/e2etraceapp"
 			},
 			"problemMatcher": []
 		},
@@ -207,7 +207,7 @@
 				"pytest"
 			],
 			"options": {
-				"cwd": "${workspaceFolder}/agentic-restored/python_backend",
+				"cwd": "${workspaceFolder}/python_backend",
 				"env": {
 					"GRAPH_TRACE_LOAD_DOTENV": "true"
 				}
@@ -234,7 +234,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-File",
-				"${workspaceFolder}\\bootstrap.ps1"
+				"${workspaceFolder}\\installation_scripts\\bootstrap.ps1"
 			],
 			"isBackground": false,
 			"problemMatcher": [],
@@ -249,7 +249,7 @@
 				"-ExecutionPolicy",
 				"Bypass",
 				"-File",
-				"${workspaceFolder}\\start-all.ps1"
+				"${workspaceFolder}\\installation_scripts\\start-all.ps1"
 			],
 			"isBackground": true,
 			"problemMatcher": [],

@@ -337,24 +337,78 @@ async function fetchJsonFailClosed(url, options = {}) {
 // AGENT TASK EXECUTION HELPERS
 async function executeGraphQuery(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Executing graph query:`, payload);
-  return {
-    success: false,
-    message: 'Graph query agent is not wired to a backend query endpoint yet (N/A).',
-    data: { unavailable: true },
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+  
+  try {
+    const baseUrl = API_CONFIG?.API_BASE_URL || '';
+    const taskData = {
+      type: 'GRAPH_QUERY',
+      required_capabilities: ['execute_cypher_queries'],
+      payload: {
+        ...payload,
+        agent_id: assignedAgent
+      }
+    };
+
+    const result = await fetchJsonFailClosed(`${baseUrl}${API_CONFIG.ENDPOINTS.AGENTIC_TASK}`, {
+      method: 'POST',
+      body: JSON.stringify(taskData)
+    });
+
+    return {
+      success: result.success,
+      message: result.success ? 'Graph query executed successfully' : (result.error || 'Graph query failed'),
+      data: result.result || {},
+      timestamp: result.timestamp || new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error, 'Graph query execution failed');
+    return {
+      success: false,
+      message,
+      data: { error: message },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 async function performDataAnalysis(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Performing data analysis:`, payload);
-  return {
-    success: false,
-    message: 'Data analysis agent is not wired to persisted-truth endpoints yet (N/A).',
-    data: { unavailable: true },
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+  
+  try {
+    const baseUrl = API_CONFIG?.API_BASE_URL || '';
+    const taskData = {
+      type: 'DATA_ANALYSIS',
+      required_capabilities: ['data_analysis'],
+      payload: {
+        ...payload,
+        agent_id: assignedAgent
+      }
+    };
+
+    const result = await fetchJsonFailClosed(`${baseUrl}${API_CONFIG.ENDPOINTS.AGENTIC_TASK}`, {
+      method: 'POST',
+      body: JSON.stringify(taskData)
+    });
+
+    return {
+      success: result.success,
+      message: result.success ? 'Analysis complete' : (result.error || 'Analysis failed'),
+      data: result.result || {},
+      timestamp: result.timestamp || new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error, 'Data analysis failed');
+    return {
+      success: false,
+      message,
+      data: { error: message },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 async function orchestratePipeline(payload, assignedAgent) {
@@ -469,35 +523,119 @@ async function orchestratePipeline(payload, assignedAgent) {
 
 async function generateVisualization(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Generating visualization:`, payload);
-  return {
-    success: false,
-    message: 'Visualization agent is not wired to a deterministic backend yet (N/A).',
-    data: { unavailable: true },
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+  
+  try {
+    const baseUrl = API_CONFIG?.API_BASE_URL || '';
+    const taskData = {
+      type: 'VISUALIZATION_GENERATION',
+      required_capabilities: ['generate_graph_layouts'],
+      payload: {
+        ...payload,
+        agent_id: assignedAgent
+      }
+    };
+
+    const result = await fetchJsonFailClosed(`${baseUrl}${API_CONFIG.ENDPOINTS.AGENTIC_TASK}`, {
+      method: 'POST',
+      body: JSON.stringify(taskData)
+    });
+
+    return {
+      success: result.success,
+      message: result.success ? 'Visualization generated' : (result.error || 'Visualization generation failed'),
+      data: result.result || {},
+      timestamp: result.timestamp || new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error, 'Visualization generation failed');
+    return {
+      success: false,
+      message,
+      data: { error: message },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 async function assessDataQuality(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Assessing data quality:`, payload);
-  return {
-    success: false,
-    message: 'Quality assessment is not wired to Postgres-backed scans yet (N/A).',
-    data: { unavailable: true },
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+  
+  try {
+    const baseUrl = API_CONFIG?.API_BASE_URL || '';
+    const taskData = {
+      type: 'QUALITY_ASSESSMENT',
+      required_capabilities: ['data_quality_assessment'],
+      payload: {
+        ...payload,
+        agent_id: assignedAgent
+      }
+    };
+
+    const result = await fetchJsonFailClosed(`${baseUrl}${API_CONFIG.ENDPOINTS.AGENTIC_TASK}`, {
+      method: 'POST',
+      body: JSON.stringify(taskData)
+    });
+
+    return {
+      success: result.success,
+      message: result.success ? 'Quality assessment complete' : (result.error || 'Assessment failed'),
+      data: result.result || {},
+      timestamp: result.timestamp || new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error, 'Quality assessment failed');
+    return {
+      success: false,
+      message,
+      data: { error: message },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 async function processChatWithAgent(payload, assignedAgent) {
   console.log(`[${assignedAgent}] Processing chat:`, payload);
-  return {
-    success: true,
-    message: 'Chat agent is ready; orchestration hooks are limited in this build.',
-    data: { intent: payload?.intent },
-    timestamp: new Date().toISOString(),
-    agent: assignedAgent
-  };
+  
+  try {
+    const baseUrl = API_CONFIG?.API_BASE_URL || '';
+    // Payload usually contains { message, ... }
+    const chatRequest = {
+      message: payload.message || payload.text || '',
+      context: payload.context || {},
+      session_id: payload.session_id,
+      intent: payload.intent
+    };
+
+    const result = await fetchJsonFailClosed(`${baseUrl}${API_CONFIG.ENDPOINTS.AGENTIC_CHAT}`, {
+      method: 'POST',
+      body: JSON.stringify(chatRequest)
+    });
+
+    return {
+      success: true,
+      message: result.message || 'Response received',
+      data: { 
+        response: result.message,
+        agent_responses: result.agent_responses,
+        suggested_actions: result.suggested_actions
+      },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error, 'Chat processing failed');
+    return {
+      success: false,
+      message,
+      data: { error: message },
+      timestamp: new Date().toISOString(),
+      agent: assignedAgent
+    };
+  }
 }
 
 // OBSERVABILITY WIDGETS - Real-time Agent Monitoring

@@ -51,6 +51,17 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        // Proxy Swagger UI and OpenAPI docs
+        '/docs': {
+          target: proxyTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/openapi.json': {
+          target: proxyTarget,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   }

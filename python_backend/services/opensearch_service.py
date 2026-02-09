@@ -72,9 +72,9 @@ class OpenSearchService:
 
         timeout_raw = cfg.get("timeout_s") or cfg.get("pool_timeout")
         if timeout_raw is None:
-            self.timeout_s = float((os.getenv("OPENSEARCH_TIMEOUT_S") or "5").strip() or 5)
+            self.timeout_s = float((os.getenv("OPENSEARCH_TIMEOUT_S") or "30").strip() or 30)
         else:
-            self.timeout_s = float(timeout_raw or 5)
+            self.timeout_s = float(timeout_raw or 30)
 
         self._client = None
 

@@ -11,21 +11,22 @@ GraphTrace is a local-first, full-stack application for **data lineage**, **PLM 
 
 ### One-command Bootstrap
 ```powershell
-.\bootstrap.ps1
+.\installation_scripts\bootstrap.ps1
 ```
 This creates virtual environments, installs dependencies, and initializes the database schema.
 
 ### Start Everything
 ```powershell
-.\start-all.ps1
+.\installation_scripts\start-all.ps1
 ```
 Or use the VS Code task: **Start Full Stack (Frontend + Backend)**
 
 ## Documentation
 
-- 📦 **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
-- ▶️ **Execution Guide**: [docs/EXECUTION_GUIDE.md](docs/EXECUTION_GUIDE.md)
-- 👤 **User Guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- **User Guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Application Guide**: [docs/APP_GUIDE.md](docs/APP_GUIDE.md)
 
 ## Access Points (Local Development)
 
@@ -40,14 +41,13 @@ Or use the VS Code task: **Start Full Stack (Frontend + Backend)**
 
 ```
 GoodpointAI/
-├── agentic-restored/          # Main application source
-│   ├── python_backend/        # FastAPI backend
-│   └── e2etraceapp/           # React/Vite frontend
+├── python_backend/            # FastAPI backend
+├── e2etraceapp/               # React/Vite frontend
+├── agent_services/            # MCP-powered AI agents
+├── mcp_server/                # MCP coordination server
+├── installation_scripts/      # Bootstrap, start, stop scripts
 ├── docs/                      # Documentation
-├── bootstrap.ps1              # One-time setup
-├── start-all.ps1/.bat         # Start both services
-├── start-backend.ps1/.bat     # Start backend only
-└── start-frontend.ps1/.bat    # Start frontend only
+└── config/                    # Runtime configuration
 ```
 
 ## Persistence
@@ -56,10 +56,10 @@ This project uses **PostgreSQL** as the only supported persistence store.
 
 1. Copy the example config:
    ```powershell
-   copy agentic-restored\python_backend\.env.example agentic-restored\python_backend\.env
+   copy python_backend\.env.example python_backend\.env
    ```
 
-2. Edit `agentic-restored/python_backend/.env` and set the connection:
+2. Edit `python_backend/.env` and set the connection:
 
 ```dotenv
 DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/graphtrace"

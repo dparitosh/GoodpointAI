@@ -18,6 +18,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import API_CONFIG, { buildEndpoint } from '../../config/api-config';
 import { toast } from '../../hooks/useToast';
 import { LoadingSpinner, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './SelfHealingMonitorPage.css';
@@ -73,7 +74,7 @@ const SelfHealingMonitorPage = () => {
     const connectWebSocket = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsHost = getPreferredWsHost();
-      const wsUrl = `${protocol}://${wsHost}/api/self-healing/ws/monitor`;
+      const wsUrl = `${protocol}://${wsHost}${API_CONFIG.ENDPOINTS.SELF_HEALING_WS_PATH}`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -126,7 +127,7 @@ const SelfHealingMonitorPage = () => {
   // Load circuit breakers
   const loadCircuitBreakers = async () => {
     try {
-      const response = await fetch('/api/self-healing/circuit-breakers');
+      const response = await fetch(API_CONFIG.ENDPOINTS.SELF_HEALING_CIRCUIT_BREAKERS);
       let data = null;
       try {
         data = await response.json();
@@ -150,7 +151,7 @@ const SelfHealingMonitorPage = () => {
   // Load DLQ messages
   const loadDLQ = async () => {
     try {
-      const response = await fetch('/api/self-healing/dead-letter-queue');
+      const response = await fetch(API_CONFIG.ENDPOINTS.SELF_HEALING_DLQ);
       let data = null;
       try {
         data = await response.json();
@@ -181,7 +182,7 @@ const SelfHealingMonitorPage = () => {
         route: {
           id: 'primary_route',
           name: 'Primary Database',
-          endpoint: '/api/data',
+          endpoint: API_CONFIG.ENDPOINTS.SYSTEM_DATA,
           successRate: 0.9,
           averageLatency: 100,
           priority: 1
@@ -190,7 +191,7 @@ const SelfHealingMonitorPage = () => {
           {
             id: 'backup_route_1',
             name: 'Backup Database 1',
-            endpoint: '/api/data',
+            endpoint: API_CONFIG.ENDPOINTS.SYSTEM_DATA,
             successRate: 0.85,
             averageLatency: 150,
             priority: 2
@@ -198,7 +199,7 @@ const SelfHealingMonitorPage = () => {
           {
             id: 'backup_route_2',
             name: 'Backup Database 2',
-            endpoint: '/api/data',
+            endpoint: API_CONFIG.ENDPOINTS.SYSTEM_DATA,
             successRate: 0.8,
             averageLatency: 200,
             priority: 3
@@ -213,7 +214,7 @@ const SelfHealingMonitorPage = () => {
       };
 
       const response = await fetch(
-        `/api/self-healing/execute?simulate_failure=${simulateFailure}`,
+        `${API_CONFIG.ENDPOINTS.SELF_HEALING_EXECUTE}?simulate_failure=${simulateFailure}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

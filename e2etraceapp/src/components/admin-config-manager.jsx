@@ -6,8 +6,9 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import API_CONFIG from '../config/api-config';
 
-const API_BASE = 'http://localhost:8011/api/admin/config';
+const API_BASE = API_CONFIG.IS_DEVELOPMENT ? '/api/admin/config' : `${API_CONFIG.API_BASE_URL}/api/admin/config`;
 
 // Tab Navigation Component
 function TabNavigation({ tabs, activeTab, onTabChange }) {
@@ -547,6 +548,131 @@ function LLMProviderForm({ provider, onChange }) {
   );
 }
 
+// Embedding Model Form
+function EmbeddingModelForm({ model, onChange }) {
+  // Auto-generate ID from name if empty
+  const handleNameChange = (e) => {
+    const newName = e.target.value;
+    const updates = { name: newName };
+    if (!model.id && newName) {
+      updates.id = newName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    }
+    onChange({ ...model, ...updates });
+  };
+
+  return (
+    <>
+      <div className="form-row">
+        <div className="form-group">
+          <label>ID (Required)</label>
+          <input 
+            type="text" 
+            value={model.id || ''} 
+            onChange={e => onChange({ ...model, id: e.target.value })}
+            placeholder="e.g., nomic-embed-v1"
+            disabled={!!model.created_at} // Disable ID editing for existing
+          />
+        </div>
+        <div className="form-group">
+          <label>Display Name</label>
+          <input 
+            type="text" 
+            value={model.name || ''} 
+            onChange={handleNameChange}
+            placeholder="e.g., Nomic Embed Text"
+          />
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label>Provider</label>
+          <select value={model.provider || ''} onChange={e => onChange({ ...model, provider: e.target.value })}>
+             <option value="">Select Provider</option>
+             <option value="openai">OpenAI</option>
+             <option value="azure_openai">Azure OpenAI</option>
+             <option value="huggingface">Hugging Face</option>
+             <option value="sentence_transformers">Sentence Transformers (Local)</option>
+             <option value="cohere">Cohere</option>
+             <option value="custom">Custom / Nomic / Ollama</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Status</label>
+          <select value={model.status || 'active'} onChange={e => onChange({ ...model, status: e.target.value })}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="testing">Testing</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="form-group">
+        <label>Model Name (on Provider)</label>
+        <input 
+          type="text" 
+          value={model.model_name || ''} 
+          onChange={e => onChange({ ...model, model_name: e.target.value })}
+          placeholder="e.g., nomic-embed-text-v1.5"
+        />
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>Dimension</label>
+          <input 
+            type="number" 
+            value={model.dimension || 768} 
+            onChange={e => onChange({ ...model, dimension: parseInt(e.target.value) })}
+          />
+        </div>
+        <div className="form-group">
+          <label>Max Input Length</label>
+          <input 
+            type="number" 
+            value={model.max_input_length || 512} 
+            onChange={e => onChange({ ...model, max_input_length: parseInt(e.target.value) })}
+          />
+        </div>
+      </div>
+
+      {(model.provider === 'custom' || model.provider === 'openai' || model.provider === 'azure_openai' || model.provider === 'cohere') && (
+        <div className="form-group">
+          <label>API Key</label>
+          <input 
+            type="password" 
+            value={model.custom_api_key || ''} 
+            onChange={e => onChange({ ...model, custom_api_key: e.target.value })}
+            placeholder="sk-..."
+          />
+        </div>
+      )}
+
+      {(model.provider === 'custom' || model.provider === 'azure_openai') && (
+        <div className="form-group">
+          <label>Custom Endpoint / Base URL</label>
+          <input 
+            type="text" 
+            value={model.custom_endpoint || ''} 
+            onChange={e => onChange({ ...model, custom_endpoint: e.target.value })}
+            placeholder="e.g., http://localhost:11434/v1"
+          />
+        </div>
+      )}
+
+      <div className="form-group">
+        <label>
+          <input 
+            type="checkbox" 
+            checked={model.is_default || false} 
+            onChange={e => onChange({ ...model, is_default: e.target.checked })} 
+          />
+          {' '}Set as Default Embedding Model
+        </label>
+      </div>
+    </>
+  );
+}
+
 // Connection Form
 function ConnectionForm({ connection, onChange }) {
   const type = (connection.connection_type || '').toLowerCase();
@@ -868,6 +994,7 @@ export default function AdminConfigManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [data, setData] = useState({
     llmProviders: [],
     embeddingModels: [],
@@ -886,6 +1013,7 @@ export default function AdminConfigManager() {
     { id: 'llm', label: 'LLM Providers', icon: 'fas fa-brain', count: data.llmProviders.length },
     { id: 'embedding', label: 'Embedding Models', icon: 'fas fa-vector-square', count: data.embeddingModels.length },
     { id: 'connections', label: 'Connections', icon: 'fas fa-plug', count: data.connections.length },
+    { id: 'api-docs', label: 'API Docs', icon: 'fas fa-book', count: 0 },
     { id: 'settings', label: 'System Settings', icon: 'fas fa-cog', count: data.systemConfigs.length },
     { id: 'flags', label: 'Feature Flags', icon: 'fas fa-flag', count: data.featureFlags.length }
   ];
@@ -1040,15 +1168,27 @@ export default function AdminConfigManager() {
   // Open modal for add/edit
   const openModal = (type, item = null) => {
     setModalType(type);
-    if (type === 'connection' && item) {
-      const sanitized = { ...item };
-      // Avoid accidentally persisting masked secrets back to the server
-      if (typeof sanitized.connection_string === 'string' && sanitized.connection_string.includes('*')) {
-        sanitized.connection_string = '';
-      }
-      setEditItem(sanitized);
+    setIsCreating(!item);
+    
+    if (item) {
+        if (type === 'connection') {
+          const sanitized = { ...item };
+          // Avoid accidentally persisting masked secrets back to the server
+          if (typeof sanitized.connection_string === 'string' && sanitized.connection_string.includes('*')) {
+            sanitized.connection_string = '';
+          }
+          setEditItem(sanitized);
+        } else {
+          setEditItem(item);
+        }
     } else {
-      setEditItem(item || {});
+      // Defaults for new items
+      if (type === 'llm') setEditItem({ status: 'active', is_default: false, provider: 'openai' });
+      else if (type === 'embedding') setEditItem({ status: 'active', dimension: 768, provider: 'custom', is_default: false });
+      else if (type === 'connection') setEditItem({ status: 'active', connection_type: 'postgres' });
+      else if (type === 'setting') setEditItem({ enabled: true, is_secret: false, value_type: 'string' });
+      else if (type === 'flag') setEditItem({ is_enabled: false, percentage_rollout: 0 });
+      else setEditItem({});
     }
     setModalOpen(true);
   };
@@ -1058,27 +1198,27 @@ export default function AdminConfigManager() {
     try {
       let endpoint, method;
       
+      method = isCreating ? 'POST' : 'PUT';
+
       switch (modalType) {
         case 'llm':
-          endpoint = editItem.id ? `${API_BASE}/llm-providers/${editItem.id}` : `${API_BASE}/llm-providers`;
+          endpoint = isCreating ? `${API_BASE}/llm-providers` : `${API_BASE}/llm-providers/${editItem.id}`;
           break;
         case 'embedding':
-          endpoint = editItem.id ? `${API_BASE}/embedding-models/${editItem.id}` : `${API_BASE}/embedding-models`;
+          endpoint = isCreating ? `${API_BASE}/embedding-models` : `${API_BASE}/embedding-models/${editItem.id}`;
           break;
         case 'connection':
-          endpoint = editItem.id ? `${API_BASE}/connections/${editItem.id}` : `${API_BASE}/connections`;
+          endpoint = isCreating ? `${API_BASE}/connections` : `${API_BASE}/connections/${editItem.id}`;
           break;
         case 'setting':
-          endpoint = editItem.id ? `${API_BASE}/system/${editItem.id}` : `${API_BASE}/system`;
+          endpoint = isCreating ? `${API_BASE}/system` : `${API_BASE}/system/${editItem.id}`;
           break;
         case 'flag':
-          endpoint = editItem.id ? `${API_BASE}/feature-flags/${editItem.id}` : `${API_BASE}/feature-flags`;
+          endpoint = isCreating ? `${API_BASE}/feature-flags` : `${API_BASE}/feature-flags/${editItem.id}`;
           break;
         default:
           return;
       }
-      
-      method = editItem.id ? 'PUT' : 'POST';
       
       const res = await fetch(endpoint, {
         method,
@@ -1243,6 +1383,54 @@ export default function AdminConfigManager() {
             />
           </div>
         );
+
+      case 'api-docs':
+        // Determine the docs URL. In dev, we can use the relative path because of the Vite proxy.
+        // In prod, use the configured base URL.
+        const docsUrl = API_CONFIG.IS_DEVELOPMENT ? '/docs' : `${API_CONFIG.API_BASE_URL}/docs`;
+        const openApiUrl = API_CONFIG.IS_DEVELOPMENT ? '/openapi.json' : `${API_CONFIG.API_BASE_URL}/openapi.json`;
+
+        return (
+          <div className="admin-config-content" style={{ height: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
+            <div className="config-section-header" style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <h3>API Documentation</h3>
+                <span className="status-badge status-active">
+                  <i className="fas fa-check-circle"></i> Live
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                 <a 
+                  href={openApiUrl}
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn-secondary"
+                >
+                  <i className="fas fa-file-code"></i> JSON Spec
+                </a>
+                <a 
+                  href={docsUrl}
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="btn-primary"
+                >
+                  <i className="fas fa-external-link-alt"></i> Open Full Window
+                </a>
+              </div>
+            </div>
+            
+            <div style={{ flexGrow: 1, padding: '0', overflow: 'hidden', borderBottom: '1px solid #e9ecef' }}>
+              <iframe 
+                src={docsUrl}
+                title="Swagger UI"
+                width="100%"
+                height="100%"
+                style={{ border: 'none' }}
+                loading="lazy"
+              />
+            </div>
+          </div>
+        );
         
       default:
         return null;
@@ -1254,6 +1442,8 @@ export default function AdminConfigManager() {
     switch (modalType) {
       case 'llm':
         return <LLMProviderForm provider={editItem} onChange={setEditItem} />;
+      case 'embedding':
+        return <EmbeddingModelForm model={editItem} onChange={setEditItem} />;
       case 'connection':
         return <ConnectionForm connection={editItem} onChange={setEditItem} />;
       default:

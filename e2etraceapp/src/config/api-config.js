@@ -25,8 +25,20 @@ const DEFAULT_CONFIG = {
     HEALTH: '/api/health',
     STATUS: '/api/status',
     
+    // Agentic AI
+    AGENTIC: '/api/agentic',
+    AGENTIC_TASK: '/api/agentic/task',
+    AGENTIC_CHAT: '/api/agentic/chat',
+    AGENTIC_STATUS: '/api/agentic/status',
+    AGENTIC_AGENTS: '/api/agentic/agents',
+    
+    // Conversational Search
+    SEARCH_HEALTH: '/api/search/health',
+    SEARCH_QUERY: '/api/search/query',
+
     // Graph Data
     GRAPH: '/api/graph',
+    GRAPH_VALIDATE: '/api/graph/validate-connection',
     GRAPH_QUERY: '/api/query',
     GRAPH_SCHEMA: '/api/schema',
     ENTITIES: '/api/entities',
@@ -42,6 +54,7 @@ const DEFAULT_CONFIG = {
     
     // Data Configuration
     DATA_SOURCES: '/api/data-sources',
+    DATA_SOURCES_LEGACY: '/api/_data-sources',
     DATA_SOURCE_TEST: (sourceId) => `/api/data-sources/${sourceId}/test`,
     DATA_SOURCE_SYNC: (sourceId) => `/api/data-sources/${sourceId}/sync`,
     DATA_SOURCE_TYPES: '/api/data-sources/types/supported',
@@ -91,6 +104,14 @@ const DEFAULT_CONFIG = {
     DATA_QUALITY_METRICS: '/api/monitoring/data-quality',
     MONITORING_TEMPLATES: '/api/monitoring/templates',
     
+    // Self Healing & System Health
+    SELF_HEALING_CIRCUIT_BREAKERS: '/api/self-healing/circuit-breakers',
+    SELF_HEALING_DLQ: '/api/self-healing/dead-letter-queue',
+    SELF_HEALING_EXECUTE: '/api/self-healing/execute',
+    SELF_HEALING_WS_PATH: '/api/self-healing/ws/monitor',
+    SYSTEM_DATA: '/api/data',
+    FILES_DOWNLOAD: (filename) => `/api/files/download/${encodeURIComponent(filename)}`,
+
     // Data Conversion & Validation
     DATA_CONVERT: '/api/convert',
     DATA_VALIDATE: '/api/validate',
@@ -125,7 +146,17 @@ const DEFAULT_CONFIG = {
     WORKFLOW_INSTANTIATE: (templateId) => `/api/workflows/templates/${templateId}/instantiate`,
     WORKFLOW_EXECUTE: (workflowId) => `/api/workflows/${workflowId}/execute`,
     WORKFLOW_DELETE: (workflowId) => `/api/workflows/${workflowId}`,
+    WORKFLOW_DETAILS: (workflowId) => `/api/workflows/${workflowId}`,
+    WORKFLOW_ARCHIVE: (workflowId) => `/api/workflows/${workflowId}/archive`,
+    WORKFLOW_GRAPH: (workflowId) => `/api/workflows/${workflowId}/graph`,
     
+    // PLM Integration
+    PLM_WORKFLOW: '/api/plm/workflow',
+    PLM_AVAILABILITY: '/api/plm/workflow/availability',
+    
+    // Migration WebSocket
+    MIGRATION_WS: (sid) => `/api/migration/advanced/ws/${encodeURIComponent(sid)}`,
+
     // Configuration Management
     CONFIG_BACKUP: '/api/config/backup',
     CONFIG_RESTORE: '/api/config/restore',

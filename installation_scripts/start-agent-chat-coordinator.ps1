@@ -1,0 +1,19 @@
+# PowerShell script to start Chat Coordinator Agent Service
+# Usage: .\start-agent-chat-coordinator.ps1
+
+$scriptDir = $PSScriptRoot
+$repoRoot = Split-Path $scriptDir -Parent
+Set-Location "$repoRoot"
+
+Write-Host "Starting Chat Coordinator Agent Service..." -ForegroundColor Cyan
+
+$env:PYTHONPATH = "$repoRoot"
+$env:GRAPH_TRACE_LOAD_DOTENV = "true"
+
+try {
+    python -m agent_services.chat_coordinator.main
+}
+catch {
+    Write-Host "Error starting Chat Coordinator Agent: $_" -ForegroundColor Red
+    Read-Host "Press Enter to exit..."
+}

@@ -998,6 +998,8 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
   const [conditionMode, setConditionMode] = useState(form.expression ? 'expression' : 'builder');
+  const [testDataText, setTestDataText] = useState('{\n  "lifecycle_state": "RELEASED",\n  "weight": 10,\n  "cad_links": ["file1"],\n  "revision": "A"\n}');
+  const [testDataError, setTestDataError] = useState(null);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -1019,14 +1021,26 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
   const testExpression = async () => {
     setTesting(true);
     setTestResult(null);
+    setTestDataError(null);
     try {
+      let parsedTestData = {};
+      if (testDataText && testDataText.trim()) {
+        try {
+          parsedTestData = JSON.parse(testDataText);
+        } catch (e) {
+          setTestDataError(`Invalid JSON test data: ${e.message}`);
+          setTesting(false);
+          return;
+        }
+      }
+
       const response = await fetch(`${API_BASE}/validate-expression`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           expression: form.expression,
           expression_type: form.expression_type,
-          test_data: { test: true },
+          test_data: parsedTestData,
         }),
       });
       const data = await response.json();
@@ -1053,25 +1067,42 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
 
   // Build expression from conditions for backend compatibility
   const buildExpressionFromConditions = () => {
-    const ops = {
-      equals: '==',
-      not_equals: '!=',
-      greater_than: '>',
-      less_than: '<',
-      contains: '.contains(',
-      is_empty: '== None or len(',
-      matches: '.match(',
+    const escapePyString = (value) => {
+      return String(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n');
     };
-    
-    const conditions = form.conditions
-      .filter(c => c.field && c.value)
+
+    const fieldRef = (field) => `_record.get('${escapePyString(field)}')`;
+    const strLit = (value) => `'${escapePyString(value)}'`;
+
+    const conditions = (form.conditions || [])
+      .filter(c => c.field && (c.value || c.operator === 'is_empty'))
       .map(c => {
-        if (c.operator === 'contains') return `${c.field}${ops[c.operator]}'${c.value}')`;
-        if (c.operator === 'is_empty') return `${c.field}${ops[c.operator]}${c.field}) == 0`;
-        if (c.operator === 'matches') return `${c.field}${ops[c.operator]}r'${c.value}')`;
-        return `${c.field} ${ops[c.operator]} '${c.value}'`;
-      });
-    
+        const f = fieldRef(c.field);
+        switch (c.operator) {
+          case 'equals':
+            return `${f} == ${strLit(c.value)}`;
+          case 'not_equals':
+            return `${f} != ${strLit(c.value)}`;
+          case 'greater_than':
+            return `float(${f} or 0) > float(${strLit(c.value)})`;
+          case 'less_than':
+            return `float(${f} or 0) < float(${strLit(c.value)})`;
+          case 'contains':
+            return `contains(${f}, ${strLit(c.value)})`;
+          case 'is_empty':
+            return `is_empty(${f})`;
+          case 'matches':
+            return `matches_regex(${f}, ${strLit(c.value)})`;
+          default:
+            return `${f} == ${strLit(c.value)}`;
+        }
+      })
+      .filter(Boolean);
+
     return conditions.join(form.condition_logic === 'AND' ? ' and ' : ' or ');
   };
 
@@ -1299,10 +1330,10 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
                     onChange={e => handleChange('expression_type', e.target.value)}
                     className="form-select"
                   >
-                    <option value="python">Python</option>
-                    <option value="sql">SQL</option>
-                    <option value="sparksql">SparkSQL</option>
-                    <option value="cypher">Cypher (Neo4j)</option>
+                    <option value="python">Python (supported)</option>
+                    <option value="sql" disabled>SQL (coming soon)</option>
+                    <option value="sparksql" disabled>SparkSQL (coming soon)</option>
+                    <option value="cypher" disabled>Cypher (coming soon)</option>
                   </select>
                   <button 
                     className="btn-secondary btn-small"
@@ -1312,6 +1343,24 @@ function RuleForm({ rule, ruleSetId, parentRuleId, templates, onSave, onCancel }
                     {testing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-flask"></i>}
                     Validate Expression
                   </button>
+                </div>
+                <div className="expression-testdata">
+                  <label>Test Data (JSON)</label>
+                  <textarea
+                    value={testDataText}
+                    onChange={e => setTestDataText(e.target.value)}
+                    rows={6}
+                    className="code-input"
+                    placeholder={'{ "field": "value" }'}
+                  />
+                  {testDataError ? (
+                    <div className="test-result error">
+                      <i className="fas fa-times-circle"></i> {testDataError}
+                    </div>
+                  ) : null}
+                  <div className="field-hint">
+                    Tip: reference fields via <code>_record.get('field')</code>. Helper functions available: <code>is_empty</code>, <code>is_not_null</code>, <code>contains</code>, <code>matches_regex</code>, <code>in_range</code>, <code>in_list</code>.
+                  </div>
                 </div>
                 <textarea
                   value={form.expression}

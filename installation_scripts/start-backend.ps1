@@ -1,3 +1,7 @@
+Param(
+    [switch]$UpdateDeps
+)
+
 # PowerShell script to start the GraphTrace Python backend
 # Usage: .\start-backend.ps1
 
@@ -15,7 +19,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 # Use repo-root .venv so VS Code tasks and scripts share one environment.
-$repoRoot = $PSScriptRoot
+$repoRoot = Split-Path $PSScriptRoot -Parent
 $venvPath = Join-Path $repoRoot ".venv"
 $venvPython = Join-Path $venvPath "Scripts\python.exe"
 $venvActivate = Join-Path $venvPath "Scripts\Activate.ps1"
@@ -25,11 +29,16 @@ if (-not (Test-Path $venvPath)) {
     python -m venv $venvPath
 }
 
+# Increase OpenSearch timeout to avoid startup/latency errors
+if (-not $env:OPENSEARCH_TIMEOUT_S) {
+    $env:OPENSEARCH_TIMEOUT_S = "30"
+}
+
 Write-Host "Activating virtual environment..." -ForegroundColor Yellow
 & $venvActivate
 
 # Navigate to backend directory
-Set-Location -Path "$repoRoot\agentic-restored\python_backend"
+Set-Location -Path "$repoRoot\python_backend"
 
 # Check if .env file exists
 if (-not (Test-Path ".env")) {
@@ -43,9 +52,13 @@ if (-not (Test-Path ".env")) {
 }
 
 # Install/upgrade dependencies
-Write-Host "Installing/updating dependencies..." -ForegroundColor Yellow
-& $venvPython -m pip install --upgrade pip
-& $venvPython -m pip install -r requirements.txt
+if ($UpdateDeps) {
+    Write-Host "Installing/updating dependencies..." -ForegroundColor Yellow
+    & $venvPython -m pip install --upgrade pip
+    & $venvPython -m pip install -r requirements.txt
+} else {
+    Write-Host "Skipping dependency check (run with -UpdateDeps to force)." -ForegroundColor Gray
+}
 
 # Ensure encryption key exists for DB-backed encrypted configuration.
 # Load from key file if available, otherwise generate and persist.
@@ -75,15 +88,29 @@ try {
 }
 
 # Set PYTHONPATH
-$env:PYTHONPATH = "$PSScriptRoot\agentic-restored\python_backend"
+$env:PYTHONPATH = "$repoRoot\python_backend"
+
+# Determine Port from .env or default to 8011
+$port = 8011
+$envFile = "$repoRoot\.env"
+if (Test-Path $envFile) {
+    $envContent = Get-Content $envFile
+    foreach ($line in $envContent) {
+        if ($line -match "^PORT=(\d+)") {
+            $port = $matches[1]
+            Write-Host "Found PORT in .env: $port" -ForegroundColor Yellow
+            break
+        }
+    }
+}
 
 # Start the server
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "Starting FastAPI server on port 8011..." -ForegroundColor Green
-Write-Host "API Documentation: http://localhost:8011/docs" -ForegroundColor Cyan
+Write-Host "Starting FastAPI server on port $port..." -ForegroundColor Green
+Write-Host "API Documentation: http://localhost:$port/docs" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
-& $venvPython -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload
+& $venvPython -m uvicorn main:app --host 0.0.0.0 --port $port --reload

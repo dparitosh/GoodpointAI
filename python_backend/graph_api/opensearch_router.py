@@ -35,7 +35,7 @@ def _load_db_config(db: Session) -> Dict[str, Any]:
             "username": payload.get("username") or None,
             "password": payload.get("password") or None,
             "verify_certs": bool(payload.get("verify_certs", True)),
-            "timeout_s": float(payload.get("timeout_s", 5.0) or 5.0),
+            "timeout_s": float(payload.get("timeout_s", 30.0) or 30.0),
         }
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Failed to load OpenSearch config from DB; falling back to env: %s", exc)
@@ -52,8 +52,17 @@ def get_service(db: Session) -> Any:
         # Do not cache: allows OPENSEARCH_URL/OPENSEARCH_HOSTS to be updated without restart.
         from services.opensearch_service import OpenSearchService
 
-        cfg = _load_db_config(db)
-        return OpenSearchService(config=cfg)
+        # 1. Try initializing via Admin Config (ConnectionConfig) which OpenSearchService supports if db_session is passed.
+        # This allows the "Connections" tab in Admin UI to control the setting.
+        service = OpenSearchService(db_session=db)
+        
+        # 2. If endpoint is still missing (not in Admin Config AND not in Env), fall back to legacy EncryptedConfig
+        if not service.endpoint:
+            legacy_cfg = _load_db_config(db)
+            if legacy_cfg:
+                service = OpenSearchService(config=legacy_cfg)
+                
+        return service
     except Exception as exc:
         logger.error("Failed to initialize OpenSearchService: %s", exc)
         raise HTTPException(status_code=500, detail="Service initialization failed") from exc

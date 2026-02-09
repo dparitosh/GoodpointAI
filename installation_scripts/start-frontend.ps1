@@ -1,3 +1,7 @@
+Param(
+    [switch]$UpdateDeps
+)
+
 # PowerShell script to start the GraphTrace React frontend
 # Usage: .\start-frontend.ps1
 
@@ -22,7 +26,8 @@ Write-Host "npm version: $(npm --version)" -ForegroundColor Cyan
 Write-Host ""
 
 # Navigate to frontend directory
-Set-Location -Path "$PSScriptRoot\agentic-restored\e2etraceapp"
+$repoRoot = Split-Path $PSScriptRoot -Parent
+Set-Location -Path "$repoRoot\e2etraceapp"
 
 # Check if .env file exists
 if (-not (Test-Path ".env")) {
@@ -33,9 +38,11 @@ if (-not (Test-Path ".env")) {
 if (-not (Test-Path "node_modules")) {
     Write-Host "node_modules not found. Installing dependencies..." -ForegroundColor Yellow
     npm install
-} else {
+} elseif ($UpdateDeps) {
     Write-Host "Checking for dependency updates..." -ForegroundColor Yellow
     npm install
+} else {
+    Write-Host "Skipping dependency check (run with -UpdateDeps to force)." -ForegroundColor Gray
 }
 
 # Start the development server

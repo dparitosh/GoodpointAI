@@ -418,36 +418,67 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         })
       });
 
-      // Transform with deterministic defaults so SODA can evaluate canonical tables
-      // If we sampled arbitrary keys, attempt a best-effort mapping guess from the first record.
-      const first = Array.isArray(stagedRecords) && stagedRecords.length > 0 ? stagedRecords[0] : null;
-      const keys = first && typeof first === 'object' && !Array.isArray(first) ? Object.keys(first) : [];
-      const guessedPart = findKey(keys, ['part_number', 'partnumber', 'part', 'id', 'key']) || 'part_number';
-      const guessedName = findKey(keys, ['name', 'title', 'label']) || 'name';
-      const guessedCategory = findKey(keys, ['category', 'class', 'classification', 'type']) || 'category';
-      const guessedRevision = findKey(keys, ['revision', 'rev', 'version']) || 'revision';
-
-      await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/transform`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          part_mapping: {
-            [guessedPart]: 'part_number',
-            [guessedName]: 'name',
-            [guessedCategory]: 'classification',
-            [guessedRevision]: 'description'
-          }
-        })
-      });
-
-      // Attempt SODA gate scan + detailed gate fetch (fail-soft)
+      // Submit Discovery Task to Agentic Backend
+      // The ETL Orchestrator Agent will handle schema inference, mapping, transformation, and SODA validation.
       let sodaResult = null;
       let issues = [];
       let recommendations = [];
-
+      let inferredSourceSchema = null;
+      let aiSuggestedMappings = [];
+      let inferredSourceFields = [];
+      
       try {
-        const sodaResponse = await e2etraceFetchWithRetry(
-          `${plmBaseUrl}/runs/${discoveryRunId}/dq/soda/scan/public.plm_parts`,
+        const agentResponse = await e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}/api/agentic/task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+             type: "data_analysis",
+             required_capabilities: ["perform_data_discovery"],
+             payload: {
+               type: "discovery",
+               run_id: discoveryRunId,
+               records: stagedRecords,
+               source_system: wizardData.sourceSystem?.name
+             }
+          })
+        });
+
+        const taskResult = await agentResponse.json();
+        
+        if (taskResult.success && taskResult.result) {
+           const res = taskResult.result;
+           sodaResult = res.quality_scan;
+           
+           // Extract inferred schema
+           if (res.inferred_schema) {
+              inferredSourceFields = Object.keys(res.inferred_schema);
+              inferredSourceSchema = { 
+                fields: inferredSourceFields.map(name => ({
+                  name, 
+                  type: res.inferred_schema[name]
+                }))
+              };
+           }
+
+           // Extract mappings
+           if (res.applied_mapping) {
+              aiSuggestedMappings = Object.entries(res.applied_mapping).map(([src, target]) => ({
+                  sourceField: src,
+                  targetField: target,
+                  transformation: null,
+                  confidence: 'High (Agent)'
+              }));
+           }
+        } else {
+             console.warn("Agent task completed but returned no result or failed:", taskResult);
+        }
+
+      } catch (agentError) {
+         console.warn("Agentic discovery failed, falling back to legacy happy path...", agentError);
+         // Fallback logic could go here, but for now we warn and proceed partial
+      }
+
+      // Legacy SODA result handling for UI compatibility
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -512,24 +543,28 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         });
       }
 
-      // Seed mapping suggestions based on canonical defaults
-      const defaultMappingSuggestions = [
+      // Seed mapping suggestions based on canonical defaults if not provided by Agent
+      const defaultMappingSuggestions = aiSuggestedMappings.length > 0 ? aiSuggestedMappings : [
         { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
         { sourceField: 'name', targetField: 'name', transformation: 'TRIM', confidence: '90%' },
         { sourceField: 'category', targetField: 'classification', transformation: null, confidence: '85%' },
         { sourceField: 'revision', targetField: 'description', transformation: null, confidence: '70%' }
       ];
 
-      const inferredSourceFields = Array.isArray(keys) && keys.length > 0
-        ? keys
-        : (Array.isArray(stagedRecords) && stagedRecords.length > 0 && stagedRecords[0] && typeof stagedRecords[0] === 'object')
-          ? Object.keys(stagedRecords[0])
-          : [];
+      // If Agent didn't provide schema, infer from first record
+      if (inferredSourceFields.length === 0) {
+          const first = Array.isArray(stagedRecords) && stagedRecords.length > 0 ? stagedRecords[0] : null;
+          const keys = first && typeof first === 'object' && !Array.isArray(first) ? Object.keys(first) : [];
+          inferredSourceFields = keys;
+      }
+
       const canonicalTargetFields = ['part_number', 'name', 'classification', 'description'];
-      const inferredSourceSchema = inferredSourceFields.length > 0
+      
+      const finalSourceSchema = inferredSourceSchema || (inferredSourceFields.length > 0
         ? { fields: inferredSourceFields.map((name) => ({ name })) }
-        : null;
-      const inferredTargetSchema = { fields: canonicalTargetFields.map((name) => ({ name })) };
+        : null);
+      
+      const finalTargetSchema = { fields: canonicalTargetFields.map((name) => ({ name })) };
 
       const introspectPayload = {
         run_id: discoveryRunId,
@@ -550,8 +585,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         discoveryInsights: insights,
         discoverySample: samplePayload ? { ...samplePayload, stagedFrom } : { stagedFrom },
         discoveryIntrospect: introspectPayload,
-        sourceSchema: inferredSourceSchema,
-        targetSchema: inferredTargetSchema,
+        sourceSchema: finalSourceSchema,
+        targetSchema: finalTargetSchema,
         aiSuggestedMappings: defaultMappingSuggestions
       }));
     } catch (error) {

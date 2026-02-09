@@ -131,6 +131,7 @@ async def lifespan_manager(app: FastAPI):
                 logger.warning("DB config seeding failed (non-fatal): %s", exc)
 
         # Load Neo4j config from Admin Configuration Center (single source of truth)
+        health_task = None
         neo4j_cfg = _get_neo4j_config_from_admin_center()
         neo4j_uri = neo4j_cfg["uri"]
         neo4j_user = neo4j_cfg["username"]
