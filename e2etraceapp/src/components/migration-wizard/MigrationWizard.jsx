@@ -479,6 +479,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       }
 
       // Legacy SODA result handling for UI compatibility
+      try {
+        const sodaResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/dq/scan`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
