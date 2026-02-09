@@ -1384,7 +1384,7 @@ export default function AdminConfigManager() {
           </div>
         );
 
-      case 'api-docs':
+      case 'api-docs': {
         // Determine the docs URL. In dev, we can use the relative path because of the Vite proxy.
         // In prod, use the configured base URL.
         const docsUrl = API_CONFIG.IS_DEVELOPMENT ? '/docs' : `${API_CONFIG.API_BASE_URL}/docs`;
@@ -1431,6 +1431,7 @@ export default function AdminConfigManager() {
             </div>
           </div>
         );
+      }
         
       default:
         return null;

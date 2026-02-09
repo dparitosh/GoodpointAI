@@ -40,19 +40,19 @@ export default function E2ETraceMainDashboard() {
 
   // Cytoscape elements derived from graphData with enhancements
   const cyElements = useMemo(() => {
-    const elements = e2etraceTransformDataForCytoscape(graphData, { 
+    return e2etraceTransformDataForCytoscape(graphData, { 
       colorScheme,
       autoGrouping: true,
       sizingProperty: 'importance',
       defaultSize: 50
     });
-    
-    // Calculate and update graph statistics
-    const stats = calculateGraphStats(elements);
-    setGraphStats(stats);
-    
-    return elements;
   }, [graphData, colorScheme]);
+
+  // Calculate graph statistics as a derived value (not a side effect in useMemo)
+  useEffect(() => {
+    const stats = calculateGraphStats(cyElements);
+    setGraphStats(stats);
+  }, [cyElements]);
 
   // Enhanced search handler with highlighting
   const handleAdvancedSearch = useCallback((query) => {

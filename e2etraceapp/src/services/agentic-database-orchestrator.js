@@ -1,5 +1,5 @@
 import { AgenticOrchestrator } from './agentic-orchestrator.js';
-import { agenticFetchWithRetry } from './backend-integration-service'; // Pure Agentic API implementation
+import { e2etraceFetchWithRetry as agenticFetchWithRetry } from '../api/e2etrace-api'; // Use centralized fetch utility
 import { API_CONFIG } from '../config/api-config.js';
 
 /**

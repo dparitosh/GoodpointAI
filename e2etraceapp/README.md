@@ -6,7 +6,7 @@ React/Vite frontend for GraphTrace.
 
 ```powershell
 # From repo root
-cd agentic-restored/e2etraceapp
+cd e2etraceapp
 npm install
 npm run dev
 ```

@@ -372,7 +372,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       let stagedFrom = 'synthetic';
       let samplePayload = null;
 
-      const findKey = (keys, candidates) => {
+      const _findKey = (keys, candidates) => {
         const lowerKeys = keys.map(k => String(k));
         for (const c of candidates) {
           const match = lowerKeys.find(k => k.toLowerCase().includes(c));

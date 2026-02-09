@@ -748,6 +748,7 @@ class ETLEngine {
   }
 }
 
-// Export singleton instance
+// Export singleton instance and class
+export { ETLEngine };
 export const etlEngine = new ETLEngine();
 export default etlEngine;

@@ -10,9 +10,10 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import API_CONFIG from '../config/api-config';
 import './data-pipeline-wizard.css';
 
-const API_BASE = 'http://localhost:8011';
+const API_BASE = API_CONFIG.API_BASE_URL || '';
 
 // Pipeline definitions with clear categorization
 const PIPELINE_BRANCHES = {

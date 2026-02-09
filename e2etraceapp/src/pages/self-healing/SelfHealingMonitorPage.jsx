@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import API_CONFIG, { buildEndpoint } from '../../config/api-config';
+import API_CONFIG from '../../config/api-config';
 import { toast } from '../../hooks/useToast';
 import { LoadingSpinner, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './SelfHealingMonitorPage.css';

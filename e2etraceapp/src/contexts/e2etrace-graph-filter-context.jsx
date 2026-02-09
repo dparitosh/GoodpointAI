@@ -4,7 +4,6 @@ const GraphFilterContext = createContext(null);
 
 export const GraphFilterProvider = ({ children }) => {
   const [filterText, setFilterText] = useState('');
-  console.log("GraphFilterProvider is rendering"); // Add this line
 
   return (
     <GraphFilterContext.Provider value={{ filterText, setFilterText }}>
