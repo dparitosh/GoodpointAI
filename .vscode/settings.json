@@ -1,5 +1,6 @@
 {
   "python.analysis.extraPaths": [
     "${workspaceFolder}/python_backend"
-  ]
+  ],
+  "python.terminal.activateEnvInCurrentTerminal": true
 }

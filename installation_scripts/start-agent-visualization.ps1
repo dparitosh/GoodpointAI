@@ -10,7 +10,7 @@ Write-Host "Starting Visualization Agent Service..." -ForegroundColor Cyan
 $env:PYTHONPATH = "$repoRoot"
 $env:GRAPH_TRACE_LOAD_DOTENV = "true"
 
-$venvPython = Join-Path $repoRoot ".venv" "Scripts" "python.exe"
+$venvPython = Join-Path (Join-Path (Join-Path $repoRoot ".venv") "Scripts") "python.exe"
 if (-not (Test-Path $venvPython)) { $venvPython = "python" }
 
 try {

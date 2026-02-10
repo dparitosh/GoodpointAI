@@ -21,8 +21,9 @@ def test_data_sources_never_return_plaintext_secrets(tmp_path, monkeypatch) -> N
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    # Register ORM models
+    # Register ORM models — import all models the router touches
     from models.configuration_models import DataSourceConfigRecord  # noqa: F401
+    from models.admin_config_models import ConnectionConfig  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

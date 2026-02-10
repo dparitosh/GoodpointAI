@@ -786,7 +786,7 @@ async def get_data_source_sample(
 
 class DataSourceConnection(BaseModel):
     host: Optional[str] = None
-    port: Optional[str] = None
+    port: Optional[Any] = None
     database: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
@@ -1040,6 +1040,11 @@ async def get_data_sources(
     except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         logger.error("Error fetching data sources: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch data sources") from e
+    except Exception as e:
+        # Database unavailable (e.g. OperationalError when Postgres is down)
+        logger.warning("Database unavailable when fetching data sources: %s", e)
+        response.headers["X-Total-Count"] = "0"
+        return []
 
 
 @router.get(

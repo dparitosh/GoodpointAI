@@ -15,8 +15,7 @@ GoodpointAI/
 │   ├── start-frontend.ps1     # Launch frontend only
 │   ├── stop-all.ps1           # Kill all services
 │   └── start-agent-*.ps1      # Individual agent launchers
-├── docs/                      # Documentation
-└── config/                    # Runtime configuration files
+└── docs/                      # Documentation
 ```
 
 ## Prerequisites
@@ -58,17 +57,23 @@ GRANT ALL PRIVILEGES ON DATABASE graphtrace TO graphtrace_app;
 > **Tip:** If you already have a `graphtrace` database, skip this step.
 
 #### 2b. Create the `.env` File
-Create `python_backend/.env` with your connection string:
+Copy the example and edit your connection details:
+```powershell
+Copy-Item python_backend\.env.example python_backend\.env
+```
+Then edit `python_backend/.env` — at minimum set `DATABASE_URL`:
 ```dotenv
 DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace
 GRAPH_TRACE_LOAD_DOTENV=true
 ```
 
-> The default port is **5433**. The backend also respects `POSTGRES_HOST`, `POSTGRES_PORT`,
-> `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` environment variables.
+> **Note:** The bootstrap script (Step 3) will automatically copy `.env.example` → `.env`
+> if the file doesn't exist yet, but you **must** edit `DATABASE_URL` with your actual
+> Postgres credentials before proceeding.
 
 ### Step 3: Bootstrap Environment
 Run the bootstrap script. This will:
+- Copy `python_backend/.env.example` → `python_backend/.env` (if `.env` doesn't exist)
 - Create a Python virtual environment at `.venv/`
 - Install all backend pip dependencies
 - Generate an encryption key (`.graphtrace.encryption_key`)

@@ -341,7 +341,7 @@ const MultiModalAnalyzerPage = () => {
                 <div className="info-grid">
                   <div className="info-item">
                     <span className="info-label">Filename:</span>
-                    <span className="info-value">{result.filename}</span>
+                    <span className="info-value">{result.file_name}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">File Type:</span>
@@ -349,41 +349,32 @@ const MultiModalAnalyzerPage = () => {
                   </div>
                   <div className="info-item">
                     <span className="info-label">Size:</span>
-                    <span className="info-value">{formatFileSize(result.file_size)}</span>
+                    <span className="info-value">{formatFileSize(result.file_size_bytes)}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">Analyzed:</span>
-                    <span className="info-value">{new Date(result.analyzed_at).toLocaleString()}</span>
+                    <span className="info-value">{result.analyzed_at ? new Date(result.analyzed_at).toLocaleString() : 'Just now'}</span>
                   </div>
-                  {result.processing_time_seconds && (
+                  {result.processing_time_ms && (
                     <div className="info-item">
                       <span className="info-label">Processing Time:</span>
-                      <span className="info-value">{result.processing_time_seconds.toFixed(2)}s</span>
+                      <span className="info-value">{(result.processing_time_ms / 1000).toFixed(2)}s</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Extracted Text */}
-              {result.extracted_text && result.extracted_text.length > 0 && (
+              {/* Extracted Text / Content */}
+              {result.text_content && result.text_content.length > 0 && (
                 <div className="result-section">
-                  <h4><i className="fas fa-align-left" aria-hidden="true" /> Extracted Text ({result.extracted_text.length} characters)</h4>
+                  <h4><i className="fas fa-align-left" aria-hidden="true" /> Extracted Content ({result.text_content.length} characters)</h4>
                   <div className="text-content">
-                    {result.extracted_text}
+                    {result.text_content}
                   </div>
                 </div>
               )}
 
-              {/* Vision Analysis */}
-              {result.vision_analysis && (
-                <div className="result-section">
-                  <h4><i className="fas fa-eye" aria-hidden="true" /> Vision AI Analysis</h4>
-                  <div className="analysis-content">
-                    {result.vision_analysis}
-                  </div>
-                </div>
-              )}
-
+              {/* Vision Analysis - Merged into Extracted Content */}
               {/* Metadata */}
               {result.metadata && Object.keys(result.metadata).length > 0 && (
                 <div className="result-section">

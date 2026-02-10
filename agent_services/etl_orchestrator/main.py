@@ -24,6 +24,9 @@ except ImportError:
 # Add parent directory to path to allow importing base
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
+# Also add python_backend to path for Rule Engine imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "python_backend"))
+
 # Load environment variables from backend .env
 env_path = Path(__file__).resolve().parent.parent.parent / "python_backend" / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -170,15 +173,20 @@ class ETLOrchestratorAgent(AgentService):
             except Exception as e:
                 logger.warning(f"Failed to persist transformed data: {e}")
         
-        # 4. SODA Validation
+        # 4. Rule Engine Validation
+        rule_result = None
+        try:
+            loop = asyncio.get_running_loop()
+            rule_result = await loop.run_in_executor(
+                None, self._run_rule_validation, records
+            )
+        except Exception as e:
+            rule_result = {"outcome": "error", "message": str(e)}
+
+        # 5. SODA Validation (supplementary)
         soda_result = None
         if Scan:
             try:
-                # In a full implementation, we would construct a Scan object here
-                # accessing the same postgres DB. 
-                # For this simplified agent version, we simulate the SODA Result
-                # based on the data quality of the dataframe itself
-                
                 null_counts = df.isnull().sum()
                 issue_count = int(null_counts.sum())
                 
@@ -197,9 +205,117 @@ class ETLOrchestratorAgent(AgentService):
             "inferred_schema": inferred_schema,
             "applied_mapping": mapping,
             "staged_count": len(records),
+            "rule_validation": rule_result,
             "quality_scan": soda_result,
-            "agent_notes": "Discovery completed using Agentic Heuristics v2."
+            "quality_score": rule_result.get("quality_score", 100.0) if isinstance(rule_result, dict) else None,
+            "agent_notes": "Discovery completed using Agentic Heuristics v2 with Rule Engine validation."
         }
+
+    def _run_rule_validation(self, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Execute Rule Engine rule sets against the provided records synchronously."""
+        try:
+            from core.db_session import SessionLocal
+            from models.rule_engine_models import RuleSet, Rule, RuleStatus
+            from services.rule_engine import RuleEngine
+        except Exception as e:
+            return {
+                "outcome": "error",
+                "quality_score": 0.0,
+                "message": f"Rule engine import failed: {e}",
+            }
+
+        db = SessionLocal()
+        try:
+            rule_sets = (
+                db.query(RuleSet)
+                .filter(
+                    RuleSet.is_active == True,  # noqa: E712
+                    RuleSet.status == RuleStatus.ACTIVE.value,
+                )
+                .all()
+            )
+
+            if not rule_sets:
+                return {
+                    "outcome": "pass",
+                    "quality_score": 100.0,
+                    "message": "No active rule sets configured",
+                    "rule_sets_executed": 0,
+                }
+
+            engine = RuleEngine(db)
+            all_results = []
+
+            for rs in rule_sets:
+                rules = (
+                    db.query(Rule)
+                    .filter(
+                        Rule.rule_set_id == rs.id,
+                        Rule.status == RuleStatus.ACTIVE.value,
+                        Rule.enabled == True,  # noqa: E712
+                    )
+                    .order_by(Rule.sequence_order)
+                    .all()
+                )
+                if not rules:
+                    continue
+
+                rule_set_dict = {
+                    "id": rs.id,
+                    "name": rs.name,
+                    "execution_mode": rs.execution_mode,
+                    "stop_on_critical": rs.stop_on_critical,
+                }
+                rules_dict = [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "expression": r.expression,
+                        "level": r.level or "entity",
+                        "severity": r.severity or "warning",
+                        "action_on_fail": r.action_on_fail or "log",
+                        "parent_rule_id": r.parent_rule_id,
+                        "dependency_condition": r.dependency_condition,
+                        "sequence_order": r.sequence_order,
+                        "parameters": r.parameters or {},
+                    }
+                    for r in rules
+                ]
+
+                result = engine.execute_rule_set(
+                    rule_set_dict, rules_dict, records,
+                    stop_on_critical=rs.stop_on_critical,
+                )
+                all_results.append({
+                    "rule_set_id": rs.id,
+                    "rule_set_name": rs.name,
+                    "status": result.status,
+                    "overall_pass_rate": round(result.overall_pass_rate, 2),
+                    "rules_passed": result.rules_passed,
+                    "rules_failed": result.rules_failed,
+                    "duration_ms": result.duration_ms,
+                })
+
+            if all_results:
+                quality_score = sum(r["overall_pass_rate"] for r in all_results) / len(all_results)
+            else:
+                quality_score = 100.0
+
+            return {
+                "outcome": "pass" if quality_score >= 80 else "warn" if quality_score >= 50 else "fail",
+                "quality_score": round(quality_score, 2),
+                "rule_sets_executed": len(all_results),
+                "results": all_results,
+            }
+
+        except Exception as e:
+            return {
+                "outcome": "error",
+                "quality_score": 0.0,
+                "message": str(e),
+            }
+        finally:
+            db.close()
 
 if __name__ == "__main__":
     agent = ETLOrchestratorAgent()

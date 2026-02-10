@@ -53,11 +53,10 @@ const NAV_GROUPS = [
     titleKey: 'nav.insightsReports',
     icon: 'fas fa-chart-bar',
     href: '/analytics',
-    matchPrefixes: ['/lineage', '/self-healing', '/observability', '/analytics', '/reporting'],
+    matchPrefixes: ['/lineage', '/self-healing', '/observability', '/analytics'],
     items: [
       { to: '/lineage', labelKey: 'nav.dataLineage', icon: 'fas fa-stream' },
       { to: '/analytics', labelKey: 'nav.analytics', icon: 'fas fa-chart-line' },
-      { to: '/reporting', labelKey: 'nav.reporting', icon: 'fas fa-file-alt' },
       { to: '/observability', labelKey: 'nav.observability', icon: 'fas fa-eye' },
       { to: '/self-healing', labelKey: 'nav.selfHealingMonitor', icon: 'fas fa-heartbeat' },
     ],
@@ -67,7 +66,7 @@ const NAV_GROUPS = [
     titleKey: 'nav.advancedTools',
     icon: 'fas fa-toolbox',
     href: '/graph-explorer',
-    matchPrefixes: ['/graph-explorer', '/graphexplorer', '/multimodal', '/api-docs'],
+    matchPrefixes: ['/graph-explorer', '/multimodal', '/api-docs'],
     items: [
       { to: '/graph-explorer', labelKey: 'nav.graphExplorer', icon: 'fas fa-project-diagram' },
       { to: '/multimodal', labelKey: 'nav.multiModalAnalyzer', icon: 'fas fa-brain' },
@@ -82,7 +81,7 @@ const NAV_GROUPS = [
     matchPrefixes: ['/settings', '/admin'],
     items: [
       { to: '/settings', labelKey: 'nav.preferences', icon: 'fas fa-sliders-h' },
-      { to: '/settings/admin', labelKey: 'nav.adminSettings', icon: 'fas fa-user-cog' },
+      { to: '/admin', labelKey: 'nav.adminSettings', icon: 'fas fa-user-cog' },
     ],
   },
 ];

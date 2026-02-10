@@ -205,8 +205,14 @@ async def get_agentic_system_status():
         status_data = await mcp_client.get_system_status()
         return SystemStatus(**status_data)
     except Exception as e:
-        logger.error("Error getting agentic system status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.warning("Agentic system status unavailable: %s", e)
+        return {
+            "status": "unavailable",
+            "agents": [],
+            "mcp_server": {"connected": False},
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+        }
 
 @router.get("/agents/active")
 async def get_active_agents_list(

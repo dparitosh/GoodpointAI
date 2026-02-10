@@ -9,15 +9,15 @@ const OpenApiDocsPage = () => {
           This page shows the backend OpenAPI schema and Swagger UI via the app&apos;s `/api` proxy.
         </p>
         <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-          <a href="/api/docs" target="_blank" rel="noreferrer">Open Swagger UI in new tab</a>
-          <a href="/api/openapi.json" target="_blank" rel="noreferrer">Open OpenAPI JSON</a>
+          <a href="/docs" target="_blank" rel="noreferrer">Open Swagger UI in new tab</a>
+          <a href="/openapi.json" target="_blank" rel="noreferrer">Open OpenAPI JSON</a>
         </div>
       </div>
 
       <div style={{ flex: 1, minHeight: 500, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
         <iframe
           title="Swagger UI"
-          src="/api/docs"
+          src="/docs"
           style={{ width: '100%', height: '100%', border: 0 }}
         />
       </div>

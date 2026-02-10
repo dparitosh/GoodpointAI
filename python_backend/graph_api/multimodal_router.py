@@ -30,7 +30,10 @@ from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 from enum import Enum
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from core.db_session import get_db
+from services.admin_config_service import AdminConfigService
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -78,6 +81,7 @@ class FileAnalysisResponse(BaseModel):
     extracted_data: Dict[str, Any] = {}
     images_analyzed: int = 0
     processing_time_ms: int = 0
+    analyzed_at: Optional[datetime] = None
     success: bool = True
     error: Optional[str] = None
 
@@ -131,7 +135,8 @@ class MultiModalService:
         self,
         image_data: bytes,
         prompt: str,
-        model: str = "llava:latest"
+        model: str = "llava:latest",
+        ollama_host: Optional[str] = None
     ) -> Dict[str, Any]:
         """Analyze image using Ollama vision model"""
         try:
@@ -140,8 +145,15 @@ class MultiModalService:
             # Encode image to base64
             image_base64 = base64.b64encode(image_data).decode('utf-8')
             
+            # Initialize client with custom host if provided
+            if ollama_host:
+                client = ollama.Client(host=ollama_host)
+                chat_func = client.chat
+            else:
+                chat_func = ollama.chat
+
             # Call Ollama vision model
-            response = ollama.chat(
+            response = chat_func(
                 model=model,
                 messages=[{
                     'role': 'user',
@@ -372,7 +384,8 @@ class MultiModalService:
             file_name=filename,
             file_type=file_type,
             file_size_bytes=file_size,
-            extraction_method=extraction_method
+            extraction_method=extraction_method,
+            analyzed_at=start_time
         )
         
         try:
@@ -392,7 +405,8 @@ class MultiModalService:
                             vision_result = await self.analyze_with_vision_llm(
                                 img_info["image_bytes"],
                                 "Describe this technical diagram or image. Extract any text, dimensions, or specifications visible.",
-                                vision_model
+                                vision_model,
+                                ollama_host=ollama_host
                             )
                             
                             if vision_result["success"]:
@@ -407,7 +421,8 @@ class MultiModalService:
                     vision_result = await self.analyze_with_vision_llm(
                         file_content,
                         "Describe this image in detail. Extract any text, technical specifications, or structured data visible.",
-                        vision_model
+                        vision_model,
+                        ollama_host=ollama_host
                     )
                     
                     if vision_result["success"]:
@@ -479,7 +494,8 @@ async def analyze_file(
     extract_metadata: bool = True,
     extract_text: bool = True,
     extract_images: bool = False,
-    ocr_language: str = "eng"
+    ocr_language: str = "eng",
+    db: Session = Depends(get_db)
 ):
     """
     Analyze uploaded file using multi-modal AI
@@ -492,6 +508,17 @@ async def analyze_file(
     - CAD: Metadata extraction (coming soon)
     """
     try:
+        # Fetch Ollama configuration from Admin Config
+        ollama_host = None
+        if extraction_method in [ExtractionMethod.VISION_LLM, ExtractionMethod.HYBRID]:
+            try:
+                config_service = AdminConfigService(db)
+                ollama_config = config_service.get_llm_provider_config("ollama")
+                if ollama_config and ollama_config.get("api_endpoint"):
+                    ollama_host = ollama_config["api_endpoint"]
+            except Exception as e:
+                logger.warning("Failed to fetch Ollama config from DB, using default: %s", e)
+
         # Read file content
         file_content = await file.read()
 
@@ -506,7 +533,8 @@ async def analyze_file(
             extract_metadata=extract_metadata,
             extract_text=extract_text,
             extract_images=extract_images,
-            ocr_language=ocr_language
+            ocr_language=ocr_language,
+            ollama_host=ollama_host
         )
         
         return result
@@ -517,9 +545,22 @@ async def analyze_file(
 
 
 @router.post("/analyze-image", summary="Analyze Image with Vision LLM")
-async def analyze_image(request: ImageAnalysisRequest):
+async def analyze_image(
+    request: ImageAnalysisRequest,
+    db: Session = Depends(get_db)
+):
     """Analyze image using Ollama vision model (LLaVA, BakLLaVA)"""
     try:
+        # Fetch Ollama configuration
+        ollama_host = None
+        try:
+            config_service = AdminConfigService(db)
+            ollama_config = config_service.get_llm_provider_config("ollama")
+            if ollama_config and ollama_config.get("api_endpoint"):
+                ollama_host = ollama_config["api_endpoint"]
+        except Exception:
+            pass # Ignore config fetch errors, use default
+
         # Decode base64 image
         image_data = base64.b64decode(request.image_base64)
         
@@ -527,7 +568,8 @@ async def analyze_image(request: ImageAnalysisRequest):
         vision_result = await service.analyze_with_vision_llm(
             image_data=image_data,
             prompt=request.prompt,
-            model=request.vision_model
+            model=request.vision_model,
+            ollama_host=ollama_host
         )
         
         # Optional: Run OCR

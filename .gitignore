@@ -29,7 +29,6 @@ e2etraceapp/.env
 python_backend/.env
 
 # Logs
-logs/
 python_backend/logs/
 
 # Temporary/runtime data created by the backend
@@ -45,6 +44,7 @@ python_backend/data/
 
 # Local-only encryption key (do not commit)
 python_backend/.graphtrace.encryption_key
+.graphtrace.encryption_key
 
 # Generated test artifacts
 e2etraceapp/test-results/junit.xml
@@ -53,11 +53,6 @@ e2etraceapp/test-results/test-results.json
 # Playwright / UI test outputs
 e2etraceapp/playwright-report/
 e2etraceapp/test-results/
-test-results/
 
 # Local archive artifacts
 python_backend.7z
-
-# Local diagnostics outputs (generated)
-diagnostics/windows/*_report.*
-diagnostics/windows/audit_*_report.*

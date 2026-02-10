@@ -38,7 +38,7 @@ def seed_defaults(
 
     init_db()
 
-    system_path = Path(system_config) if system_config else (Path(__file__).resolve().parents[2] / "config" / "system_configuration.json")
+    system_path = Path(system_config) if system_config else (Path(__file__).resolve().parents[1] / "config" / "system_configuration.json")
     if not system_path.exists():
         raise FileNotFoundError(f"System config file not found: {system_path}")
 
@@ -120,7 +120,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Seed DB-backed configuration for GraphTrace")
     parser.add_argument(
         "--system-config",
-        default=str(Path(__file__).resolve().parents[2] / "config" / "system_configuration.json"),
+        default=str(Path(__file__).resolve().parents[1] / "config" / "system_configuration.json"),
         help="Path to system_configuration.json",
     )
     parser.add_argument(

@@ -3,6 +3,7 @@ Neo4j GraphRAG Router - REST API for hybrid search and semantic queries.
 Bridges Neo4j graph context with OpenSearch vector similarity.
 """
 
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -79,13 +80,19 @@ async def health_check():
             "status": "degraded",
             "neo4j_connected": False,
             "embedding_dimension": 0,
-            "timestamp": "2025-11-23T16:30:00Z",
+            "timestamp": datetime.now().isoformat(),
             "error": "Neo4j driver not installed"
         }
     
     except Exception as e:
-        logger.error("Health check error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.warning("Neo4j GraphRAG health check unavailable: %s", e)
+        return {
+            "status": "unavailable",
+            "neo4j_connected": False,
+            "embedding_dimension": 0,
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+        }
 
 
 @router.post("/query", response_model=GraphRAGQueryResponse)

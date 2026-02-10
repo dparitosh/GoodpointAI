@@ -35,13 +35,6 @@ const router = createHashRouter([
         handle: { crumb: 'nav.overview' }
       },
 
-      // Interactive State Flow (XState)
-      {
-        path: 'interactive-state-flow',
-        element: <Navigate to="/" replace />,
-        handle: { crumb: 'nav.overview' }
-      },
-
       // Conversational Search - AI-powered search across all data sources
       {
         path: 'search',
@@ -56,35 +49,11 @@ const router = createHashRouter([
         handle: { crumb: 'nav.migration' },
       },
 
-
-      // Data Mapping - now consolidated into Migration Wizard (Step 3)
-      {
-        path: 'data-mapping',
-        element: <Navigate to="/migration" replace />,
-        handle: { crumb: 'nav.dataMapping' },
-      },
-
-
-
-      // Processing Hub - Redirects to Analytics (SODA merged)
-      {
-        path: 'processing',
-        element: <Navigate to="/analytics?tab=quality-reports" replace />,
-        handle: { crumb: 'nav.analytics' },
-      },
-
       // Settings
       {
         path: 'settings',
         element: <E2ETracePropertyPalette />,
         handle: { crumb: 'nav.settings' },
-      },
-      
-      // Settings/Admin alias (for nested URL structure)
-      {
-        path: 'settings/admin',
-        element: <AdminSettingsPage />,
-        handle: { crumb: 'nav.adminSettings' },
       },
       
       // Admin Configuration Center
@@ -112,32 +81,6 @@ const router = createHashRouter([
         ],
       },
 
-      // Legacy alias (clean-env compatibility)
-      {
-        path: 'graphexplorer',
-        element: <Navigate to="/graph-explorer" replace />,
-      },
-
-      // Reports & Dashboards - Merged into Enterprise Analytics Hub
-      {
-        path: 'reporting',
-        element: <Navigate to="/analytics?tab=reports" replace />,
-        handle: { crumb: 'nav.analytics' },
-      },
-      
-      // Data Quality Dashboard (SODA) - Now in Analytics
-      {
-        path: 'data-quality',
-        element: <Navigate to="/analytics?tab=quality-reports" replace />,
-        handle: { crumb: 'nav.analytics' },
-      },
-
-      // Legacy alias
-      {
-        path: 'dataquality',
-        element: <Navigate to="/analytics?tab=quality-reports" replace />,
-      },
-      
       // Observability Dashboard
       {
         path: 'observability',
@@ -145,23 +88,10 @@ const router = createHashRouter([
         handle: { crumb: 'nav.observability' },
       },
 
-      // Legacy alias (older UI links)
-      {
-        path: 'monitoring',
-        element: <Navigate to="/observability" replace />,
-      },
-
       // Analytics Dashboard - Enterprise Hub with GraphQL Query Builder
       {
         path: 'analytics',
         element: <EnterpriseAnalyticsHub />,
-        handle: { crumb: 'nav.analytics' },
-      },
-      
-      // Workflow Manager - redirects to Analytics
-      {
-        path: 'workflow-manager',
-        element: <Navigate to="/analytics" replace />,
         handle: { crumb: 'nav.analytics' },
       },
       
@@ -206,6 +136,18 @@ const router = createHashRouter([
         element: <OpenApiDocsPage />,
         handle: { crumb: 'nav.apiDocs' },
       },
+
+      // ── Legacy redirects (one per target) ──
+      // Keep old bookmarks working without duplicating destinations.
+      { path: 'data-mapping',    element: <Navigate to="/migration" replace /> },
+      { path: 'processing',      element: <Navigate to="/analytics?tab=quality-reports" replace /> },
+      { path: 'reporting',       element: <Navigate to="/analytics?tab=quality-reports" replace /> },
+      { path: 'data-quality',    element: <Navigate to="/analytics?tab=quality-reports" replace /> },
+      { path: 'dataquality',     element: <Navigate to="/analytics?tab=quality-reports" replace /> },
+      { path: 'graphexplorer',   element: <Navigate to="/graph-explorer" replace /> },
+      { path: 'monitoring',      element: <Navigate to="/observability" replace /> },
+      { path: 'workflow-manager', element: <Navigate to="/analytics" replace /> },
+      { path: 'settings/admin',  element: <Navigate to="/admin" replace /> },
 
       // Catch-all (prevents React Router default 404 overlay)
       {

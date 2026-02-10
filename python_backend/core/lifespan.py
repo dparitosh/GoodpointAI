@@ -32,7 +32,6 @@ def _get_neo4j_config_from_admin_center() -> dict:
         Dict with uri, username, password, database keys
     """
     try:
-        from services.admin_config_service import AdminConfigService
         from models.admin_config_models import ConnectionConfig
         
         db = SessionLocal()
@@ -129,6 +128,31 @@ async def lifespan_manager(app: FastAPI):
                     logger.info("Seeded default DB configuration keys: %s", ", ".join(seeded))
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 logger.warning("DB config seeding failed (non-fatal): %s", exc)
+
+            # Seed admin configurations (connections, LLM providers, feature flags)
+            # so the Migration Wizard can see configured data sources on first run
+            # without requiring a separate bootstrap step.
+            try:
+                from scripts.seed_admin_configs import (
+                    seed_connections,
+                    seed_llm_providers,
+                    seed_embedding_models,
+                    seed_feature_flags,
+                    seed_system_configurations,
+                )
+
+                db = SessionLocal()
+                try:
+                    seed_system_configurations(db)
+                    seed_llm_providers(db)
+                    seed_embedding_models(db)
+                    seed_connections(db)
+                    seed_feature_flags(db)
+                    logger.info("Admin configurations seeded (connections, LLM, flags)")
+                finally:
+                    db.close()
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.warning("Admin config seeding failed (non-fatal): %s", exc)
 
         # Load Neo4j config from Admin Configuration Center (single source of truth)
         health_task = None

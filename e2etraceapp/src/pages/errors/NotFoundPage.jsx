@@ -12,7 +12,7 @@ export default function NotFoundPage() {
       </p>
       <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <Link to="/" style={{ color: 'var(--tcs-blue-primary)' }}>Go Home</Link>
-        <Link to="/graphexplorer" style={{ color: 'var(--tcs-blue-primary)' }}>Graph Explorer</Link>
+        <Link to="/graph-explorer" style={{ color: 'var(--tcs-blue-primary)' }}>Graph Explorer</Link>
       </div>
     </div>
   );

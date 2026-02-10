@@ -45,6 +45,21 @@ function Ensure-Venv() {
 if (-not $SkipBackend) {
   Write-Host "[1/3] Backend: venv + deps + DB schema + seed" -ForegroundColor Cyan
   Ensure-Venv
+
+  # Copy .env.example → .env if .env doesn't already exist
+  $envFile = Join-Path $root "python_backend\.env"
+  $envExample = Join-Path $root "python_backend\.env.example"
+  if (-not (Test-Path $envFile)) {
+    if (Test-Path $envExample) {
+      Copy-Item $envExample $envFile
+      Write-Host "Created python_backend\.env from .env.example — edit DATABASE_URL and other settings." -ForegroundColor Yellow
+    } else {
+      Write-Host "Warning: python_backend\.env.example not found. Create python_backend\.env manually per INSTALLATION.md Step 2b." -ForegroundColor Yellow
+    }
+  } else {
+    Write-Host "python_backend\.env already exists, skipping copy." -ForegroundColor DarkGray
+  }
+
   Push-Location "$root\python_backend"
   try {
     & $venvPython -m pip install --upgrade pip

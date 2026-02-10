@@ -11,6 +11,8 @@ from enum import Enum
 import uuid
 import os
 
+from services.rule_engine import RuleEngine, RuleContext, RuleSetResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -153,7 +155,7 @@ class MigrationSession:
         
     def to_dict(self) -> Dict[str, Any]:
         """Convert session to dictionary"""
-        return {
+        result = {
             "session_id": self.session_id,
             "sources": self.sources,
             "target": self.target,
@@ -166,6 +168,10 @@ class MigrationSession:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+        # Include rule validation summary if available
+        if "rule_validation" in self.metadata:
+            result["rule_validation"] = self.metadata["rule_validation"]
+        return result
     
     def add_history(self, from_state: str, to_state: str, event: str, context: Optional[Dict] = None):
         """Add transition to history"""
@@ -539,12 +545,13 @@ class AdvancedMigrationEngine:
                 session.progress = 80.0
                 await self._broadcast_update(session)
 
-            # Validation phase
+            # Validation phase — execute Rule Engine rules
             if float(session.progress or 0.0) < 95.0:
                 await self._transition_state(session, MigrationState.VALIDATION, "AUTO")
-                await asyncio.sleep(2)
+                rule_result = await self._run_rule_validation(session)
                 session.progress = 95.0
-                session.quality_score = 98.5
+                session.quality_score = rule_result.get("quality_score", 0.0)
+                session.metadata["rule_validation"] = rule_result
                 await self._broadcast_update(session)
 
             # Complete
@@ -570,6 +577,250 @@ class AdvancedMigrationEngine:
             session.errors.append(str(e))
             await self._transition_state(session, MigrationState.FAILED, "ERROR")
     
+    async def _run_rule_validation(self, session: MigrationSession) -> Dict[str, Any]:
+        """Execute Rule Engine rules against the migration session data.
+
+        Loads active rule sets from Postgres, runs them via RuleEngine, persists
+        execution records and quarantine entries, and returns a summary dict
+        including quality_score (0–100).
+
+        This runs synchronous RuleEngine code in a thread so the event loop is
+        not blocked.
+        """
+        from core.db_session import SessionLocal
+        from models.rule_engine_models import (
+            RuleSet, Rule, RuleStatus, RuleSetExecution, RuleExecution,
+            QuarantineRecord, ExecutionStatus,
+        )
+
+        def _execute_in_thread() -> Dict[str, Any]:
+            db = SessionLocal()
+            try:
+                # Determine entity type from session target (if provided)
+                target_entity_type = None
+                if isinstance(session.target, dict):
+                    target_entity_type = session.target.get("entity_type") or session.target.get("type")
+
+                # Load active rule sets (optionally filtered by target entity type)
+                query = db.query(RuleSet).filter(
+                    RuleSet.is_active == True,  # noqa: E712
+                    RuleSet.status == RuleStatus.ACTIVE.value,
+                )
+                if target_entity_type:
+                    query = query.filter(
+                        (RuleSet.target_entity_type == target_entity_type)
+                        | (RuleSet.target_entity_type == None)  # noqa: E711
+                    )
+                rule_sets = query.all()
+
+                if not rule_sets:
+                    logger.info(
+                        "No active rule sets found for migration %s — skipping rule validation",
+                        session.session_id,
+                    )
+                    return {
+                        "quality_score": 100.0,
+                        "rule_sets_executed": 0,
+                        "message": "No active rule sets configured",
+                    }
+
+                # Gather migration records to validate.
+                # The migration engine currently works with in-memory sessions; real record
+                # data may be attached to session.metadata by prior phases. Fall back to
+                # sources as coarse proxy records so rules can at least evaluate source
+                # metadata (e.g., has required fields).
+                records: List[Dict[str, Any]] = session.metadata.get("migrated_records", [])
+                if not records and isinstance(session.sources, list):
+                    records = [
+                        s if isinstance(s, dict) else {"value": s}
+                        for s in session.sources
+                    ]
+                if not records:
+                    records = [{"_session_id": session.session_id}]
+
+                engine = RuleEngine(db)
+                all_set_results: List[RuleSetResult] = []
+                total_quarantined = 0
+
+                for rs in rule_sets:
+                    rules = (
+                        db.query(Rule)
+                        .filter(
+                            Rule.rule_set_id == rs.id,
+                            Rule.status == RuleStatus.ACTIVE.value,
+                            Rule.enabled == True,  # noqa: E712
+                        )
+                        .order_by(Rule.sequence_order)
+                        .all()
+                    )
+                    if not rules:
+                        continue
+
+                    rule_set_dict = {
+                        "id": rs.id,
+                        "name": rs.name,
+                        "execution_mode": rs.execution_mode,
+                        "stop_on_critical": rs.stop_on_critical,
+                    }
+                    rules_dict = [
+                        {
+                            "id": r.id,
+                            "name": r.name,
+                            "expression": r.expression,
+                            "level": r.level or "entity",
+                            "severity": r.severity or "warning",
+                            "action_on_fail": r.action_on_fail or "log",
+                            "parent_rule_id": r.parent_rule_id,
+                            "dependency_condition": r.dependency_condition,
+                            "sequence_order": r.sequence_order,
+                            "parameters": r.parameters or {},
+                        }
+                        for r in rules
+                    ]
+
+                    result = engine.execute_rule_set(
+                        rule_set_dict,
+                        rules_dict,
+                        records,
+                        stop_on_critical=rs.stop_on_critical,
+                    )
+                    all_set_results.append(result)
+
+                    # Persist execution record
+                    exec_record = RuleSetExecution(
+                        id=result.execution_id,
+                        rule_set_id=rs.id,
+                        status=result.status,
+                        total_rules=result.total_rules,
+                        rules_passed=result.rules_passed,
+                        rules_failed=result.rules_failed,
+                        rules_skipped=result.rules_skipped,
+                        rules_error=result.rules_error,
+                        total_records_checked=result.total_records,
+                        total_failures=result.total_failures,
+                        overall_pass_rate=result.overall_pass_rate,
+                        duration_ms=result.duration_ms,
+                        started_at=result.started_at,
+                        completed_at=result.completed_at,
+                        error_message=result.error_message,
+                        triggered_by="migration_engine",
+                        record_count=len(records),
+                        data_source=f"migration:{session.session_id}",
+                        execution_context={
+                            "session_id": session.session_id,
+                            "workflow_id": session.workflow_id,
+                            "strategy": session.strategy,
+                        },
+                    )
+                    db.add(exec_record)
+
+                    # Persist individual rule executions & quarantine failed records
+                    for rr in result.rule_results:
+                        rule_exec = RuleExecution(
+                            id=str(uuid.uuid4()),
+                            set_execution_id=result.execution_id,
+                            rule_id=rr.rule_id,
+                            status=(
+                                ExecutionStatus.COMPLETED.value
+                                if not rr.error
+                                else ExecutionStatus.ERROR.value
+                            ),
+                            records_checked=rr.records_checked,
+                            records_passed=rr.records_checked - rr.records_failed,
+                            records_failed=rr.records_failed,
+                            pass_rate=(
+                                (rr.records_checked - rr.records_failed)
+                                / rr.records_checked
+                                * 100
+                                if rr.records_checked > 0
+                                else 0
+                            ),
+                            duration_ms=rr.duration_ms,
+                            failure_samples=rr.failure_samples[:50],
+                            error_message=rr.error,
+                        )
+                        db.add(rule_exec)
+
+                        # Find the matching Rule ORM to get action_on_fail / severity
+                        rule_meta = next(
+                            (rd for rd in rules_dict if rd["id"] == rr.rule_id), {}
+                        )
+                        action = rule_meta.get("action_on_fail", "log")
+
+                        # Quarantine failed records when action requires it
+                        if rr.records_failed > 0 and action in ("quarantine", "reject"):
+                            for sample in rr.failure_samples[:50]:
+                                qr = QuarantineRecord(
+                                    id=str(uuid.uuid4()),
+                                    rule_execution_id=rule_exec.id,
+                                    rule_id=rr.rule_id,
+                                    source_table=f"migration:{session.session_id}",
+                                    source_record_id=str(
+                                        sample.get("record", {}).get("id", "")
+                                    ),
+                                    record_data=sample.get("record", {}),
+                                    failure_reason=sample.get("error", "Rule failed"),
+                                    severity=rule_meta.get("severity", "warning"),
+                                )
+                                db.add(qr)
+                                total_quarantined += 1
+
+                db.commit()
+
+                # Aggregate quality score across all executed rule sets
+                if all_set_results:
+                    pass_rates = [r.overall_pass_rate for r in all_set_results]
+                    quality_score = sum(pass_rates) / len(pass_rates)
+                else:
+                    quality_score = 100.0
+
+                summary = {
+                    "quality_score": round(quality_score, 2),
+                    "rule_sets_executed": len(all_set_results),
+                    "total_rules_passed": sum(r.rules_passed for r in all_set_results),
+                    "total_rules_failed": sum(r.rules_failed for r in all_set_results),
+                    "total_records_quarantined": total_quarantined,
+                    "execution_ids": [r.execution_id for r in all_set_results],
+                    "per_rule_set": [
+                        {
+                            "rule_set_id": r.rule_set_id,
+                            "status": r.status,
+                            "overall_pass_rate": round(r.overall_pass_rate, 2),
+                            "rules_passed": r.rules_passed,
+                            "rules_failed": r.rules_failed,
+                            "duration_ms": r.duration_ms,
+                        }
+                        for r in all_set_results
+                    ],
+                }
+                logger.info(
+                    "Migration %s rule validation: score=%.2f, sets=%d, quarantined=%d",
+                    session.session_id,
+                    quality_score,
+                    len(all_set_results),
+                    total_quarantined,
+                )
+                return summary
+
+            except Exception as e:
+                logger.error(
+                    "Rule validation failed for migration %s: %s",
+                    session.session_id,
+                    e,
+                    exc_info=True,
+                )
+                db.rollback()
+                return {
+                    "quality_score": 0.0,
+                    "error": str(e),
+                    "rule_sets_executed": 0,
+                }
+            finally:
+                db.close()
+
+        # Run synchronous DB+rule code on a thread so we don't block the event loop.
+        return await asyncio.get_running_loop().run_in_executor(None, _execute_in_thread)
+
     async def _transition_state(
         self, 
         session: MigrationSession, 

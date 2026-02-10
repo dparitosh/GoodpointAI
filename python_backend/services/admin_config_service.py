@@ -202,7 +202,7 @@ class AdminConfigService:
                 db_config = self.db.query(LLMProviderConfig).filter(
                     and_(
                         LLMProviderConfig.status == ConfigStatus.ACTIVE,
-                        LLMProviderConfig.is_primary == True
+                        LLMProviderConfig.is_default == True
                     )
                 ).first()
                 
@@ -247,9 +247,9 @@ class AdminConfigService:
                         "id": cfg.id,
                         "name": cfg.name,
                         "provider": cfg.provider,
-                        "model": cfg.default_model,
+                        "model": cfg.default_chat_model,
                         "status": cfg.status,
-                        "is_primary": cfg.is_primary,
+                        "is_primary": cfg.is_default,
                     })
                 if providers:
                     _config_cache.set(cache_key, providers)
@@ -301,7 +301,7 @@ class AdminConfigService:
                 if provider:
                     query = query.filter(EmbeddingModelConfig.provider == provider)
                 else:
-                    query = query.filter(EmbeddingModelConfig.is_primary == True)
+                    query = query.filter(EmbeddingModelConfig.is_default == True)
                 
                 db_config = query.first()
                 
@@ -316,12 +316,12 @@ class AdminConfigService:
                         "provider": db_config.provider,
                         "model": db_config.model_name,
                         "dimension": db_config.dimension,
-                        "api_key": db_config.api_key,
-                        "endpoint": db_config.endpoint_url,
-                        "max_tokens": db_config.max_tokens,
+                        "api_key": db_config.custom_api_key,
+                        "endpoint": db_config.custom_endpoint,
+                        "max_tokens": db_config.max_input_length,
                         "batch_size": db_config.batch_size,
-                        "normalize": db_config.normalize_embeddings,
-                        "extra_settings": db_config.extra_settings or {},
+                        "normalize": db_config.normalize,
+                        "extra_settings": {},
                     }
                     _config_cache.set(cache_key, config)
                     return config

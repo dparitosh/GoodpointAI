@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { getExcelSheetNames, readExcelArrayBufferToAoa } from '../../utils/spreadsheet-utils.js';
@@ -87,9 +88,21 @@ const AGGREGATIONS = [
   { id: 'distinct', name: 'Distinct Count' }
 ];
 
+const VALID_TABS = ['query-builder', 'natural-language', 'quality-reports', 'saved-queries', 'spreadsheets'];
+
 const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const resolvedInitial = (tabFromUrl && VALID_TABS.includes(tabFromUrl)) ? tabFromUrl : initialTab;
+
   // Core state
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [activeTab, setActiveTabState] = useState(resolvedInitial);
+
+  // Keep URL and state in sync
+  const setActiveTab = useCallback((tab) => {
+    setActiveTabState(tab);
+    setSearchParams(tab === 'query-builder' ? {} : { tab }, { replace: true });
+  }, [setSearchParams]);
   const [dataSource, setDataSource] = useState('postgres');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1089,6 +1102,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
             <button className={`tab-inline ${activeTab === 'natural-language' ? 'active' : ''}`} onClick={() => setActiveTab('natural-language')}>Natural Language</button>
             <button className={`tab-inline ${activeTab === 'quality-reports' ? 'active' : ''}`} onClick={() => setActiveTab('quality-reports')}>Quality Reports</button>
             <button className={`tab-inline ${activeTab === 'saved-queries' ? 'active' : ''}`} onClick={() => setActiveTab('saved-queries')}>Saved Queries</button>
+            <button className={`tab-inline ${activeTab === 'spreadsheets' ? 'active' : ''}`} onClick={() => setActiveTab('spreadsheets')}>Spreadsheets</button>
           </nav>
         </div>
         <div className="header-right">

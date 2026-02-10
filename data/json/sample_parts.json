@@ -1,5 +1,0 @@
-[
-  {"part_number": "P-1000", "name": "Widget", "category": "Hardware", "revision": "A"},
-  {"part_number": "P-1001", "name": "Gadget", "category": "Hardware", "revision": "B"},
-  {"part_number": "P-2000", "name": "Bracket", "category": "Mechanical", "revision": "A"}
-]

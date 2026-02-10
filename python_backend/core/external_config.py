@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional
 
 # Load environment variables
@@ -177,6 +177,20 @@ class FileSystemConfig(BaseSettings):
     
     # Folder monitoring
     watch_folders: List[str] = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
+
+    @field_validator("watch_folders", mode="before")
+    @classmethod
+    def _coerce_watch_folders(cls, v):
+        """Accept a plain string (e.g. './data/watch') and wrap it into a list."""
+        if isinstance(v, str):
+            # If it looks like JSON (starts with '['), let pydantic handle it
+            stripped = v.strip()
+            if stripped.startswith("["):
+                import json
+                return json.loads(stripped)
+            # Comma-separated or single path
+            return [p.strip() for p in v.split(",") if p.strip()]
+        return v
     
     # File size limits (in MB)
     max_upload_size_mb: int = Field(default=100, validation_alias="MAX_UPLOAD_SIZE_MB")
