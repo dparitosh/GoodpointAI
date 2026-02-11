@@ -50,15 +50,23 @@ def seed_defaults(
     neo4j_bolt_port = int(neo4j_ports.get("bolt_port") or 7687)
     opensearch_port = int(opensearch_ports.get("port") or 9200)
 
-    # Default, install-friendly values. Passwords remain empty until user sets them via UI.
+    # Allow environment variables to override default install-friendly values (127.0.0.1)
+    # This prevents hardcoding issues in containerized or remote environments.
+    import os
+    env_neo4j_uri = os.environ.get("NEO4J_URI") or f"neo4j://127.0.0.1:{neo4j_bolt_port}"
+    env_neo4j_user = os.environ.get("NEO4J_USER") or "neo4j"
+    env_neo4j_pass = os.environ.get("NEO4J_PASSWORD") or ""
+
+    env_os_url = os.environ.get("OPENSEARCH_URL") or f"http://127.0.0.1:{opensearch_port}"
+
     neo4j_payload = {
-        "uri": f"neo4j://127.0.0.1:{neo4j_bolt_port}",
-        "username": "neo4j",
-        "password": "",
+        "uri": env_neo4j_uri,
+        "username": env_neo4j_user,
+        "password": env_neo4j_pass,
         "database": "neo4j",
     }
     opensearch_payload = {
-        "url": f"http://127.0.0.1:{opensearch_port}",
+        "url": env_os_url,
         "username": None,
         "password": "",
         "verify_certs": True,

@@ -30,13 +30,15 @@ GoodpointAI/
 
 ## Installation Steps (Windows)
 
-### Step 1: Clone the Repository
+### Single-Machine Installation (Default)
+
+#### Step 1: Clone the Repository
 ```powershell
 git clone https://github.com/dparitosh/GoodpointAI.git
 cd GoodpointAI
 ```
 
-### Step 2: Configure PostgreSQL
+#### Step 2: Configure PostgreSQL
 
 #### 2a. Create the Database
 Connect to your local PostgreSQL instance (e.g. via `psql`) and create the `graphtrace` database:
@@ -69,11 +71,13 @@ GRAPH_TRACE_LOAD_DOTENV=true
 
 > **Note:** The bootstrap script (Step 3) will automatically copy `.env.example` → `.env`
 > if the file doesn't exist yet, but you **must** edit `DATABASE_URL` with your actual
-> Postgres credentials before proceeding.
+> Postgres credentials before proceeding. The bootstrap script will now validate that you have
+> changed the default credentials and fail safely with instructions if you haven't.
 
 ### Step 3: Bootstrap Environment
 Run the bootstrap script. This will:
 - Copy `python_backend/.env.example` → `python_backend/.env` (if `.env` doesn't exist)
+- **Check configuration**: Verifies `DATABASE_URL` is configured (fails if default `yourpassword` detected)
 - Create a Python virtual environment at `.venv/`
 - Install all backend pip dependencies
 - Generate an encryption key (`.graphtrace.encryption_key`)
@@ -230,3 +234,115 @@ python -m scripts.init_db_schema
 - **Database connection refused**: Ensure PostgreSQL is running and `DATABASE_URL` in `python_backend/.env` is correct.
 - **Encryption key mismatch**: Delete `.graphtrace.encryption_key` and re-run bootstrap, or set `GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG=true` then run `python -m scripts.init_db_schema`.
 - **Port already in use**: Run `.\installation_scripts\stop-all.ps1` to kill orphan processes.
+
+## Multi-VM Deployment
+
+For production deployments across separate virtual machines, configure each component's `.env` file with network-accessible addresses instead of `localhost`/`127.0.0.1`.
+
+### Example Architecture
+
+```
+VM 1 (Database): PostgreSQL (port 5433), Neo4j (port 7687), Redis (port 6379)
+VM 2 (Backend):  FastAPI Backend (port 8011), MCP Server (port 8012)
+VM 3 (Frontend): Vite Dev Server (port 5173) OR Nginx/Apache serving static build
+VM 4 (Agents):   AI Agent Services (ports 8020-8025)
+```
+
+### Configuration Steps
+
+#### 1. VM1 (Database Server)
+Ensure PostgreSQL, Neo4j, and Redis are configured to accept network connections:
+
+**PostgreSQL** (`postgresql.conf`):
+```conf
+listen_addresses = '*'  # Or specific IP
+```
+
+**PostgreSQL** (`pg_hba.conf`):
+```conf
+host    graphtrace    postgres    10.0.0.0/24    scram-sha-256
+```
+
+**Neo4j** (`neo4j.conf`):
+```conf
+dbms.default_listen_address=0.0.0.0
+```
+
+#### 2. VM2 (Backend Server)
+Edit `python_backend/.env`:
+```dotenv
+# Use VM1's IP address (not localhost)
+DATABASE_URL=postgresql://postgres:yourpassword@10.0.0.10:5433/graphtrace
+NEO4J_URI=neo4j://10.0.0.10:7687
+REDIS_HOST=10.0.0.10
+
+# Bind to all interfaces so other VMs can reach the API
+BACKEND_HOST=0.0.0.0
+
+# Allow frontend VM origin
+GRAPH_TRACE_ALLOWED_ORIGINS=["http://10.0.0.30:5173","https://yourdomain.com"]
+```
+
+Edit `mcp_server/.env`:
+```dotenv
+# MCP binds to all interfaces
+MCP_SERVER_HOST=0.0.0.0
+
+# Use VM1's database addresses
+DATABASE_URL=postgresql://postgres:yourpassword@10.0.0.10:5433/graphtrace
+REDIS_URL=redis://10.0.0.10:6379/0
+```
+
+#### 3. VM3 (Frontend Server)
+
+**Development Mode:**
+Edit `e2etraceapp/.env`:
+```dotenv
+# Point to VM2's backend
+VITE_API_BASE_URL=http://10.0.0.20:8011
+VITE_DEV_PROXY_TARGET=http://10.0.0.20:8011
+```
+
+**Production Mode:**
+Build the static assets and configure your web server (Nginx/Apache) to proxy `/api/*` requests to VM2:
+
+```nginx
+# Nginx example
+location /api/ {
+    proxy_pass http://10.0.0.20:8011;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+#### 4. VM4 (Agent Services - Optional)
+Each agent's `main.py` loads `python_backend/.env`. Create a shared `.env` or set environment variables:
+```dotenv
+DATABASE_URL=postgresql://postgres:yourpassword@10.0.0.10:5433/graphtrace
+NEO4J_URI=neo4j://10.0.0.10:7687
+REDIS_URL=redis://10.0.0.10:6379/0
+```
+
+Agents register with the MCP server on VM2:
+```dotenv
+MCP_SERVER_URL=http://10.0.0.20:8012
+```
+
+### Firewall Rules
+Ensure the following ports are open between VMs:
+
+| Source VM | Target VM | Ports | Purpose |
+|-----------|-----------|-------|----------|
+| VM2 (Backend) | VM1 (DB) | 5433, 7687, 6379 | Database access |
+| VM3 (Frontend) | VM2 (Backend) | 8011 | API requests |
+| VM4 (Agents) | VM1 (DB) | 5433, 7687, 6379 | Database access |
+| VM4 (Agents) | VM2 (MCP) | 8012 | Agent registration |
+| Client Browser | VM3 (Frontend) | 5173, 80, 443 | UI access |
+
+### Security Considerations
+
+1. **Do not use default passwords** — change all credentials in `.env` files
+2. **Enable SSL/TLS** for PostgreSQL and Neo4j in production
+3. **Use firewall rules** to restrict access between VMs
+4. **Enable authentication** by setting `GRAPH_TRACE_AUTH_REQUIRED=true` in backend `.env`
+5. **Use environment-specific secrets management** (Azure Key Vault, AWS Secrets Manager, etc.)

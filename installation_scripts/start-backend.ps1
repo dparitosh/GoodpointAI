@@ -40,15 +40,24 @@ Write-Host "Activating virtual environment..." -ForegroundColor Yellow
 # Navigate to backend directory
 Set-Location -Path "$repoRoot\python_backend"
 
-# Check if .env file exists
+# Check if .env file exists and validate configuration
 if (-not (Test-Path ".env")) {
-    Write-Host "Note: .env file not found (OK). You can configure integrations in the UI." -ForegroundColor Yellow
-    Write-Host "Example .env contents:" -ForegroundColor Yellow
-    Write-Host "DATABASE_URL=postgresql://postgres:password@127.0.0.1:5433/graphtrace" -ForegroundColor Cyan
-    Write-Host "NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io" -ForegroundColor Cyan
-    Write-Host "NEO4J_USER=neo4j" -ForegroundColor Cyan
-    Write-Host "NEO4J_PASSWORD=your-password" -ForegroundColor Cyan
-    Write-Host ""
+    Write-Host "Running for first time? .env file not found." -ForegroundColor Yellow
+    Write-Host "Please run '..\bootstrap.ps1' to set up the environment and create .env." -ForegroundColor Red
+    exit 1
+} else {
+    $envContent = Get-Content ".env" -Raw
+    if ($envContent -match "yourpassword" -or $envContent -match "postgresql://postgres:password@") {
+        Write-Host ""
+        Write-Host "CRITICAL CONFIGURATION REQUIRED:" -ForegroundColor Red -BackgroundColor Black
+        Write-Host "You must edit python_backend\.env with your actual PostgreSQL credentials." -ForegroundColor Red
+        Write-Host "Default placeholders ('yourpassword') are still present." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "1. Open python_backend\.env" -ForegroundColor Yellow
+        Write-Host "2. Set DATABASE_URL=postgresql://user:pass@host:port/dbname" -ForegroundColor Yellow
+        Write-Host "3. Re-run start-backend.ps1" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Install/upgrade dependencies

@@ -23,7 +23,7 @@ Or use the VS Code task: **Start Full Stack (Frontend + Backend)**
 
 ## Documentation
 
-- **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- **Installation**: [docs/INSTALLATION.md](docs/INSTALLATION.md) — Single-machine and multi-VM deployment
 - **User Guide**: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - **Architecture**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **Application Guide**: [docs/APP_GUIDE.md](docs/APP_GUIDE.md)
@@ -59,8 +59,11 @@ This project uses **PostgreSQL** as the only supported persistence store.
    copy python_backend\.env.example python_backend\.env
    ```
 
-2. Edit `python_backend/.env` and set the connection:
+2. Edit `python_backend/.env` and set your actual PostgreSQL credentials:
 
 ```dotenv
-DATABASE_URL="postgresql://postgres:password@127.0.0.1:5433/graphtrace"
+DATABASE_URL="postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace"
 ```
+
+> **Important:** Replace `yourpassword` with your actual PostgreSQL password.  
+> For multi-VM deployment, see [docs/INSTALLATION.md](docs/INSTALLATION.md#multi-vm-deployment).

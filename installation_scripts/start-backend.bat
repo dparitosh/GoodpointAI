@@ -31,14 +31,32 @@ cd /d "%REPO_ROOT%python_backend"
 
 REM Check if .env file exists
 if not exist ".env" (
-    echo Note: .env file not found ^(OK^). You can configure integrations in the UI.
-    echo Example .env contents:
-    echo DATABASE_URL=postgresql://postgres:password@127.0.0.1:5433/graphtrace
-    echo NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
-    echo NEO4J_USER=neo4j
-    echo NEO4J_PASSWORD=your-password
-    echo.
+    echo .env file not found. You must configure environment variables.
+    echo Please run '..\bootstrap.ps1' first to set up the environment.
+    pause
+    exit /b 1
 )
+
+findstr /C:"yourpassword" .env >nul
+if not errorlevel 1 goto ConfigError
+findstr /C:"postgresql://postgres:password@" .env >nul
+if not errorlevel 1 goto ConfigError
+goto ConfigOK
+
+:ConfigError
+echo.
+echo CRITICAL CONFIGURATION REQUIRED:
+echo You must edit python_backend\.env with your actual PostgreSQL credentials.
+echo Default placeholders ('yourpassword') are still present.
+echo.
+echo 1. Open python_backend\.env
+echo 2. Set DATABASE_URL=postgresql://user:pass@host:port/dbname
+echo 3. Re-run start-backend.bat
+echo.
+pause
+exit /b 1
+
+:ConfigOK
 
 REM Install/upgrade dependencies
 echo Installing/updating dependencies...

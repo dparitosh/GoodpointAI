@@ -8,11 +8,13 @@ class Settings(BaseSettings):
     MCP_SERVER_HOST: str = "0.0.0.0"
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/graphtrace"
+    # Use empty defaults for passwords to ensure security. 
+    # Valid values must be provided formatted in .env (see python_backend/.env.example)
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/graphtrace"
     REDIS_URL: str = "redis://localhost:6379/0"
     NEO4J_URI: str = "neo4j://localhost:7687"
     NEO4J_USERNAME: str = "neo4j"
-    NEO4J_PASSWORD: str = "password"
+    NEO4J_PASSWORD: str = ""
     
     # Queue
     AZURE_SERVICE_BUS_CONNECTION_STRING: str = ""

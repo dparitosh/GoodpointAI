@@ -52,12 +52,26 @@ if (-not $SkipBackend) {
   if (-not (Test-Path $envFile)) {
     if (Test-Path $envExample) {
       Copy-Item $envExample $envFile
-      Write-Host "Created python_backend\.env from .env.example — edit DATABASE_URL and other settings." -ForegroundColor Yellow
+      Write-Host "Created python_backend\.env from .env.example." -ForegroundColor Yellow
     } else {
-      Write-Host "Warning: python_backend\.env.example not found. Create python_backend\.env manually per INSTALLATION.md Step 2b." -ForegroundColor Yellow
+      Write-Host "Warning: python_backend\.env.example not found." -ForegroundColor Yellow
     }
-  } else {
-    Write-Host "python_backend\.env already exists, skipping copy." -ForegroundColor DarkGray
+  }
+
+  # Validate .env configuration
+  if (Test-Path $envFile) {
+    $envContent = Get-Content $envFile -Raw
+    if ($envContent -match "yourpassword" -or $envContent -match "postgresql://postgres:password@") {
+        Write-Host ""
+        Write-Host "CRITICAL CONFIGURATION REQUIRED:" -ForegroundColor Red -BackgroundColor Black
+        Write-Host "You must edit python_backend\.env with your actual PostgreSQL credentials." -ForegroundColor Red
+        Write-Host "Default placeholders ('yourpassword') are still present." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "1. Open $envFile" -ForegroundColor Yellow
+        Write-Host "2. Set DATABASE_URL=postgresql://user:pass@host:port/dbname" -ForegroundColor Yellow
+        Write-Host "3. Re-run bootstrap.ps1" -ForegroundColor Yellow
+        exit 1
+    }
   }
 
   Push-Location "$root\python_backend"
@@ -98,7 +112,19 @@ if (-not $SkipBackend) {
       }
     }
 
-    & $venvPython -m scripts.init_db_schema
+    try {
+      & $venvPython -m scripts.init_db_schema
+    } catch {
+      Write-Host ""
+      Write-Host "DATABASE INITIALIZATION FAILED:" -ForegroundColor Red
+      Write-Host "$_" -ForegroundColor Red
+      Write-Host ""
+      Write-Host "Troubleshooting:" -ForegroundColor Yellow
+      Write-Host "1. Is the PostgreSQL service running?" -ForegroundColor Yellow
+      Write-Host "2. Does the 'graphtrace' database exist? (See Step 2a in INSTALLATION.md)" -ForegroundColor Yellow
+      Write-Host "3. Are the credentials in python_backend\.env correct?" -ForegroundColor Yellow
+      exit 1
+    }
   }
   finally {
     Pop-Location
@@ -114,11 +140,6 @@ if (-not $SkipFrontend) {
   finally {
     Pop-Location
   }
-}
-
-if ($RunDiagnostics) {
-  Write-Host "[3/3] Diagnostics" -ForegroundColor Cyan
-  & "$root\diagnostics\windows\diagnose-all.ps1"
 }
 
 Write-Host "Bootstrap complete." -ForegroundColor Green

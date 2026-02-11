@@ -98,7 +98,7 @@ def seed_system_configurations(db: Session):
          "description": "JWT token expiry time in hours", "is_secret": False},
         {"category": "security", "key": "enable_cors", "value": "true", "value_type": "boolean",
          "description": "Enable CORS for API", "is_secret": False},
-        {"category": "security", "key": "allowed_origins", "value": '["http://localhost:5173","http://localhost:3000"]', "value_type": "json",
+        {"category": "security", "key": "allowed_origins", "value": os.environ.get("GRAPH_TRACE_ALLOWED_ORIGINS", '["http://localhost:5173","http://localhost:3000"]'), "value_type": "json",
          "description": "Allowed CORS origins", "is_secret": False},
         {"category": "security", "key": "rate_limit_requests", "value": "100", "value_type": "number",
          "description": "Rate limit: requests per minute", "is_secret": False},
