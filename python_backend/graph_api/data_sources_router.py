@@ -198,8 +198,14 @@ async def _sample_system_connection(
     fmt = "json"
 
     try:
-        if conn_type in _DATABASE_TYPES:
+        if conn_type in {"postgres", "postgresql", "database"}:
             records, warnings = await _sample_postgres(conn_dict, limit)
+        elif conn_type in {"sqlserver", "mssql"}:
+            records, warnings = await _sample_sqlserver(conn_dict, limit)
+        elif conn_type in {"oracle"}:
+            records, warnings = await _sample_oracle(conn_dict, limit)
+        elif conn_type in {"mysql"}:
+            records, warnings = await _sample_postgres(conn_dict, limit)  # MySQL uses similar approach
         elif conn_type in _NEO4J_TYPES:
             records, warnings = await _sample_neo4j(conn_dict, limit)
         elif conn_type in _API_TYPES:
@@ -230,14 +236,14 @@ async def _sample_system_connection(
 
 
 async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
-    """Sample rows from a PostgreSQL / SQL database connection."""
+    """Sample rows from a PostgreSQL database connection."""
     warnings: List[str] = []
     records: List[Dict[str, Any]] = []
 
     try:
         import psycopg  # type: ignore
     except ImportError:
-        warnings.append("psycopg driver not installed — cannot sample SQL database")
+        warnings.append("psycopg driver not installed — cannot sample PostgreSQL database")
         return records, warnings
 
     host = conn.get("host", "localhost")
@@ -278,6 +284,125 @@ async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
                 warnings.append(f"Sampled from table: {table_name}")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         warnings.append(f"SQL sampling error: {str(exc)}")
+
+    return records, warnings
+
+
+async def _sample_sqlserver(conn: Dict[str, Any], limit: int) -> tuple:
+    """Sample rows from a Microsoft SQL Server database connection."""
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+
+    try:
+        import pyodbc  # type: ignore
+    except ImportError:
+        warnings.append("pyodbc driver not installed — cannot sample SQL Server database")
+        return records, warnings
+
+    host = conn.get("host", "localhost")
+    port = conn.get("port", "1433")
+    database = conn.get("database", "master")
+    username = conn.get("username", "sa")
+    password = conn.get("password", "")
+    driver = conn.get("driver", "{ODBC Driver 17 for SQL Server}")
+
+    # Build connection string for SQL Server
+    conn_str = (
+        f"DRIVER={driver};"
+        f"SERVER={host},{port};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        f"Connection Timeout=5;"
+    )
+
+    try:
+        with pyodbc.connect(conn_str) as db_conn:
+            with db_conn.cursor() as cur:
+                # Discover the first user table to sample
+                cur.execute(
+                    "SELECT TOP 1 TABLE_SCHEMA, TABLE_NAME "
+                    "FROM INFORMATION_SCHEMA.TABLES "
+                    "WHERE TABLE_TYPE = 'BASE TABLE' "
+                    "AND TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA') "
+                    "ORDER BY TABLE_NAME"
+                )
+                table_info = cur.fetchone()
+                if not table_info:
+                    warnings.append("No user tables found in SQL Server database")
+                    return records, warnings
+
+                schema_name, table_name = table_info
+                full_table = f"[{schema_name}].[{table_name}]"
+                cur.execute(f"SELECT TOP {limit} * FROM {full_table}")
+                columns = [desc[0] for desc in cur.description]
+                for row in cur.fetchall():
+                    records.append(dict(zip(columns, row)))
+
+                warnings.append(f"Sampled {len(records)} rows from SQL Server table {full_table}")
+
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"SQL Server sampling error: {str(exc)}")
+
+    return records, warnings
+
+
+async def _sample_oracle(conn: Dict[str, Any], limit: int) -> tuple:
+    """Sample rows from an Oracle database connection."""
+    warnings: List[str] = []
+    records: List[Dict[str, Any]] = []
+
+    try:
+        import oracledb  # type: ignore (formerly cx_Oracle)
+    except ImportError:
+        try:
+            import cx_Oracle as oracledb  # type: ignore (legacy)
+        except ImportError:
+            warnings.append("oracledb driver not installed — cannot sample Oracle database")
+            return records, warnings
+
+    host = conn.get("host", "localhost")
+    port = conn.get("port", "1521")
+    service_name = conn.get("service_name", conn.get("database", "ORCL"))
+    username = conn.get("username", "system")
+    password = conn.get("password", "")
+    
+    # Oracle connection DSN
+    dsn = f"{host}:{port}/{service_name}"
+
+    try:
+        with oracledb.connect(user=username, password=password, dsn=dsn) as db_conn:
+            with db_conn.cursor() as cur:
+                # Discover the first user table to sample (exclude system tables)
+                cur.execute(
+                    "SELECT owner, table_name FROM all_tables "
+                    "WHERE owner NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', "
+                    "'WMSYS', 'EXFSYS', 'CTXSYS', 'XDB', 'ANONYMOUS', 'ORDSYS', 'MDSYS', 'OLAPSYS') "
+                    "AND ROWNUM = 1 ORDER BY table_name"
+                )
+                table_info = cur.fetchone()
+                if not table_info:
+                    warnings.append("No user tables found in Oracle database")
+                    return records, warnings
+
+                owner, table_name = table_info
+                full_table = f"{owner}.{table_name}"
+                cur.execute(f"SELECT * FROM {full_table} WHERE ROWNUM <= {limit}")
+                columns = [desc[0] for desc in cur.description]
+                for row in cur.fetchall():
+                    # Convert Oracle-specific types to JSON-serializable types
+                    serialized_row = []
+                    for val in row:
+                        if hasattr(val, 'read'):  # LOB objects
+                            serialized_row.append(val.read()[:1000] if val else None)
+                        else:
+                            serialized_row.append(val)
+                    records.append(dict(zip(columns, serialized_row)))
+
+                warnings.append(f"Sampled {len(records)} rows from Oracle table {full_table}")
+
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        warnings.append(f"Oracle sampling error: {str(exc)}")
 
     return records, warnings
 
@@ -1416,7 +1541,7 @@ async def _test_database_connection(connection: Dict) -> TestConnectionResponse:
         )
 
 async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
-    """Test PostgreSQL connection using psycopg (v3)"""
+    """Test PostgreSQL/MySQL connection using psycopg (v3) or pymysql"""
     try:
         import psycopg
         
@@ -1447,6 +1572,88 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
         return TestConnectionResponse(
             success=False,
             message=f"PostgreSQL connection failed: {str(e)}"
+        )
+
+
+async def _test_sqlserver_connection(connection: Dict) -> TestConnectionResponse:
+    """Test Microsoft SQL Server connection using pyodbc"""
+    try:
+        import pyodbc
+        
+        host = connection.get('host', 'localhost')
+        port = connection.get('port', '1433')
+        database = connection.get('database', 'master')
+        username = connection.get('username', 'sa')
+        password = connection.get('password', '')
+        driver = connection.get('driver', '{ODBC Driver 17 for SQL Server}')
+        
+        conn_str = (
+            f"DRIVER={driver};"
+            f"SERVER={host},{port};"
+            f"DATABASE={database};"
+            f"UID={username};"
+            f"PWD={password};"
+            f"Connection Timeout=5;"
+        )
+        
+        with pyodbc.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT @@VERSION")
+                version = cur.fetchone()[0]
+        
+        return TestConnectionResponse(
+            success=True,
+            message="SQL Server connection successful",
+            details={"host": host, "port": port, "database": database, "version": version[:80]}
+        )
+    except ImportError:
+        return TestConnectionResponse(
+            success=False,
+            message="pyodbc driver not installed. Install with: pip install pyodbc"
+        )
+    except Exception as e:
+        return TestConnectionResponse(
+            success=False,
+            message=f"SQL Server connection failed: {str(e)}"
+        )
+
+
+async def _test_oracle_connection(connection: Dict) -> TestConnectionResponse:
+    """Test Oracle database connection using oracledb (python-oracledb)"""
+    try:
+        import oracledb
+    except ImportError:
+        try:
+            import cx_Oracle as oracledb  # type: ignore
+        except ImportError:
+            return TestConnectionResponse(
+                success=False,
+                message="oracledb driver not installed. Install with: pip install oracledb"
+            )
+    
+    try:
+        host = connection.get('host', 'localhost')
+        port = connection.get('port', '1521')
+        service_name = connection.get('service_name', connection.get('database', 'ORCL'))
+        username = connection.get('username', 'system')
+        password = connection.get('password', '')
+        
+        dsn = f"{host}:{port}/{service_name}"
+        
+        with oracledb.connect(user=username, password=password, dsn=dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM v$version WHERE ROWNUM = 1")
+                version = cur.fetchone()[0]
+        
+        return TestConnectionResponse(
+            success=True,
+            message="Oracle connection successful",
+            details={"host": host, "port": port, "service_name": service_name, "version": version[:80]}
+        )
+    except Exception as e:
+        return TestConnectionResponse(
+            success=False,
+            message=f"Oracle connection failed: {str(e)}"
         )
 
 async def _test_api_connection(connection: Dict) -> TestConnectionResponse:
@@ -1769,11 +1976,55 @@ async def _test_plm_connection(connection: Dict, plm_type: str) -> TestConnectio
 async def get_supported_types():
     """Get supported data source types"""
     return {
-        "database": {
-            "name": "SQL Database",
+        "postgres": {
+            "name": "PostgreSQL Database",
             "fields": ["host", "port", "database", "username", "password"],
-            "default_port": "5433",
-            "description": "PostgreSQL, MySQL, SQL Server, etc."
+            "default_port": "5432",
+            "description": "PostgreSQL relational database"
+        },
+        "postgresql": {
+            "name": "PostgreSQL Database",
+            "fields": ["host", "port", "database", "username", "password"],
+            "default_port": "5432",
+            "description": "PostgreSQL relational database (alias)"
+        },
+        "mysql": {
+            "name": "MySQL Database",
+            "fields": ["host", "port", "database", "username", "password"],
+            "default_port": "3306",
+            "description": "MySQL/MariaDB relational database"
+        },
+        "sqlserver": {
+            "name": "Microsoft SQL Server",
+            "fields": ["host", "port", "database", "username", "password", "driver"],
+            "default_port": "1433",
+            "description": "Microsoft SQL Server database (requires pyodbc)",
+            "extras": {
+                "driver": "{ODBC Driver 17 for SQL Server}",
+                "alternative_drivers": ["{ODBC Driver 18 for SQL Server}", "{SQL Server}"]
+            }
+        },
+        "mssql": {
+            "name": "Microsoft SQL Server",
+            "fields": ["host", "port", "database", "username", "password", "driver"],
+            "default_port": "1433",
+            "description": "Microsoft SQL Server database (alias for sqlserver)"
+        },
+        "oracle": {
+            "name": "Oracle Database",
+            "fields": ["host", "port", "service_name", "username", "password"],
+            "default_port": "1521",
+            "description": "Oracle Database (requires python-oracledb)",
+            "extras": {
+                "connection_modes": ["service_name", "sid"],
+                "note": "Use 'service_name' field for the Oracle service name or SID"
+            }
+        },
+        "database": {
+            "name": "Generic SQL Database",
+            "fields": ["host", "port", "database", "username", "password"],
+            "default_port": "5432",
+            "description": "Generic database connection (auto-detected)"
         },
         "neo4j": {
             "name": "Neo4j Graph Database",
