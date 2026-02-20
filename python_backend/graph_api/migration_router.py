@@ -1,14 +1,16 @@
 """
 Migration API Router
 Provides REST endpoints and WebSocket support for advanced migration operations.
+Includes RDBMS-specific migration endpoints for SQL Server, Oracle, MySQL, PostgreSQL.
 """
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import List, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
+from sqlalchemy.orm import Session
 import csv
 import io
 
@@ -16,6 +18,9 @@ from services.advanced_migration_engine import (
     migration_engine,
     MigrationEvent,
 )
+from services.database_migration_service import DatabaseMigrationService
+from models.admin_config_models import ConnectionConfig
+from core.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -295,3 +300,249 @@ async def websocket_migration_updates(websocket: WebSocket, session_id: str):
     finally:
         # Unregister WebSocket
         migration_engine.unregister_websocket(session_id, websocket)
+
+
+# =============================================================================
+# RDBMS Migration Endpoints
+# =============================================================================
+
+class TableMapping(BaseModel):
+    """Table mapping configuration for RDBMS migration."""
+    source_table: str
+    target_table: str
+    query: Optional[str] = None
+    batch_size: int = Field(default=1000, ge=100, le=10000)
+
+
+class RDBMSMigrationRequest(BaseModel):
+    """RDBMS migration execution request."""
+    source_connection_id: str
+    target_connection_id: str = "postgres_primary"
+    table_mappings: List[TableMapping]
+
+
+@router.post("/rdbms/execute")
+async def execute_rdbms_migration(
+    request: RDBMSMigrationRequest,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Execute database migration from RDBMS source to target.
+    
+    **Supported Sources:**
+    - SQL Server (pyodbc + ODBC Driver 17)
+    - Oracle (python-oracledb, thin/thick mode)
+    - MySQL (pymysql / psycopg MySQL connector)
+    - PostgreSQL (psycopg)
+    
+    **Workflow:**
+    1. Extract data from source database
+    2. Transform data (schema mapping, type conversion)
+    3. Validate quality (Rule Engine + SODA checks)
+    4. Load into target PostgreSQL
+    5. Track lineage in Neo4j graph
+    
+    **Example:**
+    ```json
+    {
+      "source_connection_id": "sqlserver_migration_source",
+      "target_connection_id": "postgres_primary",
+      "table_mappings": [
+        {
+          "source_table": "Parts",
+          "target_table": "plm_parts",
+          "query": "SELECT * FROM Parts WHERE Active = 1",
+          "batch_size": 1000
+        }
+      ]
+    }
+    ```
+    """
+    logger.info(f"RDBMS migration: {request.source_connection_id} → {request.target_connection_id}")
+    
+    # Get source connection
+    source_conn = db.query(ConnectionConfig).filter(
+        ConnectionConfig.id == request.source_connection_id
+    ).first()
+    
+    if not source_conn:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source connection not found: {request.source_connection_id}"
+        )
+    
+    if source_conn.status != "active":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Source connection is not active: {request.source_connection_id}"
+        )
+    
+    # Get target connection
+    target_conn = db.query(ConnectionConfig).filter(
+        ConnectionConfig.id == request.target_connection_id
+    ).first()
+    
+    if not target_conn:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Target connection not found: {request.target_connection_id}"
+        )
+    
+    # Build connection configs
+    source_config = {
+        "type": source_conn.connection_type,
+        "host": source_conn.host,
+        "port": source_conn.port,
+        "database": source_conn.database,
+        "username": source_conn.username,
+        "password": source_conn.password,  # TODO: Decrypt if encrypted
+        **(source_conn.extra_options or {})
+    }
+    
+    target_config = {
+        "type": target_conn.connection_type,
+        "connection_string": f"postgresql://{target_conn.username}:{target_conn.password}@{target_conn.host}:{target_conn.port}/{target_conn.database}"
+    }
+    
+    # Initialize migration service
+    migration_service = DatabaseMigrationService(db)
+    
+    # Convert table mappings
+    table_mappings = [
+        {
+            "source_table": mapping.source_table,
+            "target_table": mapping.target_table,
+            "query": mapping.query,
+        }
+        for mapping in request.table_mappings
+    ]
+    
+    # Execute migration by source type
+    try:
+        batch_size = request.table_mappings[0].batch_size if request.table_mappings else 1000
+        
+        if source_conn.connection_type == "sqlserver":
+            result = await migration_service.migrate_from_sqlserver(
+                source_config=source_config,
+                target_config=target_config,
+                table_mappings=table_mappings,
+                batch_size=batch_size
+            )
+        
+        elif source_conn.connection_type == "oracle":
+            result = await migration_service.migrate_from_oracle(
+                source_config=source_config,
+                target_config=target_config,
+                table_mappings=table_mappings,
+                batch_size=batch_size
+            )
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Migration from {source_conn.connection_type} not yet supported. Use: sqlserver, oracle"
+            )
+        
+        logger.info(f"Migration completed: {result['migration_id']}, status: {result['status']}")
+        return result
+    
+    except Exception as e:
+        logger.error(f"RDBMS migration failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Migration failed: {str(e)}"
+        )
+
+
+@router.get("/rdbms/supported-types")
+async def get_supported_rdbms_types() -> Dict[str, Any]:
+    """
+    Get list of supported RDBMS types for migration.
+    
+    **Returns:**
+    - Database types with driver requirements
+    - Sample connection configurations
+    - Target database options
+    """
+    return {
+        "supported_sources": [
+            {
+                "type": "sqlserver",
+                "name": "Microsoft SQL Server",
+                "driver": "pyodbc",
+                "system_driver": "ODBC Driver 17 for SQL Server",
+                "sample_config": {
+                    "host": "sql-server.company.com",
+                    "port": 1433,
+                    "database": "ProductionDB",
+                    "username": "migration_user",
+                    "password": "***",
+                    "extra_options": {
+                        "driver": "{ODBC Driver 17 for SQL Server}",
+                        "trust_server_certificate": "yes"
+                    }
+                }
+            },
+            {
+                "type": "oracle",
+                "name": "Oracle Database",
+                "driver": "python-oracledb",
+                "system_driver": "None (thin mode) or Oracle Client (thick mode)",
+                "sample_config": {
+                    "host": "oracle-prod.company.com",
+                    "port": 1521,
+                    "service_name": "ORCL",
+                    "username": "system",
+                    "password": "***",
+                    "extra_options": {
+                        "thick_mode": False,
+                        "encoding": "UTF-8"
+                    }
+                }
+            },
+            {
+                "type": "mysql",
+                "name": "MySQL / MariaDB",
+                "driver": "pymysql",
+                "system_driver": "None",
+                "sample_config": {
+                    "host": "mysql-prod.company.com",
+                    "port": 3306,
+                    "database": "production",
+                    "username": "migration_user",
+                    "password": "***"
+                }
+            },
+            {
+                "type": "postgres",
+                "name": "PostgreSQL",
+                "driver": "psycopg",
+                "system_driver": "None",
+                "sample_config": {
+                    "host": "postgres-source.company.com",
+                    "port": 5432,
+                    "database": "legacy_db",
+                    "username": "migration_user",
+                    "password": "***"
+                }
+            }
+        ],
+        "target_databases": [
+            {
+                "type": "postgres",
+                "name": "PostgreSQL",
+                "description": "Primary data warehouse for relational data"
+            },
+            {
+                "type": "neo4j",
+                "name": "Neo4j",
+                "description": "Knowledge graph for lineage tracking"
+            },
+            {
+                "type": "opensearch",
+                "name": "OpenSearch",
+                "description": "Full-text search and vector embeddings"
+            }
+        ],
+        "documentation": "/docs/DATABASE_MIGRATION_GUIDE.md"
+    }

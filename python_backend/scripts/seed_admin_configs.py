@@ -369,6 +369,62 @@ def seed_connections(db: Session):
             "password": os.getenv("REDIS_PASSWORD", ""),
             "status": "inactive",
             "is_default": True
+        },
+        # Migration source database examples
+        {
+            "id": "sqlserver_migration_source",
+            "connection_type": "sqlserver",
+            "name": "SQL Server Migration Source",
+            "description": "Example SQL Server source for data migration (configure with actual credentials)",
+            "host": os.getenv("MIGRATION_SQLSERVER_HOST", "sql-server.company.com"),
+            "port": int(os.getenv("MIGRATION_SQLSERVER_PORT", "1433")),
+            "database": os.getenv("MIGRATION_SQLSERVER_DATABASE", "ProductionDB"),
+            "username": os.getenv("MIGRATION_SQLSERVER_USER", "migration_user"),
+            "password": os.getenv("MIGRATION_SQLSERVER_PASSWORD", ""),
+            "extra_options": {
+                "driver": "{ODBC Driver 17 for SQL Server}",
+                "trust_server_certificate": "yes",
+                "connection_timeout": 30
+            },
+            "status": "inactive",  # Inactive by default - user must configure
+            "is_default": False
+        },
+        {
+            "id": "oracle_migration_source",
+            "connection_type": "oracle",
+            "name": "Oracle Migration Source",
+            "description": "Example Oracle source for data migration (configure with actual credentials)",
+            "host": os.getenv("MIGRATION_ORACLE_HOST", "oracle-prod.company.com"),
+            "port": int(os.getenv("MIGRATION_ORACLE_PORT", "1521")),
+            "database": os.getenv("MIGRATION_ORACLE_SERVICE", "ORCL"),
+            "username": os.getenv("MIGRATION_ORACLE_USER", "system"),
+            "password": os.getenv("MIGRATION_ORACLE_PASSWORD", ""),
+            "extra_options": {
+                "service_name": os.getenv("MIGRATION_ORACLE_SERVICE", "ORCL"),
+                "thick_mode": False,  # Use thin mode by default (no Oracle client needed)
+                "connection_timeout": 30,
+                "encoding": "UTF-8"
+            },
+            "status": "inactive",  # Inactive by default - user must configure
+            "is_default": False
+        },
+        {
+            "id": "mysql_migration_source",
+            "connection_type": "mysql",
+            "name": "MySQL Migration Source",
+            "description": "Example MySQL source for data migration (configure with actual credentials)",
+            "host": os.getenv("MIGRATION_MYSQL_HOST", "mysql-prod.company.com"),
+            "port": int(os.getenv("MIGRATION_MYSQL_PORT", "3306")),
+            "database": os.getenv("MIGRATION_MYSQL_DATABASE", "production"),
+            "username": os.getenv("MIGRATION_MYSQL_USER", "migration_user"),
+            "password": os.getenv("MIGRATION_MYSQL_PASSWORD", ""),
+            "extra_options": {
+                "charset": "utf8mb4",
+                "connection_timeout": 30,
+                "ssl_disabled": True
+            },
+            "status": "inactive",  # Inactive by default - user must configure
+            "is_default": False
         }
     ]
     
