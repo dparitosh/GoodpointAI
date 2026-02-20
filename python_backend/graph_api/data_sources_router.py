@@ -428,7 +428,19 @@ async def _sample_plm_system(
     auth = None
     headers: Dict[str, str] = {"Accept": "application/json"}
 
-    if auth_method == "basic" and username:
+    # Handle OAuth authentication
+    if auth_method == "oauth":
+        from core.oauth_service import get_connection_oauth_token  # noqa: E402
+        
+        connection_id = conn.get("id", f"plm_{plm_type}")
+        access_token = await get_connection_oauth_token(connection_id, extra)
+        
+        if not access_token:
+            warnings.append("OAuth token acquisition failed. Check oauth_client_id, oauth_client_secret, and oauth_token_url in extra_options.")
+            return records, warnings, fmt
+        
+        headers["Authorization"] = f"Bearer {access_token}"
+    elif auth_method == "basic" and username:
         auth = httpx.BasicAuth(username, password)
     elif auth_method == "bearer" and password:
         headers["Authorization"] = f"Bearer {password}"
@@ -1712,7 +1724,21 @@ async def _test_plm_connection(connection: Dict, plm_type: str) -> TestConnectio
     auth = None
     headers: Dict[str, str] = {"Accept": "application/json"}
 
-    if auth_method == "basic" and username:
+    # Handle OAuth authentication
+    if auth_method == "oauth":
+        from core.oauth_service import get_connection_oauth_token  # noqa: E402
+        
+        connection_id = connection.get("id", f"plm_{plm_type}")
+        access_token = await get_connection_oauth_token(connection_id, extra)
+        
+        if not access_token:
+            return TestConnectionResponse(
+                success=False,
+                message="OAuth token acquisition failed. Check oauth_client_id, oauth_client_secret, and oauth_token_url in extra_options.",
+            )
+        
+        headers["Authorization"] = f"Bearer {access_token}"
+    elif auth_method == "basic" and username:
         auth = httpx.BasicAuth(username, password)
     elif auth_method == "bearer" and password:
         headers["Authorization"] = f"Bearer {password}"

@@ -1725,3 +1725,116 @@ async def test_connection(conn_id: str, db: Session = Depends(get_db)):
         db.commit()
     
     return result
+
+
+# ============================================================================
+# OAuth Token Management
+# ============================================================================
+
+@router.post("/connections/{connection_id}/oauth/refresh", response_model=Dict[str, Any])
+async def refresh_oauth_token(connection_id: str, force: bool = False, db: Session = Depends(get_db)):
+    """Refresh OAuth token for a connection.
+    
+    Acquires a new OAuth token using client credentials flow.
+    Useful for testing OAuth configuration or forcing token refresh.
+    """
+    from core.oauth_service import get_connection_oauth_token, get_oauth_token_manager
+    from models.admin_config_models import ConnectionConfig
+    
+    # Get connection
+    conn = db.get(ConnectionConfig, connection_id)
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"Connection not found: {connection_id}")
+    
+    extra = conn.extra_options or {}
+    auth_method = extra.get("auth_method", "").lower()
+    
+    if auth_method != "oauth":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Connection {connection_id} does not use OAuth authentication (auth_method={auth_method})"
+        )
+    
+    # Validate OAuth config
+    oauth_client_id = extra.get("oauth_client_id", "").strip()
+    oauth_client_secret = extra.get("oauth_client_secret", "").strip()
+    oauth_token_url = extra.get("oauth_token_url", "").strip()
+    
+    if not all([oauth_client_id, oauth_client_secret, oauth_token_url]):
+        raise HTTPException(
+            status_code=400,
+            detail="Incomplete OAuth configuration. Required: oauth_client_id, oauth_client_secret, oauth_token_url in extra_options"
+        )
+    
+    # Acquire token
+    try:
+        access_token = await get_connection_oauth_token(connection_id, extra, force_refresh=force)
+        
+        if not access_token:
+            return {
+                "success": False,
+                "message": "OAuth token acquisition failed. Check client credentials and token URL.",
+                "connection_id": connection_id,
+            }
+        
+        # Update connection health
+        conn.last_health_check = datetime.now(timezone.utc)
+        conn.health_status = "healthy"
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "OAuth token acquired successfully",
+            "connection_id": connection_id,
+            "token_preview": access_token[:20] + "...",
+            "cached": not force,
+        }
+        
+    except Exception as e:
+        conn.last_health_check = datetime.now(timezone.utc)
+        conn.health_status = "failed"
+        db.commit()
+        
+        raise HTTPException(status_code=500, detail=f"OAuth token refresh failed: {str(e)}") from e
+
+
+@router.delete("/connections/{connection_id}/oauth/cache", response_model=Dict[str, Any])
+async def invalidate_oauth_token_cache(connection_id: str, db: Session = Depends(get_db)):
+    """Invalidate cached OAuth token for a connection.
+    
+    Forces token re-acquisition on next use.
+    """
+    from core.oauth_service import get_oauth_token_manager
+    from models.admin_config_models import ConnectionConfig
+    
+    # Verify connection exists
+    conn = db.get(ConnectionConfig, connection_id)
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"Connection not found: {connection_id}")
+    
+    # Invalidate cache
+    manager = get_oauth_token_manager()
+    manager.invalidate_token(connection_id)
+    
+    return {
+        "success": True,
+        "message": f"OAuth token cache invalidated for connection {connection_id}",
+        "connection_id": connection_id,
+    }
+
+
+@router.post("/oauth/clear-cache", response_model=Dict[str, Any])
+async def clear_oauth_token_cache():
+    """Clear all cached OAuth tokens.
+    
+    Admin endpoint to force re-acquisition of all OAuth tokens.
+    """
+    from core.oauth_service import get_oauth_token_manager
+    
+    manager = get_oauth_token_manager()
+    manager.clear_cache()
+    
+    return {
+        "success": True,
+        "message": "All OAuth token caches cleared",
+    }

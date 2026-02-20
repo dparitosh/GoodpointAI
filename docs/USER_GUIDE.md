@@ -151,7 +151,7 @@ Admin-only configuration panel with internal tabs:
 | :--- | :--- |
 | **LLM Providers** | Configure connections to Ollama, Azure OpenAI, or other LLM endpoints. Test connection. |
 | **Embedding Models** | Select and configure the embedding model used for semantic search and mapping. |
-| **Connection Settings** | Manage data source connections (Postgres, Neo4j, OpenSearch). Add/Edit/Delete/Test. |
+| **Connection Settings** | Manage data source connections (Postgres, Neo4j, OpenSearch, PLM systems). Add/Edit/Delete/Test. Supports OAuth 2.0 for Azure API Gateway. See [OAuth Configuration Guide](./OAUTH_CONFIGURATION.md). |
 | **System Settings** | Core runtime settings (CORS origins, rate limits, log levels). |
 | **Feature Flags** | Toggle experimental features on/off. |
 
@@ -165,3 +165,4 @@ Admin-only configuration panel with internal tabs:
 | 503 errors on optional features | Neo4j/OpenSearch/LLM not configured. Set them up in Admin tab. |
 | "Unauthorized" on API calls | Enable auth is on. Check `GRAPH_TRACE_AUTH_REQUIRED` and supply JWT. |
 | Migration Wizard stuck on "Discovering" | Check the ETL Orchestrator Agent terminal window for errors. |
+| PLM connection fails with OAuth | Verify client credentials in Azure AD. See [OAuth Troubleshooting](./OAUTH_CONFIGURATION.md#troubleshooting). |

@@ -247,13 +247,13 @@ class APIGatewayConfig(BaseSettings):
 
 # Initialize all configurations
 azure_config = AzureConfig()
-aws_config = AWSConfig()
-odata_config = ODataConfig()
-llm_config = LLMConfig()
-plm_config = PLMConfig()
-filesystem_config = FileSystemConfig()
-database_config = DatabaseConfig()
-api_gateway_config = APIGatewayConfig()
+aws_config: AWSConfig = AWSConfig()
+odata_config: ODataConfig = ODataConfig()
+llm_config: LLMConfig = LLMConfig()
+plm_config: PLMConfig = PLMConfig()
+filesystem_config: FileSystemConfig = FileSystemConfig()
+database_config: DatabaseConfig = DatabaseConfig()
+api_gateway_config: APIGatewayConfig = APIGatewayConfig()
 
 
 # ============================================================================

@@ -285,7 +285,13 @@ class ConnectionConfig(Base):
     max_overflow: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     pool_timeout: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     
-    # Additional options
+    # Additional options (JSON):
+    # - auth_method: "basic" | "bearer" | "oauth"
+    # - oauth_client_id: OAuth client ID
+    # - oauth_client_secret: OAuth client secret
+    # - oauth_token_url: Token endpoint URL
+    # - oauth_scope: OAuth scope (optional)
+    # - oauth_token_cached: Cached token data (managed by oauth_service)
     extra_options: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
     # Status
@@ -645,3 +651,45 @@ class ConfigHealthResponse(BaseModel):
     connections: Dict[str, str]
     warnings: List[str]
     timestamp: datetime
+
+
+# ============================================================
+# OAuth Configuration Models
+# ============================================================
+
+class OAuthConfig(BaseModel):
+    """OAuth 2.0 configuration for connection authentication.
+    
+    Supports client credentials flow for service-to-service authentication
+    (common for Azure API Gateway, Azure AD, etc.).
+    """
+    auth_method: str = Field(default="oauth", description="Authentication method")
+    oauth_client_id: str = Field(..., description="OAuth client ID")
+    oauth_client_secret: str = Field(..., description="OAuth client secret")
+    oauth_token_url: str = Field(..., description="Token endpoint URL")
+    oauth_scope: Optional[str] = Field(None, description="OAuth scope (optional)")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "auth_method": "oauth",
+                "oauth_client_id": "your-client-id",
+                "oauth_client_secret": "your-client-secret",
+                "oauth_token_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+                "oauth_scope": "https://graph.microsoft.com/.default"
+            }
+        }
+
+
+class OAuthTokenResponse(BaseModel):
+    """OAuth token response"""
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+    scope: Optional[str] = None
+
+
+class OAuthTokenRefreshRequest(BaseModel):
+    """Request to refresh OAuth token"""
+    connection_id: str = Field(..., description="Connection ID to refresh")
+    force_refresh: bool = Field(default=False, description="Force token refresh even if cached")
