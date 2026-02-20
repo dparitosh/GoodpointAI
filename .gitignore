@@ -34,6 +34,7 @@ python_backend/logs/
 # Temporary/runtime data created by the backend
 python_backend/mapping_rules.json
 python_backend/mapping_templates.json
+python_backend/data_sources.json
 
 # Frontend build artifacts
 e2etraceapp/dist/
@@ -49,6 +50,7 @@ python_backend/.graphtrace.encryption_key
 # Generated test artifacts
 e2etraceapp/test-results/junit.xml
 e2etraceapp/test-results/test-results.json
+e2etraceapp/UNIT_TEST_RESULTS.md
 
 # Playwright / UI test outputs
 e2etraceapp/playwright-report/

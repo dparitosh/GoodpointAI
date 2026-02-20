@@ -82,13 +82,13 @@ Run the bootstrap script. This will:
 - Install all backend pip dependencies
 - Generate an encryption key (`.graphtrace.encryption_key`)
 - Initialize the PostgreSQL database schema (all tables via SQLAlchemy `create_all`)
-- Seed default configuration:
-  - Encrypted config keys (`system_configuration`, `neo4j`, `opensearch`, `cors`, `workflow_defaults`)
-  - Admin connections (Primary PostgreSQL, Neo4j, OpenSearch, Redis)
-  - LLM providers (OpenAI, Anthropic, Azure OpenAI, Ollama, HuggingFace)
-  - Embedding models (MiniLM, MPNet, OpenAI, Cohere)
-  - Feature flags (LLM Chat, Vector Search, GraphRAG, Pipeline Wizard, etc.)
-  - Pipeline templates, file patterns, search/index configs, Neo4j schema configs
+- Seed default configuration (all automatic via `init_db_schema`):
+  - **Encrypted config keys**: `system_configuration`, `neo4j`, `opensearch`, `cors`, `workflow_defaults`
+  - **Admin connections**: Primary PostgreSQL, Neo4j, OpenSearch, Redis
+  - **LLM providers**: OpenAI, Anthropic, Azure OpenAI, Ollama, HuggingFace
+  - **Embedding models**: MiniLM, MPNet, OpenAI, Cohere
+  - **Feature flags**: LLM Chat, Vector Search, GraphRAG, Pipeline Wizard, etc.
+  - **Pipeline templates**: File patterns, search/index configs, Neo4j schema configs
 - Install all frontend npm dependencies
 
 ```powershell
@@ -105,7 +105,10 @@ Launch Backend, Frontend, MCP Server, and all AI Agents:
 Open a browser and check:
 - **Frontend UI**: [http://localhost:5173](http://localhost:5173)
 - **Backend Health**: [http://localhost:8011/health](http://localhost:8011/health)
+- **MCP Server Health**: [http://localhost:8012/health](http://localhost:8012/health) *(if MCP server started)*
 - **API Docs (Swagger)**: [http://localhost:8011/docs](http://localhost:8011/docs)
+
+> **Note:** The 6 agent services (Data Analyst, ETL Orchestrator, Visualization, Query Planner, Quality Monitor, Chat Coordinator) will be running on ports 8020-8025 if started via `start-all.ps1`. They do not have web UIs but can be verified via their log output in their respective terminal windows.
 
 ## Manual Installation (Step-by-Step)
 
@@ -120,15 +123,15 @@ cd python_backend
 pip install -r requirements.txt
 
 # 3. Initialize database schema + seed all default configurations
-#    This creates all PostgreSQL tables AND seeds admin configs,
-#    pipeline templates, file patterns, LLM providers, connections, etc.
+#    This single command creates all PostgreSQL tables AND automatically seeds:
+#    - Admin configs (LLM providers, embedding models, connections, feature flags)
+#    - Pipeline configs (templates, file patterns, search/index configs, Neo4j schema)
+#    - Encrypted config keys (system_configuration, neo4j, opensearch, cors, workflow_defaults)
 python -m scripts.init_db_schema
 
-# 4. (Optional) Seed admin configurations separately if needed
-python -m scripts.seed_admin_configs
-
-# 5. (Optional) Seed pipeline configurations separately if needed
-python -m scripts.seed_pipeline_configs
+# Note: The following are OPTIONAL - init_db_schema already calls these automatically:
+# python -m scripts.seed_admin_configs      # Auto-run by init_db_schema
+# python -m scripts.seed_pipeline_configs   # Auto-run by init_db_schema
 
 # 6. Start the server
 python -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload
@@ -209,13 +212,32 @@ python -m scripts.init_db_schema
 
 ## Script Reference
 
-| Script | Purpose | Usage |
+### Main Scripts
+
+| Script | Purpose | Platform | Usage |
+| :--- | :--- | :--- | :--- |
+| `bootstrap.ps1` | First-time setup (venv, deps, DB schema, seed) | Windows (PowerShell) | Run once after clone |
+| `start-all.ps1` | Launch full stack (Backend, MCP, 6 Agents, Frontend) | Windows (PowerShell) | Daily dev startup |
+| `start-all.bat` | Launch full stack (same as .ps1) | Windows (CMD) | Alternative for batch users |
+| `start-backend.ps1` | Backend API server only | Windows (PowerShell) | Add `-UpdateDeps` to force pip install |
+| `start-backend.bat` | Backend API server only | Windows (CMD) | Batch equivalent |
+| `start-frontend.ps1` | Frontend dev server only | Windows (PowerShell) | Add `-UpdateDeps` to force npm install |
+| `start-frontend.bat` | Frontend dev server only | Windows (CMD) | Batch equivalent |
+| `stop-all.ps1` | Kill all Python/Node processes | Windows (PowerShell) | Cleanup orphan processes |
+
+### Individual Service Scripts
+
+| Script | Service | Port |
 | :--- | :--- | :--- |
-| `bootstrap.ps1` | First-time setup (venv, deps, DB) | Run once after clone |
-| `start-all.ps1` | Launch entire stack | Daily dev startup |
-| `start-backend.ps1` | Backend only | `start-backend.ps1 -UpdateDeps` to force pip install |
-| `start-frontend.ps1` | Frontend only | `start-frontend.ps1 -UpdateDeps` to force npm install |
-| `stop-all.ps1` | Kill all Python/Node processes | Cleanup |
+| `start-mcp-server.ps1` | MCP Coordination Server | 8012 |
+| `start-agent-data-analyst.ps1` | Data Analyst Agent | 8020 |
+| `start-agent-etl-orchestrator.ps1` | ETL Orchestrator Agent | 8021 |
+| `start-agent-visualization.ps1` | Visualization Agent | 8022 |
+| `start-agent-query-planner.ps1` | Query Planner Agent | 8023 |
+| `start-agent-quality-monitor.ps1` | Quality Monitor Agent | 8024 |
+| `start-agent-chat-coordinator.ps1` | Chat Coordinator Agent | 8025 |
+
+> **Note:** Individual service scripts are PowerShell-only. Use `start-all.bat` for batch file support of all services.
 
 ## Environment Variables
 
