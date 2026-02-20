@@ -31,11 +31,11 @@ def _default_postgres_url() -> str:
     via DATABASE_URL for tests/local experiments).
     """
 
-    host = (database_config.postgres_host or "localhost").strip() or "localhost"
+    host = str(database_config.postgres_host or "localhost").strip() or "localhost"
     port = int(database_config.postgres_port or 5433)
-    database = (database_config.postgres_database or "graphtrace").strip() or "graphtrace"
-    user = (database_config.postgres_user or "postgres").strip() or "postgres"
-    password = (database_config.postgres_password or "").strip()
+    database = str(database_config.postgres_database or "graphtrace").strip() or "graphtrace"
+    user = str(database_config.postgres_user or "postgres").strip() or "postgres"
+    password = str(database_config.postgres_password or "").strip()
 
     if password:
         return f"postgresql+psycopg://{user}:{quote_plus(password)}@{host}:{port}/{database}"
@@ -43,7 +43,7 @@ def _default_postgres_url() -> str:
 
 
 DATABASE_URL = (
-    (database_config.sqlalchemy_database_url or "").strip()
+    str(database_config.sqlalchemy_database_url or "").strip()
     or os.getenv("DATABASE_URL", "").strip()
     or _default_postgres_url()
 )

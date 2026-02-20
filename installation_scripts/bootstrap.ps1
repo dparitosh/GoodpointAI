@@ -61,6 +61,8 @@ if (-not $SkipBackend) {
   # Validate .env configuration
   if (Test-Path $envFile) {
     $envContent = Get-Content $envFile -Raw
+    
+    # Check for placeholder credentials
     if ($envContent -match "yourpassword" -or $envContent -match "postgresql://postgres:password@") {
         Write-Host ""
         Write-Host "CRITICAL CONFIGURATION REQUIRED:" -ForegroundColor Red -BackgroundColor Black
@@ -70,6 +72,19 @@ if (-not $SkipBackend) {
         Write-Host "1. Open $envFile" -ForegroundColor Yellow
         Write-Host "2. Set DATABASE_URL=postgresql://user:pass@host:port/dbname" -ForegroundColor Yellow
         Write-Host "3. Re-run bootstrap.ps1" -ForegroundColor Yellow
+        exit 1
+    }
+    
+    # Check if DATABASE_URL is missing or empty
+    if (-not ($envContent -match "DATABASE_URL\s*=\s*.+") -or $envContent -match "DATABASE_URL\s*=\s*$") {
+        Write-Host ""
+        Write-Host "CRITICAL CONFIGURATION REQUIRED:" -ForegroundColor Red -BackgroundColor Black
+        Write-Host "DATABASE_URL is missing or empty in python_backend\.env" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "1. Open $envFile" -ForegroundColor Yellow
+        Write-Host "2. Add: DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace" -ForegroundColor Yellow
+        Write-Host "3. Replace 'yourpassword' with your actual PostgreSQL password" -ForegroundColor Yellow
+        Write-Host "4. Re-run bootstrap.ps1" -ForegroundColor Yellow
         exit 1
     }
   }

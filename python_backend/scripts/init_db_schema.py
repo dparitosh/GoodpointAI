@@ -11,6 +11,20 @@ logger = logging.getLogger(__name__)
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
 
+    # Validate database configuration before attempting connection
+    if not DATABASE_URL or DATABASE_URL == "sqlite:///:memory:":
+        logger.error("DATABASE_URL is not configured!")
+        logger.error("Please set DATABASE_URL in python_backend/.env")
+        logger.error("Example: DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace")
+        return 1
+    
+    # Check for placeholder credentials that indicate incomplete configuration
+    if "yourpassword" in DATABASE_URL or ":password@" in DATABASE_URL:
+        logger.error("DATABASE_URL contains placeholder credentials!")
+        logger.error("Please edit python_backend/.env and set your actual PostgreSQL password")
+        logger.error("Current (redacted): Use actual credentials, not 'yourpassword' or 'password'")
+        return 1
+
     init_db()
     logger.info("DB schema ensured (create_all)")
 
