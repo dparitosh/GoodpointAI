@@ -202,6 +202,9 @@ async def list_blobs(
 
     except HTTPException:
         raise
+    except ImportError as e:
+        logger.error("Error listing Azure blobs: %s", e)
+        raise HTTPException(status_code=503, detail="Azure SDK is not installed") from e
     except Exception as e:
         logger.error("Error listing Azure blobs: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e

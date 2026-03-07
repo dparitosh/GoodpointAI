@@ -12,12 +12,16 @@ import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx
 import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
 import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
 import MultiModalAnalyzerPage from '../pages/multimodal/MultiModalAnalyzerPage.jsx';
+import FileBatchProcessorPage from '../pages/batch-processor/FileBatchProcessorPage.jsx';
 import OpenApiDocsPage from '../pages/api-docs/OpenApiDocsPage.jsx';
 import EnterpriseAnalyticsHub from '../pages/analytics/EnterpriseAnalyticsHub.jsx';
+import DQScanDashboard from '../pages/dq-dashboard/DQScanDashboard.jsx';
 import ConversationalSearchPage from '../pages/search/ConversationalSearchPage.jsx';
 import E2ETracePropertyPalette from '../pages/settings/settings/e2etrace-property-palette.jsx';
 import AdminSettingsPage from '../pages/settings/AdminSettingsPage.jsx';
 import RuleEnginePage from '../pages/rule-engine/RuleEnginePage.jsx';
+import DataDiscoveryPage from '../pages/data-discovery/DataDiscoveryPage.jsx';
+import ReportingHubPage from '../pages/reporting-hub/ReportingHubPage.jsx';
 import RouteErrorPage from '../pages/errors/RouteErrorPage.jsx';
 import NotFoundPage from '../pages/errors/NotFoundPage.jsx';
 
@@ -94,6 +98,13 @@ const router = createHashRouter([
         element: <EnterpriseAnalyticsHub />,
         handle: { crumb: 'nav.analytics' },
       },
+
+      // Data Quality Scan Dashboard
+      {
+        path: 'dq-dashboard',
+        element: <DQScanDashboard />,
+        handle: { crumb: 'Data Quality Dashboard' },
+      },
       
       // Workflow Detail - Individual workflow instance view
       {
@@ -123,11 +134,32 @@ const router = createHashRouter([
         handle: { crumb: 'nav.multiModalAnalyzer' },
       },
 
+      // Batch File Processor - large-scale parallel ingestion
+      {
+        path: 'batch-processor',
+        element: <FileBatchProcessorPage />,
+        handle: { crumb: 'nav.batchProcessor' },
+      },
+
       // PLM Rule Engine - Data Quality & ETL Rules
       {
         path: 'rule-engine',
         element: <RuleEnginePage />,
         handle: { crumb: 'nav.ruleEngine' },
+      },
+
+      // Data Discovery - profile and catalog folder data sources via MCP
+      {
+        path: 'data-discovery',
+        element: <DataDiscoveryPage />,
+        handle: { crumb: 'Data Discovery' },
+      },
+
+      // Reporting Hub - unified view of all saved reports
+      {
+        path: 'reporting-hub',
+        element: <ReportingHubPage />,
+        handle: { crumb: 'Reporting Hub' },
       },
 
       // API Docs (OpenAPI/Swagger)

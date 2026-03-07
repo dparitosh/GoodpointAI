@@ -10,7 +10,11 @@ class AgentType(str, Enum):
     QUERY_PLANNER = "query_planner"
     VISUALIZATION_AGENT = "visualization_agent"
     QUALITY_MONITOR = "quality_monitor"
+    DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
+    TASK_DECOMPOSER = "task_decomposer"
+
+#  AGENT TYPE DEFINITIONS — add DATA_DISCOVERY_AGENT before CHAT_COORDINATOR
 
 #  TASK DEFINITIONS
 class TaskType(str, Enum):
@@ -20,6 +24,18 @@ class TaskType(str, Enum):
     VISUALIZATION_GENERATION = "visualization_generation"
     QUALITY_ASSESSMENT = "quality_assessment"
     CHAT_PROCESSING = "chat_processing"
+    # New task types for data discovery and quality
+    DATA_DISCOVERY = "data_discovery"
+    DATA_QUALITY_SCAN = "data_quality_scan"
+    FILE_BATCH_PROCESSING = "file_batch_processing"
+    TASK_DECOMPOSITION = "task_decomposition"
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
 
 #  PYDANTIC MODELS
 class AgentCapability(BaseModel):
@@ -38,11 +54,25 @@ class AgentDefinition(BaseModel):
     last_activity: datetime = Field(default_factory=datetime.now)
     performance_metrics: Dict[str, float] = {}
 
+class AgenticSubtask(BaseModel):
+    id: str = Field(default_factory=lambda: f"subtask_{int(datetime.now().timestamp() * 1000)}")
+    parent_task_id: str
+    type: TaskType
+    required_capabilities: List[str]
+    payload: Dict[str, Any]
+    status: TaskStatus = TaskStatus.PENDING
+    dependencies: List[str] = []
+    priority: int = 5
+    timeout: int = 30
+    created_at: datetime = Field(default_factory=datetime.now)
+
 class AgenticTask(BaseModel):
     id: str = Field(default_factory=lambda: f"task_{int(datetime.now().timestamp() * 1000)}")
     type: TaskType
     required_capabilities: List[str]
     payload: Dict[str, Any]
+    status: TaskStatus = TaskStatus.PENDING
+    subtasks: List[AgenticSubtask] = []
     priority: int = 5
     timeout: int = 30
     created_at: datetime = Field(default_factory=datetime.now)

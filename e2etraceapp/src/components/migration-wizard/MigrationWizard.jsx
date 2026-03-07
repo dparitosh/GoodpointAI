@@ -42,15 +42,14 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     // Optional schema data (used by mapping/validation if available)
     sourceSchema: null,
     targetSchema: null,
-    schemaMapping: [],
     // Step 3: Mapping
     fieldMappings: [],
     aiSuggestedMappings: [],
     selectedTemplate: null,
     // Step 4: Validation
     validationResults: [],
-    transformationRules: [],
     qualityChecks: { passed: 0, failed: 0, warnings: 0 },
+    validationRun: false,
     // Step 5: Execution
     migrationStatus: 'pending',
     processedRecords: 0,
@@ -131,29 +130,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     return { nodes, edges };
   }, [currentStep, stepStatus, steps]);
 
-  // Load initial data
-  useEffect(() => {
-    loadDataSources();
-    loadMappingTemplates();
-    graphRAGHealth.checkHealth().catch(() => {});
-    agenticSystem.checkStatus().catch(() => {});
-    
-    // Check for pre-loaded data from Data Workbench
-    const source = searchParams.get('source');
-    if (source === 'workbench') {
-      loadWorkbenchData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Load data from Data Workbench (via localStorage)
-  const loadWorkbenchData = () => {
+  const loadWorkbenchData = useCallback(() => {
     try {
       const stored = localStorage.getItem('workbench_migration_data');
       if (!stored) return;
       
       const workbenchData = JSON.parse(stored);
+      if (!workbenchData || typeof workbenchData !== 'object') return;
       const { schema, timestamp } = workbenchData;
+      if (!schema || !timestamp) return;
       
       // Check if data is not too old (1 hour max)
       const age = Date.now() - new Date(timestamp).getTime();
@@ -188,9 +174,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } catch (error) {
       console.error('Error loading workbench data:', error);
     }
-  };
+  // useCallback stable: only uses React state setters which are guaranteed stable.
+  }, []);
 
-  const loadDataSources = async () => {
+  const loadDataSources = useCallback(async () => {
     try {
       const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_SOURCES);
       const sources = await response.json();
@@ -199,10 +186,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setAvailableSources(Array.isArray(sources) ? sources : []);
     } catch (error) {
       console.error('Error loading data sources:', error);
+      setAvailableSources([]);
     }
-  };
+  // useCallback stable: only uses React state setters which are guaranteed stable.
+  }, []);
 
-  const loadMappingTemplates = async () => {
+  const loadMappingTemplates = useCallback(async () => {
     try {
       const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_MAPPING_TEMPLATES);
       const templates = await response.json();
@@ -269,7 +258,24 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         }
       ]);
     }
-  };
+  // useCallback stable: only uses React state setters which are guaranteed stable.
+  }, []);
+
+  // Load initial data — placed after all three useCallback refs are initialised
+  // to avoid the temporal dead zone (TDZ) for const declarations.
+  useEffect(() => {
+    loadDataSources();
+    loadMappingTemplates();
+    graphRAGHealth.checkHealth().catch(() => {});
+    agenticSystem.checkStatus().catch(() => {});
+
+    // Check for pre-loaded data from Data Workbench
+    const source = searchParams.get('source');
+    if (source === 'workbench') {
+      loadWorkbenchData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- stable method refs via hooks
+  }, [loadDataSources, loadMappingTemplates, loadWorkbenchData, searchParams]);
 
   // Step navigation
   const canProceed = useCallback((step) => {
@@ -277,7 +283,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       case 1: return wizardData.workflowName.trim().length > 0 && wizardData.sourceSystem && wizardData.targetSystem;
       case 2: return wizardData.discoveryAccepted;
       case 3: return wizardData.fieldMappings.length > 0;
-      case 4: return wizardData.validationResults.length > 0 || wizardData.qualityChecks.passed > 0;
+      case 4: return wizardData.validationRun && (wizardData.validationResults.length > 0 || wizardData.qualityChecks.passed > 0);
       case 5: return true;
       default: return false;
     }
@@ -428,12 +434,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       let inferredSourceFields = [];
       
       try {
+        // Use the dedicated discovery endpoint which routes to DataDiscoveryAgent via MCP
         const agentResponse = await e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}/api/agentic/task`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-             type: "data_analysis",
-             required_capabilities: ["perform_data_discovery"],
+             type: "data_discovery",
+             required_capabilities: ["perform_data_discovery", "discover_files"],
              payload: {
                type: "discovery",
                run_id: discoveryRunId,
@@ -480,11 +487,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
       // Legacy SODA result handling for UI compatibility
       try {
+        // Run the staged-data DQ scan (internal completeness check, no Soda Core required)
         const sodaResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/dq/scan`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stage: 'transformed' })
+            body: JSON.stringify({ stage: 'staged' })
           }
         );
         sodaResult = await sodaResponse.json();
@@ -500,7 +508,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         recommendations = Array.isArray(report?.recommendations) ? report.recommendations : [];
       } catch (sodaError) {
         // SODA or Postgres may not be configured; discovery still continues.
-        console.warn('Discovery SODA scan unavailable:', sodaError?.message || sodaError);
+        console.warn('Discovery DQ scan unavailable:', sodaError?.message || sodaError);
       }
 
       const insights = [];
@@ -755,14 +763,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setWizardData(prev => ({
         ...prev,
         validationResults: validationInsights,
-        qualityChecks: { passed, failed, warnings }
+        qualityChecks: { passed, failed, warnings },
+        validationRun: true
       }));
     } catch (error) {
       console.error('Validation failed:', error);
       setWizardData(prev => ({
         ...prev,
         validationResults: [{ id: 0, insight: 'Validation service unavailable', severity: 'warning' }],
-        qualityChecks: { passed: 0, failed: 0, warnings: 1 }
+        qualityChecks: { passed: 0, failed: 0, warnings: 1 },
+        validationRun: true
       }));
     } finally {
       setIsLoading(false);
@@ -812,7 +822,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           failed: prev.qualityChecks.failed + failed,
           warnings: prev.qualityChecks.warnings + warnings
         },
-        sodaScanResult: sodaResult
+        sodaScanResult: sodaResult,
+        validationRun: true
       }));
     } catch (error) {
       console.error('SODA scan failed:', error);
@@ -835,9 +846,30 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         { target: wizardData.targetSchema },
         wizardData.fieldMappings
       );
-      console.log('Transformation test result:', result);
+      // Show transform result as a validation insight
+      setWizardData(prev => ({
+        ...prev,
+        validationResults: [
+          ...prev.validationResults.filter(v => !v.insight?.includes('Transform')),
+          {
+            id: Date.now(),
+            insight: `Transform test ${result ? 'succeeded' : 'returned no data'}`,
+            severity: result ? 'success' : 'warning',
+            recommendation: result ? 'Field transformations are working correctly' : 'Check transformation rules'
+          }
+        ],
+        validationRun: true
+      }));
     } catch (error) {
       console.error('Transformation test failed:', error);
+      setWizardData(prev => ({
+        ...prev,
+        validationResults: [
+          ...prev.validationResults.filter(v => !v.insight?.includes('Transform')),
+          { id: Date.now(), insight: `Transform test failed: ${error?.message || 'Unknown error'}`, severity: 'error' }
+        ],
+        validationRun: true
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -1050,6 +1082,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                   <div className="source-info">
                     <span className="source-name">{source.name}</span>
                     <span className="source-type">{source.type}</span>
+                    {source.connection?.folder_path && (
+                      <span className="source-path" title={source.connection.folder_path}>{source.connection.folder_path}</span>
+                    )}
+                    {source.description && !source.connection?.folder_path && (
+                      <span className="source-path" title={source.description}>{source.description}</span>
+                    )}
                   </div>
                   <div className="source-status connected">
                     <i className={source?.status === 'connected' || source?.status === 'active' ? 'fas fa-check-circle' : 'fas fa-cog'} /> {source?.status || 'configured'}
@@ -1081,6 +1119,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                 <div className="source-info">
                   <span className="source-name">{source.name}</span>
                   <span className="source-type">{source.type}</span>
+                  {source.connection?.folder_path && (
+                    <span className="source-path" title={source.connection.folder_path}>{source.connection.folder_path}</span>
+                  )}
+                  {source.description && !source.connection?.folder_path && (
+                    <span className="source-path" title={source.description}>{source.description}</span>
+                  )}
                 </div>
                 <div className="source-status connected">
                   <i className={source?.status === 'connected' || source?.status === 'active' ? 'fas fa-check-circle' : 'fas fa-cog'} /> {source?.status || 'configured'}
@@ -1152,6 +1196,86 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <div className="discovery-error">{wizardData.discoveryError}</div>
         )}
       </div>
+
+      {/* ── Inferred source fields ─────────────────────────── */}
+      {wizardData.discoveryIntrospect?.inferred_source_fields?.length > 0 && (
+        <div className="discovery-data-panel">
+          <div className="ddp-header">
+            <i className="fas fa-columns" /> Inferred Source Fields
+            <span className="ddp-badge">{wizardData.discoveryIntrospect.inferred_source_fields.length} fields</span>
+          </div>
+          <div className="ddp-chips">
+            {wizardData.discoveryIntrospect.inferred_source_fields.map((f) => (
+              <span key={f} className="ddp-chip">{f}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sample records ─────────────────────────────────── */}
+      {(() => {
+        const sampleRows = Array.isArray(wizardData.discoverySample?.records)
+          ? wizardData.discoverySample.records.slice(0, 5)
+          : null;
+        if (!sampleRows || sampleRows.length === 0) return null;
+        const cols = Object.keys(sampleRows[0]);
+        return (
+          <div className="discovery-data-panel">
+            <div className="ddp-header">
+              <i className="fas fa-table" /> Sample Records
+              <span className="ddp-badge">{sampleRows.length} of {wizardData.discoverySample.records.length}</span>
+              <span className="ddp-source-tag">
+                {wizardData.discoverySample.stagedFrom === 'source' ? 'live source' : 'synthetic'}
+              </span>
+            </div>
+            <div className="ddp-table-wrap">
+              <table className="ddp-table">
+                <thead>
+                  <tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {sampleRows.map((row, i) => (
+                    <tr key={i}>
+                      {cols.map((c) => (
+                        <td key={c} title={String(row[c] ?? '')}>
+                          {String(row[c] ?? '—').substring(0, 40)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Mapping hints ──────────────────────────────────── */}
+      {wizardData.discoveryStatus === 'completed' && wizardData.aiSuggestedMappings?.length > 0 && (
+        <div className="discovery-data-panel">
+          <div className="ddp-header">
+            <i className="fas fa-random" /> Mapping Hints
+            <span className="ddp-badge">{wizardData.aiSuggestedMappings.length} suggestions</span>
+            <span className="ddp-note">Carry over to Step 3</span>
+          </div>
+          <div className="ddp-mappings">
+            {wizardData.aiSuggestedMappings.map((m, i) => (
+              <div key={i} className="ddp-mapping-row">
+                <span className="ddp-src-field">{m.sourceField}</span>
+                <span className="ddp-arrow"><i className="fas fa-arrow-right" /></span>
+                <span className="ddp-tgt-field">{m.targetField}</span>
+                {m.transformation && <span className="ddp-transform">{m.transformation}</span>}
+                {m.confidence && <span className="ddp-confidence">{m.confidence}</span>}
+              </div>
+            ))}
+          </div>
+          <div className="ddp-footer-link">
+            <a href="#/data-discovery" target="_blank" rel="noreferrer">
+              <i className="fas fa-external-link-alt" /> View full discovery catalogue
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 

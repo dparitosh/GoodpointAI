@@ -93,19 +93,109 @@ class ETLOrchestratorAgent(AgentService):
             AgentCapability(name="manage_data_pipelines", description="Manage ETL pipelines"),
             AgentCapability(name="perform_data_discovery", description="Analyze sources, stage data, and run quality checks"),
             AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
-            AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health")
+            AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health"),
+            AgentCapability(name="file_batch_processing", description="Discover and process thousands of files in parallel with lineage tracking"),
         ]
 
     async def process_task(self, task: AgentTaskRequest):
         task_type = task.payload.get("type", "unknown")
-        
+
         if task_type == "discovery" or "perform_data_discovery" in task.required_capabilities:
             return await self.perform_discovery(task)
-            
+
+        if task_type == "file_batch_processing" or "file_batch_processing" in task.required_capabilities:
+            return await self.process_file_batch(task)
+
         return {
             "status": "success",
             "message": f"Task type {task_type} acknowledged (placeholder implementation)",
             "timestamp": datetime.now().isoformat()
+        }
+
+    async def process_file_batch(self, task: AgentTaskRequest) -> Dict[str, Any]:
+        """ETL Orchestrator handler for large-scale file batch processing.
+
+        Payload keys
+        ------------
+        directory   : str   — root directory to discover (mutually exclusive with file_paths)
+        file_paths  : list  — explicit list of absolute file paths
+        recursive   : bool  — crawl sub-directories (default True)
+        concurrency : int   — parallel workers (default 8)
+        db_flush_size: int  — rows flushed to Postgres at a time (default 50)
+        extraction_method : str — hybrid | ocr | vision_llm | text_parser
+        vision_model : str  — Ollama model name (default llava:latest)
+        """
+        payload = task.payload
+        job_id = payload.get("job_id") or uuid.uuid4().hex
+
+        # Import batch processor (lives in python_backend)
+        try:
+            from services.file_batch_processor import (
+                FileBatchProcessor, FileRecord, _classify_ext, discover_files
+            )
+        except ImportError as exc:
+            return {"status": "error", "error": f"file_batch_processor unavailable: {exc}"}
+
+        neo4j_driver = self.driver  # may be None if Neo4j is not connected
+        db_session_factory = None
+        if self.db_engine:
+            from sqlalchemy.orm import sessionmaker
+            db_session_factory = sessionmaker(bind=self.db_engine)
+
+        processor = FileBatchProcessor(
+            concurrency=int(payload.get("concurrency", 8)),
+            db_flush_size=int(payload.get("db_flush_size", 50)),
+            neo4j_driver=neo4j_driver,
+            db_session_factory=db_session_factory,
+        )
+
+        extraction_method = payload.get("extraction_method", "hybrid")
+        vision_model = payload.get("vision_model", "llava:latest")
+
+        # --- discover mode ---
+        directory = payload.get("directory")
+        if directory:
+            report = await processor.process_directory(
+                directory,
+                recursive=bool(payload.get("recursive", True)),
+                extraction_method=extraction_method,
+                vision_model=vision_model,
+                job_id=job_id,
+            )
+        # --- explicit file list mode ---
+        elif payload.get("file_paths"):
+            from pathlib import Path as _Path
+            records = [
+                FileRecord(
+                    path=_Path(p).resolve(),
+                    ext=_Path(p).suffix.lower(),
+                    size_bytes=_Path(p).stat().st_size if _Path(p).is_file() else 0,
+                    file_type=_classify_ext(_Path(p).suffix.lower()),
+                )
+                for p in payload["file_paths"]
+                if _Path(p).is_file()
+            ]
+            if not records:
+                return {"status": "error", "error": "No valid files in file_paths"}
+            report = await processor.process_records(
+                records,
+                job_id=job_id,
+                extraction_method=extraction_method,
+                vision_model=vision_model,
+            )
+        else:
+            return {"status": "error", "error": "Provide 'directory' or 'file_paths' in payload"}
+
+        return {
+            "status": "completed",
+            "job_id": report.job_id,
+            "total_files": report.total_files,
+            "processed": report.processed,
+            "succeeded": report.succeeded,
+            "failed": report.failed,
+            "started_at": report.started_at.isoformat(),
+            "completed_at": report.completed_at.isoformat() if report.completed_at else None,
+            "errors_summary": report.errors_summary[:20],  # cap for response size
         }
 
     async def perform_discovery(self, task: AgentTaskRequest) -> Dict[str, Any]:

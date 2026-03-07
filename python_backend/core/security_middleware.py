@@ -24,13 +24,26 @@ _ALLOWLIST_PREFIXES = (
 )
 
 
+# R-14: set of peer IPs that are trusted to relay X-Forwarded-For headers.
+# Configure via TRUSTED_PROXY_IPS env var (comma-separated CIDRs/IPs are not
+# supported here — exact IP matching only for simplicity; use a reverse proxy
+# like nginx that strips/rewrites the header for production deployments).
+_TRUSTED_PROXIES: frozenset[str] = frozenset(
+    ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()
+)
+
+
 def _get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        # The left-most is original client.
-        return forwarded_for.split(",")[0].strip()
     client = request.client
-    return client.host if client else "unknown"
+    peer_ip = client.host if client else ""
+
+    # R-14: only honour X-Forwarded-For when the direct peer is a known trusted proxy;
+    # otherwise an attacker can spoof the header to bypass IP-based rate limiting.
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for and peer_ip in _TRUSTED_PROXIES:
+        return forwarded_for.split(",")[0].strip()
+
+    return peer_ip or "unknown"
 
 
 def _extract_api_key(request: Request) -> Optional[str]:
@@ -126,12 +139,25 @@ class InMemoryRateLimiter:
     Good enough for dev/single-process use; replace with Redis for multi-worker.
     """
 
+    # R-04: evict stale windows when the table grows beyond this threshold to
+    # prevent unbounded memory growth when many unique IPs are seen.
+    _EVICT_THRESHOLD = 5_000
+
     def __init__(self, limit_per_minute: int) -> None:
         self.limit_per_minute = max(1, int(limit_per_minute))
         self._state: dict[str, Tuple[float, int]] = {}
 
     def check(self, key: str) -> RateLimitDecision:
         now = time.monotonic()
+
+        # R-04: evict windows that expired more than a full minute ago so the
+        # dict does not grow without bound across long-running processes.
+        if len(self._state) >= self._EVICT_THRESHOLD:
+            cutoff = now - 60.0
+            stale_keys = [k for k, (ws, _) in self._state.items() if ws < cutoff]
+            for k in stale_keys:
+                del self._state[k]
+
         window_start, count = self._state.get(key, (now, 0))
 
         if now - window_start >= 60.0:

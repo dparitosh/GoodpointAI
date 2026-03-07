@@ -1,6 +1,40 @@
-import React from 'react';
+import React, { Component } from 'react';
 import MigrationWizard from '../../components/migration-wizard/MigrationWizard.jsx';
 import './MigrationPage.css';
+
+/**
+ * Error boundary to catch rendering failures in the migration wizard.
+ */
+class MigrationErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('MigrationWizard error boundary caught:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="migration-error-boundary">
+          <div className="error-icon"><i className="fas fa-exclamation-triangle" /></div>
+          <h3>Something went wrong</h3>
+          <p>{this.state.error?.message || 'An unexpected error occurred in the migration wizard.'}</p>
+          <button className="btn btn-primary" onClick={() => this.setState({ hasError: false, error: null })}>
+            <i className="fas fa-redo" /> Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * MigrationPage - Dedicated PLM Data Migration Wizard Page
@@ -41,7 +75,9 @@ const MigrationPage = () => {
       </div>
       
       <div className="wizard-container">
-        <MigrationWizard onComplete={handleMigrationComplete} />
+        <MigrationErrorBoundary>
+          <MigrationWizard onComplete={handleMigrationComplete} />
+        </MigrationErrorBoundary>
       </div>
     </div>
   );

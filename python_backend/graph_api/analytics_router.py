@@ -17,9 +17,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
-# Ollama configuration
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3:latest"
+# Ollama configuration — resolved at call time from external_config so that
+# OLLAMA_BASE_URL / OLLAMA_MODEL env vars (and DB-backed overrides) are honoured.
+def _ollama_base_url() -> str:
+    from core.external_config import llm_config
+    return llm_config.ollama_base_url
+
+
+def _ollama_model() -> str:
+    from core.external_config import llm_config
+    return llm_config.ollama_model
+
+
 OLLAMA_TIMEOUT_S = float(os.getenv("GRAPH_TRACE_OLLAMA_TIMEOUT_S", "3") or 3)
 
 
@@ -92,16 +101,23 @@ async def execute_sql_query(request: SQLQueryRequest):
                 detail="Only SELECT queries are allowed"
             )
         
-        # Block dangerous keywords (using word boundaries to avoid false positives like 'created_at')
-        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE', '--', ';--']
+        # Block dangerous DML/DDL keywords (word-boundary match avoids false positives like 'created_at')
+        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
         for keyword in dangerous_keywords:
-            # Use regex word boundary to avoid matching substrings like 'created_at'
-            pattern = r'\b' + keyword + r'\b'
-            if re.search(pattern, sql_upper):
+            if re.search(r'\b' + keyword + r'\b', sql_upper):
                 logger.warning("SQL query rejected - dangerous keyword '%s'", keyword)
                 raise HTTPException(
                     status_code=400,
                     detail=f"Dangerous keyword '{keyword}' not allowed in query"
+                )
+        # Block SQL comment markers and multi-statement separators separately
+        # (word boundaries don't work for non-word character sequences like '--')
+        for marker in ('--', ';'):
+            if marker in sql_upper:
+                logger.warning("SQL query rejected - forbidden marker '%s'", marker)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Forbidden SQL marker '{marker}' not allowed in query"
                 )
         
         # Reference list of allowed tables (can be used for validation)
@@ -618,9 +634,9 @@ Provide a concise, helpful response:"""
         )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{_ollama_base_url()}/api/generate",
                 json={
-                    "model": OLLAMA_MODEL,
+                    "model": _ollama_model(),
                     "prompt": prompt,
                     "stream": False,
                     "options": {
@@ -890,7 +906,7 @@ async def natural_language_query(request: NLQRequest):
             "metadata": {
                 "execution_time_ms": execution_time,
                 "rows_returned": len(results),
-                "model": OLLAMA_MODEL,
+                "model": _ollama_model(),
                 "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
         }

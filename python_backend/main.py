@@ -37,6 +37,7 @@ from graph_api.graphql_router import router as graphql_router
 from graph_api.graphql_catalogue_router import router as graphql_catalogue_router
 from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
 from graph_api.agentic_router import router as agentic_router
+from graph_api.report_hub_router import router as report_hub_router
 from graph_api.quality_router import router as quality_router
 from graph_api.agentic_config_router import router as agentic_config_router
 from graph_api.plm_workflow_router import router as plm_workflow_router
@@ -64,7 +65,7 @@ from routers.admin_config_router import router as admin_config_router
 
 from core.auth import auth_required, get_request_principal
 from core.config_store import get_encrypted_config_payload
-from services.mcp_client import MCPClient
+from services.mcp_client import mcp_client as _mcp_client
 
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -82,14 +83,10 @@ except Exception:  # pylint: disable=broad-exception-caught
 
 
 def _best_effort_seed_config() -> None:
-    # Seed defaults early so DB-backed config can influence startup wiring
-    # (e.g., CORS origins). Non-fatal if DB/encryption isn't ready.
-    try:
-        from scripts.seed_db_config import seed_defaults
-
-        seed_defaults(force=False)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        logger.debug("Early DB config seeding skipped: %s", exc)
+    # Seeding is now done exclusively in the lifespan startup (after DB connectivity
+    # is verified). The early import-time call was removed to avoid double-seeding
+    # and to prevent synchronous DB access before the event loop is ready.
+    pass
 
 
 def _expand_localhost_origin_variants(origins: list[str]) -> list[str]:
@@ -169,7 +166,7 @@ app = FastAPI(
 
 
 _rate_limiter = InMemoryRateLimiter(
-    limit_per_minute=int((__import__("os").getenv("RATE_LIMIT_PER_MINUTE") or "240").strip() or 240)
+    limit_per_minute=int((os.getenv("RATE_LIMIT_PER_MINUTE") or "240").strip() or 240)
 )
 
 
@@ -191,11 +188,13 @@ async def request_timing_middleware(request: Request, call_next):
         neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
         
         # Check MCP Server Health
-        mcp_ok = await MCPClient().check_health()
+        mcp_ok = await _mcp_client.check_health()
         
         overall = "healthy" if (db_ok and neo4j_ok and mcp_ok) else "degraded"
+        # Return 503 when degraded so load-balancers/k8s pull the instance.
+        http_status = 200 if overall == "healthy" else 503
         response = JSONResponse(
-            status_code=200,
+            status_code=http_status,
             content={
                 "status": overall,
                 "service": "GoodPoint AgenticAI API",
@@ -283,6 +282,7 @@ app.include_router(graphql_router)
 app.include_router(graphql_catalogue_router)
 app.include_router(neo4j_graphrag_router)
 app.include_router(agentic_router)
+app.include_router(report_hub_router)
 app.include_router(quality_router)
 app.include_router(agentic_config_router)
 app.include_router(plm_workflow_router)
@@ -310,21 +310,24 @@ app.include_router(admin_config_router)
 
 @app.get("/health", tags=["Health"], summary="Health check endpoint")
 async def root_health_check():
-    # Keep a simple top-level health alias for clients that expect /health,
-    # but include dependency readiness so operators don't need to scrape logs.
     db_ok = bool(getattr(app.state, "db_ok", False))
     neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
-    overall = "healthy" if (db_ok and neo4j_ok) else "degraded"
-
-    return {
-        "status": overall,
-        "service": "GoodPoint AgenticAI API",
-        "timestamp": datetime.now().isoformat(),
-        "dependencies": {
-            "postgres": {"ok": db_ok},
-            "neo4j": {"ok": neo4j_ok},
+    mcp_ok = await _mcp_client.check_health()
+    overall = "healthy" if (db_ok and neo4j_ok and mcp_ok) else "degraded"
+    http_status = 200 if overall == "healthy" else 503
+    return JSONResponse(
+        status_code=http_status,
+        content={
+            "status": overall,
+            "service": "GoodPoint AgenticAI API",
+            "timestamp": datetime.now().isoformat(),
+            "dependencies": {
+                "postgres": {"ok": db_ok},
+                "neo4j": {"ok": neo4j_ok},
+                "mcp_server": {"ok": mcp_ok},
+            },
         },
-    }
+    )
 
 if __name__ == "__main__":
     import uvicorn

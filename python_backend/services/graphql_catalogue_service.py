@@ -4,14 +4,14 @@ Provides CRUD operations for query registry with unique name constraints.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone
 import importlib
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 
 def _utcnow() -> datetime:
-    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.now(timezone.utc).replace(tzinfo=None).
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 _graphql_models = importlib.import_module("models.graphql_models")

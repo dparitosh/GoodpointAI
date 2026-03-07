@@ -1,0 +1,9 @@
+# GraphTrace - Complete Installation (All Features)
+# Install: pip install -r requirements-all.txt
+
+-r requirements-core.txt
+-r requirements-migration.txt
+-r requirements-ai.txt
+-r requirements-monitoring.txt
+-r requirements-jobs.txt
+-r requirements-dev.txt

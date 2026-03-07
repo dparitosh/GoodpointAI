@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import logging
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ class ConfigCache:
     def get(self, key: str) -> Optional[Any]:
         """Get cached value if not expired."""
         if key in self._cache:
-            if datetime.utcnow() - self._timestamps.get(key, datetime.min) < self._ttl:
+            if datetime.now(timezone.utc).replace(tzinfo=None) - self._timestamps.get(key, datetime.min) < self._ttl:
                 return self._cache[key]
             else:
                 del self._cache[key]
@@ -51,7 +51,7 @@ class ConfigCache:
     def set(self, key: str, value: Any) -> None:
         """Set cached value with current timestamp."""
         self._cache[key] = value
-        self._timestamps[key] = datetime.utcnow()
+        self._timestamps[key] = datetime.now(timezone.utc).replace(tzinfo=None)
     
     def invalidate(self, key: Optional[str] = None) -> None:
         """Invalidate cache entry or entire cache."""

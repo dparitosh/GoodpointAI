@@ -12,22 +12,16 @@ export function useE2ETraceGraphData(setTableElements) {
     let isMounted = true;
 
     async function fetchInitialData() {
-      console.log('[useGraphData] fetchInitialData: Setting loading to true.');
       setLoading(true);
       setLoadingError(null);
       try {
-        console.log('[useGraphData] fetchInitialData: Attempting to fetch', API_CONFIG.ENDPOINTS.GRAPH);
         const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.GRAPH);
-        console.log('[useGraphData] fetchInitialData: Received response status:', response.status);
         const data = await response.json();
-        console.log('[useGraphData] fetchInitialData: Successfully parsed JSON data.');
         if (isMounted) {
             setGraphData(data);
-            console.log('[useGraphData] fetchInitialData: Graph data set.');
             if (setTableElements) {
                 const tableData = e2etraceCreateTableElementsFromGraph(data);
                 setTableElements(tableData);
-                console.log('[useGraphData] fetchInitialData: Table elements set.');
             }
         }
       } catch (error) {
@@ -36,7 +30,6 @@ export function useE2ETraceGraphData(setTableElements) {
             setLoadingError(`Error loading graph: ${error.message}. Check console for details.`);
         }
       } finally {
-        console.log('[useGraphData] fetchInitialData: In finally block, setting loading to false.');
         if (isMounted) {
             setLoading(false);
         }

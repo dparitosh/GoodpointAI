@@ -159,7 +159,7 @@ async def create_mapping_rule(rule: MappingRule):
     rule.updated_at = datetime.now().isoformat()
 
     # Convert to dict and add to rules
-    rule_dict = rule.dict()
+    rule_dict = rule.model_dump()
     rules.append(rule_dict)
 
     # Save to file
@@ -189,7 +189,7 @@ async def update_mapping_rule(rule_id: str, rule: MappingRule):
     if 'created_at' in rules[rule_index]:
         rule.created_at = rules[rule_index]['created_at']
 
-    rules[rule_index] = rule.dict()
+    rules[rule_index] = rule.model_dump()
 
     # Save to file
     save_mapping_rules(rules)
@@ -257,7 +257,7 @@ async def create_mapping_template(template: MappingTemplate):
     template.created_at = datetime.now().isoformat()
 
     # Convert to dict and add to templates
-    template_dict = template.dict()
+    template_dict = template.model_dump()
     templates.append(template_dict)
 
     # Save to file
@@ -316,7 +316,7 @@ async def execute_mapping_rule(rule_id: str, execution: MappingExecution):
         message="Mapping execution is unavailable: source/target connectors and an execution engine are not configured.",
         errors=["EXECUTION_NOT_CONFIGURED"],
     )
-    return JSONResponse(status_code=503, content=result.dict())
+    return JSONResponse(status_code=503, content=result.model_dump())
 
 @router.post(
     "/rules/{rule_id}/validate",

@@ -176,7 +176,7 @@ class AgenticConfigurationManager:
             try:
                 # Convert to dict and handle datetime serialization
                 config_dict = {
-                    "configuration": self.current_config.dict()
+                    "configuration": self.current_config.model_dump()
                 }
                 # Convert datetime objects to ISO format strings
                 def convert_datetime(obj):
@@ -206,7 +206,7 @@ class AgenticConfigurationManager:
         try:
             # Merge with existing configuration
             if self.current_config:
-                current_dict = self.current_config.dict()
+                current_dict = self.current_config.model_dump()
                 # Deep merge the update
                 merged_config = self._deep_merge(current_dict, config_update)
             else:
@@ -234,7 +234,7 @@ class AgenticConfigurationManager:
             await self._notify_websocket_clients({
                 "type": "configuration_updated",
                 "data": {
-                    "config": self.current_config.dict(),
+                    "config": self.current_config.model_dump(),
                     "analysis": analysis
                 }
             })
@@ -250,7 +250,7 @@ class AgenticConfigurationManager:
                 "message": "Configuration updated successfully",
                 "analysis": analysis,
                 "deployment": deployment_result,
-                "config": self.current_config.dict()
+                "config": self.current_config.model_dump()
             }
             
         except ValidationError as e:
@@ -540,7 +540,7 @@ class AgenticConfigurationManager:
         if self.current_config:
             await websocket.send_text(json.dumps({
                 "type": "configuration_loaded",
-                "data": self.current_config.dict()
+                "data": self.current_config.model_dump()
             }, default=str))
     
     def remove_websocket_connection(self, websocket: WebSocket) -> None:
@@ -551,12 +551,12 @@ class AgenticConfigurationManager:
     async def get_configuration(self) -> Dict[str, Any]:
         """Get current configuration"""
         if self.current_config:
-            return self.current_config.dict()
+            return self.current_config.model_dump()
         return {}
     
     async def get_deployment_status(self) -> Dict[str, Any]:
         """Get current deployment status"""
-        return self.deployment_status.dict()
+        return self.deployment_status.model_dump()
     
     async def trigger_deployment(self, deployment_config: Dict[str, Any], 
                                _background_tasks: BackgroundTasks) -> Dict[str, Any]:
@@ -691,7 +691,7 @@ class AgenticConfigurationManager:
             return {
                 "status": "success",
                 "message": "Data source added successfully",
-                "data": {"config": self.current_config.dict() if self.current_config else {}}
+                "data": {"config": self.current_config.model_dump() if self.current_config else {}}
             }
             
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -722,7 +722,7 @@ class AgenticConfigurationManager:
                         return {
                             "status": "success",
                             "message": "Data source updated successfully",
-                            "data": {"config": self.current_config.dict()}
+                            "data": {"config": self.current_config.model_dump()}
                         }
             
             raise HTTPException(status_code=404, detail=f"Data source {source_id} not found")
@@ -755,7 +755,7 @@ class AgenticConfigurationManager:
                         return {
                             "status": "success",
                             "message": "Data source deleted successfully",
-                            "data": {"config": self.current_config.dict()}
+                            "data": {"config": self.current_config.model_dump()}
                         }
             
             raise HTTPException(status_code=404, detail=f"Data source {source_id} not found")
@@ -820,7 +820,7 @@ class AgenticConfigurationManager:
     async def export_configuration(self) -> Dict[str, Any]:
         """Export current configuration"""
         if self.current_config:
-            config_data = self.current_config.dict()
+            config_data = self.current_config.model_dump()
             config_data["exported_at"] = datetime.now().isoformat()
             config_data["export_version"] = "2.0.0"
             return config_data
@@ -846,13 +846,13 @@ class AgenticConfigurationManager:
             # Notify WebSocket clients
             await self._notify_websocket_clients({
                 "type": "configuration_imported",
-                "data": {"config": self.current_config.dict()}
+                "data": {"config": self.current_config.model_dump()}
             })
             
             return {
                 "status": "success",
                 "message": "Configuration imported successfully",
-                "data": {"config": self.current_config.dict()}
+                "data": {"config": self.current_config.model_dump()}
             }
             
         except ValidationError as e:

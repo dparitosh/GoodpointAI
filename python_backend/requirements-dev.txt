@@ -1,0 +1,17 @@
+# GraphTrace - Development & Testing
+# Install: pip install -r requirements-core.txt -r requirements-dev.txt
+
+-r requirements-core.txt
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Linting & Formatting (optional - add if using)
+# black==24.0.0
+# ruff==0.1.0
+# mypy==1.7.0
+
+# Dependency analysis
+# pipdeptree==2.13.0

@@ -8,11 +8,11 @@ import xml.etree.ElementTree as ET
 import hashlib
 import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone
 
 
 def _utcnow_iso() -> str:
-    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.now(timezone.utc).replace(tzinfo=None).
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 

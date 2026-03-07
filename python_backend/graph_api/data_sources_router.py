@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 import os
@@ -87,8 +88,21 @@ def _allowed_local_roots() -> List[Path]:
 
 
 def _is_under_allowed_root(path: Path) -> bool:
-    # Allow all local paths for desktop app usage
-    return True
+    """Return True only when *path* is inside an admin-approved root directory.
+
+    The allowed roots are populated from DB-backed config → env var → repo-local
+    defaults (see `_allowed_local_roots`).  When no roots exist (first run before
+    seeding) we fall back to the repo-local /data tree so the app remains usable
+    without extra configuration.
+    """
+    resolved = path.resolve()
+    roots = _allowed_local_roots()
+    if not roots:
+        # No roots configured → deny all, fail-safe.
+        return False
+    return any(
+        str(resolved).startswith(str(r)) for r in roots
+    )
 
 
 def _detect_format_from_name(name: str) -> str:
@@ -173,6 +187,51 @@ def _resolve_local_file_path(connection: Dict[str, Any]) -> Path:
 # System connection sampling (admin-registered connections)
 # ---------------------------------------------------------------------------
 
+# R-12: maximum number of per-request HTTP retry attempts for transient errors.
+_HTTP_MAX_RETRIES: int = int(os.getenv("DATA_SOURCE_HTTP_RETRIES", "3"))
+_HTTP_RETRY_BACKOFF_S: float = 0.5  # seconds — doubles each attempt
+
+
+async def _http_retry_get(client: Any, url: str, **kwargs: Any) -> Any:
+    """GET with exponential back-off on transient HTTP/network errors (R-12)."""
+    import httpx  # noqa: E402
+
+    last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(max(1, _HTTP_MAX_RETRIES)):
+        try:
+            resp = await client.get(url, **kwargs)
+            # Only retry on server-side transient errors or network issues.
+            if resp.status_code < 500 or attempt == _HTTP_MAX_RETRIES - 1:
+                return resp
+            # Treat 5xx as transient — fall through to retry.
+            last_exc = RuntimeError(f"HTTP {resp.status_code}")
+        except (httpx.TransportError, httpx.TimeoutException) as exc:
+            last_exc = exc
+            if attempt == _HTTP_MAX_RETRIES - 1:
+                raise
+        await asyncio.sleep(_HTTP_RETRY_BACKOFF_S * (2 ** attempt))
+    raise last_exc  # pragma: no cover
+
+
+async def _http_retry_post(client: Any, url: str, **kwargs: Any) -> Any:
+    """POST with exponential back-off on transient HTTP/network errors (R-12)."""
+    import httpx  # noqa: E402
+
+    last_exc: Exception = RuntimeError("no attempts")
+    for attempt in range(max(1, _HTTP_MAX_RETRIES)):
+        try:
+            resp = await client.post(url, **kwargs)
+            if resp.status_code < 500 or attempt == _HTTP_MAX_RETRIES - 1:
+                return resp
+            last_exc = RuntimeError(f"HTTP {resp.status_code}")
+        except (httpx.TransportError, httpx.TimeoutException) as exc:
+            last_exc = exc
+            if attempt == _HTTP_MAX_RETRIES - 1:
+                raise
+        await asyncio.sleep(_HTTP_RETRY_BACKOFF_S * (2 ** attempt))
+    raise last_exc  # pragma: no cover
+
+
 _DATABASE_TYPES = {"postgres", "postgresql", "database", "mysql", "sqlserver", "mssql", "oracle"}
 _NEO4J_TYPES = {"neo4j"}
 _API_TYPES = {"rest_api", "odata", "graphql", "api"}
@@ -213,7 +272,10 @@ async def _sample_system_connection(
         elif conn_type in _PLM_TYPES:
             records, warnings, fmt = await _sample_plm_system(conn_dict, conn_type, limit)
         elif conn_type in _FILE_STORAGE_TYPES:
-            records, warnings, fmt = _sample_file_storage(conn_dict, conn_type, limit)
+            # R-02: _sample_file_storage contains blocking S3/Azure/file I/O.
+            records, warnings, fmt = await asyncio.to_thread(
+                _sample_file_storage, conn_dict, conn_type, limit
+            )
         else:
             warnings.append(
                 f"Live sampling is not yet supported for connection type '{conn_type}'. "
@@ -334,7 +396,9 @@ async def _sample_sqlserver(conn: Dict[str, Any], limit: int) -> tuple:
 
                 schema_name, table_name = table_info
                 full_table = f"[{schema_name}].[{table_name}]"
-                cur.execute(f"SELECT TOP {limit} * FROM {full_table}")
+                # Use parameterised LIMIT via pyodbc; TOP doesn't support params directly,
+                # so we format only the integer-typed, already-validated `limit` value.
+                cur.execute(f"SELECT TOP (?) * FROM {full_table}", (int(limit),))
                 columns = [desc[0] for desc in cur.description]
                 for row in cur.fetchall():
                     records.append(dict(zip(columns, row)))
@@ -387,7 +451,8 @@ async def _sample_oracle(conn: Dict[str, Any], limit: int) -> tuple:
 
                 owner, table_name = table_info
                 full_table = f"{owner}.{table_name}"
-                cur.execute(f"SELECT * FROM {full_table} WHERE ROWNUM <= {limit}")
+                # Use a parameterised bind variable (:lim) for the ROWNUM guard.
+                cur.execute(f"SELECT * FROM {full_table} WHERE ROWNUM <= :lim", {"lim": int(limit)})
                 columns = [desc[0] for desc in cur.description]
                 for row in cur.fetchall():
                     # Convert Oracle-specific types to JSON-serializable types
@@ -481,20 +546,23 @@ async def _sample_api_endpoint(
         url = f"{url}{sep}$top={limit}"
 
     try:
-        async with httpx.AsyncClient(timeout=30, verify=False) as client:
+        async with httpx.AsyncClient(timeout=30, verify=True) as client:
             if api_type == "graphql":
                 # For GraphQL, POST an introspection-like query for first N records.
                 # Without knowing the schema we send a generic query; the user may
                 # need to configure the object_types/query in extra_options.
                 graphql_query = extra.get("query") or '{ __schema { types { name } } }'
-                resp = await client.post(
+                # R-12: retry on transient network/5xx errors.
+                resp = await _http_retry_post(
+                    client,
                     url,
                     json={"query": graphql_query},
                     headers=headers,
                     auth=auth,
                 )
             else:
-                resp = await client.get(url, headers=headers, auth=auth)
+                # R-12: retry on transient network/5xx errors.
+                resp = await _http_retry_get(client, url, headers=headers, auth=auth)
 
         if resp.status_code >= 400:
             warnings.append(f"API returned HTTP {resp.status_code}")
@@ -594,8 +662,9 @@ async def _sample_plm_system(
     url = server_url.rstrip("/") + search_path
 
     try:
-        async with httpx.AsyncClient(timeout=30, verify=False) as client:
-            resp = await client.get(url, headers=headers, auth=auth)
+        async with httpx.AsyncClient(timeout=30, verify=True) as client:
+            # R-12: retry on transient network/5xx errors.
+            resp = await _http_retry_get(client, url, headers=headers, auth=auth)
 
         if resp.status_code >= 400:
             warnings.append(f"PLM API returned HTTP {resp.status_code}")
@@ -822,12 +891,17 @@ async def get_data_source_sample(
             raise HTTPException(status_code=404, detail="Local file not found")
         name_hint = path.name
         try:
-            # Avoid reading huge files into memory
+            # P-04: offload blocking file I/O to a thread to avoid stalling the event loop.
             max_bytes = 512 * 1024
-            with open(path, "rb") as fp:
-                content = fp.read(max_bytes)
+            def _read_file() -> bytes:
+                with open(path, "rb") as fp:
+                    return fp.read(max_bytes)
+            content = await asyncio.to_thread(_read_file)
             if path.stat().st_size > max_bytes:
                 warnings.append("Sample truncated to 512KB")
+            # DQ-03: record content integrity checksum.
+            import hashlib as _hl
+            warnings.append(f"sha256:{_hl.sha256(content).hexdigest()[:16]}…")
         except OSError as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -839,6 +913,7 @@ async def get_data_source_sample(
 
         try:
             import boto3  # type: ignore
+            import hashlib as _hashlib
 
             client_kwargs: Dict[str, Any] = {}
             region = (connection.get("region") or "").strip() or None
@@ -853,22 +928,29 @@ async def get_data_source_sample(
             if session_token:
                 client_kwargs["aws_session_token"] = session_token
 
-            s3 = boto3.client("s3", **client_kwargs)
-            obj = s3.get_object(Bucket=bucket, Key=key)
-            body = obj.get("Body")
-            if body is None:
-                raise HTTPException(status_code=500, detail="S3 object body missing")
-
             max_bytes = 512 * 1024
-            content = body.read(max_bytes)
+            _ck = dict(client_kwargs)  # capture for thread
+            _bucket, _key = bucket, key
+
+            # R-02: boto3 is synchronous — offload to thread to avoid blocking event loop.
+            def _s3_fetch() -> bytes:
+                s3 = boto3.client("s3", **_ck)
+                obj = s3.get_object(Bucket=_bucket, Key=_key)
+                body = obj.get("Body")
+                if body is None:
+                    raise RuntimeError("S3 object body missing")
+                raw = body.read(max_bytes)
+                cl = int(obj.get("ContentLength") or 0)
+                return raw, cl  # type: ignore[return-value]
+
+            raw_result = await asyncio.to_thread(_s3_fetch)
+            content, content_length = raw_result  # type: ignore[misc]
             name_hint = key
 
-            try:
-                content_length = int(obj.get("ContentLength") or 0)
-                if content_length and content_length > max_bytes:
-                    warnings.append("Sample truncated to 512KB")
-            except Exception:
-                pass
+            if content_length and content_length > max_bytes:
+                warnings.append("Sample truncated to 512KB")
+            # DQ-03: record content checksum so callers can detect corruption.
+            warnings.append(f"sha256:{_hashlib.sha256(content).hexdigest()[:16]}…")
         except ImportError as e:
             raise HTTPException(status_code=503, detail="boto3 is not installed. Install: pip install boto3") from e
         except HTTPException:
@@ -885,20 +967,32 @@ async def get_data_source_sample(
 
         try:
             from azure.storage.blob import BlobServiceClient  # type: ignore
+            import hashlib as _hashlib
 
-            service = BlobServiceClient.from_connection_string(connection_string)
-            blob_client = service.get_blob_client(container=container_name, blob=blob_name)
-            downloader = blob_client.download_blob(max_concurrency=1)
             max_bytes = 512 * 1024
-            content = downloader.readall(max_bytes)
+            _cs, _cname, _bname = connection_string, container_name, blob_name
+
+            # R-02: azure-storage-blob is synchronous — offload to thread.
+            def _azure_fetch() -> bytes:
+                svc = BlobServiceClient.from_connection_string(_cs)
+                bc = svc.get_blob_client(container=_cname, blob=_bname)
+                raw = bc.download_blob(max_concurrency=1).readall()
+                size = len(raw)
+                try:
+                    props = bc.get_blob_properties()
+                    size = int(getattr(props, "size", 0) or size)
+                except Exception:
+                    pass
+                return raw[:max_bytes], size  # type: ignore[return-value]
+
+            raw_result = await asyncio.to_thread(_azure_fetch)
+            content, blob_size = raw_result  # type: ignore[misc]
             name_hint = blob_name
-            try:
-                props = blob_client.get_blob_properties()
-                size = int(getattr(props, "size", 0) or 0)
-                if size and size > max_bytes:
-                    warnings.append("Sample truncated to 512KB")
-            except Exception:
-                pass
+
+            if blob_size and blob_size > max_bytes:
+                warnings.append("Sample truncated to 512KB")
+            # DQ-03: content integrity checksum.
+            warnings.append(f"sha256:{_hashlib.sha256(content).hexdigest()[:16]}…")
         except ImportError as e:
             raise HTTPException(status_code=503, detail="azure-storage-blob is not installed. Install: pip install azure-storage-blob") from e
         except HTTPException:
@@ -1097,8 +1191,8 @@ async def get_data_sources(
         conn_query = db.query(ConnectionConfig).filter(ConnectionConfig.status != "deleted")
         conn_count = conn_query.count()
         
-        # 2. Fetch Data Sources
-        ds_query = db.query(DataSourceConfigRecord)
+        # 2. Fetch Data Sources (DQ-12: exclude soft-deleted records)
+        ds_query = db.query(DataSourceConfigRecord).filter(DataSourceConfigRecord.status != "deleted")
         ds_count = ds_query.count()
         
         response.headers["X-Total-Count"] = str(conn_count + ds_count)
@@ -1118,17 +1212,30 @@ async def get_data_sources(
             conns_to_show = all_conns[skip : skip + limit]
             
             for c in conns_to_show:
+                extra = c.extra_options if isinstance(c.extra_options, dict) else {}
+                conn_type = (c.connection_type or "").lower().strip()
+
+                # Build connection summary — include non-secret extra fields
+                # so the UI can display folder_path for local_folder, etc.
+                conn_info: Dict[str, Any] = {
+                    "host": c.host,
+                    "port": c.port,
+                    "database": c.database,
+                    "username": c.username,
+                    "connection_string_preview": "***" if c.password else None,
+                }
+                # Surface folder/file path for file-based connection types
+                if conn_type in ("local_folder", "file", "s3", "aws_s3", "azure_blob"):
+                    for key in ("folder_path", "file_path", "bucket", "container_name", "prefix", "blob_prefix"):
+                        val = extra.get(key)
+                        if val:
+                            conn_info[key] = val
+
                 result.append({
                     "id": f"conn_{c.id}", # Prefix to distinguish from data source UUIDs
                     "name": c.name,
                     "type": c.connection_type,
-                    "connection": {
-                        "host": c.host,
-                        "port": c.port,
-                        "database": c.database,
-                        "username": c.username,
-                        "connection_string_preview": "***" if c.password else None
-                    },
+                    "connection": conn_info,
                     "description": c.description or f"System {c.connection_type} connection",
                     "status": c.status,
                     "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -1275,7 +1382,12 @@ async def create_data_source(source: DataSource, db: Session = Depends(get_db)):
         db.add(record)
         db.commit()
         db.refresh(record)
-        
+        # DQ-10: structured audit entry.
+        logger.info(
+            "AUDIT action=create entity_type=data_source entity_id=%s entity_name=%s",
+            record.id,
+            record.name,
+        )
         return DataSourceResponse(
             status="success",
             message="Data source created successfully",
@@ -1344,7 +1456,12 @@ async def update_data_source(source_id: str, source: DataSource, db: Session = D
             raise HTTPException(status_code=503, detail=str(e)) from e
         db.commit()
         db.refresh(record)
-        
+        # DQ-10: structured audit entry.
+        logger.info(
+            "AUDIT action=update entity_type=data_source entity_id=%s entity_name=%s",
+            record.id,
+            record.name,
+        )
         return DataSourceResponse(
             status="success",
             message="Data source updated successfully",
@@ -1367,9 +1484,15 @@ async def delete_data_source(source_id: str, db: Session = Depends(get_db)):
         if record is None:
             raise HTTPException(status_code=404, detail="Data source not found")
 
-        db.delete(record)
+        # DQ-12: soft-delete — mark as deleted rather than permanently removing the row.
+        record.status = "deleted"
         db.commit()
-        
+        # DQ-10: structured audit entry.
+        logger.info(
+            "AUDIT action=delete entity_type=data_source entity_id=%s entity_name=%s",
+            source_id,
+            record.name,
+        )
         return DataSourceResponse(
             status="success",
             message="Data source deleted successfully"
@@ -1798,7 +1921,6 @@ async def _test_s3_connection(connection: Dict) -> TestConnectionResponse:
 
     try:
         import boto3  # type: ignore
-        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
 
         client_kwargs: Dict[str, Any] = {}
         if region:
@@ -1809,9 +1931,14 @@ async def _test_s3_connection(connection: Dict) -> TestConnectionResponse:
         if session_token:
             client_kwargs["aws_session_token"] = session_token
 
-        s3 = boto3.client("s3", **client_kwargs)
-        # Lightweight check
-        s3.head_bucket(Bucket=bucket)
+        _ck = dict(client_kwargs)
+        _b = bucket
+
+        # R-02: boto3 is synchronous — offload to thread.
+        def _check() -> None:
+            boto3.client("s3", **_ck).head_bucket(Bucket=_b)
+
+        await asyncio.to_thread(_check)
         return TestConnectionResponse(
             success=True,
             message="S3 bucket is accessible",
@@ -1837,11 +1964,16 @@ async def _test_azure_blob_connection(connection: Dict) -> TestConnectionRespons
     try:
         from azure.storage.blob import BlobServiceClient  # type: ignore
 
-        service = BlobServiceClient.from_connection_string(connection_string)
-        if container_name:
-            container = service.get_container_client(container_name)
-            # list at most one blob
-            _ = next(container.list_blobs(results_per_page=1), None)
+        _cs, _cname = connection_string, container_name
+
+        # R-02: azure-storage-blob is synchronous — offload to thread.
+        def _check() -> None:
+            svc = BlobServiceClient.from_connection_string(_cs)
+            if _cname:
+                container = svc.get_container_client(_cname)
+                _ = next(container.list_blobs(results_per_page=1), None)
+
+        await asyncio.to_thread(_check)
         return TestConnectionResponse(
             success=True,
             message="Azure Blob Storage is accessible",
@@ -1889,7 +2021,7 @@ async def _test_api_endpoint_connection(connection: Dict, api_type: str = "rest_
             headers["Authorization"] = f"Bearer {token}"
 
     try:
-        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+        async with httpx.AsyncClient(timeout=15, verify=True) as client:
             resp = await client.get(endpoint_url, headers=headers, auth=auth)
         if resp.status_code < 400:
             return TestConnectionResponse(
@@ -1951,7 +2083,7 @@ async def _test_plm_connection(connection: Dict, plm_type: str) -> TestConnectio
         headers["Authorization"] = f"Bearer {password}"
 
     try:
-        async with httpx.AsyncClient(timeout=15, verify=False) as client:
+        async with httpx.AsyncClient(timeout=15, verify=True) as client:
             resp = await client.get(server_url, headers=headers, auth=auth)
         if resp.status_code < 400:
             return TestConnectionResponse(

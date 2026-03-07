@@ -3,9 +3,8 @@ import writeXlsxFile from 'write-excel-file';
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-export async function readExcelArrayBufferToAoa(arrayBuffer) {
-  // Backward compatible signature: (arrayBuffer) or (arrayBuffer, sheet)
-  const sheet = arguments.length > 1 ? arguments[1] : undefined;
+export async function readExcelArrayBufferToAoa(arrayBuffer, sheet) {
+  if (!arrayBuffer) return [];
   let rows;
   try {
     rows = sheet != null ? await readXlsxFile(arrayBuffer, { sheet }) : await readXlsxFile(arrayBuffer);

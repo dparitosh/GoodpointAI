@@ -8,7 +8,7 @@ environment variables and config store for backward compatibility.
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone
 import os
 import httpx
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.utcnow().
+    # Keep naive UTC timestamps (previous behavior) without using deprecated datetime.now(timezone.utc).replace(tzinfo=None).
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 

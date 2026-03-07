@@ -6,29 +6,35 @@ Following AGENTIC_REFACTORING_GUIDE.md principles
 """
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from pydantic import BaseModel, Field
 import neo4j
+from sqlalchemy.orm import Session
 
 from .dependencies import get_driver
-from services.mcp_client import MCPClient
+from core.db_session import get_db
+from models.quality_models import DiscoveryReport
+from models.report_hub_models import UnifiedReport
+from services.mcp_client import mcp_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agentic", tags=["Agentic Orchestration"])
 
-#  AGENT TYPE DEFINITIONS
+# ── Canonical enums (kept local so python_backend has no import dependency on mcp_server) ──
+
 class AgentType(str, Enum):
     DATA_ANALYST = "data_analyst"
     ETL_ORCHESTRATOR = "etl_orchestrator"
     QUERY_PLANNER = "query_planner"
     VISUALIZATION_AGENT = "visualization_agent"
     QUALITY_MONITOR = "quality_monitor"
+    DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
 
-#  TASK DEFINITIONS
 class TaskType(str, Enum):
     DATA_ANALYSIS = "data_analysis"
     PIPELINE_ORCHESTRATION = "pipeline_orchestration"
@@ -36,8 +42,12 @@ class TaskType(str, Enum):
     VISUALIZATION_GENERATION = "visualization_generation"
     QUALITY_ASSESSMENT = "quality_assessment"
     CHAT_PROCESSING = "chat_processing"
+    DATA_DISCOVERY = "data_discovery"
+    DATA_QUALITY_SCAN = "data_quality_scan"
+    FILE_BATCH_PROCESSING = "file_batch_processing"
 
-#  PYDANTIC MODELS
+# ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
+
 class AgentCapability(BaseModel):
     name: str
     description: str
@@ -91,8 +101,7 @@ class SystemStatus(BaseModel):
     performance_metrics: Dict[str, Any]
     timestamp: datetime = Field(default_factory=datetime.now)
 
-#  MCP CLIENT INSTANCE
-mcp_client = MCPClient()
+# ── MCP client singleton (shared with main.py and other consumers) ──
 
 
 #  API ENDPOINTS
@@ -270,4 +279,150 @@ async def get_agent_metrics():
         logger.error("Error getting agent metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
+
+# ── Data Discovery via MCP ─────────────────────────────────────────────────
+
+class DiscoveryRequest(BaseModel):
+    source_id: Optional[str] = None
+    folder_path: Optional[str] = None
+    recursive: bool = True
+    include_profiling: bool = True
+    save_report: bool = True
+
+@router.post("/discovery", summary="Discover and profile a folder data source via MCP")
+async def discover_datasource(req: DiscoveryRequest, db: Session = Depends(get_db)):
+    """
+    Submit a DATA_DISCOVERY task to the MCP orchestrator.
+    Routes to the DataDiscoveryAgent when registered, or falls back to the ETL Orchestrator agent.
+    When save_report=True the result is persisted to discovery_reports and returned with report_id.
+    """
+    if not req.source_id and not req.folder_path:
+        raise HTTPException(status_code=400, detail="Provide source_id or folder_path")
+    task = AgenticTask(
+        type=TaskType.DATA_DISCOVERY,
+        required_capabilities=["discover_files", "profile_files"],
+        payload={
+            "source_id": req.source_id,
+            "folder_path": req.folder_path,
+            "recursive": req.recursive,
+            "include_profiling": req.include_profiling,
+        },
+    )
+    try:
+        result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
+    except Exception as e:
+        logger.error("Discovery task failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    if req.save_report:
+        try:
+            inner = result_dict.get("result") or result_dict
+            files = inner.get("files") or inner.get("discovered_files") or []
+            total_size = sum(int(f.get("size_bytes") or 0) for f in files if isinstance(f, dict))
+            label = (
+                req.folder_path
+                or req.source_id
+                or inner.get("folder_path")
+                or "unknown"
+            )
+            report = DiscoveryReport(
+                report_id=str(uuid.uuid4()),
+                label=label,
+                source_id=req.source_id,
+                folder_path=req.folder_path,
+                total_files=len(files),
+                total_size_bytes=total_size,
+                result=result_dict,
+            )
+            db.add(report)
+            # Also write to unified reports hub
+            unified = UnifiedReport(
+                report_id=str(uuid.uuid4()),
+                report_type="discovery",
+                title=f"Discovery: {label}",
+                source_page="data-discovery",
+                status="info",
+                summary={
+                    "total_files": len(files),
+                    "total_size_bytes": total_size,
+                    "folder_path": req.folder_path or req.source_id,
+                },
+                result=result_dict,
+                tags=["discovery"],
+            )
+            db.add(unified)
+            db.commit()
+            result_dict["report_id"] = report.report_id
+            logger.info("Discovery report saved: %s (%d files)", report.report_id, len(files))
+        except Exception as persist_err:
+            logger.warning("Failed to persist discovery report: %s", persist_err)
+            db.rollback()
+
+    return result_dict
+
+
+@router.get("/discovery/reports", summary="List saved data discovery reports")
+async def list_discovery_reports(
+    limit: int = Query(50, ge=1, le=500),
+    source_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Return saved discovery reports in reverse-chronological order.
+    Used by the Data Discovery page 'Past Runs' history panel.
+    """
+    q = db.query(DiscoveryReport)
+    if source_id:
+        q = q.filter(DiscoveryReport.source_id == source_id)
+    rows = q.order_by(DiscoveryReport.created_at.desc()).limit(limit).all()
+    return [
+        {
+            "report_id": r.report_id,
+            "label": r.label,
+            "source_id": r.source_id,
+            "folder_path": r.folder_path,
+            "total_files": r.total_files,
+            "total_size_bytes": r.total_size_bytes,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "result": r.result,
+        }
+        for r in rows
+    ]
+
+
+# ── Data Quality Scan via MCP ──────────────────────────────────────────────
+
+class QualityScanMCPRequest(BaseModel):
+    source_id: Optional[str] = None
+    folder_path: Optional[str] = None
+    scan_type: str = "full"        # full | quick | sample
+    save_report: bool = True
+    entity_type: Optional[str] = None
+
+@router.post("/quality-scan", summary="Run a data quality scan via MCP orchestration")
+async def quality_scan_via_mcp(req: QualityScanMCPRequest):
+    """
+    Submit a DATA_QUALITY_SCAN task to the MCP orchestrator.
+    Routes to the QualityMonitor agent which uses the Rule Engine
+    and the backend quality scan endpoint.
+    """
+    if not req.source_id and not req.folder_path:
+        raise HTTPException(status_code=400, detail="Provide source_id or folder_path")
+    task = AgenticTask(
+        type=TaskType.DATA_QUALITY_SCAN,
+        required_capabilities=["scan_datasource_quality", "generate_quality_reports"],
+        payload={
+            "source_id": req.source_id,
+            "folder_path": req.folder_path,
+            "scan_type": req.scan_type,
+            "save_report": req.save_report,
+            "entity_type": req.entity_type,
+        },
+    )
+    try:
+        result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
+        return result_dict
+    except Exception as e:
+        logger.error("Quality scan task failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 

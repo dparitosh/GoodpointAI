@@ -13,7 +13,7 @@ Architecture:
 
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -48,12 +48,12 @@ class DatabaseMigrationService:
         import pyodbc
         from sqlalchemy import create_engine
         
-        migration_id = f"mig_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        migration_id = f"mig_{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d_%H%M%S')}"
         results = {
             "migration_id": migration_id,
             "source_type": "sqlserver",
             "target_type": target_config.get("type", "postgres"),
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "tables_migrated": [],
             "total_rows": 0,
             "total_errors": 0
@@ -92,7 +92,7 @@ class DatabaseMigrationService:
         finally:
             target_engine.dispose()
         
-        results["completed_at"] = datetime.utcnow().isoformat()
+        results["completed_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         results["status"] = "success" if results["total_errors"] == 0 else "partial_failure"
         
         # Record in Neo4j lineage graph
@@ -115,12 +115,12 @@ class DatabaseMigrationService:
         import oracledb
         from sqlalchemy import create_engine
         
-        migration_id = f"mig_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        migration_id = f"mig_{datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y%m%d_%H%M%S')}"
         results = {
             "migration_id": migration_id,
             "source_type": "oracle",
             "target_type": target_config.get("type", "postgres"),
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "tables_migrated": [],
             "total_rows": 0,
             "total_errors": 0
@@ -163,7 +163,7 @@ class DatabaseMigrationService:
         finally:
             target_engine.dispose()
         
-        results["completed_at"] = datetime.utcnow().isoformat()
+        results["completed_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         results["status"] = "success" if results["total_errors"] == 0 else "partial_failure"
         
         await self._record_migration_lineage(results)
@@ -210,7 +210,7 @@ class DatabaseMigrationService:
                     
                     # Add migration metadata
                     df["_migration_id"] = migration_id
-                    df["_migrated_at"] = datetime.utcnow()
+                    df["_migrated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
                     
                     # Insert into target
                     try:
@@ -282,7 +282,7 @@ class DatabaseMigrationService:
                         df = transform_fn(df)
                     
                     df["_migration_id"] = migration_id
-                    df["_migrated_at"] = datetime.utcnow()
+                    df["_migrated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
                     
                     try:
                         df.to_sql(
@@ -385,7 +385,7 @@ class DatabaseMigrationService:
         """
         validation_result = {
             "migration_id": migration_id,
-            "validated_at": datetime.utcnow().isoformat(),
+            "validated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "tables": [],
             "overall_status": "pass"
         }

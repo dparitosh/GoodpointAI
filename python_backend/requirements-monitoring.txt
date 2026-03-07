@@ -1,0 +1,7 @@
+# GraphTrace - Monitoring & Observability
+# Install: pip install -r requirements-core.txt -r requirements-monitoring.txt
+
+-r requirements-core.txt
+
+prometheus-client==0.21.0  # Prometheus metrics export
+sentry-sdk==2.18.0         # Error tracking and performance monitoring

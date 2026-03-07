@@ -103,6 +103,36 @@ async def lifespan_manager(app: FastAPI):
                 exc,
             )
 
+        # Apply incremental column-level migrations for tables that existed before
+        # new columns were added (CREATE TABLE IF NOT EXISTS won't add columns).
+        try:
+            from core.db_session import DATABASE_URL
+            from sqlalchemy import create_engine as _ce, text as _text
+
+            _mg_engine = _ce(DATABASE_URL)
+            _ALTER_STMTS = [
+                "ALTER TABLE plm_staged_records ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)",
+                "ALTER TABLE plm_staged_records ADD COLUMN IF NOT EXISTS source_object_id VARCHAR(256)",
+                "CREATE INDEX IF NOT EXISTS ix_plm_staged_records_content_hash ON plm_staged_records (content_hash)",
+                "CREATE INDEX IF NOT EXISTS ix_plm_staged_records_source_object_id ON plm_staged_records (source_object_id)",
+                """DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_staged_run_content_hash')
+                    THEN ALTER TABLE plm_staged_records ADD CONSTRAINT uq_staged_run_content_hash UNIQUE (run_id, content_hash);
+                    END IF; END $$""",
+                "ALTER TABLE plm_ingestion_runs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            ]
+            with _mg_engine.connect() as _conn:
+                for _stmt in _ALTER_STMTS:
+                    try:
+                        _conn.execute(_text(_stmt))
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass  # column/constraint already exists
+                _conn.commit()
+            _mg_engine.dispose()
+            logger.info("Incremental DB migrations applied")
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.debug("Incremental DB migration skipped (non-fatal): %s", exc)
+
         # Explicit DB connectivity verification (mirrors the Neo4j verify_connectivity logs).
         db_url_safe = redacted_database_url()
         logger.info("Attempting to verify database connectivity for %s...", db_url_safe)
@@ -227,6 +257,13 @@ async def lifespan_manager(app: FastAPI):
             await health_task
         except asyncio.CancelledError:
             pass
+
+    # R-13: cancel all in-flight migration asyncio tasks on shutdown.
+    for sid, mig_session in list(migration_engine.sessions.items()):
+        task = getattr(mig_session, "task", None)
+        if task and not task.done():
+            task.cancel()
+            logger.info("Cancelled migration task for session %s on shutdown", sid)
 
     driver = getattr(app.state, "driver", None)
     if driver:

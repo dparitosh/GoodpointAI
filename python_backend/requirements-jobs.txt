@@ -1,0 +1,8 @@
+# GraphTrace - Background Jobs
+# Install: pip install -r requirements-core.txt -r requirements-jobs.txt
+
+-r requirements-core.txt
+
+celery==5.4.0             # Distributed task queue
+kombu==5.4.2              # Messaging library for Celery
+redis==5.1.1              # Redis for Celery broker/backend

@@ -10,7 +10,9 @@ class AgentType(str, Enum):
     QUERY_PLANNER = "query_planner"
     VISUALIZATION_AGENT = "visualization_agent"
     QUALITY_MONITOR = "quality_monitor"
+    DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
+    TASK_DECOMPOSER = "task_decomposer"
 
 class TaskPriority(int, Enum):
     LOW = 1

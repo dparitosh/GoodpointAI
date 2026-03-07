@@ -168,7 +168,7 @@ async def update_query(
     """
     try:
         # Filter out None values
-        updates = {k: v for k, v in request.dict().items() if v is not None}
+        updates = {k: v for k, v in request.model_dump().items() if v is not None}
         
         query = service.update_query(query_id, **updates)
         if not query:

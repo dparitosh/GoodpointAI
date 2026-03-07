@@ -1,0 +1,27 @@
+# GraphTrace - Database Migration Features
+# Install: pip install -r requirements-core.txt -r requirements-migration.txt
+
+-r requirements-core.txt
+
+# Database connectors for migration sources
+oracledb>=2.0.0           # Oracle database connector (thin/thick mode)
+pyodbc>=5.0.0             # SQL Server connector (requires ODBC Driver 17)
+
+# Data processing for ETL
+pandas==2.2.3             # Data transformation and intelligent column mapping
+pyarrow==18.1.0           # Columnar data format support
+
+# File format support (for data import)
+openpyxl==3.1.5           # Excel (.xlsx) support
+xlrd==2.0.1               # Excel (.xls) legacy support
+python-docx==1.1.2        # Word document support
+xmltodict==0.14.2         # XML to dict conversion
+lxml==5.3.0               # XML/HTML parsing
+xmlschema==3.4.3          # XML schema validation
+
+# Legacy system integrations
+requests==2.32.3          # Sync HTTP (used by PLM/SOAP integrations)
+requests-oauthlib==2.0.0  # OAuth for legacy APIs
+oauthlib==3.2.2           # OAuth library
+pyodata==1.11.2           # OData protocol support
+zeep==4.2.1               # SOAP client

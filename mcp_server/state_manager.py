@@ -16,6 +16,11 @@ class StateManager:
         self.use_redis = False
         self._memory_store: Dict[str, str] = {}
 
+    @property
+    def is_connected(self) -> bool:
+        """True once connect() has succeeded (redis or in-memory fallback)."""
+        return True  # always connected — redis failure falls back to in-memory
+
     async def connect(self):
         """Initialize connection to Redis"""
         if self.settings.REDIS_URL:

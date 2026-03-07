@@ -3,6 +3,7 @@ LLM Integration Router
 Handles OpenAI, Anthropic Claude, Azure OpenAI, Ollama
 """
 import logging
+import asyncio
 import os
 import importlib
 from typing import Any, Dict, List, Optional, cast
@@ -18,6 +19,15 @@ router = APIRouter(prefix="/api/llm", tags=["LLM Integration"])
 def _is_ollama_explicitly_configured() -> bool:
     # Avoid treating default config values as "configured".
     return bool((os.getenv("OLLAMA_BASE_URL") or "").strip() or (os.getenv("OLLAMA_HOST") or "").strip())
+
+
+def _make_ollama_client(ollama_mod: Any, base_url: str) -> Any:
+    """Return an ollama.Client bound to *base_url*.
+
+    The `ollama` Python SDK reads OLLAMA_HOST from env by default, which does NOT
+    respect OLLAMA_BASE_URL.  Always pass an explicit host so our config is honoured.
+    """
+    return ollama_mod.Client(host=base_url)
 
 
 def _require_module(module_name: str, *, install_hint: str) -> Any:
@@ -276,23 +286,27 @@ async def ollama_chat_completion(request: LLMChatRequest):
         from core.external_config import llm_config
         _require_provider_configured("ollama")
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
-        
+        client = _make_ollama_client(ollama, llm_config.ollama_base_url)
+
         model = request.model or llm_config.ollama_model
-        
+
         # Convert messages
         messages = [
             {"role": msg.role, "content": msg.content}
             for msg in request.messages
         ]
-        
-        response = ollama.chat(
-            model=model,
-            messages=messages,
-            options={
-                "temperature": request.temperature
-            }
-        )
-        
+
+        # Wrap sync client call in a thread so the event loop is not blocked.
+        def _call() -> Any:
+            return client.chat(
+                model=model,
+                messages=messages,
+                stream=False,  # stream=True not yet supported; honour False explicitly
+                options={"temperature": request.temperature},
+            )
+
+        response = await asyncio.to_thread(_call)
+
         return {
             "status": "success",
             "provider": "ollama",
@@ -301,7 +315,7 @@ async def ollama_chat_completion(request: LLMChatRequest):
             "created_at": response.get('created_at'),
             "done": response.get('done', True)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -316,17 +330,19 @@ async def ollama_generate(request: LLMCompletionRequest):
         from core.external_config import llm_config
         _require_provider_configured("ollama")
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
-        
+        client = _make_ollama_client(ollama, llm_config.ollama_base_url)
+
         model = request.model or llm_config.ollama_model
-        
-        response = ollama.generate(
-            model=model,
-            prompt=request.prompt,
-            options={
-                "temperature": request.temperature
-            }
-        )
-        
+
+        def _call() -> Any:
+            return client.generate(
+                model=model,
+                prompt=request.prompt,
+                options={"temperature": request.temperature},
+            )
+
+        response = await asyncio.to_thread(_call)
+
         return {
             "status": "success",
             "provider": "ollama",
@@ -334,7 +350,7 @@ async def ollama_generate(request: LLMCompletionRequest):
             "response": response['response'],
             "done": response.get('done', True)
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -350,11 +366,13 @@ async def list_ollama_models(
 ):
     """List available Ollama models"""
     try:
+        from core.external_config import llm_config
         _require_provider_configured("ollama")
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
-        
-        ollama_resp = cast(Dict[str, Any], ollama.list())
-        
+        client = _make_ollama_client(ollama, llm_config.ollama_base_url)
+
+        ollama_resp = cast(Dict[str, Any], await asyncio.to_thread(client.list))
+
         models = []
         for model in ollama_resp.get('models', []):
             models.append({
@@ -363,7 +381,7 @@ async def list_ollama_models(
                 "modified_at": model.get('modified_at'),
                 "digest": model.get('digest')
             })
-        
+
         total_count = len(models)
         http_response.headers["X-Total-Count"] = str(total_count)
         models_page = models[skip : skip + limit]
@@ -374,7 +392,7 @@ async def list_ollama_models(
             "count": len(models_page),
             "models": models_page,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -389,14 +407,15 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
         from core.external_config import llm_config
         _require_provider_configured("ollama")
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
-        
+        client = _make_ollama_client(ollama, llm_config.ollama_base_url)
+
         model = request.model or llm_config.ollama_model
-        
-        response = ollama.embeddings(
-            model=model,
-            prompt=request.text
-        )
-        
+
+        def _call() -> Any:
+            return client.embeddings(model=model, prompt=request.text)
+
+        response = await asyncio.to_thread(_call)
+
         return {
             "status": "success",
             "provider": "ollama",
@@ -404,7 +423,7 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
             "embedding": response['embedding'],
             "dimensions": len(response['embedding'])
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

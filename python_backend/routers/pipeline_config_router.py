@@ -34,7 +34,7 @@ from models.pipeline_config_models import (
     FilePatternsByCategory,
 )
 
-router = APIRouter(prefix="/config", tags=["Pipeline Configuration"])
+router = APIRouter(prefix="/api/config", tags=["Pipeline Configuration"])
 
 
 # ============================================================

@@ -6,9 +6,10 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { e2etraceFetchWithRetry } from '../api/e2etrace-api.js';
+import { API_CONFIG } from '../config/api-config.js';
 
-const AGENTIC_API_BASE = '/api/orchestration/config';
-const AGENTIC_SYSTEM_API = '/api/agentic/system';
+const AGENTIC_API_BASE = API_CONFIG.ENDPOINTS.AGENTIC_ORCHESTRATION_CONFIG;
+const AGENTIC_SYSTEM_API = API_CONFIG.ENDPOINTS.AGENTIC_SYSTEM;
 
 /**
  * Hook for Agentic Configuration management
@@ -283,11 +284,13 @@ export const useAgenticAI = () => {
   const deployment = useAgenticDeployment();
 
   const initialize = useCallback(async () => {
-    await Promise.all([
-      config.loadConfig().catch(() => null),
-      config.loadSchema().catch(() => null),
-      system.checkStatus().catch(() => null)
+    const results = await Promise.allSettled([
+      config.loadConfig(),
+      config.loadSchema(),
+      system.checkStatus()
     ]);
+    const failures = results.filter(r => r.status === 'rejected');
+    return { ok: failures.length === 0, failures: failures.length };
   }, [config, system]);
 
   return {

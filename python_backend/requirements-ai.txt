@@ -1,0 +1,15 @@
+# GraphTrace - AI/LLM Features
+# Install: pip install -r requirements-core.txt -r requirements-ai.txt
+
+-r requirements-core.txt
+
+# LLM Providers
+openai==1.57.0            # OpenAI GPT models
+anthropic==0.39.0         # Anthropic Claude models
+ollama==0.4.4             # Local LLM via Ollama
+
+# Model Context Protocol
+mcp[cli]>=1.2.0,<2.0.0    # MCP server for agent orchestration
+
+# Optional: Uncomment for local embeddings (heavy dependency ~500MB)
+# sentence-transformers>=2.6.0,<4.0.0

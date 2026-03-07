@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -20,6 +21,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import './LineageVisualizerPage.css';
+import { useReportHub } from '../../hooks/useReportHub.js';
 
 const NODE_TYPE_CONFIG = {
   source_system: { color: 'var(--info-color, #0078D4)', icon: 'SRC', label: 'Source System' },
@@ -79,6 +81,7 @@ const LineageVisualizerPage = () => {
   const [activeTab, setActiveTab] = useState('lineage');
   
   const [dbStatus, setDbStatus] = useState({ postgres: false, neo4j: false });
+  const { saveReport, saving: rhSaving, saved: rhSaved } = useReportHub();
 
   useEffect(() => {
     const checkConnectivity = async () => {
@@ -548,6 +551,28 @@ const LineageVisualizerPage = () => {
           <span className={`status-badge ${dbStatus.neo4j ? 'connected' : 'disconnected'}`}>
             Neo4j: {dbStatus.neo4j ? 'Connected' : 'Offline'}
           </span>
+          {nodes.length > 0 && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => saveReport({
+                report_type: 'lineage',
+                title: `Lineage Snapshot: ${workflowDetails?.name || selectedWorkflowId || 'Graph'}`,
+                source_page: 'lineage',
+                workflow_id: selectedWorkflowId || undefined,
+                status: 'info',
+                summary: { nodes: nodes.length, edges: edges.length },
+                result: { nodes: nodes.map(n => n.id), edges: edges.map(e => e.id), workflow_id: selectedWorkflowId },
+                tags: ['lineage'],
+              })}
+              disabled={rhSaving}
+              title="Save snapshot to Reporting Hub"
+            >
+              {rhSaved ? <><i className="fas fa-check" /> Saved</> : rhSaving ? <><i className="fas fa-spinner fa-spin" /> Saving…</> : <><i className="fas fa-clipboard-list" /> Save Report</>}
+            </button>
+          )}
+          <Link to="/reporting-hub" className="btn btn-secondary btn-sm" title="Reporting Hub">
+            <i className="fas fa-clipboard-list" /> Reports
+          </Link>
         </div>
       </header>
 

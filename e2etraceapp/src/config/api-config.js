@@ -31,7 +31,17 @@ const DEFAULT_CONFIG = {
     AGENTIC_CHAT: '/api/agentic/chat',
     AGENTIC_STATUS: '/api/agentic/status',
     AGENTIC_AGENTS: '/api/agentic/agents',
-    
+    AGENTIC_DISCOVERY: '/api/agentic/discovery',
+    AGENTIC_QUALITY_SCAN: '/api/agentic/quality-scan',
+
+    // Reporting Hub (unified cross-page reports — /api/report-hub)
+    REPORT_HUB: '/api/report-hub',
+    REPORT_HUB_SUMMARY: '/api/report-hub/summary',
+
+    // Agentic Orchestration Config
+    AGENTIC_ORCHESTRATION_CONFIG: '/api/orchestration/config',
+    AGENTIC_SYSTEM: '/api/agentic/system',
+
     // Conversational Search
     SEARCH_HEALTH: '/api/search/health',
     SEARCH_QUERY: '/api/search/query',
@@ -139,7 +149,6 @@ const DEFAULT_CONFIG = {
     SCHEMA_CONSTRAINTS: '/api/schema/constraints',
     
     // Reporting
-    REPORTS: '/api/reports',
     REPORT_GENERATE: '/api/reports/generate',
     DASHBOARDS: '/api/dashboards',
     DASHBOARD_DATA: (dashboardId) => `/api/dashboards/${dashboardId}/data`,
@@ -176,21 +185,18 @@ const DEFAULT_CONFIG = {
 const ENVIRONMENT_CONFIG = {
   development: {
     API_BASE_URL: '', // Use Vite proxy
-    API_PORT: 8000, // Neo4j FastAPI backend port
     API_TIMEOUT: 10000,
     DEBUG: true,
   },
   
   testing: {
     API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
-    API_PORT: 8000,
     API_TIMEOUT: 5000,
     DEBUG: true,
   },
   
   production: {
     API_BASE_URL: import.meta.env.VITE_API_BASE_URL || '',
-    API_PORT: 8000,
     API_TIMEOUT: 30000,
     DEBUG: false,
   }
@@ -232,10 +238,13 @@ export const getFullUrl = (endpoint, params = {}) => {
 export const checkApiHealth = async () => {
   try {
     const healthEndpoint = `${API_CONFIG.API_BASE_URL}${API_CONFIG.ENDPOINTS.HEALTH}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(healthEndpoint, {
       method: 'GET',
-      timeout: 5000,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return response.ok;
   } catch (error) {
     console.warn('API health check failed:', error);

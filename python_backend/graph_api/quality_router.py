@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
@@ -10,12 +11,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 import csv
+import io
 import json
 import xml.etree.ElementTree as ET
 
+import httpx
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session
@@ -26,6 +30,26 @@ from models.quality_models import DataQualityRule, DataQualityResult, DataQualit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics/quality", tags=["Analytics - Quality"])
+
+# P-05: guard against extremely large or deeply-nested directory scans.
+_MAX_RGLOB_FILES = 10_000
+_MAX_RGLOB_DEPTH = 10
+
+# P-07: simple TTL cache for _profile_table results (keyed by qualified table name).
+# Avoids re-firing 150+ SQL queries when the same table is scanned repeatedly within
+# the TTL window (e.g. polling from the UI).
+import threading as _threading
+import time as _time
+
+@dataclasses.dataclass
+class _ProfileCacheEntry:
+    profiling: List[Dict[str, Any]]
+    distribution: List[Dict[str, Any]]
+    expires_at: float
+
+_PROFILE_CACHE: Dict[str, "_ProfileCacheEntry"] = {}
+_PROFILE_CACHE_LOCK = _threading.Lock()
+_PROFILE_CACHE_TTL_S: float = float(os.getenv("PROFILE_CACHE_TTL_S", "60"))
 
 # --- Pydantic Models ---
 
@@ -478,32 +502,58 @@ def _profile_table(
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Return (profiling, distribution_metrics) for a table.
 
+    P-01: replaces N×3 per-column queries with a single aggregated SQL pass for
+          null counts + cardinality, then one GROUP-BY per column for top-k values.
+    P-07: results are cached per qualified table name with a configurable TTL
+          (PROFILE_CACHE_TTL_S env var, default 60 s) to avoid hammering the DB
+          when the UI polls repeatedly.
+
     Profiling is column-level. Distribution metrics are numeric-only summaries.
     """
+    # P-07: cache lookup.
+    cache_key = qualified
+    with _PROFILE_CACHE_LOCK:
+        entry = _PROFILE_CACHE.get(cache_key)
+        if entry and _time.monotonic() < entry.expires_at:
+            return entry.profiling, entry.distribution
 
     profiling: List[Dict[str, Any]] = []
     distribution: List[Dict[str, Any]] = []
 
     cols = columns_with_types[:max_columns]
-    for c in cols:
+    valid_cols = [c for c in cols if str(c.get("name") or "")]
+
+    if not valid_cols:
+        return profiling, distribution
+
+    # P-01: single aggregated query for total rows + per-column null counts + distinct counts.
+    # Collapses O(N_cols × 2) queries → 1 query.
+    agg_parts: List[str] = ["COUNT(*) AS _total"]
+    for c in valid_cols:
+        qn = _quote_ident(str(c["name"]))
+        safe = str(c["name"]).replace('"', "").replace("'", "")  # for alias
+        agg_parts.append(
+            f"SUM(CASE WHEN {qn} IS NULL THEN 1 ELSE 0 END) AS _null_{safe}"
+        )
+        agg_parts.append(f"COUNT(DISTINCT {qn}) AS _dist_{safe}")
+
+    try:
+        agg_q = text(f"SELECT {', '.join(agg_parts)} FROM {qualified}")
+        agg_row = cast(Dict[str, Any], dict(db.execute(agg_q).mappings().first() or {}))
+    except Exception:  # pylint: disable=broad-exception-caught
+        agg_row = {}
+
+    total_rows = int(agg_row.get("_total") or 0)
+
+    for c in valid_cols:
         name = str(c.get("name") or "")
         dt = str(c.get("data_type") or "")
-        if not name:
-            continue
+        safe = name.replace('"', "").replace("'", "")
 
-        # Nulls
-        null_q = text(
-            f"SELECT COUNT(*) AS total, SUM(CASE WHEN {_quote_ident(name)} IS NULL THEN 1 ELSE 0 END) AS nulls FROM {qualified}"
-        )
-        null_row = cast(Dict[str, Any], dict(db.execute(null_q).mappings().first() or {}))
-        total = int(null_row.get("total") or 0)
-        nulls = int(null_row.get("nulls") or 0)
+        total = total_rows
+        nulls = int(agg_row.get(f"_null_{safe}") or 0)
+        distinct_count = int(agg_row.get(f"_dist_{safe}") or 0)
         null_pct = (float(nulls) / float(total) * 100.0) if total > 0 else 0.0
-
-        # Cardinality
-        card_q = text(f"SELECT COUNT(DISTINCT {_quote_ident(name)}) AS distinct_count FROM {qualified}")
-        card_row = cast(Dict[str, Any], dict(db.execute(card_q).mappings().first() or {}))
-        distinct_count = int(card_row.get("distinct_count") or 0)
 
         # Frequent values (top-k). NOTE: This returns actual values, which is required for discovery/profiling.
         freq: List[Dict[str, Any]] = []
@@ -527,7 +577,7 @@ def _profile_table(
                     if len(sv) > 128:
                         sv = sv[:125] + "..."
                 freq.append({"value": sv, "count": int(r.get("count") or 0)})
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             freq = []
 
         top_fraction = 0.0
@@ -570,12 +620,12 @@ def _profile_table(
                 )
                 stats = cast(Dict[str, Any], dict(db.execute(stats_q).mappings().first() or {}))
                 numeric_stats = {
-                    "min": stats.get("min"),
-                    "max": stats.get("max"),
+                    "min": _coerce_float(stats.get("min"), default=None),
+                    "max": _coerce_float(stats.get("max"), default=None),
                     "avg": _coerce_float(stats.get("avg"), default=None),
                     "stddev": _coerce_float(stats.get("stddev"), default=None),
                 }
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 numeric_stats = None
 
         col_profile = {
@@ -592,6 +642,14 @@ def _profile_table(
             distribution.append({"column": name, **numeric_stats})
 
         profiling.append(col_profile)
+
+    # P-07: store result in cache.
+    with _PROFILE_CACHE_LOCK:
+        _PROFILE_CACHE[cache_key] = _ProfileCacheEntry(
+            profiling=profiling,
+            distribution=distribution,
+            expires_at=_time.monotonic() + _PROFILE_CACHE_TTL_S,
+        )
 
     return profiling, distribution
 
@@ -894,10 +952,23 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
         extension_counts: Dict[str, int] = {}
         xml_count = 0
         xsd_count = 0
+        _rglob_file_count = 0  # P-05: per-scan file counter
 
         for child in p.rglob("*"):
             if not child.is_file():
                 continue
+
+            # P-05: skip deeply-nested paths and stop if file limit is reached.
+            try:
+                depth = len(child.relative_to(p).parts)
+            except ValueError:
+                continue
+            if depth > _MAX_RGLOB_DEPTH:
+                continue
+            _rglob_file_count += 1
+            if _rglob_file_count > _MAX_RGLOB_FILES:
+                logger.warning("P-05: rglob scan truncated at %d files for %s", _MAX_RGLOB_FILES, p)
+                break
 
             ext = child.suffix.lower().lstrip(".") or "(none)"
             extension_counts[ext] = extension_counts.get(ext, 0) + 1
@@ -993,6 +1064,22 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
 
 # --- Quality Reports ---
 
+@router.get("/tables")
+async def list_scannable_tables(db: Session = Depends(get_db)):
+    """List public tables available for quality scanning."""
+    _require_postgres()
+    q = text(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+        """
+    )
+    rows = db.execute(q).all()
+    return [str(r[0]) for r in rows]
+
+
 @router.get("/reports", response_model=List[DataQualityReport])
 async def get_quality_reports(
     response: Response,
@@ -1010,7 +1097,13 @@ async def get_quality_reports(
         _, t = _parse_table_name(table_name)
         q = q.filter(DataQualityScanReport.table_name == t)
 
-    total_count = q.count()
+    # P-06: use func.count() scalar instead of ORM q.count() to avoid subquery wrapping.
+    count_q = db.query(func.count(DataQualityScanReport.scan_id))  # type: ignore[attr-defined]
+    if table_name:
+        count_q = count_q.filter(  # type: ignore[arg-type]
+            DataQualityScanReport.table_name == _parse_table_name(table_name)[1]
+        )
+    total_count: int = count_q.scalar() or 0
     rows = (
         q.order_by(DataQualityScanReport.scan_date.desc())
         .offset(skip)
@@ -1031,6 +1124,150 @@ async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Quality report not found")
     return _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+
+
+@router.get("/reports/{scan_id}/export")
+async def export_quality_report(
+    scan_id: str,
+    format: str = Query(default="json", pattern="^(json|csv)$"),
+    db: Session = Depends(get_db),
+):
+    """Download a quality scan report as JSON or CSV."""
+    _require_postgres()
+    row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Quality report not found")
+
+    report = _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    filename_base = f"quality_report_{row.table_name}_{scan_id[:8]}"
+
+    if format == "json":
+        content = json.dumps(report, indent=2, default=str)
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename_base}.json"'},
+        )
+
+    # CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Field", "Value"])
+    for key in [
+        "table_name", "scan_id", "overall_score", "completeness_score",
+        "accuracy_score", "consistency_score", "validity_score",
+        "row_count", "column_count", "missing_values", "invalid_values",
+        "duplicate_count", "sla_violations", "scan_date",
+    ]:
+        writer.writerow([key, report.get(key, "")])
+
+    writer.writerow([])
+    writer.writerow(["--- Issues ---"])
+    writer.writerow(["severity", "description", "affected_rows", "affected_columns"])
+    for issue in (report.get("issues") or []):
+        writer.writerow([
+            issue.get("severity"),
+            issue.get("description"),
+            issue.get("affected_rows"),
+            ",".join(issue.get("affected_columns") or []),
+        ])
+
+    writer.writerow([])
+    writer.writerow(["--- Column Profiling ---"])
+    writer.writerow(["column", "data_type", "null_percentage", "cardinality", "distribution_shape"])
+    for col in (report.get("profiling") or []):
+        writer.writerow([
+            col.get("column"),
+            col.get("data_type"),
+            col.get("null_percentage"),
+            col.get("cardinality"),
+            col.get("distribution_shape"),
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename_base}.csv"'},
+    )
+
+
+@router.get("/reports/{scan_id}/insights")
+async def get_quality_insights(scan_id: str, db: Session = Depends(get_db)):
+    """Return an AI-generated narrative summary for a quality scan report.
+
+    Uses Ollama if available; falls back to a deterministic rule-based summary.
+    """
+    _require_postgres()
+    row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Quality report not found")
+
+    report = _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+
+    issues_summary = "; ".join(
+        f"{i.get('severity')} – {i.get('description')}"
+        for i in (report.get("issues") or [])
+    ) or "None"
+
+    score = float(report.get("overall_score") or 0)
+    prompt = (
+        "You are a data quality analyst. Summarize this quality scan result in 3–5 sentences for a business audience.\n\n"
+        f"Table: {report.get('table_name')}\n"
+        f"Scan Date: {report.get('scan_date')}\n"
+        f"Overall Score: {score:.1%}\n"
+        f"Completeness: {float(report.get('completeness_score') or 0):.1%} | "
+        f"Accuracy: {float(report.get('accuracy_score') or 0):.1%} | "
+        f"Consistency: {float(report.get('consistency_score') or 0):.1%} | "
+        f"Validity: {float(report.get('validity_score') or 0):.1%}\n"
+        f"Row Count: {report.get('row_count')} | Columns: {report.get('column_count')}\n"
+        f"Missing Values: {report.get('missing_values')} | Invalid: {report.get('invalid_values')} | Duplicates: {report.get('duplicate_count')}\n"
+        f"SLA Violations: {report.get('sla_violations')}\n"
+        f"Key Issues: {issues_summary}\n"
+        f"Recommendations: {'; '.join(report.get('recommendations') or [])}\n\n"
+        "Write a concise executive summary highlighting the most important findings and recommended actions."
+    )
+
+    ollama_url = os.getenv("GRAPH_TRACE_OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_model = os.getenv("GRAPH_TRACE_OLLAMA_MODEL", "llama3:latest")
+    timeout_s = float(os.getenv("GRAPH_TRACE_OLLAMA_TIMEOUT_S", "10") or 10)
+
+    llm_powered = False
+    insight_text: Optional[str] = None
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            resp = await client.post(
+                f"{ollama_url}/api/generate",
+                json={"model": ollama_model, "prompt": prompt, "stream": False},
+            )
+            if resp.status_code == 200:
+                insight_text = (resp.json().get("response") or "").strip() or None
+                llm_powered = bool(insight_text)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Ollama insights request failed: %s", exc)
+
+    if not insight_text:
+        n_issues = len(report.get("issues") or [])
+        if score >= 0.9:
+            grade = "excellent"
+        elif score >= 0.7:
+            grade = "acceptable but needs attention"
+        else:
+            grade = "poor and requires immediate action"
+        recs = "; ".join(report.get("recommendations") or []) or "No recommendations."
+        insight_text = (
+            f"The {report.get('table_name')} table has {grade} data quality with an overall score of "
+            f"{score:.1%}. {n_issues} issue(s) were detected across "
+            f"{report.get('row_count', 0):,} rows. {recs}"
+        )
+
+    return {
+        "scan_id": scan_id,
+        "table_name": report.get("table_name"),
+        "overall_score": report.get("overall_score"),
+        "insight": insight_text,
+        "llm_powered": llm_powered,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 class GenericScanRequest(BaseModel):
@@ -1143,6 +1380,70 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
                 "Add mappings for 5 unindexed fields",
                 "Resolve mapping conflict in 'events' index"
             ]
+        }
+
+    elif request.datasource == "folder":
+        # Folder / filesystem datasource quality scan
+        folder_path = request.table_name or ""
+        (
+            fs_issues,
+            fs_recommendations,
+            fs_completeness_score,
+            fs_accuracy_score,
+            fs_consistency_score,
+            fs_validity_score,
+            fs_row_count,
+            fs_column_count,
+        ) = _scan_filesystem_data_source(folder_path)
+
+        overall_score = round(
+            (fs_completeness_score + fs_accuracy_score + fs_consistency_score + fs_validity_score) / 4, 2
+        )
+
+        # Persist report to DB
+        from models.quality_models import DQScanReport as DQScanReportModel
+        report_record = DQScanReportModel(
+            scan_id=scan_id,
+            table_name=folder_path,
+            data_source="folder",
+            overall_score=overall_score * 100,
+            issues_count=len(fs_issues),
+            rows_scanned=fs_row_count,
+            status="completed",
+            scan_date=now,
+            profile={
+                "completeness": round(fs_completeness_score * 100, 2),
+                "accuracy": round(fs_accuracy_score * 100, 2),
+                "consistency": round(fs_consistency_score * 100, 2),
+                "validity": round(fs_validity_score * 100, 2),
+            },
+            issues=fs_issues,
+            recommendations=fs_recommendations,
+            metadata={"scan_type": request.scan_type, "folder_path": folder_path},
+        )
+        try:
+            db.add(report_record)
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        return {
+            "scan_id": scan_id,
+            "status": "completed",
+            "datasource": "folder",
+            "folder_path": folder_path,
+            "scan_date": now.isoformat(),
+            "overall_score": overall_score,
+            "rows_scanned": fs_row_count,
+            "columns_scanned": fs_column_count,
+            "issues": fs_issues,
+            "recommendations": fs_recommendations,
+            "profile": {
+                "completeness": round(fs_completeness_score * 100, 2),
+                "accuracy": round(fs_accuracy_score * 100, 2),
+                "consistency": round(fs_consistency_score * 100, 2),
+                "validity": round(fs_validity_score * 100, 2),
+            },
         }
     
     else:
@@ -1260,10 +1561,45 @@ async def scan_table_quality(table_name: str, scan_request: QualityScanRequest, 
 
     rules = rules_q.order_by(DataQualityRule.id.asc()).all()
     if not rules:
-        raise HTTPException(
-            status_code=409,
-            detail="No enabled rules configured for this table/entity_type",
-        )
+        # No rules configured — fall back to profiling-only scan.
+        _scan_id = str(uuid.uuid4())
+        _now = datetime.now(timezone.utc)
+        freshness = _compute_freshness(db, qualified, columns_with_types)
+        sla_violations = _compute_sla_violations_from_freshness(freshness)
+        profiling, distribution_metrics = _profile_table(db, qualified, columns_with_types, row_count=int(row_count))
+        # Derive completeness from average null % across columns
+        if profiling:
+            avg_null_pct = sum(c.get("null_percentage", 0) for c in profiling) / len(profiling)
+            completeness_score = max(0.0, min(1.0, 1.0 - avg_null_pct / 100.0))
+        else:
+            completeness_score = 1.0 if row_count > 0 else 0.0
+        _overall = round(float(completeness_score + 1.0 + 1.0 + 1.0) / 4.0, 3)
+        _missing = sum(c.get("null_count", 0) for c in profiling)
+        _report_payload: Dict[str, Any] = {
+            "table_name": table, "scan_id": _scan_id,
+            "completeness_score": round(completeness_score, 3),
+            "accuracy_score": 1.0, "consistency_score": 1.0, "validity_score": 1.0,
+            "overall_score": _overall,
+            "issues": [],
+            "recommendations": [
+                "No quality rules configured — profiling-only report. "
+                "Add rules via the Quality Rules tab to enable rule-based checks."
+            ],
+            "scan_date": _now.isoformat(),
+            "row_count": int(row_count), "column_count": int(column_count),
+            "missing_values": int(_missing), "invalid_values": 0, "duplicate_count": 0,
+            "freshness": freshness, "delayed_arrivals": 0, "sla_violations": int(sla_violations),
+            "distribution_metrics": distribution_metrics, "profiling": profiling,
+        }
+        db.add(DataQualityScanReport(
+            scan_id=_scan_id, table_name=table,
+            data_source=str(scan_request.data_source or "").strip() or None,
+            report=_report_payload, overall_score=float(_overall),
+            issues_count=0, scan_date=_now, row_count=int(row_count), column_count=int(column_count),
+        ))
+        db.commit()
+        logger.info("Completed profiling-only scan %s for table %s (no rules)", _scan_id, table)
+        return {"scan_id": _scan_id, "message": f"Profiling scan completed for table {table}", "status": "completed"}
 
     issues: List[Dict[str, Any]] = []
     recommendations: List[str] = []

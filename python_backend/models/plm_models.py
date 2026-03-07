@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, Text, text
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
 
 from core.database import Base
 
@@ -30,11 +31,12 @@ class PLMIngestionRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
+    # R-11/DQ-05: use SQLAlchemy-side onupdate so PostgreSQL actually updates this column.
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=text("CURRENT_TIMESTAMP"),
-        server_onupdate=text("CURRENT_TIMESTAMP"),
-        nullable=True,
+        onupdate=func.now(),
+        nullable=False,
     )
 
 
@@ -48,9 +50,16 @@ class PLMStagedRecord(Base):
     # Raw payload (dict/list) stored as JSON when supported.
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     source_object_id: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
+    # DQ-02: SHA-256 of canonical JSON payload for deduplication.
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False
+    )
+
+    __table_args__ = (
+        # DQ-01: prevent duplicate records for the same run/content.
+        UniqueConstraint("run_id", "content_hash", name="uq_staged_run_content_hash"),
     )
 
 
@@ -93,11 +102,6 @@ class PLMBOMItem(Base):
     )
 
     __table_args__ = (
-        Index(
-            "idx_plm_bom_run_parent_child",
-            "run_id",
-            "parent_part_number",
-            "child_part_number",
-            unique=False,
-        ),
+        # DQ-04: enforce uniqueness; duplicate BOM edges corrupt quantity roll-ups.
+        Index("idx_plm_bom_run_parent_child", "run_id", "parent_part_number", "child_part_number", unique=True),
     )

@@ -24,13 +24,15 @@ Integrations:
 # pylint: disable=broad-except,unused-import
 
 import logging
+import asyncio
 import base64
 import io
+import re
 from datetime import datetime, timezone
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from core.db_session import get_db
 from services.admin_config_service import AdminConfigService
@@ -152,15 +154,19 @@ class MultiModalService:
             else:
                 chat_func = ollama.chat
 
-            # Call Ollama vision model
-            response = chat_func(
-                model=model,
-                messages=[{
-                    'role': 'user',
-                    'content': prompt,
-                    'images': [image_base64]
-                }]
-            )
+            # Call Ollama vision model — the ollama Python client is synchronous;
+            # wrap it in a thread so the event loop is not blocked.
+            def _call_ollama() -> Any:
+                return chat_func(
+                    model=model,
+                    messages=[{
+                        'role': 'user',
+                        'content': prompt,
+                        'images': [image_base64]
+                    }]
+                )
+
+            response = await asyncio.to_thread(_call_ollama)
             
             return {
                 "description": response['message']['content'],
@@ -362,7 +368,256 @@ class MultiModalService:
                 "success": False,
                 "error": str(e)
             }
-    
+
+    async def extract_cad_data(self, file_content: bytes, filename: str) -> Dict[str, Any]:
+        """Dispatch CAD extraction based on file extension."""
+        ext = Path(filename).suffix.lower()
+        if ext == '.dxf':
+            return await self._extract_dxf(file_content)
+        elif ext == '.dwg':
+            return self._extract_dwg_header(file_content)
+        elif ext in {'.step', '.stp'}:
+            return await self._extract_step(file_content)
+        elif ext in {'.iges', '.igs'}:
+            return await self._extract_iges(file_content)
+        return {"success": False, "error": f"Unsupported CAD extension: {ext}"}
+
+    async def _extract_dxf(self, file_content: bytes) -> Dict[str, Any]:
+        """Extract layers, entities, and text from DXF files using ezdxf."""
+        try:
+            import ezdxf
+            from ezdxf import recover
+
+            # ezdxf recover.readbytes is a sync call — offload to thread pool.
+            doc, auditor = await asyncio.to_thread(recover.readbytes, file_content)
+
+            metadata = {
+                "dxf_version": doc.dxfversion,
+                "encoding": doc.encoding,
+            }
+
+            layers = [
+                {
+                    "name": layer.dxf.name,
+                    "color": layer.dxf.color,
+                    "linetype": layer.dxf.get("linetype", "CONTINUOUS"),
+                }
+                for layer in doc.layers
+            ]
+
+            entity_counts: Dict[str, int] = {}
+            text_items = []
+            for entity in doc.modelspace():
+                etype = entity.dxftype()
+                entity_counts[etype] = entity_counts.get(etype, 0) + 1
+                if etype in ("TEXT", "MTEXT"):
+                    try:
+                        text_items.append(entity.dxf.text)
+                    except Exception:  # pylint: disable=broad-except
+                        pass
+
+            return {
+                "format": "DXF",
+                "metadata": metadata,
+                "layers": layers,
+                "entity_counts": entity_counts,
+                "total_entities": sum(entity_counts.values()),
+                "text_content": "\n".join(text_items),
+                "audit_errors": len(auditor.errors),
+                "success": True,
+            }
+        except ImportError:
+            return {"success": False, "error": "ezdxf not installed. Run: pip install ezdxf"}
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting DXF: %s", e)
+            return {"success": False, "error": str(e)}
+
+    def _extract_dwg_header(self, file_content: bytes) -> Dict[str, Any]:
+        """Decode version from DWG binary header magic bytes.
+
+        Full DWG parsing requires LibreDWG (native C library) or a CAD application.
+        We extract the version stamp from the first 6 bytes which is always ASCII.
+        """
+        DWG_VERSION_MAP = {
+            b"AC1006": "R10",    b"AC1009": "R11/R12",
+            b"AC1012": "R13",    b"AC1014": "R14",
+            b"AC1015": "R2000",  b"AC1018": "R2004",
+            b"AC1021": "R2007",  b"AC1024": "R2010",
+            b"AC1027": "R2013",  b"AC1032": "R2018",
+        }
+        version_key = file_content[:6] if len(file_content) >= 6 else b""
+        label = DWG_VERSION_MAP.get(
+            version_key,
+            f"Unknown ({version_key.decode('ascii', errors='replace')})",
+        )
+        return {
+            "format": "DWG",
+            "metadata": {
+                "dwg_version": label,
+                "file_size_bytes": len(file_content),
+            },
+            "note": "Full DWG parsing requires LibreDWG. Only header metadata extracted.",
+            "success": True,
+        }
+
+    async def _extract_step(self, file_content: bytes) -> Dict[str, Any]:
+        """Extract metadata and entity summary from STEP (ISO 10303) files.
+
+        STEP is a text-based format — no external library required.
+        Parses the HEADER section and counts entity types in the DATA section.
+        """
+        try:
+            text = file_content.decode("utf-8", errors="replace")
+
+            metadata: Dict[str, Any] = {}
+
+            fn_m = re.search(
+                r"FILE_NAME\s*\(\s*'([^']*)'",
+                text, re.IGNORECASE,
+            )
+            fn_m2 = re.search(
+                r"FILE_NAME\s*\(\s*'[^']*'\s*,\s*'([^']*)'\s*,",
+                text, re.IGNORECASE,
+            )
+            if fn_m:
+                metadata["file_name"] = fn_m.group(1)
+            if fn_m2:
+                metadata["timestamp"] = fn_m2.group(1)
+
+            fd_m = re.search(
+                r"FILE_DESCRIPTION\s*\(\s*\(\s*'([^']*)'",
+                text, re.IGNORECASE,
+            )
+            if fd_m:
+                metadata["description"] = fd_m.group(1)
+
+            fs_m = re.search(
+                r"FILE_SCHEMA\s*\(\s*\(\s*'([^']*)'",
+                text, re.IGNORECASE,
+            )
+            if fs_m:
+                metadata["schema"] = fs_m.group(1)
+
+            # Count entity types in the DATA section
+            entity_counts: Dict[str, int] = {}
+            products = []
+            data_m = re.search(r"DATA\s*;(.*?)ENDSEC\s*;", text, re.DOTALL | re.IGNORECASE)
+            if data_m:
+                data_body = data_m.group(1)
+                for em in re.finditer(r"#\d+\s*=\s*([A-Z_][A-Z0-9_]*)\s*\(", data_body):
+                    etype = em.group(1)
+                    entity_counts[etype] = entity_counts.get(etype, 0) + 1
+                for pm in re.finditer(
+                    r"PRODUCT\s*\(\s*'([^']*)'\s*,\s*'([^']*)'",
+                    data_body, re.IGNORECASE,
+                ):
+                    products.append({"id": pm.group(1), "name": pm.group(2)})
+
+            top_entities = dict(
+                sorted(entity_counts.items(), key=lambda x: -x[1])[:10]
+            )
+
+            return {
+                "format": "STEP",
+                "metadata": metadata,
+                "top_entity_types": top_entities,
+                "total_entities": sum(entity_counts.values()),
+                "products": products[:20],
+                "success": True,
+            }
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting STEP: %s", e)
+            return {"success": False, "error": str(e)}
+
+    async def _extract_iges(self, file_content: bytes) -> Dict[str, Any]:
+        """Extract metadata and entity summary from IGES files.
+
+        IGES is column-aligned ASCII: column 73 is the section flag character.
+        Section 'S' = Start, 'G' = Global, 'D' = Directory Entry, 'P' = Parameter.
+        Entity type number sits in columns 1-8 of every odd Directory Entry line.
+        """
+        IGES_ENTITY_NAMES = {
+            100: "Circular Arc",          102: "Composite Curve",
+            104: "Conic Arc",             106: "Copious Data",
+            108: "Plane",                 110: "Line",
+            112: "Param Spline Curve",    114: "Param Spline Surface",
+            116: "Point",                 118: "Ruled Surface",
+            120: "Surface of Revolution", 122: "Tabulated Cylinder",
+            124: "Transformation Matrix", 126: "Rational B-Spline Curve",
+            128: "Rational B-Spline Surface", 130: "Offset Curve",
+            140: "Offset Surface",        141: "Boundary",
+            142: "Curve on Param Surface",143: "Bounded Surface",
+            144: "Trimmed Surface",       212: "General Note",
+            308: "Subfigure Definition",  314: "Color Definition",
+            402: "Associativity Instance",404: "Drawing",
+            406: "Property",             408: "Singular Subfigure Instance",
+            410: "View",                 502: "Vertex",
+            504: "Edge",                 508: "Loop",
+            510: "Face",                 514: "Shell",
+        }
+        try:
+            text = file_content.decode("utf-8", errors="replace")
+            lines = text.splitlines()
+
+            global_parts = []
+            entity_counts: Dict[str, int] = {}
+            start_text_lines = []
+
+            for line in lines:
+                if len(line) < 73:
+                    continue
+                section = line[72]
+                col_data = line[:72].rstrip()
+                if section == 'S':
+                    start_text_lines.append(col_data)
+                elif section == 'G':
+                    global_parts.append(col_data)
+                elif section == 'D':
+                    try:
+                        entity_type = int(line[0:8].strip())
+                        entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+                    except (ValueError, IndexError):
+                        pass
+
+            metadata: Dict[str, Any] = {}
+            if global_parts:
+                global_str = "".join(global_parts)
+                # Strip parameter/record delimiters (1H, and 1H;)
+                global_str = re.sub(r"1H[,;]", "", global_str)
+                fields = global_str.split(",")
+                # IGES global section field indices (1-based in spec, 0-based here)
+                field_map = {
+                    3: "product_id_sender",
+                    4: "file_name",
+                    5: "native_system_id",
+                    6: "preprocessor_version",
+                    23: "author",
+                    24: "organization",
+                }
+                for idx, label in field_map.items():
+                    if idx < len(fields):
+                        val = fields[idx].strip().strip("'")
+                        if val:
+                            metadata[label] = val
+
+            named_counts = {
+                IGES_ENTITY_NAMES.get(k, f"Entity_{k}"): v
+                for k, v in entity_counts.items()
+            }
+            top_entities = dict(sorted(named_counts.items(), key=lambda x: -x[1])[:10])
+
+            return {
+                "format": "IGES",
+                "metadata": metadata,
+                "top_entity_types": top_entities,
+                "total_entities": sum(entity_counts.values()),
+                "start_section_preview": " ".join(start_text_lines)[:500] if start_text_lines else "",
+                "success": True,
+            }
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Error extracting IGES: %s", e)
+            return {"success": False, "error": str(e)}
+
     async def analyze_file(
         self,
         file_content: bytes,
@@ -459,11 +714,23 @@ class MultiModalService:
                 else:
                     result.error = word_data.get("error")
             
-            # CAD files (placeholder for future implementation)
+            # CAD files
             elif file_type == FileType.CAD:
-                result.error = "CAD file processing not yet implemented"
-                result.success = False
-            
+                cad_data = await self.extract_cad_data(file_content, filename)
+                if cad_data["success"]:
+                    if extract_metadata:
+                        result.metadata = cad_data.get("metadata", {})
+                    # Expose all non-metadata keys in extracted_data
+                    result.extracted_data = {
+                        k: v for k, v in cad_data.items()
+                        if k not in ("success", "error", "metadata")
+                    }
+                    if extract_text and cad_data.get("text_content"):
+                        result.text_content = cad_data["text_content"]
+                else:
+                    result.error = cad_data.get("error")
+                    result.success = False
+
             else:
                 result.error = f"Unsupported file type: {file_type}"
                 result.success = False
@@ -630,3 +897,262 @@ async def get_vision_models():
             "recommended": "llava:latest",
             "error": str(e)
         }
+
+
+# =============================================================================
+# BATCH PROCESSING ENDPOINTS
+# =============================================================================
+
+class BatchAnalyzeRequest(BaseModel):
+    """Request body for batch file analysis."""
+    file_paths: List[str]
+    extraction_method: ExtractionMethod = ExtractionMethod.HYBRID
+    vision_model: str = "llava:latest"
+    concurrency: int = 8
+    db_flush_size: int = 50
+
+
+class DirectoryDiscoverRequest(BaseModel):
+    """Request body for directory discovery + batch processing."""
+    directory: str
+    recursive: bool = True
+    extraction_method: ExtractionMethod = ExtractionMethod.HYBRID
+    vision_model: str = "llava:latest"
+    concurrency: int = 8
+    db_flush_size: int = 50
+    run_immediately: bool = True
+
+
+def _make_batch_processor(concurrency: int, db_flush_size: int, db: Session):
+    """Build a :class:`FileBatchProcessor` wired to the current DB session."""
+    from services.file_batch_processor import FileBatchProcessor
+    from core.db_session import SessionLocal
+
+    # Attempt to get a live Neo4j driver (optional)
+    neo4j_driver = None
+    try:
+        from graph_api.dependencies import _driver  # module-level cached driver
+        neo4j_driver = _driver
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+    return FileBatchProcessor(
+        concurrency=concurrency,
+        db_flush_size=db_flush_size,
+        neo4j_driver=neo4j_driver,
+        db_session_factory=SessionLocal,
+    )
+
+
+@router.post("/discover", summary="Discover Files in a Directory")
+async def discover_directory(request: DirectoryDiscoverRequest):
+    """Recursively walk *directory* and return a manifest of all supported files.
+
+    Does NOT process the files — use `/analyze-batch` or set
+    ``run_immediately=true`` to also trigger analysis in the background.
+    Returns a manifest you can pass directly to `/analyze-batch`.
+    """
+    from pathlib import Path as _Path
+    from services.file_batch_processor import discover_files, ALL_SUPPORTED
+
+    root = _Path(request.directory).expanduser().resolve()
+    if not root.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {request.directory}")
+
+    records = discover_files(root, recursive=request.recursive)
+
+    # Group by type for the manifest
+    by_type: Dict[str, List[str]] = {}
+    for rec in records:
+        by_type.setdefault(rec.file_type, []).append(str(rec.path))
+
+    manifest = {
+        "directory": str(root),
+        "recursive": request.recursive,
+        "total_files": len(records),
+        "by_type": {t: len(paths) for t, paths in by_type.items()},
+        "file_paths": [str(r.path) for r in records],
+    }
+
+    return manifest
+
+
+@router.post("/analyze-batch", summary="Batch Analyze File List")
+async def analyze_batch(
+    request: BatchAnalyzeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Process a list of file paths through the multi-modal pipeline in parallel.
+
+    - Uses ``asyncio.Semaphore(concurrency)`` — default 8 workers.
+    - Flushes results to Postgres and Neo4j every ``db_flush_size`` files.
+    - Returns immediately with a ``job_id``; poll ``/batch-status/{job_id}``.
+
+    For **small** lists (≤ 20 files) the request blocks and returns results
+    inline.  For larger lists the job runs in a background task.
+    """
+    from pathlib import Path as _Path
+    from services.file_batch_processor import FileBatchProcessor, FileRecord, _classify_ext
+    import uuid
+
+    # Resolve file paths → FileRecord list, rejecting path-traversal attempts
+    records = []
+    for raw in request.file_paths:
+        p = _Path(raw).expanduser().resolve()
+        if not p.is_file():
+            continue
+        ext = p.suffix.lower()
+        records.append(FileRecord(path=p, ext=ext, size_bytes=p.stat().st_size, file_type=_classify_ext(ext)))
+
+    if not records:
+        raise HTTPException(status_code=400, detail="No valid file paths provided.")
+
+    # Fetch Ollama host from DB config (optional)
+    ollama_host = None
+    try:
+        config_service = AdminConfigService(db)
+        ollama_cfg = config_service.get_llm_provider_config("ollama")
+        if ollama_cfg and ollama_cfg.get("api_endpoint"):
+            ollama_host = ollama_cfg["api_endpoint"]
+    except Exception:  # pylint: disable=broad-except
+        pass
+
+    processor = _make_batch_processor(request.concurrency, request.db_flush_size, db)
+    job_id = uuid.uuid4().hex
+
+    if len(records) <= 20:
+        # Inline — wait for the result and return it
+        report = await processor.process_records(
+            records,
+            job_id=job_id,
+            extraction_method=request.extraction_method.value,
+            vision_model=request.vision_model,
+            ollama_host=ollama_host,
+        )
+        return {
+            "job_id": report.job_id,
+            "status": "completed",
+            "total_files": report.total_files,
+            "processed": report.processed,
+            "succeeded": report.succeeded,
+            "failed": report.failed,
+            "errors_summary": report.errors_summary,
+        }
+
+    # Large batch — fire and forget, return job_id for polling
+    async def _run_background():
+        try:
+            await processor.process_records(
+                records,
+                job_id=job_id,
+                extraction_method=request.extraction_method.value,
+                vision_model=request.vision_model,
+                ollama_host=ollama_host,
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.error("Background batch job %s failed: %s", job_id, exc)
+
+    background_tasks.add_task(_run_background)
+    return {
+        "job_id": job_id,
+        "status": "running",
+        "total_files": len(records),
+        "message": "Batch job started. Poll /api/multimodal/batch-status/{job_id} for progress.",
+    }
+
+
+@router.get("/batch-status/{job_id}", summary="Get Batch Job Status")
+async def get_batch_status(job_id: str, db: Session = Depends(get_db)):
+    """Return the current status of a batch processing job from Postgres."""
+    try:
+        from sqlalchemy import text as sa_text
+        row = db.execute(
+            sa_text(
+                "SELECT job_id, started_at, completed_at, total_files, "
+                "processed, succeeded, failed, skipped "
+                "FROM file_batch_jobs WHERE job_id = :jid"
+            ),
+            {"jid": job_id},
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+        return {
+            "job_id": row.job_id,
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+            "status": "completed" if row.completed_at else "running",
+            "total_files": row.total_files,
+            "processed": row.processed,
+            "succeeded": row.succeeded,
+            "failed": row.failed,
+            "skipped": row.skipped,
+            "progress_pct": round(100 * row.processed / row.total_files, 1) if row.total_files else 0,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("Error fetching batch status: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/batch-results/{job_id}", summary="Get Batch Job Results")
+async def get_batch_results(
+    job_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    file_type: Optional[str] = None,
+    success_only: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Page through per-file results for a completed batch job."""
+    try:
+        from sqlalchemy import text as sa_text
+        where_clauses = ["job_id = :jid"]
+        params: Dict[str, Any] = {"jid": job_id, "skip": skip, "limit": limit}
+
+        if file_type:
+            where_clauses.append("file_type = :file_type")
+            params["file_type"] = file_type
+        if success_only:
+            where_clauses.append("success = TRUE")
+
+        where = " AND ".join(where_clauses)
+        rows = db.execute(
+            sa_text(
+                f"SELECT file_path, file_type, success, text_content, error, "
+                f"processing_time_ms, processed_at "
+                f"FROM file_batch_results WHERE {where} "
+                f"ORDER BY id OFFSET :skip LIMIT :limit"
+            ),
+            params,
+        ).fetchall()
+
+        total = db.execute(
+            sa_text(f"SELECT COUNT(*) FROM file_batch_results WHERE {where}"),
+            params,
+        ).scalar()
+
+        return {
+            "job_id": job_id,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "results": [
+                {
+                    "file_path": r.file_path,
+                    "file_type": r.file_type,
+                    "success": r.success,
+                    "text_snippet": (r.text_content or "")[:200],
+                    "error": r.error,
+                    "processing_time_ms": r.processing_time_ms,
+                    "processed_at": r.processed_at,
+                }
+                for r in rows
+            ],
+        }
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("Error fetching batch results: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

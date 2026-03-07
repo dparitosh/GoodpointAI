@@ -20,7 +20,7 @@ from services.advanced_migration_engine import (
 )
 from services.database_migration_service import DatabaseMigrationService
 from models.admin_config_models import ConnectionConfig
-from core.database import get_db
+from core.db_session import get_db
 
 logger = logging.getLogger(__name__)
 

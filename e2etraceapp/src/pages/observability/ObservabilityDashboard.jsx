@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import { useReportHub } from '../../hooks/useReportHub.js';
 import './ObservabilityDashboard.css';
 
 /**
@@ -13,6 +15,7 @@ export const ObservabilityDashboard = () => {
   const [agenticStatus, setAgenticStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
+  const { saveReport, saving: rhSaving, saved: rhSaved } = useReportHub();
 
   useEffect(() => {
     fetchAllMetrics();
@@ -98,6 +101,29 @@ export const ObservabilityDashboard = () => {
           <button onClick={fetchAllMetrics} className="refresh-btn">
             <i className="fas fa-sync" aria-hidden="true" /> Refresh Now
           </button>
+          <button
+            className="refresh-btn"
+            onClick={() => saveReport({
+              report_type: 'observability',
+              title: `Observability Snapshot — ${new Date().toLocaleString()}`,
+              source_page: 'observability',
+              status: (alerts.filter(a => a.level === 'error').length > 0) ? 'warning' : 'pass',
+              summary: {
+                quality_score: qualityMetrics?.qualityScore ?? null,
+                active_alerts: alerts.length,
+                agentic_agents_ready: agenticStatus?.agents_ready ?? null,
+              },
+              result: { alerts, qualityMetrics, agenticStatus },
+              tags: ['observability', 'health'],
+            })}
+            disabled={rhSaving || loading}
+            title="Save snapshot to Reporting Hub"
+          >
+            {rhSaved ? <><i className="fas fa-check" /> Saved</> : <><i className="fas fa-clipboard-list" aria-hidden="true" /> Save Report</>}
+          </button>
+          <Link to="/reporting-hub" className="refresh-btn" title="Reporting Hub">
+            <i className="fas fa-clipboard-list" aria-hidden="true" /> Reports
+          </Link>
         </div>
       </div>
 

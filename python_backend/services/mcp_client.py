@@ -89,5 +89,9 @@ class MCPClient:
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPError as e:
-                logger.error(f"Failed to get system status: {e}")
+                logger.error("Failed to get system status: %s", e)
                 raise
+
+
+# Module-level singleton — shared across all consumers (main.py, agentic_router.py, etc.)
+mcp_client: MCPClient = MCPClient()

@@ -54,7 +54,18 @@ connect_args = {}
 if DATABASE_URL.startswith("sqlite:"):
     connect_args = {"check_same_thread": False}
 
+_is_sqlite = DATABASE_URL.startswith("sqlite:")
 engine = create_engine(
+    DATABASE_URL,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    # Pool sizing — ignored by SQLite's StaticPool, relevant for Postgres.
+    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    # Recycle connections every 30 min to avoid stale TCP issues.
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+) if not _is_sqlite else create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True,
@@ -77,6 +88,7 @@ def init_db() -> None:
         "models.pipeline_config_models",
         "models.admin_config_models",
         "models.rule_engine_models",
+        "models.report_hub_models",
     ):
         importlib.import_module(module_name)
 

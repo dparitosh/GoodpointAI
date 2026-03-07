@@ -533,6 +533,9 @@ async def connect_aws(request: AWSConnectRequest):
         }
     except HTTPException:
         raise
+    except ImportError as e:
+        logger.error("AWS connect validation failed: %s", e)
+        raise HTTPException(status_code=503, detail="AWS SDK (boto3) is not installed") from e
     except Exception as e:
         logger.error("AWS connect validation failed: %s", e)
         raise HTTPException(status_code=502, detail="Failed to validate AWS credentials") from e

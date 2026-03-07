@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { getExcelSheetNames, readExcelArrayBufferToAoa } from '../../utils/spreadsheet-utils.js';
@@ -24,6 +24,7 @@ import {
   useGraphQLCatalogue
 } from '../../hooks/useGraphQL';
 import './EnterpriseAnalyticsHub.css';
+import { useReportHub } from '../../hooks/useReportHub.js';
 
 const DATA_SOURCE_CONFIG = {
   postgres: { name: 'PostgreSQL', icon: 'PG', color: '#336791', endpoint: '/api/analytics/sql', queryType: 'SQL' },
@@ -106,6 +107,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [dataSource, setDataSource] = useState('postgres');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { saveReport: saveToReportHub, saving: rhSaving, saved: rhSaved } = useReportHub();
 
   // Query Builder state
   const [queryText, setQueryText] = useState('');
@@ -140,6 +142,13 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [selectedReportIndex, setSelectedReportIndex] = useState(null);
   const [selectedQualityReport, setSelectedQualityReport] = useState(null);
   const [qualityReportDetailLoading, setQualityReportDetailLoading] = useState(false);
+  const [qualityInsight, setQualityInsight] = useState(null);
+  const [qualityInsightLoading, setQualityInsightLoading] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanTableInput, setScanTableInput] = useState('');
+  const [availableTables, setAvailableTables] = useState([]);
+  const [scanModalLoading, setScanModalLoading] = useState(false);
+  const [scanModalError, setScanModalError] = useState(null);
 
   // Spreadsheet Integration state
   const [spreadsheetConfig, setSpreadsheetConfig] = useState({
@@ -225,9 +234,13 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
       if (response.ok) {
         const data = await response.json();
         setQualityReports(Array.isArray(data) ? data : []);
+      } else {
+        console.warn('Quality reports returned HTTP', response.status);
+        setQualityReports([]);
       }
     } catch (err) {
       console.error('Failed to load quality reports:', err);
+      setQualityReports([]);
     }
   };
 
@@ -248,6 +261,56 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
       setSelectedQualityReport(null);
     } finally {
       setQualityReportDetailLoading(false);
+    }
+  };
+
+  const fetchAvailableTables = async () => {
+    try {
+      const res = await e2etraceFetchWithRetry('/api/analytics/quality/tables');
+      if (res.ok) setAvailableTables(await res.json());
+    } catch { /* non-fatal */ }
+  };
+
+  const runScan = async () => {
+    const table = scanTableInput.trim();
+    if (!table) { setScanModalError('Please enter or select a table name.'); return; }
+    setScanModalLoading(true);
+    setScanModalError(null);
+    try {
+      const res = await e2etraceFetchWithRetry(
+        `/api/analytics/quality/scan/${encodeURIComponent(table)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setShowScanModal(false);
+        setScanTableInput('');
+        setTimeout(fetchQualityReports, 800);
+      } else {
+        setScanModalError(data.detail || 'Scan failed.');
+      }
+    } catch (err) {
+      setScanModalError('Network error: ' + err.message);
+    } finally {
+      setScanModalLoading(false);
+    }
+  };
+
+  const fetchQualityInsight = async (scanId) => {
+    if (!scanId) { setQualityInsight(null); return; }
+    setQualityInsightLoading(true);
+    try {
+      const response = await e2etraceFetchWithRetry(`/api/analytics/quality/reports/${encodeURIComponent(scanId)}/insights`);
+      if (response.ok) {
+        setQualityInsight(await response.json());
+      } else {
+        setQualityInsight(null);
+      }
+    } catch (err) {
+      console.error('Failed to load quality insights:', err);
+      setQualityInsight(null);
+    } finally {
+      setQualityInsightLoading(false);
     }
   };
 
@@ -481,18 +544,19 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   }, [nlQuery, dataSource, schema]);
 
   const handleSaveQuery = useCallback(async () => {
+    if (!queryText.trim()) { setError('No query to save'); return; }
     const name = prompt('Enter a name for this query:');
-    if (!name) return;
+    if (!name?.trim()) return;
     try {
-      await saveQuery(name, queryText, `Saved from Analytics Hub - ${dataSource}`, 'graphql');
-      alert('Query saved successfully');
+      await saveQuery(name.trim(), queryText, `Saved from Analytics Hub - ${dataSource}`, 'graphql');
     } catch {
       setError('Failed to save query');
     }
   }, [queryText, dataSource, saveQuery]);
 
   const handleFileUpload = useCallback((event) => {
-    const files = Array.from(event.target.files);
+    const files = Array.from(event?.target?.files || []);
+    if (files.length === 0) return;
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -1113,6 +1177,25 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
               </span>
             ))}
           </div>
+          <button
+            className="tab-inline"
+            onClick={() => saveToReportHub({
+              report_type: 'analytics',
+              title: `Analytics: ${dataSource} — ${new Date().toLocaleString()}`,
+              source_page: 'analytics',
+              status: 'info',
+              summary: { rows_returned: queryResults?.length ?? 0, data_source: dataSource, tab: activeTab },
+              result: { query: queryText, results: Array.isArray(queryResults) ? queryResults.slice(0, 50) : [] },
+              tags: ['analytics', dataSource],
+            })}
+            disabled={rhSaving || !queryResults?.length}
+            title="Save to Reporting Hub"
+          >
+            {rhSaved ? <><i className="fas fa-check" /> Saved</> : rhSaving ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-clipboard-list" /> Save Report</>}
+          </button>
+          <Link to="/reporting-hub" className="tab-inline" title="Reporting Hub">
+            <i className="fas fa-clipboard-list" /> Reports
+          </Link>
         </div>
       </header>
 
@@ -1521,28 +1604,10 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                     </select>
                   </div>
                   <button onClick={fetchQualityReports} className="btn btn-secondary">Refresh Reports</button>
-                  <button 
-                    onClick={async () => {
-                      setLoading(true);
-                      try {
-                        const response = await e2etraceFetchWithRetry('/api/analytics/quality/scan', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ datasource: dataSource, scan_type: 'full' })
-                        });
-                        if (response.ok) {
-                          const result = await response.json();
-                          alert(`Scan initiated: ${result.message || 'Quality scan started'}`);
-                          setTimeout(fetchQualityReports, 2000);
-                        }
-                      } catch (err) {
-                        setError('Failed to start quality scan: ' + err.message);
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
+                  <button
+                    onClick={() => { fetchAvailableTables(); setScanModalError(null); setScanTableInput(''); setShowScanModal(true); }}
                     className="btn btn-primary"
-                    disabled={loading || !dbStatus[dataSource]}
+                    disabled={!dbStatus[dataSource]}
                   >
                     Run New Scan
                   </button>
@@ -1614,6 +1679,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                           onClick={() => {
                             setSelectedReportIndex(i);
                             fetchQualityReportDetail(report.scan_id);
+                            fetchQualityInsight(report.scan_id);
                           }}
                           style={{ cursor: 'pointer' }}
                         >
@@ -1644,10 +1710,17 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                             <button className="btn-action" onClick={(e) => { e.stopPropagation(); setQueryText(`SELECT * FROM ${report.table_name} LIMIT 100`); setDataSource('postgres'); setActiveTab('query-builder'); }} title="Query Table">
                               <i className="fas fa-search"></i>
                             </button>
-                            <button className="btn-action" onClick={(e) => { e.stopPropagation(); }} title="Export Report">
+                            <button className="btn-action" onClick={(e) => {
+                              e.stopPropagation();
+                              const sid = report.scan_id;
+                              if (!sid) return;
+                              const link = document.createElement('a');
+                              link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=csv`;
+                              link.download = `quality_report_${report.table_name}_${sid.slice(0,8)}.csv`;
+                              link.click();
+                            }} title="Export CSV">
                               <i className="fas fa-download"></i>
-                            </button>
-                          </td>
+                            </button>                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1744,11 +1817,108 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                             <p className="text-muted">No profiling data available for this report.</p>
                           )}
                         </div>
+
+                        {/* AI Insights panel */}
+                        <div className="quality-detail-card quality-insight-card">
+                          <h3>
+                            AI Insights&nbsp;
+                            {qualityInsight?.llm_powered
+                              ? <span className="badge badge-llm">LLM</span>
+                              : <span className="badge badge-auto">Auto</span>}
+                          </h3>
+                          {qualityInsightLoading ? (
+                            <p className="text-muted">Generating insights…</p>
+                          ) : qualityInsight ? (
+                            <>
+                              <p className="insight-text">{qualityInsight.insight}</p>
+                              <div className="insight-actions">
+                                <button className="btn btn-sm" onClick={() => {
+                                  const sid = selectedQualityReport?.scan_id;
+                                  if (!sid) return;
+                                  const link = document.createElement('a');
+                                  link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=json`;
+                                  link.download = `quality_report_${selectedQualityReport?.table_name}_${sid.slice(0,8)}.json`;
+                                  link.click();
+                                }}>
+                                  <i className="fas fa-file-code"></i>&nbsp;Export JSON
+                                </button>
+                                <button className="btn btn-sm" onClick={() => {
+                                  const sid = selectedQualityReport?.scan_id;
+                                  if (!sid) return;
+                                  const link = document.createElement('a');
+                                  link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=csv`;
+                                  link.download = `quality_report_${selectedQualityReport?.table_name}_${sid.slice(0,8)}.csv`;
+                                  link.click();
+                                }}>
+                                  <i className="fas fa-file-csv"></i>&nbsp;Export CSV
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-muted">No insights available.</p>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Scan Modal */}
+          {showScanModal && (
+            <div className="modal-overlay" onClick={() => setShowScanModal(false)}>
+              <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+                <div className="modal-header">
+                  <h3>Run Quality Scan</h3>
+                  <button className="modal-close" onClick={() => setShowScanModal(false)}>×</button>
+                </div>
+                <div className="modal-body">
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>
+                    Table name
+                  </label>
+                  {availableTables.length > 0 ? (
+                    <select
+                      className="select-input"
+                      value={scanTableInput}
+                      onChange={e => setScanTableInput(e.target.value)}
+                      style={{ width: '100%', marginBottom: '0.75rem' }}
+                    >
+                      <option value="">— select a table —</option>
+                      {availableTables.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="query-input"
+                      type="text"
+                      placeholder="e.g. public.my_table or just my_table"
+                      value={scanTableInput}
+                      onChange={e => setScanTableInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && runScan()}
+                      style={{ width: '100%', marginBottom: '0.75rem' }}
+                    />
+                  )}
+                  {scanModalError && (
+                    <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0 0 0.5rem 0' }}>{scanModalError}</p>
+                  )}
+                  <p style={{ color: '#6b7280', fontSize: '0.8rem', margin: 0 }}>
+                    If no quality rules are configured, a profiling-only scan will run automatically.
+                  </p>
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-secondary" onClick={() => setShowScanModal(false)}>Cancel</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={runScan}
+                    disabled={scanModalLoading || !scanTableInput.trim()}
+                  >
+                    {scanModalLoading ? 'Scanning…' : 'Run Scan'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

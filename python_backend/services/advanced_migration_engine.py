@@ -5,6 +5,7 @@ Handles database migration orchestration with real-time state management.
 import logging
 import asyncio
 import json
+import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, TypeVar, Generic
 from enum import Enum
@@ -193,6 +194,8 @@ class AdvancedMigrationEngine:
         self.sessions: Dict[str, MigrationSession] = {}
         self.active_websockets: Dict[str, List[Any]] = {}
         self._lock = asyncio.Lock()
+        # R-09: synchronous lock guards sync mutations to self.sessions (create_session is a plain def).
+        self._sync_lock = threading.Lock()
         # Optional Neo4j driver injected by app lifespan. Used for best-effort lineage emission.
         self.neo4j_driver: Any = None
 
@@ -446,9 +449,10 @@ class AdvancedMigrationEngine:
             workflow_id=workflow_id,
         )
 
-        # Best-effort: keep internal cleanup behavior without requiring an awaited lock.
-        self.sessions[session.session_id] = session
-        self._cleanup_unlocked()
+        # R-09: protect self.sessions mutation with the sync lock.
+        with self._sync_lock:
+            self.sessions[session.session_id] = session
+            self._cleanup_unlocked()
         logger.info("Created migration session %s", session.session_id)
 
         try:

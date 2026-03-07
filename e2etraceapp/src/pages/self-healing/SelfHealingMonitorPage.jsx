@@ -18,10 +18,12 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import API_CONFIG from '../../config/api-config';
 import { toast } from '../../hooks/useToast';
 import { LoadingSpinner, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './SelfHealingMonitorPage.css';
+import { useReportHub } from '../../hooks/useReportHub.js';
 
 const normalizeArrayPayload = (data, candidates = []) => {
   if (Array.isArray(data)) return data;
@@ -63,6 +65,7 @@ const SelfHealingMonitorPage = () => {
   const [taskResults, setTaskResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const { saveReport, saving: rhSaving, saved: rhSaved } = useReportHub();
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const shouldReconnectRef = useRef(true);
@@ -310,6 +313,31 @@ const SelfHealingMonitorPage = () => {
           <span className={`ws-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
             {wsConnected ? <><i className="fas fa-circle" style={{color: '#28a745'}} aria-hidden="true" /> Live</> : <><i className="fas fa-circle" style={{color: '#dc3545'}} aria-hidden="true" /> Disconnected</>}
           </span>
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => saveReport({
+              report_type: 'self_healing',
+              title: `Self-Healing Snapshot — ${new Date().toLocaleString()}`,
+              source_page: 'self-healing',
+              status: metrics.failed_tasks > 0 ? 'warning' : 'pass',
+              summary: {
+                total_tasks: metrics.total_tasks,
+                successful: metrics.successful_tasks,
+                failed: metrics.failed_tasks,
+                retried: metrics.retried_tasks,
+                dlq_messages: metrics.dlq_messages,
+              },
+              result: { metrics, circuitBreakers, dlqMessages },
+              tags: ['self-healing'],
+            })}
+            disabled={rhSaving}
+            title="Save snapshot to Reporting Hub"
+          >
+            {rhSaved ? <><i className="fas fa-check" /> Saved</> : <><i className="fas fa-clipboard-list" /> Save Report</>}
+          </button>
+          <Link to="/reporting-hub" className="btn btn-outline-secondary btn-sm">
+            <i className="fas fa-clipboard-list" /> Reports
+          </Link>
         </div>
       </div>
 

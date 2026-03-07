@@ -100,7 +100,29 @@ class AgenticOrchestrator:
                     AgentCapability(name="monitor_data_quality", description="Monitor data quality metrics"),
                     AgentCapability(name="detect_anomalies", description="Detect data anomalies"),
                     AgentCapability(name="validate_transformations", description="Validate data transformations"),
-                    AgentCapability(name="generate_quality_reports", description="Generate quality reports")
+                    AgentCapability(name="generate_quality_reports", description="Generate quality reports"),
+                    AgentCapability(name="execute_rules", description="Execute Rule Engine rule sets against data"),
+                    AgentCapability(name="scan_datasource_quality", description="Run DQ scan on a registered data source by source_id"),
+                ]
+            },
+            AgentType.DATA_DISCOVERY_AGENT: {
+                "name": "Data Discovery Agent",
+                "capabilities": [
+                    AgentCapability(name="discover_files", description="Enumerate files in a folder-type data source"),
+                    AgentCapability(name="profile_files", description="Profile file structure, row counts, column stats, null rates"),
+                    AgentCapability(name="catalog_datasource", description="Build a data catalog entry for a registered data source"),
+                    AgentCapability(name="scan_folder_quality", description="Run quality checks across all files in a folder data source"),
+                    AgentCapability(name="infer_schema", description="Infer column types and schema from CSV/JSON/XML files"),
+                ]
+            },
+            AgentType.ETL_ORCHESTRATOR: {
+                "name": "ETL Orchestration Agent",
+                "capabilities": [
+                    AgentCapability(name="manage_data_pipelines", description="Manage ETL pipelines"),
+                    AgentCapability(name="perform_data_discovery", description="Analyze sources, stage data, and run quality checks"),
+                    AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
+                    AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health"),
+                    AgentCapability(name="file_batch_processing", description="Discover and process thousands of files in parallel with lineage tracking"),
                 ]
             },
             AgentType.CHAT_COORDINATOR: {
@@ -109,7 +131,13 @@ class AgenticOrchestrator:
                     AgentCapability(name="process_natural_language", description="Process natural language"),
                     AgentCapability(name="coordinate_agent_responses", description="Coordinate agent responses"),
                     AgentCapability(name="manage_conversation_context", description="Manage conversation context"),
-                    AgentCapability(name="route_user_requests", description="Route user requests")
+                    AgentCapability(name="route_user_requests", description="Route user requests"),
+                ]
+            },
+            AgentType.TASK_DECOMPOSER: {
+                "name": "Task Decomposer Agent",
+                "capabilities": [
+                    AgentCapability(name="decompose_task", description="Breaks down complex natural language requests into an executable DAG of subtasks"),
                 ]
             }
         }

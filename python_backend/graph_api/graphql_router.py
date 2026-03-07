@@ -208,7 +208,7 @@ async def transform_data(
     """
     try:
         # Convert Pydantic models to dicts for service
-        mappings_list = [m.dict() for m in request.mappings]
+        mappings_list = [m.model_dump() for m in request.mappings]
         
         result = service.transform_data(
             source_data=request.source_data,

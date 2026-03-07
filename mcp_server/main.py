@@ -9,6 +9,7 @@ from .orchestrator import AgenticOrchestrator
 from .models import AgenticTask, AgenticTaskResult, SystemStatus, AgentDefinition
 from .state_manager import StateManager
 from .queue_client import MessageQueueClient
+from .dag_executor import DAGExecutor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,10 +34,8 @@ async def lifespan(app: FastAPI):
     
     # Initialize Orchestrator with state manager
     app.state.orchestrator = AgenticOrchestrator(state_manager=state_manager)
-    
-    # Initialize Neo4j Driver (placeholder validation)
-    try:
-        app.state.neo4j_driver = AsyncGraphDatabase.driver(
+    # Initialize DAG Executor
+    app.state.dag_executor = DAGExecutor(orchestrator=app.state.orchestrator)
             settings.NEO4J_URI,
             auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
         )
@@ -89,10 +88,9 @@ async def register_agent(agent: AgentDefinition):
 
 @app.post("/mcp/v1/tasks", response_model=AgenticTaskResult)
 async def submit_task(task: AgenticTask):
-    orchestrator: AgenticOrchestrator = app.state.orchestrator
-    result = await orchestrator.execute_task(task, app.state.neo4j_driver)
-    return result
-
+    dag_executor: DAGExecutor = app.state.dag_executor
+    # Use DAG executor natively. If no subtasks, it delegates immediately to standard execution
+    result = await dag_executor.execute_task_with_subtasks(task, app.state.neo4j_driver)
 @app.get("/mcp/v1/tasks/{task_id}", response_model=AgenticTaskResult)
 async def get_task_status(task_id: str):
     orchestrator: AgenticOrchestrator = app.state.orchestrator

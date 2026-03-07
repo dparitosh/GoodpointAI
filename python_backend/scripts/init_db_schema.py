@@ -28,6 +28,54 @@ def main() -> int:
     init_db()
     logger.info("DB schema ensured (create_all)")
 
+    # ---- Migrate plm_staged_records – add columns that were introduced after
+    # the table was first created (CREATE TABLE IF NOT EXISTS won't add them).
+    try:
+        from sqlalchemy import create_engine as _ce, text as _text
+
+        _mg_engine = _ce(DATABASE_URL)
+        _ALTER_STMTS = [
+            # DQ-02: content hash for deduplication
+            "ALTER TABLE plm_staged_records ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)",
+            "ALTER TABLE plm_staged_records ADD COLUMN IF NOT EXISTS source_object_id VARCHAR(256)",
+            # ensure index exists (idempotent)
+            "CREATE INDEX IF NOT EXISTS ix_plm_staged_records_content_hash ON plm_staged_records (content_hash)",
+            "CREATE INDEX IF NOT EXISTS ix_plm_staged_records_source_object_id ON plm_staged_records (source_object_id)",
+            # DQ-01: unique constraint on (run_id, content_hash)
+            """DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'uq_staged_run_content_hash'
+                ) THEN
+                    ALTER TABLE plm_staged_records
+                        ADD CONSTRAINT uq_staged_run_content_hash UNIQUE (run_id, content_hash);
+                END IF;
+            END $$""",
+            # updated_at on plm_ingestion_runs
+            "ALTER TABLE plm_ingestion_runs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        ]
+        with _mg_engine.connect() as _conn:
+            for _stmt in _ALTER_STMTS:
+                try:
+                    _conn.execute(_text(_stmt))
+                except Exception as _col_exc:  # pylint: disable=broad-exception-caught
+                    logger.debug("PLM migration stmt skipped (likely already applied): %s", _col_exc)
+            _conn.commit()
+        _mg_engine.dispose()
+        logger.info("PLM schema migrations applied")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("PLM schema migration skipped (non-fatal): %s", exc)
+
+    try:
+        from sqlalchemy import create_engine as _create_engine
+        from services.file_batch_processor import ensure_schema as _ensure_batch_schema
+
+        _batch_engine = _create_engine(DATABASE_URL)
+        _ensure_batch_schema(_batch_engine)
+        _batch_engine.dispose()
+        logger.info("File batch processing tables ensured")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("File batch schema init skipped (non-fatal): %s", exc)
+
     # If the encryption key has changed (common in local dev when env vars aren't persisted),
     # previously encrypted rows become undecryptable. For local SQLite only, reset encrypted
     # tables and re-seed defaults so the app can start cleanly.

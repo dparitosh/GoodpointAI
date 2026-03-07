@@ -11,6 +11,8 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer, String, Text, Index, Float, text
 from sqlalchemy.types import JSON
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+from sqlalchemy.orm import validates
 
 from core.database import Base
 
@@ -18,6 +20,7 @@ from core.database import Base
 class DataQualityRule(Base):
     __tablename__ = "dq_rules"
 
+    # DQ-09: store normalised (lowercase, stripped) rule IDs to prevent logical duplicates.
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -34,12 +37,17 @@ class DataQualityRule(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False
     )
-    updated_at: Mapped[datetime | None] = mapped_column(
+    # DQ-05: use SQLAlchemy-side onupdate so Postgres actually refreshes this on UPDATE.
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=text("CURRENT_TIMESTAMP"),
-        server_onupdate=text("CURRENT_TIMESTAMP"),
-        nullable=True,
+        onupdate=func.now(),  # type: ignore[attr-defined]
+        nullable=False,
     )
+
+    @validates("id")
+    def _normalise_id(self, _key: str, value: str) -> str:  # DQ-09
+        return (value or "").strip().lower()
 
 
 class DataQualityResult(Base):
@@ -76,7 +84,8 @@ class DataQualityScanReport(Base):
 
     scan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     table_name: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    data_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # DQ-11: expanded from 64 to 256 chars; full paths can exceed 64 chars.
+    data_source: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
     # UI contract payload (scores/issues/recommendations/etc.)
     report: Mapped[dict] = mapped_column(JSON, nullable=False)
@@ -132,4 +141,37 @@ class DataQualityGateResult(Base):
 
     __table_args__ = (
         Index("idx_dq_gate_results_run_stage", "run_id", "stage"),
+    )
+
+
+class DiscoveryReport(Base):
+    """Persisted data-discovery run outputs.
+
+    Saved when ``save_report=True`` on ``POST /api/agentic/discovery``.
+    Exposed via ``GET /api/agentic/discovery/reports`` for the Data Discovery page history panel.
+    """
+
+    __tablename__ = "discovery_reports"
+
+    report_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    # Human-readable label: source name, folder path, or source_id
+    label: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+
+    source_id: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
+    folder_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # Counts for the list view
+    total_files: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Full agent result payload
+    result: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False, index=True
+    )
+
+    __table_args__ = (
+        Index("idx_discovery_reports_source_date", "source_id", "created_at"),
     )
