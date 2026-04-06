@@ -3,6 +3,10 @@
 import process from 'node:process';
 import { describe, expect, test } from 'vitest';
 
+const SMOKE_ENABLED = String(process.env.GRAPHTRACE_SMOKE || '').trim().toLowerCase() === 'true'
+  || String(process.env.GRAPHTRACE_SMOKE || '').trim() === '1'
+  || String(process.env.GRAPHTRACE_SMOKE || '').trim().toLowerCase() === 'yes';
+
 const API_BASE = (process.env.E2E_API_BASE_URL || 'http://127.0.0.1:8011').replace(/\/$/, '');
 
 async function fetchJson(path, { method = 'GET', body, timeoutMs = 15000 } = {}) {
@@ -28,7 +32,9 @@ async function fetchJson(path, { method = 'GET', body, timeoutMs = 15000 } = {})
   return { res, text, json, url };
 }
 
-describe('Analytics Hub smoke: PG / N4J / OS / GQL', () => {
+const smokeDescribe = SMOKE_ENABLED ? describe : describe.skip;
+
+smokeDescribe('Analytics Hub smoke: PG / N4J / OS / GQL', () => {
   test('backend /health responds 200', async () => {
     const { res, text, url } = await fetchJson('/health');
     expect(res.status, `GET ${url} -> ${res.status}\n${text}`).toBe(200);

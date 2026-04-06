@@ -13,8 +13,16 @@ if (Test-Path "$scriptDir\scripts\start.py") {
 
 $venvPython = Join-Path (Join-Path (Join-Path $repoRoot ".venv") "Scripts") "python.exe"
 
+# Ensure relative paths in the Python scripts resolve correctly even if the user
+# runs this script from a different working directory.
+Set-Location $repoRoot
+
 if (-not (Test-Path $venvPython)) {
-    Write-Host "Virtual environment not found! Please run python -m venv .venv and pip install -r requirements.txt" -ForegroundColor Red
+    Write-Host "Virtual environment not found! Create it and install dependencies:" -ForegroundColor Red
+    Write-Host "  1) python -m venv .venv" -ForegroundColor Red
+    Write-Host "  2) .\.venv\Scripts\Activate.ps1" -ForegroundColor Red
+    Write-Host "  3) pip install -r python_backend\requirements.txt -r mcp_server\requirements.txt" -ForegroundColor Red
+    Write-Host "  4) cd e2etraceapp; npm install" -ForegroundColor Red
     exit 1
 }
 

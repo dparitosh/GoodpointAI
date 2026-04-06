@@ -4,17 +4,12 @@
 
 ```
 GoodpointAI/
+├── graphtrace.ps1             # Main entrypoint (diagnostics + full stack start)
+├── scripts/                   # start.py multiplexer + diagnostics.py
 ├── python_backend/            # FastAPI backend (Python 3.11+)
 ├── e2etraceapp/               # React/Vite frontend (Node 18+)
 ├── agent_services/            # MCP-powered AI agents
 ├── mcp_server/                # MCP coordination server
-├── installation_scripts/      # All PowerShell/Batch scripts
-│   ├── bootstrap.ps1          # First-time environment setup
-│   ├── start-all.ps1          # Launch entire stack
-│   ├── start-backend.ps1      # Launch backend only
-│   ├── start-frontend.ps1     # Launch frontend only
-│   ├── stop-all.ps1           # Kill all services
-│   └── start-agent-*.ps1      # Individual agent launchers
 └── docs/                      # Documentation
 ```
 
@@ -69,36 +64,61 @@ DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace
 GRAPH_TRACE_LOAD_DOTENV=true
 ```
 
+> **Important:** The backend **does not hardcode** a Postgres host/port.
+> It reads database settings from `python_backend/.env` at runtime:
+> - Prefer `DATABASE_URL=...` (recommended)
+> - Or use `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+>   (the backend will assemble a `postgresql+psycopg://...` URL)
+
 > **Note:** The bootstrap script (Step 3) will automatically copy `.env.example` → `.env`
 > if the file doesn't exist yet, but you **must** edit `DATABASE_URL` with your actual
 > Postgres credentials before proceeding. The bootstrap script will now validate that you have
 > changed the default credentials and fail safely with instructions if you haven't.
 
-### Step 3: Bootstrap Environment
-Run the bootstrap script. This will:
-- Copy `python_backend/.env.example` → `python_backend/.env` (if `.env` doesn't exist)
-- **Check configuration**: Verifies `DATABASE_URL` is configured (fails if default `yourpassword` detected)
-- Create a Python virtual environment at `.venv/`
-- Install all backend pip dependencies
-- Generate an encryption key (`.graphtrace.encryption_key`)
-- Initialize the PostgreSQL database schema (all tables via SQLAlchemy `create_all`)
-- Seed default configuration (all automatic via `init_db_schema`):
-  - **Encrypted config keys**: `system_configuration`, `neo4j`, `opensearch`, `cors`, `workflow_defaults`
-  - **Admin connections**: Primary PostgreSQL, Neo4j, OpenSearch, Redis
-  - **LLM providers**: OpenAI, Anthropic, Azure OpenAI, Ollama, HuggingFace
-  - **Embedding models**: MiniLM, MPNet, OpenAI, Cohere
-  - **Feature flags**: LLM Chat, Vector Search, GraphRAG, Pipeline Wizard, etc.
-  - **Pipeline templates**: File patterns, search/index configs, Neo4j schema configs
-- Install all frontend npm dependencies
+### Step 3: Create `.venv` and install dependencies
+This branch uses a repo-root virtual environment at `.venv/`.
 
 ```powershell
-.\installation_scripts\bootstrap.ps1
+# Create and activate venv
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Backend deps
+pip install -r python_backend\requirements.txt
+
+# MCP server deps (required if you use the full-stack launcher)
+pip install -r mcp_server\requirements.txt
+
+# Frontend deps
+cd e2etraceapp
+npm install
+cd ..
 ```
 
 ### Step 4: Start the Full Stack
-Launch Backend, Frontend, MCP Server, and all AI Agents:
+Use the repo entrypoint script. It will run `scripts/diagnostics.py` and then launch the multiplexer in `scripts/start.py`.
+
+> The MCP server loads its config from `python_backend/.env` (same as the backend and agents).
+
 ```powershell
-.\installation_scripts\start-all.ps1
+.\graphtrace.ps1 -Start
+```
+
+To run only a preflight check (no services started):
+
+```powershell
+.\graphtrace.ps1 -Check
+```
+
+This check validates:
+- Python/Node/NPM availability
+- `python_backend/.env` presence and required keys
+- **PostgreSQL connectivity using the `DATABASE_URL`/`POSTGRES_*` values from `python_backend/.env`**
+
+If you intentionally want to run without a DB check (not recommended), you can set:
+
+```dotenv
+GRAPH_TRACE_SKIP_DB_CHECK=true
 ```
 
 ### Step 5: Verify
@@ -108,7 +128,7 @@ Open a browser and check:
 - **MCP Server Health**: [http://localhost:8012/health](http://localhost:8012/health) *(if MCP server started)*
 - **API Docs (Swagger)**: [http://localhost:8011/docs](http://localhost:8011/docs)
 
-> **Note:** The 6 agent services (Data Analyst, ETL Orchestrator, Visualization, Query Planner, Quality Monitor, Chat Coordinator) will be running on ports 8020-8025 if started via `start-all.ps1`. They do not have web UIs but can be verified via their log output in their respective terminal windows.
+> **Note:** `scripts/start.py` launches the backend, frontend, MCP server, and multiple agent processes in one multiplexer. Agents do not have web UIs; verify them via their log output in the multiplexer terminal.
 
 ## Manual Installation (Step-by-Step)
 
@@ -214,30 +234,18 @@ python -m scripts.init_db_schema
 
 ### Main Scripts
 
-| Script | Purpose | Platform | Usage |
-| :--- | :--- | :--- | :--- |
-| `bootstrap.ps1` | First-time setup (venv, deps, DB schema, seed) | Windows (PowerShell) | Run once after clone |
-| `start-all.ps1` | Launch full stack (Backend, MCP, 6 Agents, Frontend) | Windows (PowerShell) | Daily dev startup |
-| `start-all.bat` | Launch full stack (same as .ps1) | Windows (CMD) | Alternative for batch users |
-| `start-backend.ps1` | Backend API server only | Windows (PowerShell) | Add `-UpdateDeps` to force pip install |
-| `start-backend.bat` | Backend API server only | Windows (CMD) | Batch equivalent |
-| `start-frontend.ps1` | Frontend dev server only | Windows (PowerShell) | Add `-UpdateDeps` to force npm install |
-| `start-frontend.bat` | Frontend dev server only | Windows (CMD) | Batch equivalent |
-| `stop-all.ps1` | Kill all Python/Node processes | Windows (PowerShell) | Cleanup orphan processes |
-
-### Individual Service Scripts
-
-| Script | Service | Port |
+| Script | Purpose | Usage |
 | :--- | :--- | :--- |
-| `start-mcp-server.ps1` | MCP Coordination Server | 8012 |
-| `start-agent-data-analyst.ps1` | Data Analyst Agent | 8020 |
-| `start-agent-etl-orchestrator.ps1` | ETL Orchestrator Agent | 8021 |
-| `start-agent-visualization.ps1` | Visualization Agent | 8022 |
-| `start-agent-query-planner.ps1` | Query Planner Agent | 8023 |
-| `start-agent-quality-monitor.ps1` | Quality Monitor Agent | 8024 |
-| `start-agent-chat-coordinator.ps1` | Chat Coordinator Agent | 8025 |
+| `graphtrace.ps1` | Preflight diagnostics and full stack launcher | `./graphtrace.ps1 -Check` or `./graphtrace.ps1 -Start` |
+| `scripts/diagnostics.py` | Validates Python/Node/NPM and `.env` basics | Called by `graphtrace.ps1` |
+| `scripts/start.py` | Starts frontend/backend/MCP + agent processes (multiplexer) | Called by `graphtrace.ps1 -Start` |
 
-> **Note:** Individual service scripts are PowerShell-only. Use `start-all.bat` for batch file support of all services.
+### Smoke / Dev Helpers
+
+| Script | Purpose |
+| :--- | :--- |
+| `python_backend/smoke-backend.ps1` | Quick backend smoke run (developer helper) |
+| `python_backend/smoke-filesystem-datasource.ps1` | Smoke test for filesystem datasource (developer helper) |
 
 ## Environment Variables
 
@@ -252,10 +260,10 @@ python -m scripts.init_db_schema
 
 ## Troubleshooting
 
-- **"Missing module" errors**: Run `.\installation_scripts\start-backend.ps1 -UpdateDeps` to force reinstall.
+- **"Missing module" errors**: Make sure you activated `.venv` and re-install backend deps: `pip install -r python_backend/requirements.txt`.
 - **Database connection refused**: Ensure PostgreSQL is running and `DATABASE_URL` in `python_backend/.env` is correct.
 - **Encryption key mismatch**: Delete `.graphtrace.encryption_key` and re-run bootstrap, or set `GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG=true` then run `python -m scripts.init_db_schema`.
-- **Port already in use**: Run `.\installation_scripts\stop-all.ps1` to kill orphan processes.
+- **Port already in use**: Stop the multiplexer with `Ctrl+C` in the `graphtrace.ps1` terminal, or kill the specific `python`/`node` process using Task Manager.
 
 ## Multi-VM Deployment
 

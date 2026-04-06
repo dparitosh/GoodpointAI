@@ -22,7 +22,8 @@ const DEFAULT_CONFIG = {
   // Endpoints
   ENDPOINTS: {
     // Health & Status
-    HEALTH: '/api/health',
+    // Backend exposes a root-level health check at /health (not /api/health).
+    HEALTH: '/health',
     STATUS: '/api/status',
     
     // Agentic AI

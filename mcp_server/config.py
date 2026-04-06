@@ -1,6 +1,10 @@
-import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_BACKEND_ENV_FILE = _REPO_ROOT / "python_backend" / ".env"
 
 class Settings(BaseSettings):
     MCP_SERVER_ID: str = "mcp-server-01"
@@ -28,7 +32,8 @@ class Settings(BaseSettings):
     ENABLE_TRACING: bool = True
     
     model_config = {
-        "env_file": ".env",
+        # Use the shared backend env file so the whole stack is configured from one place.
+        "env_file": str(_BACKEND_ENV_FILE),
         "case_sensitive": True,
         "extra": "ignore"
     }

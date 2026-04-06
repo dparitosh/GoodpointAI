@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .state_manager import StateManager
 
 from .models import (
-    AgentType, TaskType, AgentCapability, AgentDefinition, 
+    AgentType, AgentCapability, AgentDefinition,
     AgenticTask, AgenticTaskResult, SystemStatus
 )
 
@@ -23,7 +23,7 @@ class AgenticOrchestrator:
         self.active_tasks: Dict[str, AgenticTask] = {}
         self.task_results: Dict[str, AgenticTaskResult] = {}
         self.chat_sessions: Dict[str, List[Dict]] = {}
-        self.system_metrics = {
+        self.system_metrics: Dict[str, Any] = {
             "tasks_completed": 0,
             "tasks_failed": 0,
             "average_response_time": 0.0,
@@ -44,7 +44,7 @@ class AgenticOrchestrator:
     async def register_agent(self, agent: AgentDefinition) -> AgentDefinition:
         """Register a dynamic agent service"""
         self.agents[agent.id] = agent
-        logger.info(f"Registered agent {agent.id} ({agent.name}) at {agent.service_url}")
+        logger.info("Registered agent %s (%s) at %s", agent.id, agent.name, agent.service_url)
         
         # Persist to state manager
         if self.state_manager:
@@ -65,15 +65,6 @@ class AgenticOrchestrator:
                     AgentCapability(name="generate_insights", description="Generate analytical insights"),
                     AgentCapability(name="data_quality_assessment", description="Assess data quality"),
                     AgentCapability(name="statistical_analysis", description="Perform statistical analysis")
-                ]
-            },
-            AgentType.ETL_ORCHESTRATOR: {
-                "name": "ETL Orchestration Agent", 
-                "capabilities": [
-                    AgentCapability(name="manage_data_pipelines", description="Manage ETL pipelines"),
-                    AgentCapability(name="perform_data_discovery", description="Analyze sources, stage data, and run quality checks"),
-                    AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
-                    AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health")
                 ]
             },
             AgentType.QUERY_PLANNER: {
@@ -172,7 +163,7 @@ class AgenticOrchestrator:
         suitable_agents.sort(key=lambda x: x[1], reverse=True)
         return suitable_agents[0][0]
 
-    async def execute_task(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> AgenticTaskResult:
+    async def execute_task(self, task: AgenticTask) -> AgenticTaskResult:
         """Execute task with assigned agent"""
         agent_id = await self.route_task_to_agent(task)
         
@@ -195,7 +186,7 @@ class AgenticOrchestrator:
             agent.last_activity = start_time
             
             # Execute task based on type
-            result = await self._execute_agent_task(task, agent, driver_instance)
+            result = await self._execute_agent_task(task, agent)
             
             execution_time = (datetime.now() - start_time).total_seconds()
             
@@ -272,7 +263,7 @@ class AgenticOrchestrator:
             else:
                 agent.performance_metrics["fail_count"] = agent.performance_metrics.get("fail_count", 0) + 1
 
-    async def _execute_agent_task(self, task: AgenticTask, agent: AgentDefinition, driver_instance: neo4j.AsyncDriver) -> Dict[str, Any]:
+    async def _execute_agent_task(self, task: AgenticTask, agent: AgentDefinition) -> Dict[str, Any]:
         """Execute specific agent task based on agent type and task type"""
         
         # Dispatch to remote agent if service_url is registered
@@ -287,12 +278,14 @@ class AgenticOrchestrator:
 
     async def _execute_remote_agent_task(self, task: AgenticTask, agent: AgentDefinition) -> Dict[str, Any]:
         """Execute task via remote agent service"""
+        if not agent.service_url:
+            raise RuntimeError("Agent has no service_url")
         # Ensure URL doesn't end with slash before appending endpoint
         base_url = agent.service_url.rstrip('/')
         url = f"{base_url}/execute"
         
         try:
-            logger.info(f"Dispatching task {task.id} to remote agent {agent.id} at {url}")
+            logger.info("Dispatching task %s to remote agent %s at %s", task.id, agent.id, url)
             # Construct payload matching AgentTaskRequest in agent_service
             payload = {
                 "task_id": task.id,
@@ -314,11 +307,11 @@ class AgenticOrchestrator:
                     return data.get("result", {})
                 else:
                     error_msg = data.get("error", "Unknown remote error")
-                    logger.error(f"Remote task failed with status {data.get('status')}: {error_msg}")
+                    logger.error("Remote task failed with status %s: %s", data.get('status'), error_msg)
                     raise RuntimeError(f"Remote task failed: {error_msg}")
                     
-        except Exception as e:
-            logger.error(f"Failed to execute remote task on {url}: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.error("Failed to execute remote task on %s: %s", url, e)
             raise
 
     def get_system_status(self) -> SystemStatus:

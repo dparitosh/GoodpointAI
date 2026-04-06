@@ -303,7 +303,6 @@ export default function DQScanDashboard() {
   const [reports, setReports] = useState(DUMMY_REPORTS);
   const [history] = useState(DUMMY_SCAN_HISTORY);
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [liveMode, setLiveMode] = useState(false);
   const [scanningTable, setScanningTable] = useState(null);
   const [availableTables, setAvailableTables] = useState([]);

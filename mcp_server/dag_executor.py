@@ -1,11 +1,9 @@
 import asyncio
 import logging
-from typing import Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel
-import neo4j
+from typing import Dict
 
-from .models import AgenticTask, AgenticSubtask, TaskStatus, AgenticTaskResult
+from .models import AgenticTask, TaskStatus, AgenticTaskResult
 from .orchestrator import AgenticOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -15,16 +13,16 @@ class DAGExecutor:
     def __init__(self, orchestrator: AgenticOrchestrator):
         self.orchestrator = orchestrator
 
-    async def execute_task_with_subtasks(self, task: AgenticTask, driver_instance: neo4j.AsyncDriver) -> AgenticTaskResult:
+    async def execute_task_with_subtasks(self, task: AgenticTask) -> AgenticTaskResult:
         if not hasattr(task, "subtasks") or not task.subtasks:
             # Fallback to normal execution if no subtasks defined
-            return await self.orchestrator.execute_task(task, driver_instance)
+            return await self.orchestrator.execute_task(task)
         
-        logger.info(f"Executing composite task {task.id} with {len(task.subtasks)} subtasks")
+        logger.info("Executing composite task %s with %s subtasks", task.id, len(task.subtasks))
         task.status = TaskStatus.IN_PROGRESS
 
         # Track state
-        subtask_results = {}
+        subtask_results: Dict[str, AgenticTaskResult] = {}
         pending_subtasks = {st.id: st for st in task.subtasks}
         completed_ids = set()
 
@@ -33,7 +31,7 @@ class DAGExecutor:
         while pending_subtasks:
             # Find subtasks whose dependencies are completely met
             ready_subtasks = []
-            for st_id, st in pending_subtasks.items():
+            for st in pending_subtasks.values():
                 if all(dep in completed_ids for dep in st.dependencies):
                     ready_subtasks.append(st)
 
@@ -60,14 +58,14 @@ class DAGExecutor:
                     payload=st.payload,
                     priority=st.priority
                 )
-                exec_coroutines.append(self.orchestrator.execute_task(sub_agent_task, driver_instance))
+                exec_coroutines.append(self.orchestrator.execute_task(sub_agent_task))
             
             results = await asyncio.gather(*exec_coroutines, return_exceptions=True)
 
             for i, result in enumerate(results):
                 st = ready_subtasks[i]
-                if isinstance(result, Exception):
-                    logger.error(f"Subtask {st.id} crashed: {result}")
+                if isinstance(result, BaseException):
+                    logger.error("Subtask %s crashed: %s", st.id, result)
                     st.status = TaskStatus.FAILED
                 else:
                     st.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED

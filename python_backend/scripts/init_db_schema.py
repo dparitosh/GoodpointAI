@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from core.db_session import DATABASE_URL, SessionLocal, init_db
+from core.db_session import DATABASE_URL, SessionLocal, init_db, redacted_database_url, verify_database_connectivity
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,14 @@ def main() -> int:
         logger.error("Please edit python_backend/.env and set your actual PostgreSQL password")
         logger.error("Current (redacted): Use actual credentials, not 'yourpassword' or 'password'")
         return 1
+
+    # Fail fast if Postgres isn't reachable; avoids long hangs later during create_all/seed.
+    logger.info("DATABASE_URL=%s", redacted_database_url())
+    conn_err = verify_database_connectivity(timeout_s=5.0)
+    if conn_err is not None:
+        logger.error("Database connectivity check failed: %s", conn_err)
+        logger.error("Is PostgreSQL running, and is DATABASE_URL correct in python_backend/.env?")
+        return 2
 
     init_db()
     logger.info("DB schema ensured (create_all)")
