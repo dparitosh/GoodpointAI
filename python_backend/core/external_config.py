@@ -284,7 +284,8 @@ def get_llm_config_with_db_fallback(provider: "Optional[str]" = None, db_session
                 return config_service.get_llm_provider_config(provider)
             else:
                 return config_service.get_active_llm_provider()
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, KeyError, RuntimeError) as e:
+            # Gracefully fallback to env config if DB service unavailable
             logger.debug("DB LLM config not available: %s", e)
     
     # Fall back to environment-based config
@@ -336,7 +337,8 @@ def get_embedding_config_with_db_fallback(db_session=None) -> dict:
             from services.admin_config_service import AdminConfigService
             config_service = AdminConfigService(db_session)
             return config_service.get_embedding_config()
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, KeyError, RuntimeError) as e:
+            # Gracefully fallback to env config if DB service unavailable
             logger.debug("DB embedding config not available: %s", e)
     
     # Fall back to environment-based config
@@ -373,7 +375,8 @@ def get_database_config_with_db_fallback(db_type: str, db_session=None) -> dict:
             from services.admin_config_service import AdminConfigService
             config_service = AdminConfigService(db_session)
             return config_service.get_connection_config(db_type)
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, KeyError, RuntimeError) as e:
+            # Gracefully fallback to env config if DB service unavailable
             logger.debug("DB connection config not available: %s", e)
     
     # Fall back to environment-based config
