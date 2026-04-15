@@ -99,11 +99,12 @@ class ETLOrchestratorAgent(AgentService):
 
     async def process_task(self, task: AgentTaskRequest):
         task_type = task.payload.get("type", "unknown")
+        required_caps = task.payload.get("required_capabilities", [])
 
-        if task_type == "discovery" or "perform_data_discovery" in task.required_capabilities:
+        if task_type == "discovery" or "perform_data_discovery" in required_caps:
             return await self.perform_discovery(task)
 
-        if task_type == "file_batch_processing" or "file_batch_processing" in task.required_capabilities:
+        if task_type == "file_batch_processing" or "file_batch_processing" in required_caps:
             return await self.process_file_batch(task)
 
         return {

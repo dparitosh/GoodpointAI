@@ -13,6 +13,8 @@ Each service is a standalone FastAPI application that registers with the central
 | **Query Planner** | 8023 | Optimizes Cypher queries and execution plans |
 | **Quality Monitor** | 8024 | Monitors data integrity and detects anomalies |
 | **Chat Coordinator** | 8025 | Handles natural language processing and intent routing |
+| **Data Discovery** | 8026 | Discovers, profiles, and catalogs files in folder data sources |
+| **Task Decomposer** | 8027 | Breaks complex goals into executable DAG subtasks |
 
 ## Base Framework
 
