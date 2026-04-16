@@ -21,7 +21,7 @@ def main() -> int:
     if not DATABASE_URL or DATABASE_URL == "sqlite:///:memory:":
         logger.error("DATABASE_URL is not configured!")
         logger.error("Please set DATABASE_URL in python_backend/.env")
-        logger.error("Example: DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace")
+        logger.error("Example: DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5432/graphtrace")
         return 1
     
     # Check for placeholder credentials that indicate incomplete configuration

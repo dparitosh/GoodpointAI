@@ -32,7 +32,7 @@ def _default_postgres_url() -> str:
     """
 
     host = str(database_config.postgres_host or "localhost").strip() or "localhost"
-    port = int(database_config.postgres_port or 5433)
+    port = int(database_config.postgres_port)
     database = str(database_config.postgres_database or "graphtrace").strip() or "graphtrace"
     user = str(database_config.postgres_user or "postgres").strip() or "postgres"
     password = str(database_config.postgres_password or "").strip()

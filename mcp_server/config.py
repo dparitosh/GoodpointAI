@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Database
     # Use empty defaults for passwords to ensure security. 
     # Valid values must be provided formatted in .env (see python_backend/.env.example)
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/graphtrace"
+    DATABASE_URL: str = ""  # Set via DATABASE_URL in python_backend/.env
     REDIS_URL: str = "redis://localhost:6379/0"
     NEO4J_URI: str = "neo4j://localhost:7687"
     NEO4J_USERNAME: str = "neo4j"

@@ -21,9 +21,9 @@ from models.rule_engine_models import (
 def get_database_url():
     """Get database URL from environment."""
     host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5433")
+    port = os.getenv("POSTGRES_PORT", "5432")
     user = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "")
     database = os.getenv("POSTGRES_DB", "graphtrace")
     
     return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{database}"

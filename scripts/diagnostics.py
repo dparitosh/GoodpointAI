@@ -82,8 +82,8 @@ def check_env_vars():
             print(f"[WARN] {env_file} does not exist and no .env.example found. Creating a minimal template...")
             os.makedirs(os.path.dirname(env_file), exist_ok=True)
             with open(env_file, "w", encoding="utf-8") as f:
-                # Template only — user must edit. Keep consistent with backend defaults (5433).
-                f.write("DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5433/graphtrace\n")
+                # Template only — user must edit. Standard PostgreSQL port is 5432.
+                f.write("DATABASE_URL=postgresql://postgres:yourpassword@127.0.0.1:5432/graphtrace\n")
                 f.write("# NEO4J_URI=bolt://localhost:7687\n")
                 f.write("# OPENSEARCH_URL=http://localhost:9200\n")
 

@@ -314,7 +314,7 @@ def seed_connections(db: Session):
             "name": "Primary PostgreSQL",
             "description": "Primary PostgreSQL database for application data",
             "host": os.getenv("POSTGRES_HOST", "localhost"),
-            "port": int(os.getenv("POSTGRES_PORT", "5433")),
+            "port": int(os.getenv("POSTGRES_PORT", "5432")),
             "database": os.getenv("POSTGRES_DATABASE", "graphtrace"),
             "username": os.getenv("POSTGRES_USER", "postgres"),
             "password": os.getenv("POSTGRES_PASSWORD", ""),

@@ -73,7 +73,7 @@ def check_env_loading():
 
 3. Hardcoded Defaults (Lowest Priority, dev-only)
    class Settings:
-       DATABASE_URL = "postgresql://postgres:postgres@localhost:5433/graphtrace"
+       DATABASE_URL = "postgresql://postgres:yourpassword@localhost:5432/graphtrace"
    ↓ Only used if env vars and .env are missing
 """)
     

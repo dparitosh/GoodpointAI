@@ -207,7 +207,7 @@ class DatabaseConfig(BaseSettings):
 
     # PostgreSQL
     postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
-    postgres_port: int = Field(default=5433, validation_alias="POSTGRES_PORT")
+    postgres_port: int = Field(default=5432, validation_alias="POSTGRES_PORT")
     postgres_database: str = Field(default="graphtrace", validation_alias="POSTGRES_DATABASE")
     postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")
     postgres_password: str = Field(default="", validation_alias="POSTGRES_PASSWORD")

@@ -422,10 +422,10 @@ class AdminConfigService:
             return {
                 "type": "postgresql",
                 "host": os.getenv("POSTGRES_HOST", "localhost"),
-                "port": int(os.getenv("POSTGRES_PORT", "5433")),
+                "port": int(os.getenv("POSTGRES_PORT", "5432")),
                 "database": os.getenv("POSTGRES_DB", "graphtrace"),
                 "username": os.getenv("POSTGRES_USER", "postgres"),
-                "password": os.getenv("POSTGRES_PASSWORD", "postgres"),
+                "password": os.getenv("POSTGRES_PASSWORD", ""),
                 "ssl_enabled": os.getenv("POSTGRES_SSL", "false").lower() == "true",
                 "pool_size": int(os.getenv("POSTGRES_POOL_SIZE", "10")),
             }

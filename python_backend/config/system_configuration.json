@@ -21,8 +21,8 @@
   },
   "databases": {
     "postgresql": {
-      "main_port": 5433,
-      "backup_port": 5433,
+      "main_port": 5432,
+      "backup_port": 5432,
       "backup_schedule": "hourly"
     },
     "neo4j": {

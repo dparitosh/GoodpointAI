@@ -67,57 +67,6 @@
 			"group": "build"
 		},
 		{
-			"label": "Start Backend Server (No Reload, Port 8011)",
-			"type": "shell",
-			"command": "${command:python.interpreterPath}",
-			"args": [
-				"-m",
-				"uvicorn",
-				"--app-dir",
-				"${workspaceFolder}/python_backend",
-				"main:app",
-				"--host",
-				"0.0.0.0",
-				"--port",
-				"8011"
-			],
-			"options": {
-				"cwd": "${workspaceFolder}/python_backend",
-				"env": {
-					"GRAPH_TRACE_LOAD_DOTENV": "true"
-				}
-			},
-			"isBackground": true,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
-			"label": "Start Backend Server (Postgres)",
-			"type": "shell",
-			"command": "${command:python.interpreterPath}",
-			"args": [
-				"-m",
-				"uvicorn",
-				"--app-dir",
-				"${workspaceFolder}/python_backend",
-				"main:app",
-				"--host",
-				"0.0.0.0",
-				"--port",
-				"8011",
-				"--reload"
-			],
-			"options": {
-				"cwd": "${workspaceFolder}/python_backend",
-				"env": {
-					"GRAPH_TRACE_LOAD_DOTENV": "true"
-				}
-			},
-			"isBackground": true,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
 			"label": "Start Backend Server (OpenSearch)",
 			"type": "shell",
 			"command": "${command:python.interpreterPath}",
@@ -181,6 +130,38 @@
 			"group": "build"
 		},
 		{
+			"label": "Start Full Stack (graphtrace.ps1)",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\graphtrace.ps1",
+				"-Start"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Diagnostics Check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"${workspaceFolder}\\graphtrace.ps1",
+				"-Check"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
 			"label": "Frontend: Lint",
 			"type": "shell",
 			"command": "npm run lint",
@@ -226,50 +207,7 @@
 			"group": "build"
 		},
 		{
-			"label": "Scripts: Bootstrap (PowerShell)",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"${workspaceFolder}\\installation_scripts\\bootstrap.ps1"
-			],
-			"isBackground": false,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
-			"label": "Scripts: Start All (PowerShell script)",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"${workspaceFolder}\\installation_scripts\\start-all.ps1"
-			],
-			"isBackground": true,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
 			"label": "Git: Push current branch",
-			"type": "shell",
-			"command": "git",
-			"args": [
-				"push",
-				"origin",
-				"HEAD"
-			],
-			"isBackground": false,
-			"problemMatcher": [],
-			"group": "build"
-		},
-		{
-			"label": "Git: Push current branch (shell)",
 			"type": "shell",
 			"command": "git push origin HEAD",
 			"isBackground": false,

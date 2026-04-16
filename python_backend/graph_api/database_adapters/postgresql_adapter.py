@@ -17,7 +17,7 @@ class PostgreSQLAdapter(SQLDatabaseAdapter):
     
     REQUIRED_PARAMS = ['host', 'database', 'username', 'password']
     OPTIONAL_PARAMS = ['port', 'schema', 'ssl_mode']
-    DEFAULT_PORT = 5433
+    DEFAULT_PORT = 5432
     DESCRIPTION = "PostgreSQL relational database"
     
     def __init__(self, connection_params: Dict[str, Any]):
