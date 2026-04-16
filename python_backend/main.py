@@ -59,6 +59,9 @@ from graph_api.auth_router import router as auth_router
 from graph_api.opensearch_router import router as opensearch_router
 from graph_api.reports_router import router as reports_router
 from graph_api.rule_engine_router import router as rule_engine_router
+from graph_api.rule_router import router as rule_router
+from graph_api.export_router import router as export_router
+from graph_api.workflow_router import router as workflow_router
 from routers.pipeline_config_router import router as pipeline_config_router
 from routers.conversational_search_router import router as conversational_search_router
 from routers.admin_config_router import router as admin_config_router
@@ -289,6 +292,9 @@ app.include_router(plm_workflow_router)
 app.include_router(plm_etl_router)
 app.include_router(etl_router)
 app.include_router(workflow_manager_router)
+app.include_router(rule_router)
+app.include_router(export_router)
+app.include_router(workflow_router)
 app.include_router(azure_integration_router)
 app.include_router(aws_integration_router)
 app.include_router(odata_integration_router)

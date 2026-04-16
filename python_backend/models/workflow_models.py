@@ -239,7 +239,7 @@ class WorkflowExecutionRequest(BaseModel):
     execution_params: Dict[str, Any] = {}
 
 
-class WorkflowExecutionResponse(BaseModel):
+class WorkflowActionResponse(BaseModel):
     """Response for workflow execution action"""
     workflow_id: str
     execution_id: str
@@ -257,3 +257,234 @@ class WorkflowStatistics(BaseModel):
     total_records_processed: int
     average_quality_score: Optional[float]
     active_executions: int
+
+
+# ============================================================================
+# WORKFLOW DEFINITION & EXECUTION (FOR DAG-BASED WORKFLOWS)
+# ============================================================================
+
+class MigrationStage(str, Enum):
+    """PLM migration stages (aligned with frontend state machine)"""
+    IDLE = "idle"
+    INITIALIZING = "initializing"
+    DISCOVERING = "discovering"
+    PROFILING = "profiling"
+    SCHEMA_MAPPING = "schema_mapping"
+    DATA_MIGRATION = "data_migration"
+    VALIDATION = "validation"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class WorkflowStepType(str, Enum):
+    """Workflow step types for execution"""
+    SQL = "sql"
+    PYTHON = "python"
+    API = "api"
+    DISCOVERY = "discovery"          # DISCOVERING stage
+    PROFILING = "profiling"          # PROFILING stage
+    SCHEMA_MAPPING = "schema_mapping" # SCHEMA_MAPPING stage
+    ETL_EXECUTION = "etl_execution"  # DATA_MIGRATION stage
+    VALIDATION = "validation"        # VALIDATION stage
+
+
+class WorkflowStepStatus(str, Enum):
+    """Individual workflow step execution status"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    RETRYING = "retrying"
+
+
+# SQLAlchemy ORM Models for DAG-based workflows
+class WorkflowDefinition(Base):
+    """
+    Defines a reusable workflow with steps and dependencies.
+    Can be instantiated multiple times for different executions.
+    """
+    __tablename__ = "workflow_definitions"
+    
+    id = Column(String(100), primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Source → Target mapping
+    source_id = Column(String(100), nullable=False, index=True)
+    target_id = Column(String(100), nullable=False, index=True)
+    
+    # Workflow metadata
+    definition_config = Column(JSON, nullable=False)  # Full workflow graph
+    mcp_decomposition_id = Column(String(100), nullable=True)  # Links to MCP TaskDecomposer output
+    
+    # Status & versioning
+    is_active = Column(Boolean, default=True)
+    version = Column(String(32), default="1.0.0")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    created_by = Column(String(100), nullable=True)
+
+
+class WorkflowStep(Base):
+    """
+    Individual step within a workflow definition.
+    Steps are executed in DAG order with dependency resolution.
+    """
+    __tablename__ = "workflow_steps"
+    
+    id = Column(String(100), primary_key=True, index=True)
+    workflow_id = Column(String(100), nullable=False, index=True)
+    
+    # Step identity
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Execution type (maps to migration stage)
+    step_type = Column(String(32), default=WorkflowStepType.SQL.value, nullable=False)
+    stage = Column(String(32), nullable=True)  # DISCOVERING, PROFILING, SCHEMA_MAPPING, DATA_MIGRATION, VALIDATION
+    
+    # Execution logic
+    expression = Column(Text, nullable=False)  # SQL, Python, or API endpoint
+    expression_language = Column(String(32), default="sql")
+    parameters = Column(JSON, default=dict)
+    
+    # Dependencies (for DAG)
+    depends_on = Column(JSON, default=list)  # List of step_ids this depends on
+    sequence_order = Column(Integer, default=0)
+    
+    # Execution settings
+    retries = Column(Integer, default=1)
+    timeout_seconds = Column(Integer, default=3600)
+    allow_failure = Column(Boolean, default=False)  # Continue on failure?
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_workflow_steps_workflow", "workflow_id"),
+        Index("idx_workflow_steps_stage", "stage"),
+    )
+
+
+class WorkflowExecution(Base):
+    """
+    Tracks execution of a workflow definition.
+    One definition can have multiple executions.
+    """
+    __tablename__ = "workflow_executions"
+    
+    id = Column(String(100), primary_key=True, index=True)
+    workflow_id = Column(String(100), nullable=False, index=True)
+    
+    # Execution state
+    status = Column(String(32), default=WorkflowStepStatus.PENDING.value, nullable=False)
+    current_stage = Column(String(32), default=MigrationStage.IDLE.value)
+    progress_percentage = Column(Float, default=0.0)
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    
+    # Execution context
+    execution_context = Column(JSON, default=dict)  # Input parameters
+    execution_metadata = Column(JSON, default=dict)  # Runtime info, errors
+    
+    # Statistics
+    total_steps = Column(Integer, default=0)
+    completed_steps = Column(Integer, default=0)
+    failed_steps = Column(Integer, default=0)
+    
+    # Results
+    final_result = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(String(100), nullable=True)
+    
+    __table_args__ = (
+        Index("idx_workflow_executions_workflow", "workflow_id"),
+        Index("idx_workflow_executions_status", "status"),
+    )
+
+
+class WorkflowStepExecution(Base):
+    """
+    Tracks execution of individual steps within a workflow execution.
+    """
+    __tablename__ = "workflow_step_executions"
+    
+    id = Column(String(100), primary_key=True, index=True)
+    execution_id = Column(String(100), nullable=False, index=True)
+    step_id = Column(String(100), nullable=False, index=True)
+    
+    # Execution state
+    status = Column(String(32), default=WorkflowStepStatus.PENDING.value)
+    retry_count = Column(Integer, default=0)
+    
+    # Timing
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    
+    # Results
+    result = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    output_data = Column(JSON, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = (
+        Index("idx_workflow_step_executions_execution", "execution_id"),
+        Index("idx_workflow_step_executions_step", "step_id"),
+    )
+
+
+# Pydantic models for API
+class WorkflowStepDefinition(BaseModel):
+    """API model for workflow step definition"""
+    id: str
+    name: str
+    description: Optional[str]
+    step_type: WorkflowStepType
+    stage: Optional[str]
+    expression: str
+    expression_language: str
+    parameters: Dict[str, Any] = {}
+    depends_on: List[str] = []
+    sequence_order: int = 0
+    retries: int = 1
+    timeout_seconds: int = 3600
+    allow_failure: bool = False
+
+
+class WorkflowDefinitionCreate(BaseModel):
+    """Request to create a new workflow definition"""
+    name: str
+    description: Optional[str]
+    source_id: str
+    target_id: str
+    steps: List[WorkflowStepDefinition]
+    mcp_decomposition_id: Optional[str] = None
+
+
+class WorkflowExecutionResponse(BaseModel):
+    """Response for workflow execution"""
+    id: str
+    workflow_id: str
+    status: str
+    current_stage: str
+    progress_percentage: float
+    completed_steps: int
+    total_steps: int
+    failed_steps: int
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    duration_ms: Optional[int]
+    error_message: Optional[str]
+    
+    model_config = ConfigDict(from_attributes=True)

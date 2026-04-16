@@ -90,6 +90,24 @@ def main() -> int:
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("File batch schema init skipped (non-fatal): %s", exc)
 
+    # ---- Seed admin configurations (LLM providers, connections, feature flags, etc.)
+    # These populate default settings needed for the app to run.
+    try:
+        from scripts.seed_admin_configs import main as seed_admin_main
+        seed_admin_main()
+        logger.info("Admin configurations seeded")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Admin config seeding skipped (non-fatal): %s", exc)
+
+    # ---- Seed encrypted database configurations (system settings, neo4j, opensearch, cors)
+    # These are stored in EncryptedConfig and loaded via decrypt at runtime.
+    try:
+        from scripts.seed_db_config import seed_defaults as seed_db_main
+        seed_db_main()
+        logger.info("Encrypted database configurations seeded")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning("Database config seeding skipped (non-fatal): %s", exc)
+
     # If the encryption key has changed (common in local dev when env vars aren't persisted),
     # previously encrypted rows become undecryptable. For local SQLite only, reset encrypted
     # tables and re-seed defaults so the app can start cleanly.
