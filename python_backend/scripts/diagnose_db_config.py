@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.crypto import decrypt_json
 from core.db_session import SessionLocal, redacted_database_url, verify_database_connectivity

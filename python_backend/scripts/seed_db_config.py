@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.crypto import encrypt_json
 from core.db_session import SessionLocal, init_db

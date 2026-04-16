@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
+
+# Allow running as a script directly (e.g. .\init_db_schema.py) in addition to
+# the canonical `python -m scripts.init_db_schema` invocation from python_backend/.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.db_session import DATABASE_URL, SessionLocal, init_db, redacted_database_url, verify_database_connectivity
 
