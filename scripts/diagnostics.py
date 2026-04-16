@@ -60,14 +60,21 @@ def _load_env_file(env_file: str) -> None:
     for k, v in env_map.items():
         os.environ.setdefault(k, v)
 
-def check_command(cmd, name):
-    try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        print(f"[OK] {name} is installed.")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print(f"[FAIL] {name} is missing or not in PATH!")
-        return False
+def check_command(cmd, name, fallbacks=None):
+    candidates = [cmd]
+    if fallbacks:
+        candidates.extend(fallbacks)
+
+    for candidate in candidates:
+        try:
+            subprocess.run(candidate, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            print(f"[OK] {name} is installed.")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            continue
+
+    print(f"[FAIL] {name} is missing or not in PATH!")
+    return False
 
 def check_env_vars():
     env_file, env_example = _backend_env_paths()
@@ -100,9 +107,10 @@ def check_env_vars():
             from cryptography.fernet import Fernet
             key = Fernet.generate_key().decode()
             with open(env_file, "a", encoding="utf-8") as f:
-                f.write(f"\\nGRAPH_TRACE_CONFIG_ENCRYPTION_KEY={key}\\n")
+                f.write(f"\nGRAPH_TRACE_CONFIG_ENCRYPTION_KEY={key}\n")
+            os.environ["GRAPH_TRACE_CONFIG_ENCRYPTION_KEY"] = key
             print("[AUTO-FIX] Generated and injected GRAPH_TRACE_CONFIG_ENCRYPTION_KEY")
-            content += f"\\nGRAPH_TRACE_CONFIG_ENCRYPTION_KEY={key}\\n"
+            content += f"\nGRAPH_TRACE_CONFIG_ENCRYPTION_KEY={key}\n"
         except ImportError:
             print("[WARN] python cryptography library missing. Cannot auto-generate Encryption Key.")
 
@@ -168,7 +176,7 @@ def main():
     sys_ok = all([
         check_command(["python", "--version"], "Python"),
         check_command(["node", "--version"], "Node.js"),
-        check_command(["npm", "--version"], "NPM")
+        check_command(["npm", "--version"], "NPM", fallbacks=[["npm.cmd", "--version"]])
     ])
     
     env_ok = check_env_vars()

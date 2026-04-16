@@ -19,6 +19,8 @@ from .dependencies import get_driver
 from core.db_session import get_db
 from models.quality_models import DiscoveryReport
 from models.report_hub_models import UnifiedReport
+from models.workflow_models import WorkflowExecution, MigrationStage
+from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
 from services.mcp_client import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ class AgentType(str, Enum):
     QUALITY_MONITOR = "quality_monitor"
     DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
+    TASK_DECOMPOSER = "task_decomposer"
 
 class TaskType(str, Enum):
     DATA_ANALYSIS = "data_analysis"
@@ -45,6 +48,7 @@ class TaskType(str, Enum):
     DATA_DISCOVERY = "data_discovery"
     DATA_QUALITY_SCAN = "data_quality_scan"
     FILE_BATCH_PROCESSING = "file_batch_processing"
+    WORKFLOW_DECOMPOSITION = "workflow_decomposition"
 
 # ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
 
@@ -100,6 +104,153 @@ class SystemStatus(BaseModel):
     system_health: str
     performance_metrics: Dict[str, Any]
     timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class GoalToWorkflowRequest(BaseModel):
+    goal: str
+    source_id: str
+    target_id: str
+    workflow_name: Optional[str] = None
+    auto_start: bool = True
+    execution_params: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _build_plm_agentic_phase_plan(
+    *,
+    req: GoalToWorkflowRequest,
+    decomposition_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build a UI-consumable, phase-by-phase agent/task plan for PLM migration orchestration."""
+    default_phases = ["connect", "discover", "profile", "map", "validate", "execute"]
+    requested_phases = req.execution_params.get("migration_phases")
+    phases = requested_phases if isinstance(requested_phases, list) and requested_phases else default_phases
+
+    phase_map: Dict[str, Dict[str, Any]] = {
+        "connect": {
+            "agent": AgentType.ETL_ORCHESTRATOR.value,
+            "task": TaskType.PIPELINE_ORCHESTRATION.value,
+            "capabilities": ["resolve_source_target", "prepare_connectors"],
+            "description": "Bind source/target systems and initialize migration context.",
+        },
+        "discover": {
+            "agent": AgentType.DATA_DISCOVERY_AGENT.value,
+            "task": TaskType.DATA_DISCOVERY.value,
+            "capabilities": ["discover_files", "profile_files"],
+            "description": "Discover datasets and gather source metadata.",
+        },
+        "profile": {
+            "agent": AgentType.DATA_ANALYST.value,
+            "task": TaskType.DATA_ANALYSIS.value,
+            "capabilities": ["infer_schema", "compute_data_profile", "evaluate_profile_rules"],
+            "description": "Generate schema/distribution profile and run rule-engine profiling checks.",
+            "rule_engine": {
+                "enabled": True,
+                "scope": "profiling",
+                "checks": ["schema_drift", "required_fields", "value_distribution"],
+            },
+        },
+        "map": {
+            "agent": AgentType.TASK_DECOMPOSER.value,
+            "task": TaskType.WORKFLOW_DECOMPOSITION.value,
+            "capabilities": ["decompose_goal", "build_task_dag"],
+            "description": "Convert migration goal into executable subtasks and mapping plan.",
+        },
+        "validate": {
+            "agent": AgentType.QUALITY_MONITOR.value,
+            "task": TaskType.DATA_QUALITY_SCAN.value,
+            "capabilities": ["scan_datasource_quality", "generate_quality_reports"],
+            "description": "Run DQ gates and quality assertions before execution.",
+            "rule_engine": {
+                "enabled": True,
+                "scope": "validation",
+                "checks": ["quality_rules", "business_rules", "referential_integrity"],
+            },
+        },
+        "execute": {
+            "agent": AgentType.ETL_ORCHESTRATOR.value,
+            "task": TaskType.PIPELINE_ORCHESTRATION.value,
+            "capabilities": ["run_workflow", "track_progress"],
+            "description": "Execute migration workflow and persist run state.",
+        },
+    }
+
+    decomposition_status = decomposition_payload.get("decomposition_status")
+    subtasks = decomposition_payload.get("subtasks", [])
+
+    planned_phases: List[Dict[str, Any]] = []
+    for idx, raw_phase in enumerate(phases, start=1):
+        phase_key = str(raw_phase).strip().lower()
+        base = phase_map.get(
+            phase_key,
+            {
+                "agent": AgentType.ETL_ORCHESTRATOR.value,
+                "task": TaskType.PIPELINE_ORCHESTRATION.value,
+                "capabilities": ["run_workflow"],
+                "description": f"Execute custom phase '{raw_phase}'.",
+            },
+        )
+        planned_phases.append(
+            {
+                "order": idx,
+                "phase": phase_key,
+                **base,
+                "status": "planned",
+            }
+        )
+
+    return {
+        "standard": req.execution_params.get("migration_standard") or "plm-governed-sequenced-v1",
+        "source_id": req.source_id,
+        "target_id": req.target_id,
+        "decomposition_status": decomposition_status,
+        "subtasks_count": len(subtasks) if isinstance(subtasks, list) else 0,
+        "phases": planned_phases,
+    }
+
+
+def _extract_mcp_decomposition(result_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize various MCP task result envelope shapes into decomposition payload."""
+    if not isinstance(result_dict, dict):
+        raise ValueError("MCP response is not a JSON object")
+
+    candidates: List[Dict[str, Any]] = [result_dict]
+
+    first = result_dict.get("result")
+    if isinstance(first, dict):
+        candidates.append(first)
+        nested = first.get("result")
+        if isinstance(nested, dict):
+            candidates.append(nested)
+
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        if "subtasks" in item and "decomposition_status" in item:
+            return item
+
+    raise ValueError("MCP response does not contain a valid decomposition payload")
+
+
+def _create_workflow_execution_record(
+    *,
+    db: Session,
+    workflow_id: str,
+    execution_params: Optional[Dict[str, Any]] = None,
+) -> WorkflowExecution:
+    execution_id = f"wexec_{uuid.uuid4().hex[:12]}"
+    execution = WorkflowExecution(
+        id=execution_id,
+        workflow_id=workflow_id,
+        status="pending",
+        current_stage=MigrationStage.IDLE.value,
+        progress_percentage=0.0,
+        execution_context=execution_params or {},
+        created_by="agentic_orchestrator",
+    )
+    db.add(execution)
+    db.commit()
+    db.refresh(execution)
+    return execution
 
 # ── MCP client singleton (shared with main.py and other consumers) ──
 
@@ -425,4 +576,112 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest):
     except Exception as e:
         logger.error("Quality scan task failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/workflows/from-goal", summary="Canonical goal → decomposition → workflow definition (→ optional execution)")
+async def create_workflow_from_goal_via_mcp(req: GoalToWorkflowRequest, db: Session = Depends(get_db)):
+    """
+    Canonical orchestration endpoint for goal-driven workflow creation.
+
+    Flow:
+    1) Submit a decomposition task to MCP (Task Decomposer capabilities)
+    2) Convert decomposition subtasks into workflow definition/steps
+    3) Optionally create a workflow execution record
+    """
+    if not req.goal or not req.goal.strip():
+        raise HTTPException(status_code=400, detail="goal is required")
+    if not req.source_id or not req.source_id.strip():
+        raise HTTPException(status_code=400, detail="source_id is required")
+    if not req.target_id or not req.target_id.strip():
+        raise HTTPException(status_code=400, detail="target_id is required")
+
+    task = AgenticTask(
+        type=TaskType.WORKFLOW_DECOMPOSITION,
+        required_capabilities=["decompose_goal", "build_task_dag"],
+        payload={
+            "goal": req.goal,
+            "source": req.source_id,
+            "source_id": req.source_id,
+            "target_id": req.target_id,
+        },
+    )
+
+    try:
+        mcp_result = await mcp_client.submit_task(task.model_dump(mode="json"))
+    except Exception as e:
+        logger.error("Goal decomposition task failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Goal decomposition failed: {e}") from e
+
+    try:
+        decomposition_payload = _extract_mcp_decomposition(mcp_result)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    if not MCPIntegrationHelper.validate_mcp_response(decomposition_payload):
+        raise HTTPException(
+            status_code=502,
+            detail="Decomposition payload from MCP is invalid",
+        )
+
+    agentic_plan = _build_plm_agentic_phase_plan(
+        req=req,
+        decomposition_payload=decomposition_payload,
+    )
+
+    try:
+        adapter = MCPWorkflowAdapter(db)
+        workflow = await adapter.create_workflow_from_mcp_decomposition(
+            mcp_response=decomposition_payload,
+            source_id=req.source_id,
+            target_id=req.target_id,
+            workflow_name=req.workflow_name,
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Workflow creation from decomposition failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create workflow from decomposition") from e
+
+    execution_payload: Optional[Dict[str, Any]] = None
+    if req.auto_start:
+        try:
+            workflow_id_value = str(getattr(workflow, "id", ""))
+            execution = _create_workflow_execution_record(
+                db=db,
+                workflow_id=workflow_id_value,
+                execution_params=req.execution_params,
+            )
+            execution_payload = {
+                "execution_id": execution.id,
+                "status": execution.status,
+                "current_stage": execution.current_stage,
+                "progress_percentage": execution.progress_percentage,
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error("Workflow execution record creation failed: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail="Workflow created but execution start failed") from e
+
+    return {
+        "status": "success",
+        "goal": req.goal,
+        "mcp_task_id": mcp_result.get("task_id") if isinstance(mcp_result, dict) else None,
+        "workflow": {
+            "workflow_id": workflow.id,
+            "workflow_name": workflow.name,
+            "source_id": workflow.source_id,
+            "target_id": workflow.target_id,
+            "steps_created": len(decomposition_payload.get("subtasks", [])),
+        },
+        "execution": execution_payload,
+        "agentic_plan": agentic_plan,
+        "decomposition": {
+            "decomposition_status": decomposition_payload.get("decomposition_status"),
+            "original_goal": decomposition_payload.get("original_goal"),
+            "complexity": MCPIntegrationHelper.estimate_workflow_complexity(
+                decomposition_payload.get("subtasks", [])
+            ),
+            "subtasks_count": len(decomposition_payload.get("subtasks", [])),
+        },
+    }
 

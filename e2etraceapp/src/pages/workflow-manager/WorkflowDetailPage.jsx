@@ -201,7 +201,7 @@ const WorkflowDetailPage = () => {
       setArchiveLoading(true);
       setArchiveError(null);
 
-      const res = await fetch(`${buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_ARCHIVE, { workflowId })}?limit_reports=50`, { signal: controller.signal });
+      const res = await fetch(`${buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_ARCHIVE, workflowId)}?limit_reports=50`, { signal: controller.signal });
       if (seq !== archiveSeqRef.current) return;
 
       if (!res.ok) {
@@ -290,7 +290,7 @@ const WorkflowDetailPage = () => {
     };
 
     const connect = (sid) => {
-      const url = buildWebSocketUrl(buildEndpoint(API_CONFIG.ENDPOINTS.MIGRATION_WS, { sid }));
+      const url = buildWebSocketUrl(buildEndpoint(API_CONFIG.ENDPOINTS.MIGRATION_WS, sid));
       let ws;
       try {
         ws = new WebSocket(url);
@@ -408,7 +408,7 @@ const WorkflowDetailPage = () => {
       // Retry briefly before declaring the workflow missing.
       let workflowRes;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        workflowRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS, { workflowId }), { signal: controller.signal });
+        workflowRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS, workflowId), { signal: controller.signal });
         if (workflowRes.ok) break;
         if (workflowRes.status === 404 && attempt < 2) {
           await sleep(250 * (attempt + 1));
@@ -423,7 +423,7 @@ const WorkflowDetailPage = () => {
         
         // Load workflow-specific graph
         try {
-          const graphRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_GRAPH, { workflowId }), { signal: controller.signal });
+          const graphRes = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_GRAPH, workflowId), { signal: controller.signal });
           if (!graphRes.ok) {
             throw new Error(`Workflow graph not available (${graphRes.status})`);
           }
@@ -494,7 +494,7 @@ const WorkflowDetailPage = () => {
       const timeoutMs = action === 'start' ? 5 * 60 * 1000 : 30000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       
-      const response = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_EXECUTE, { workflowId }), {
+      const response = await fetch(buildEndpoint(API_CONFIG.ENDPOINTS.WORKFLOW_EXECUTE, workflowId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, execution_params: {} }),
@@ -516,8 +516,8 @@ const WorkflowDetailPage = () => {
         console.error(`Workflow action ${action} failed:`, error.detail);
       }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('Workflow action request timed out');
+      if (error?.name === 'AbortError') {
+        // Request timed out — silently ignore
       } else {
         console.error('Error executing workflow action:', error);
       }

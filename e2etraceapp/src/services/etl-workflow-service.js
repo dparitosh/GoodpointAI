@@ -45,6 +45,34 @@ class ETLWorkflowService {
     return await response.json();
   }
 
+  async createWorkflowFromGoal({
+    goal,
+    sourceId,
+    targetId,
+    workflowName,
+    autoStart = true,
+    executionParams = {},
+  } = {}) {
+    if (!goal) throw new Error('goal is required');
+    if (!sourceId) throw new Error('sourceId is required');
+    if (!targetId) throw new Error('targetId is required');
+
+    const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_FROM_GOAL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goal,
+        source_id: sourceId,
+        target_id: targetId,
+        workflow_name: workflowName,
+        auto_start: autoStart,
+        execution_params: executionParams,
+      }),
+    });
+
+    return await response.json();
+  }
+
   async deleteWorkflow(workflowId) {
     if (!workflowId) throw new Error('workflowId is required');
     await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOW_DELETE(workflowId), { method: 'DELETE' });

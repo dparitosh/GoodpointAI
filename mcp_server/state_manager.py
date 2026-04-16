@@ -1,49 +1,66 @@
 import json
 import logging
-import asyncio
-from typing import Optional, Any, Dict, List
-import redis.asyncio as redis
+from typing import Optional, Any, Dict, List, Awaitable, cast
+import redis
+import redis.asyncio as redis_async
 from datetime import datetime
 
 from .config import Settings
 
 logger = logging.getLogger(__name__)
+RedisError = redis.exceptions.RedisError
 
 class StateManager:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.redis: Optional[redis.Redis] = None
+        self.redis: Optional[redis_async.Redis] = None
         self.use_redis = False
         self._memory_store: Dict[str, str] = {}
+        self._connected = False
 
     @property
     def is_connected(self) -> bool:
-        """True once connect() has succeeded (redis or in-memory fallback)."""
-        return True  # always connected — redis failure falls back to in-memory
+        """True only when backing Redis connection is active."""
+        return self._connected
 
     async def connect(self):
         """Initialize connection to Redis"""
         if self.settings.REDIS_URL:
             try:
-                self.redis = redis.from_url(
+                self.redis = redis_async.from_url(
                     self.settings.REDIS_URL,
                     encoding="utf-8",
                     decode_responses=True
                 )
                 await self.redis.ping()
                 self.use_redis = True
+                self._connected = True
                 logger.info("Connected to Redis")
                 return
-            except Exception as e:
-                logger.warning(f"Failed to connect to Redis: {e}. Falling back to in-memory storage.")
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.warning("Failed to connect to Redis: %s. Falling back to in-memory storage.", e)
         
         self.use_redis = False
+        self._connected = False
         logger.warning("Using in-memory storage. interactions will not persist across restarts.")
 
     async def close(self):
-        if self.redis:
-            await self.redis.close()
-            self.use_redis = False
+        if not self.redis:
+            return
+
+        aclose = getattr(self.redis, "aclose", None)
+        if callable(aclose):
+            aclose_result = aclose()
+            if hasattr(aclose_result, "__await__"):
+                await cast(Awaitable[object], aclose_result)
+        else:
+            close_result = self.redis.close()
+            if hasattr(close_result, "__await__"):
+                await cast(Awaitable[object], close_result)
+
+        self.use_redis = False
+        self._connected = False
+        self.redis = None
 
     async def register_agent(self, agent_id: str, metadata: Dict[str, Any], ttl: int = 300):
         """Register an active agent with a TTL"""
@@ -54,8 +71,8 @@ class StateManager:
         if self.use_redis and self.redis:
             try:
                 await self.redis.set(key, value, ex=ttl)
-            except Exception as e:
-                logger.error(f"Failed to register agent {agent_id}: {e}")
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.error("Failed to register agent %s: %s", agent_id, e)
         else:
             self._memory_store[key] = value
 
@@ -74,14 +91,14 @@ class StateManager:
                 for j in agents_json:
                     if j:
                         agents.append(json.loads(j))
-            except Exception as e:
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError, json.JSONDecodeError) as e:
                 logger.error("Failed to get active agents: %s", e)
         else:
             for key, val in self._memory_store.items():
                 if key.startswith("agent:"):
                     try:
                         agents.append(json.loads(val))
-                    except:
+                    except (TypeError, ValueError, json.JSONDecodeError):
                         pass
                         
         return agents
@@ -94,8 +111,8 @@ class StateManager:
         if self.use_redis and self.redis:
             try:
                 await self.redis.set(key, value, ex=ttl)
-            except Exception as e:
-                logger.error(f"Failed to save task state {task_id}: {e}")
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.error("Failed to save task state %s: %s", task_id, e)
         else:
             self._memory_store[key] = value
 
@@ -109,8 +126,8 @@ class StateManager:
                 if data:
                     return json.loads(data)
                 return None
-            except Exception as e:
-                logger.error(f"Failed to get task state {task_id}: {e}")
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError, json.JSONDecodeError) as e:
+                logger.error("Failed to get task state %s: %s", task_id, e)
                 return None
         else:
             data = self._memory_store.get(key)

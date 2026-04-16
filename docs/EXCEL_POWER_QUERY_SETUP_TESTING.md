@@ -18,11 +18,11 @@
 # From root directory
 cd d:\Download\GoodpointAI
 
-# Bootstrap if first time
-.\agentic-restored\bootstrap.ps1
+# Validate environment first
+.\graphtrace.ps1 -Check
 
 # Start backend and frontend
-.\agentic-restored\start-all.ps1
+.\graphtrace.ps1 -Start
 ```
 
 *Expected output:*
@@ -37,11 +37,11 @@ cd d:\Download\GoodpointAI
 
 ```powershell
 # Terminal 1: Backend
-cd agentic-restored/python_backend
+cd python_backend
 python -m uvicorn main:app --reload --port 8011
 
 # Terminal 2: Frontend (optional)
-cd agentic-restored/e2etraceapp
+cd e2etraceapp
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
@@ -347,7 +347,7 @@ in
 netstat -ano | findstr :8011
 
 # If not running, start it:
-cd agentic-restored/python_backend
+cd python_backend
 python -m uvicorn main:app --port 8011
 
 # Check health:
@@ -523,7 +523,7 @@ in
 **Problem?** Check:
 1. GraphTrace health: `curl http://localhost:8011/health`
 2. API docs: `http://localhost:8011/docs`
-3. Backend logs: `agentic-restored/python_backend/*.log`
+3. Backend logs: `python_backend/*.log`
 4. Power Query error message (copy exact text)
 
 **Want to improve?**

@@ -58,3 +58,21 @@ e2etraceapp/test-results/
 
 # Local archive artifacts
 python_backend.7z
+
+# Debug/utility scripts (dev only)
+python_backend/check_pagination_headers.py
+
+# Truncated/malformed files
+e2etraceapp/utputFormat
+
+# Logs (all levels)
+logs/
+
+# Internal-only documentation (do not ship to customers)
+REVIEW_TRACKER.md
+docs/API_REVIEW_STATUS.md
+docs/DATA_QUALITY_RULES_EXPORT_REVIEW.md
+docs/DEPENDENCY_ANALYSIS.md
+docs/DEPENDENCY_OPTIMIZATION_QUICK_ACTION.md
+docs/INSTALLATION_AUDIT.md
+docs/PYTHON_PACKAGE_OPTIMIZATION.md

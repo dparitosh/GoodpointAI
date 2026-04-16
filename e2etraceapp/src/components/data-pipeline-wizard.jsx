@@ -11,9 +11,62 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import API_CONFIG from '../config/api-config';
+import { etlWorkflowService } from '../services/etl-workflow-service';
 import './data-pipeline-wizard.css';
 
 const API_BASE = API_CONFIG.API_BASE_URL || '';
+
+const PHASE_AGENT_FALLBACK = {
+  connect: { agent: 'etl_orchestrator', task: 'pipeline_orchestration', ruleEngineEnabled: false },
+  discover: { agent: 'data_discovery_agent', task: 'data_discovery', ruleEngineEnabled: false },
+  profile: { agent: 'data_analyst', task: 'data_analysis', ruleEngineEnabled: true },
+  map: { agent: 'task_decomposer', task: 'workflow_decomposition', ruleEngineEnabled: false },
+  validate: { agent: 'quality_monitor', task: 'data_quality_scan', ruleEngineEnabled: true },
+  execute: { agent: 'etl_orchestrator', task: 'pipeline_orchestration', ruleEngineEnabled: false },
+};
+
+const normalizeAgenticPlan = (result, executionParams = {}) => {
+  const backendPlan = result?.agentic_plan;
+  if (backendPlan && Array.isArray(backendPlan.phases) && backendPlan.phases.length > 0) {
+    return backendPlan;
+  }
+
+  const phases = Array.isArray(executionParams.migration_phases) && executionParams.migration_phases.length > 0
+    ? executionParams.migration_phases
+    : ['connect', 'discover', 'profile', 'map', 'validate', 'execute'];
+
+  return {
+    standard: executionParams.migration_standard || 'plm-governed-sequenced-v1',
+    phases: phases.map((phase, index) => {
+      const key = String(phase).toLowerCase();
+      const fallback = PHASE_AGENT_FALLBACK[key] || PHASE_AGENT_FALLBACK.execute;
+      return {
+        order: index + 1,
+        phase: key,
+        agent: fallback.agent,
+        task: fallback.task,
+        status: 'planned',
+        rule_engine: {
+          enabled: Boolean(fallback.ruleEngineEnabled),
+          scope: key === 'profile' ? 'profiling' : key === 'validate' ? 'validation' : 'none',
+        },
+      };
+    }),
+  };
+};
+
+const deriveEndpointId = (prefix, config = {}) => {
+  const explicit = config.id || config.name || config.sourceId || config.targetId;
+  if (explicit) return String(explicit);
+
+  const host = config.host || config.hostname || config.server;
+  if (host) return `${prefix}_${String(host).replace(/\s+/g, '_')}`;
+
+  const path = config.path || config.directory || config.file_path;
+  if (path) return `${prefix}_${String(path).replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+  return `${prefix}_default`;
+};
 
 // Pipeline definitions with clear categorization
 const PIPELINE_BRANCHES = {
@@ -219,13 +272,19 @@ function SourceConfigStep({ branch, pipeline: _pipeline, config, onChange }) {
   useEffect(() => {
     if (isUnstructured) {
       setLoadingPatterns(true);
-      fetch(`${API_BASE}/config/file-patterns`)
-        .then(res => res.json())
+      fetch(`${API_BASE}${API_CONFIG.ENDPOINTS.FILE_PATTERNS}`)
+        .then(res => {
+          if (!res.ok) throw new Error(`Failed to load patterns: ${res.status}`);
+          return res.json();
+        })
         .then(data => {
           setFilePatterns(Array.isArray(data) ? data : []);
           setLoadingPatterns(false);
         })
-        .catch(() => setLoadingPatterns(false));
+        .catch(() => {
+          setFilePatterns([]);
+          setLoadingPatterns(false);
+        });
     }
   }, [isUnstructured]);
   
@@ -691,6 +750,7 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
   const [workflowName, setWorkflowName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState(null);
+  const [createdWorkflow, setCreatedWorkflow] = useState(null);
   
   const steps = [
     { id: 'branch', label: 'Data Type' },
@@ -699,6 +759,10 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
     { id: 'target', label: 'Target' },
     { id: 'review', label: 'Review' }
   ];
+
+  useEffect(() => {
+    setCreatedWorkflow(null);
+  }, [workflowName, selectedBranch, selectedPipeline, sourceConfig, targetConfig]);
   
   const canProceed = () => {
     switch (currentStep) {
@@ -724,41 +788,45 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
   };
   
   const handleCreate = useCallback(async () => {
+    setCreatedWorkflow(null);
     setIsCreating(true);
     setError(null);
     
     try {
-      const workflow = {
-        name: workflowName,
-        description: `${PIPELINE_BRANCHES[selectedBranch].title} pipeline using ${selectedPipeline}`,
-        source: {
-          type: selectedBranch === 'unstructured' ? 'filesystem' : 'database',
-          connection_details: sourceConfig
-        },
-        target: {
-          type: selectedPipeline === 'search_index' ? 'opensearch' : 
-                selectedPipeline === 'knowledge_graph' ? 'neo4j' :
-                selectedPipeline === 'plm_graph_sync' ? 'neo4j' : 'database',
-          connection_details: targetConfig
-        },
-        metadata: {
-          data_type: selectedBranch,
-          pipeline_type: selectedPipeline,
-          search_modes: targetConfig.searchModes || []
-        }
+      const branchTitle = PIPELINE_BRANCHES[selectedBranch].title;
+      const goal = `${branchTitle} pipeline using ${selectedPipeline}`;
+
+      const sourceId = deriveEndpointId('source', sourceConfig);
+      const targetId = deriveEndpointId('target', targetConfig);
+
+      const executionParams = {
+        data_type: selectedBranch,
+        pipeline_type: selectedPipeline,
+        source_config: sourceConfig,
+        target_config: targetConfig,
+        search_modes: targetConfig.searchModes || [],
+        migration_phases: ['connect', 'discover', 'profile', 'map', 'validate', 'execute'],
+        migration_standard: 'plm-governed-sequenced-v1',
       };
-      
-      const response = await fetch(`${API_BASE}/api/etl/workflows`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workflow)
+
+      const result = await etlWorkflowService.createWorkflowFromGoal({
+        goal,
+        sourceId,
+        targetId,
+        workflowName,
+        autoStart: true,
+        executionParams,
       });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to create workflow: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
+
+      const workflowId = result?.workflow?.workflow_id || null;
+      const executionId = result?.execution?.execution_id || null;
+      const agenticPlan = normalizeAgenticPlan(result, executionParams);
+      setCreatedWorkflow({
+        workflowId,
+        executionId,
+        status: result?.status || 'success',
+        agenticPlan,
+      });
       
       if (onComplete) {
         onComplete(result);
@@ -769,6 +837,18 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
       setIsCreating(false);
     }
   }, [workflowName, selectedBranch, selectedPipeline, sourceConfig, targetConfig, onComplete]);
+
+  const handleOpenWorkflow = useCallback(() => {
+    const workflowId = createdWorkflow?.workflowId;
+    if (!workflowId) return;
+
+    const encoded = encodeURIComponent(workflowId);
+    if (window.location.hash.startsWith('#/')) {
+      window.location.hash = `/workflow/${encoded}`;
+    } else {
+      window.location.assign(`/workflow/${encoded}`);
+    }
+  }, [createdWorkflow]);
   
   return (
     <div className="data-pipeline-wizard">
@@ -782,6 +862,43 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
       <StepIndicator steps={steps} currentStep={currentStep} />
       
       <div className="wizard-body">
+        {createdWorkflow && (
+          <div className="wizard-success-wrap" role="status" aria-live="polite">
+            <div className="wizard-success">
+              <i className="fas fa-check-circle" />
+              <div>
+                <strong>Workflow created successfully.</strong>
+                <div>Workflow ID: {createdWorkflow.workflowId || 'n/a'}</div>
+                {createdWorkflow.executionId ? <div>Execution ID: {createdWorkflow.executionId}</div> : null}
+              </div>
+            </div>
+
+            {Array.isArray(createdWorkflow.agenticPlan?.phases) && createdWorkflow.agenticPlan.phases.length > 0 ? (
+              <div className="wizard-agentic-plan">
+                <div className="agentic-plan-header">
+                  <i className="fas fa-diagram-project" />
+                  <strong>Agentic PLM Task Flow</strong>
+                  <span className="plan-standard">{createdWorkflow.agenticPlan.standard || 'plm-governed-sequenced-v1'}</span>
+                </div>
+                <div className="agentic-plan-list">
+                  {createdWorkflow.agenticPlan.phases.map((phase) => (
+                    <div key={`${phase.order}-${phase.phase}`} className="agentic-plan-row">
+                      <span className="plan-phase-order">{phase.order}</span>
+                      <span className="plan-phase-name">{phase.phase}</span>
+                      <span className="plan-chip agent">{phase.agent}</span>
+                      <span className="plan-chip task">{phase.task}</span>
+                      {phase?.rule_engine?.enabled ? (
+                        <span className="plan-chip rule-engine">Rule Engine ({phase?.rule_engine?.scope || 'active'})</span>
+                      ) : null}
+                      <span className="plan-chip status">{phase.status || 'planned'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {currentStep === 0 && (
           <BranchSelectionStep 
             selectedBranch={selectedBranch} 
@@ -850,17 +967,26 @@ export default function DataPipelineWizard({ onComplete, onCancel }) {
             Next <i className="fas fa-arrow-right" />
           </button>
         ) : (
-          <button 
-            className="btn-primary btn-create" 
-            onClick={handleCreate}
-            disabled={!canProceed() || isCreating}
-          >
-            {isCreating ? (
-              <><i className="fas fa-spinner fa-spin" /> Creating...</>
-            ) : (
-              <><i className="fas fa-rocket" /> Create Pipeline</>
-            )}
-          </button>
+          <>
+            <button 
+              className="btn-primary btn-create" 
+              onClick={handleCreate}
+              disabled={!canProceed() || isCreating || Boolean(createdWorkflow?.workflowId)}
+            >
+              {isCreating ? (
+                <><i className="fas fa-spinner fa-spin" /> Creating...</>
+              ) : createdWorkflow?.workflowId ? (
+                <><i className="fas fa-check" /> Created</>
+              ) : (
+                <><i className="fas fa-rocket" /> Create Pipeline</>
+              )}
+            </button>
+            {createdWorkflow?.workflowId ? (
+              <button className="btn-secondary" onClick={handleOpenWorkflow}>
+                <i className="fas fa-external-link-alt" /> Open Workflow
+              </button>
+            ) : null}
+          </>
         )}
       </div>
     </div>

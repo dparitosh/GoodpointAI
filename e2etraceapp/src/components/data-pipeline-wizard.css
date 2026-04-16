@@ -132,6 +132,121 @@
   padding: 2rem;
 }
 
+.wizard-success-wrap {
+  max-width: 900px;
+  margin: 0 auto 1rem;
+}
+
+.wizard-success {
+  background: #e8f5e9;
+  color: #1b5e20;
+  padding: 1rem;
+  border: 1px solid #c8e6c9;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.wizard-success > i {
+  margin-top: 0.15rem;
+}
+
+.wizard-agentic-plan {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.agentic-plan-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.plan-standard {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--background-color-offset);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.2rem 0.5rem;
+}
+
+.agentic-plan-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+}
+
+.agentic-plan-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--background-color-offset);
+}
+
+.plan-phase-order {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1a237e;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.plan-phase-name {
+  font-weight: 600;
+  color: var(--text-color);
+  text-transform: capitalize;
+}
+
+.plan-chip {
+  font-size: 0.72rem;
+  border-radius: 12px;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: #fff;
+}
+
+.plan-chip.agent {
+  background: #e3f2fd;
+  color: #1565c0;
+  border-color: #bbdefb;
+}
+
+.plan-chip.task {
+  background: #ede7f6;
+  color: #4527a0;
+  border-color: #d1c4e9;
+}
+
+.plan-chip.rule-engine {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-color: #c8e6c9;
+}
+
+.plan-chip.status {
+  background: #fff8e1;
+  color: #ef6c00;
+  border-color: #ffe0b2;
+  text-transform: uppercase;
+}
+
 .wizard-content {
   max-width: 900px;
   margin: 0 auto;
@@ -775,5 +890,9 @@
   
   .step-connector {
     display: none;
+  }
+
+  .agentic-plan-row {
+    grid-template-columns: 24px 1fr;
   }
 }

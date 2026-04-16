@@ -22,8 +22,8 @@ Use this checklist to validate your GraphTrace deployment before shipping to cus
 - [ ] All file paths in docs match actual repo structure
 
 ### 3. Installation Scripts
-- [ ] `bootstrap.ps1` validates `.env` configuration before proceeding
-- [ ] `start-backend.ps1` fails safely if credentials are not configured
+- [ ] `graphtrace.ps1 -Check` validates `.env` configuration before proceeding
+- [ ] `graphtrace.ps1 -Start` fails safely if credentials are not configured
 - [ ] `start-backend.bat` includes same validation as PowerShell version
 - [ ] All scripts use relative paths (no hardcoded absolute paths)
 - [ ] Scripts provide clear error messages with remediation steps
@@ -54,11 +54,11 @@ git clone <repo> && cd <repo>
 copy python_backend\.env.example python_backend\.env
 # Edit python_backend\.env with actual credentials
 
-# 4. Bootstrap
-.\installation_scripts\bootstrap.ps1
+# 4. Validate
+.\graphtrace.ps1 -Check
 
 # 5. Start services
-.\installation_scripts\start-all.ps1
+.\graphtrace.ps1 -Start
 
 # 6. Verify
 # - Backend health: http://localhost:8011/health
@@ -93,8 +93,8 @@ NEO4J_URI=neo4j://<VM1_IP>:7687
 REDIS_HOST=<VM1_IP>
 
 # Bootstrap and start
-.\installation_scripts\bootstrap.ps1
-.\installation_scripts\start-backend.ps1
+.\graphtrace.ps1 -Check
+.\graphtrace.ps1 -Start
 
 # Verify backend is accessible from other VMs
 # Test: curl http://<VM2_IP>:8011/health

@@ -30,7 +30,7 @@ from core.db_session import SessionLocal
 from models.configuration_models import DataSourceConfigRecord
 from models.workflow_models import (
     WorkflowExecutionRequest,
-    WorkflowExecutionResponse,
+    WorkflowActionResponse,
     WorkflowInstance,
     WorkflowInstanceCreate,
     WorkflowInstanceDetail,
@@ -526,14 +526,14 @@ async def _run_plm_etl_for_workflow(workflow_id: str) -> None:
         from graph_api.data_sources_router import get_data_source_sample  # pylint: disable=import-outside-toplevel
         from graph_api.plm_etl_router import (  # pylint: disable=import-outside-toplevel
             CreateRunRequest,
-            SodaGateScanRequest,
+            SodaRunScanRequest,
             StageRecordsRequest,
             TransformRequest,
             create_run,
-            list_quality_gates_for_run,
-            soda_gate_scan_for_run,
+            dq_gates,
+            soda_scan_for_run,
             stage_records,
-            transform,
+            transform_records,
         )
 
         started_at = wf.get("started_at") or _now_utc()
@@ -575,10 +575,10 @@ async def _run_plm_etl_for_workflow(workflow_id: str) -> None:
         await _set_workflow_state_async(db, workflow_id, stage=WorkflowStage.TRANSFORMING, progress=35.0)
         stage_resp = await stage_records(
             run_id=str(run_id),
-            payload=StageRecordsRequest(object_type="part", records=records, source_object_id_field=None),
+            payload=StageRecordsRequest(object_type="part", records=records),
             db=db,
         )
-        staged_count = int(cast(Dict[str, Any], stage_resp).get("staged") or 0)
+        staged_count = int(cast(Dict[str, Any], stage_resp).get("staged_count") or 0)
         await _set_workflow_state_async(
             db,
             workflow_id,
@@ -629,12 +629,12 @@ async def _run_plm_etl_for_workflow(workflow_id: str) -> None:
         await _set_workflow_state_async(db, workflow_id, progress=55.0, meta_patch={"part_mapping": part_mapping})
 
         # Transform.
-        transform_resp = await transform(
+        transform_resp = await transform_records(
             run_id=str(run_id),
-            payload=TransformRequest(part_mapping=part_mapping, bom_mapping=None),
+            payload=TransformRequest(part_mapping=part_mapping),
             db=db,
         )
-        parts_written = int(cast(Dict[str, Any], transform_resp).get("parts_written") or 0)
+        parts_written = int(cast(Dict[str, Any], transform_resp).get("transformed_count") or 0)
         await _set_workflow_state_async(
             db,
             workflow_id,
@@ -644,15 +644,15 @@ async def _run_plm_etl_for_workflow(workflow_id: str) -> None:
 
         # Validate (Soda).
         await _set_workflow_state_async(db, workflow_id, stage=WorkflowStage.VALIDATING, progress=80.0)
-        soda_resp = await soda_gate_scan_for_run(
+        soda_resp = await soda_scan_for_run(
             run_id=str(run_id),
             table_name="public.plm_parts",
-            payload=SodaGateScanRequest(stage="transformed", checks_yaml=None, data_source_name="postgres"),
+            payload=SodaRunScanRequest(stage="transformed"),
             db=db,
         )
         soda_dict = soda_resp.model_dump() if hasattr(soda_resp, "model_dump") else cast(Dict[str, Any], soda_resp)
 
-        gates = await list_quality_gates_for_run(run_id=str(run_id), db=db)
+        gates = await dq_gates(run_id=str(run_id), db=db)
         gates_dict = gates if isinstance(gates, dict) else {"run_id": str(run_id), "gates": []}
 
         blocked = bool(soda_dict.get("blocked"))
@@ -1177,7 +1177,7 @@ async def delete_workflow(
     return Response(status_code=204)
 
 
-@router.post("/{workflow_id}/execute", response_model=WorkflowExecutionResponse)
+@router.post("/{workflow_id}/execute", response_model=WorkflowActionResponse)
 async def execute_workflow(
     workflow_id: str,
     request: WorkflowExecutionRequest,
@@ -1202,7 +1202,7 @@ async def execute_workflow(
             # Idempotent start: returning 200 avoids noisy UX when a user clicks
             # "Run" multiple times or the UI refreshes mid-run.
             await _ensure_runner_started(workflow_id)
-            return WorkflowExecutionResponse(
+            return WorkflowActionResponse(
                 workflow_id=workflow_id,
                 execution_id=str(wf.get("last_execution_id") or ""),
                 status=str(WorkflowStatus.RUNNING.value),
@@ -1256,7 +1256,7 @@ async def execute_workflow(
 
     _upsert_workflow_model(db, wf)
 
-    return WorkflowExecutionResponse(
+    return WorkflowActionResponse(
         workflow_id=workflow_id,
         execution_id=str(wf.get("last_execution_id") or ""),
         status=str(_normalize_status(wf.get("status")).value),

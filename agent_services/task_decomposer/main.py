@@ -5,9 +5,9 @@ from typing import Dict, Any, List
 import uuid
 
 # Add parent dir to path so we can import base module
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from base.agent_service import AgentService
-from base.models import AgentTaskRequest, AgentTaskResponse, AgentType
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from agent_services.base.agent_service import AgentService
+from agent_services.base.models import AgentTaskRequest, AgentType, AgentCapability
 
 logger = logging.getLogger("task_decomposer")
 
@@ -22,23 +22,27 @@ class TaskDecomposerAgent(AgentService):
     async def initialize(self):
         logger.info(f"Initialized {self.agent_name} logic.")
 
-    async def execute_task(self, request: AgentTaskRequest) -> AgentTaskResponse:
-        logger.info(f"Task Decomposer received task {request.task_id} of type {request.task_type}")
+    def get_capabilities(self) -> List[AgentCapability]:
+        return [
+            AgentCapability(name="decompose_goal", description="Decompose high-level goals into dependency-ordered subtasks"),
+            AgentCapability(name="build_task_dag", description="Produce subtask DAG with capability requirements"),
+        ]
+
+    async def process_task(self, request: AgentTaskRequest) -> Dict[str, Any]:
+        logger.info("Task Decomposer received task %s of type %s", request.task_id, request.task_type)
         
         goal = request.payload.get("goal", "")
         if not goal:
-            return AgentTaskResponse(
-                task_id=request.task_id,
-                status="failed",
-                error="No goal provided for decomposition",
-                result={}
-            )
+            return {
+                "decomposition_status": "failed",
+                "error": "No goal provided for decomposition",
+                "subtasks": [],
+            }
             
         # Example Cognitive Graph Mapping
         # In a fully LLM-integrated environment, wed pass the `goal` to OpenAI to emit this JSON DAG
         # Here we dynamically simulate decomposition based on keywords
-        subtasks = []
-        deps_mapping = {}
+        subtasks: List[Dict[str, Any]] = []
         
         goal_lower = goal.lower()
         if "migrate" in goal_lower and "schema" in goal_lower:
@@ -90,17 +94,13 @@ class TaskDecomposerAgent(AgentService):
                 "priority": 5
             })
 
-        logger.info(f"Decomposed \\" {goal} \\" into {len(subtasks)} subtasks with strict dependency chains.")
+        logger.info("Decomposed '%s' into %d subtasks with strict dependency chains.", goal, len(subtasks))
 
-        return AgentTaskResponse(
-            task_id=request.task_id,
-            status="completed",
-            result={
-                "decomposition_status": "success",
-                "original_goal": goal,
-                "subtasks": subtasks
-            }
-        )
+        return {
+            "decomposition_status": "success",
+            "original_goal": goal,
+            "subtasks": subtasks,
+        }
 
 # Create singleton and export app
 agent = TaskDecomposerAgent()

@@ -287,7 +287,7 @@ class MCPIntegrationHelper:
         """Validate MCP TaskDecomposer response structure"""
         required_keys = {"decomposition_status", "subtasks"}
         if not required_keys.issubset(response.keys()):
-            logger.error(f"Invalid MCP response structure: missing keys {required_keys - set(response.keys())}")
+            logger.error("Invalid MCP response structure: missing keys %s", required_keys - set(response.keys()))
             return False
         
         if response["decomposition_status"] != "success":
@@ -296,7 +296,7 @@ class MCPIntegrationHelper:
         for subtask in response.get("subtasks", []):
             subtask_required = {"id", "type", "required_capabilities", "payload", "dependencies", "priority"}
             if not subtask_required.issubset(subtask.keys()):
-                logger.error(f"Invalid subtask structure in MCP response")
+                logger.error("Invalid subtask structure in MCP response")
                 return False
         
         return True

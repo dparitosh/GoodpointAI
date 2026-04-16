@@ -15,7 +15,7 @@ from models.rule_engine_models import RuleSet, Rule, RuleSetExecution, Execution
 from services.rule_execution_service import RuleExecutionService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/rules", tags=["rules"])
+router = APIRouter(prefix="/api/rules/v1", tags=["rules-legacy"])
 
 
 class RuleSetCreateRequest(BaseModel):

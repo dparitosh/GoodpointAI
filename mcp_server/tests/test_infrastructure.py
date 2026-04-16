@@ -25,7 +25,10 @@ async def test_state_manager_connection(mock_settings):
         mock_redis.ping.assert_called_once()
         
         await manager.close()
-        mock_redis.close.assert_called_once()
+        if getattr(mock_redis, "aclose", None) is not None and mock_redis.aclose.call_count:
+            mock_redis.aclose.assert_called_once()
+        else:
+            mock_redis.close.assert_called_once()
         assert manager.is_connected is False
 
 @pytest.mark.asyncio

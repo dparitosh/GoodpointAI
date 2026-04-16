@@ -3,7 +3,7 @@
 ## Repo layout (use this as the source of truth)
 - Backend: `python_backend/` (FastAPI + Postgres, optional Neo4j/OpenSearch)
 - Frontend: `e2etraceapp/` (React + Vite)
-- Installation scripts: `installation_scripts/` (bootstrap, start, stop)
+- Entry script: `graphtrace.ps1` (check, start)
 - Agent services: `agent_services/` (MCP-powered AI agents)
 - Documentation: `docs/` (Installation, User Guide, Architecture, App Guide)
 
@@ -20,8 +20,8 @@
   - Most operator-facing settings are edited via the UI Admin page: `http://localhost:5173/#/admin`.
 
 ## Dev workflows (Windows-first)
-- Bootstrap/install: `.\installation_scripts\bootstrap.ps1`.
-- Run full stack: `.\installation_scripts\start-all.ps1` (or VS Code task "Start Full Stack (Frontend + Backend)").
+- Validate/check: `.\graphtrace.ps1 -Check`.
+- Run full stack: `.\graphtrace.ps1 -Start` (or VS Code task "Start Full Stack (Frontend + Backend)").
 - Backend manual: `python -m uvicorn --app-dir python_backend main:app --reload --port 8011`.
 - Frontend manual: `cd e2etraceapp && npm install && npm run dev -- --host 127.0.0.1 --port 5173`.
 - Tests:

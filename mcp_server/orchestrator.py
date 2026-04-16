@@ -1,7 +1,7 @@
 import logging
 import httpx
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple, TYPE_CHECKING
+from typing import Dict, List, Optional, Any, Tuple, TYPE_CHECKING, Callable, Awaitable, cast
 import neo4j
 from fastapi import HTTPException
 
@@ -57,6 +57,17 @@ class AgenticOrchestrator:
 
     def _initialize_agents(self):
         """Initialize all agent definitions with their capabilities"""
+        default_service_urls = {
+            AgentType.DATA_DISCOVERY_AGENT: "http://127.0.0.1:8026",
+            AgentType.ETL_ORCHESTRATOR: "http://127.0.0.1:8021",
+            AgentType.VISUALIZATION_AGENT: "http://127.0.0.1:8022",
+            AgentType.QUERY_PLANNER: "http://127.0.0.1:8023",
+            AgentType.QUALITY_MONITOR: "http://127.0.0.1:8024",
+            AgentType.CHAT_COORDINATOR: "http://127.0.0.1:8025",
+            AgentType.DATA_ANALYST: "http://127.0.0.1:8020",
+            AgentType.TASK_DECOMPOSER: "http://127.0.0.1:8027",
+        }
+
         agent_configs = {
             AgentType.DATA_ANALYST: {
                 "name": "Data Analysis Agent",
@@ -129,6 +140,8 @@ class AgenticOrchestrator:
                 "name": "Task Decomposer Agent",
                 "capabilities": [
                     AgentCapability(name="decompose_task", description="Breaks down complex natural language requests into an executable DAG of subtasks"),
+                    AgentCapability(name="decompose_goal", description="Decompose high-level goal into dependency-ordered subtasks"),
+                    AgentCapability(name="build_task_dag", description="Build executable DAG from subtasks and dependencies"),
                 ]
             }
         }
@@ -138,6 +151,7 @@ class AgenticOrchestrator:
             self.agents[agent_id] = AgentDefinition(
                 id=agent_id,
                 type=agent_type,
+                service_url=default_service_urls.get(agent_type),
                 **config
             )
 
@@ -163,7 +177,7 @@ class AgenticOrchestrator:
         suitable_agents.sort(key=lambda x: x[1], reverse=True)
         return suitable_agents[0][0]
 
-    async def execute_task(self, task: AgenticTask) -> AgenticTaskResult:
+    async def execute_task(self, task: AgenticTask, _driver: Optional[Any] = None) -> AgenticTaskResult:
         """Execute task with assigned agent"""
         agent_id = await self.route_task_to_agent(task)
         
@@ -265,6 +279,15 @@ class AgenticOrchestrator:
 
     async def _execute_agent_task(self, task: AgenticTask, agent: AgentDefinition) -> Dict[str, Any]:
         """Execute specific agent task based on agent type and task type"""
+
+        # Backward-compatible local execution hook for tests and legacy integration.
+        legacy_executor_name = f"_execute_{task.type.value}_task"
+        legacy_executor = cast(Optional[Callable[[AgenticTask], Any]], getattr(self, legacy_executor_name, None))
+        if legacy_executor is not None:
+            result = legacy_executor(task)
+            if hasattr(result, "__await__"):
+                return await cast(Awaitable[Dict[str, Any]], result)
+            return result
         
         # Dispatch to remote agent if service_url is registered
         if agent.service_url:

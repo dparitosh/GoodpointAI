@@ -98,7 +98,10 @@ async def register_agent(agent: AgentDefinition):
 
 @app.post("/mcp/v1/tasks", response_model=AgenticTaskResult)
 async def submit_task(task: AgenticTask):
+    orchestrator: AgenticOrchestrator = app.state.orchestrator
     dag_executor: DAGExecutor = app.state.dag_executor
+    if dag_executor.orchestrator is not orchestrator:
+        dag_executor.orchestrator = orchestrator
     # Use DAG executor natively. If no subtasks, it delegates immediately to standard execution
     result = await dag_executor.execute_task_with_subtasks(task)
     return result

@@ -2,8 +2,14 @@ import json
 import logging
 import asyncio
 from typing import Optional, Callable, Any, Dict
-from azure.servicebus.aio import ServiceBusClient, ServiceBusSender, ServiceBusReceiver
-from azure.servicebus import ServiceBusMessage
+
+try:
+    from azure.servicebus.aio import ServiceBusClient, ServiceBusSender, ServiceBusReceiver
+    from azure.servicebus import ServiceBusMessage
+    _AZURE_SB_AVAILABLE = True
+except ImportError:
+    ServiceBusClient = ServiceBusSender = ServiceBusReceiver = ServiceBusMessage = Any  # type: ignore
+    _AZURE_SB_AVAILABLE = False
 
 from .config import Settings
 
@@ -19,6 +25,11 @@ class MessageQueueClient:
 
     async def connect(self):
         """Initialize connection to Azure Service Bus"""
+        if not _AZURE_SB_AVAILABLE:
+            logger.warning("azure-servicebus package not installed. Queue disabled.")
+            self.is_connected = False
+            return
+
         if not self.settings.AZURE_SERVICE_BUS_CONNECTION_STRING:
             logger.warning("No Azure Service Bus connection string provided. Queue disabled.")
             return

@@ -1,7 +1,15 @@
+#requires -Version 5.1
+
+[CmdletBinding()]
 Param(
     [switch]$Check,
     [switch]$Start
 )
+
+if ($PSVersionTable.PSVersion.Major -lt 5) {
+    Write-Host "This script requires Windows PowerShell 5.1+ (or PowerShell 7+). Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
+    exit 1
+}
 
 $scriptDir = $PSScriptRoot
 $repoRoot = $scriptDir

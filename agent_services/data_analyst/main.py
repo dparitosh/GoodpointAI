@@ -165,14 +165,14 @@ class DataAnalystAgent(AgentService):
                      # Pareto Query: Focus on most connected nodes (20% that drive 80% of connections)
                     query = """
                     MATCH (n)
-                    WITH n, size((n)--()) as degree
+                    WITH n, COUNT { (n)--() } as degree
                     WHERE degree > 0
                     RETURN n.id as nodeId, labels(n) as labels, n as properties, degree
                     ORDER BY degree DESC
                     LIMIT $limit
                     """
                     result = await session.run(query, limit=limit)
-                    records = await result.list()
+                    records = [record async for record in result]
                     
                     data = []
                     for r in records:
@@ -195,7 +195,7 @@ class DataAnalystAgent(AgentService):
                     LIMIT $limit
                     """
                     result = await session.run(query, limit=limit)
-                    records = await result.list()
+                    records = [record async for record in result]
                     
                     data = []
                     for r in records:
@@ -214,7 +214,7 @@ class DataAnalystAgent(AgentService):
                     LIMIT $limit
                     """
                     result = await session.run(query, limit=limit)
-                    records = await result.list()
+                    records = [record async for record in result]
 
                     patterns = []
                     for record in records:

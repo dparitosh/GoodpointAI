@@ -9,15 +9,15 @@ GraphTrace is a local-first, full-stack application for **data lineage**, **PLM 
 - **Node.js 18+** (recommended: 20)
 - **PostgreSQL 14+** (required for persistence)
 
-### One-command Bootstrap
+### Validate Environment
 ```powershell
-.\installation_scripts\bootstrap.ps1
+.\graphtrace.ps1 -Check
 ```
-This creates virtual environments, installs dependencies, and initializes the database schema.
+This validates your Python, Node.js, PostgreSQL, and `.env` configuration.
 
 ### Start Everything
 ```powershell
-.\installation_scripts\start-all.ps1
+.\graphtrace.ps1 -Start
 ```
 Or use the VS Code task: **Start Full Stack (Frontend + Backend)**
 
@@ -45,7 +45,7 @@ GoodpointAI/
 ├── e2etraceapp/               # React/Vite frontend
 ├── agent_services/            # MCP-powered AI agents
 ├── mcp_server/                # MCP coordination server
-├── installation_scripts/      # Bootstrap, start, stop scripts
+├── graphtrace.ps1             # Single entry-point (check/start)
 ├── docs/                      # Documentation
 └── config/                    # Runtime configuration
 ```

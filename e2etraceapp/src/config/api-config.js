@@ -34,6 +34,10 @@ const DEFAULT_CONFIG = {
     AGENTIC_AGENTS: '/api/agentic/agents',
     AGENTIC_DISCOVERY: '/api/agentic/discovery',
     AGENTIC_QUALITY_SCAN: '/api/agentic/quality-scan',
+    AGENTIC_WORKFLOW_FROM_GOAL: '/api/agentic/workflows/from-goal',
+
+    // File patterns
+    FILE_PATTERNS: '/api/config/file-patterns',
 
     // Reporting Hub (unified cross-page reports — /api/report-hub)
     REPORT_HUB: '/api/report-hub',
@@ -266,7 +270,7 @@ export const validateConfig = () => {
 };
 
 // Debug logging (only in development)
-if (API_CONFIG.DEBUG) {
+if (import.meta.env.DEV && API_CONFIG.DEBUG) {
   console.log('API Configuration Loaded:', {
     environment: API_CONFIG.ENVIRONMENT,
     baseUrl: API_CONFIG.API_BASE_URL,

@@ -22,7 +22,7 @@ A complete guide to using Excel with Power Query as a UI for GraphTrace data man
 ### 1. Start GraphTrace Backend
 ```powershell
 cd d:\Download\GoodpointAI
-.\agentic-restored\start-all.ps1
+.\graphtrace.ps1 -Start
 # Wait for "Backend running on http://localhost:8011"
 ```
 
@@ -325,7 +325,7 @@ netstat -ano | findstr :8011
 taskkill /PID <PID> /F
 
 # Manually start backend
-cd agentic-restored/python_backend
+cd python_backend
 python -m uvicorn main:app --port 8011
 ```
 

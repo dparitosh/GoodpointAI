@@ -12,7 +12,7 @@ from enum import Enum
 import uuid
 import os
 
-from services.rule_engine import RuleEngine, RuleContext, RuleSetResult
+from services.rule_engine import RuleEngine, RuleSetResult
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,10 @@ class MigrationSession:
         # Include rule validation summary if available
         if "rule_validation" in self.metadata:
             result["rule_validation"] = self.metadata["rule_validation"]
+        if "profile_rule_validation" in self.metadata:
+            result["profile_rule_validation"] = self.metadata["profile_rule_validation"]
+        if "profile_quality_score" in self.metadata:
+            result["profile_quality_score"] = self.metadata["profile_quality_score"]
         return result
     
     def add_history(self, from_state: str, to_state: str, event: str, context: Optional[Dict] = None):
@@ -531,6 +535,12 @@ class AdvancedMigrationEngine:
             # Profiling phase
             if float(session.progress or 0.0) < 40.0:
                 await self._transition_state(session, MigrationState.PROFILING, "AUTO")
+                profile_rule_result = await self._run_rule_validation(
+                    session,
+                    phase="profiling",
+                )
+                session.metadata["profile_rule_validation"] = profile_rule_result
+                session.metadata["profile_quality_score"] = profile_rule_result.get("quality_score", 0.0)
                 await asyncio.sleep(2)
                 session.progress = 40.0
                 await self._broadcast_update(session)
@@ -552,7 +562,7 @@ class AdvancedMigrationEngine:
             # Validation phase — execute Rule Engine rules
             if float(session.progress or 0.0) < 95.0:
                 await self._transition_state(session, MigrationState.VALIDATION, "AUTO")
-                rule_result = await self._run_rule_validation(session)
+                rule_result = await self._run_rule_validation(session, phase="validation")
                 session.progress = 95.0
                 session.quality_score = rule_result.get("quality_score", 0.0)
                 session.metadata["rule_validation"] = rule_result
@@ -581,7 +591,12 @@ class AdvancedMigrationEngine:
             session.errors.append(str(e))
             await self._transition_state(session, MigrationState.FAILED, "ERROR")
     
-    async def _run_rule_validation(self, session: MigrationSession) -> Dict[str, Any]:
+    async def _run_rule_validation(
+        self,
+        session: MigrationSession,
+        *,
+        phase: str = "validation",
+    ) -> Dict[str, Any]:
         """Execute Rule Engine rules against the migration session data.
 
         Loads active rule sets from Postgres, runs them via RuleEngine, persists
@@ -633,7 +648,16 @@ class AdvancedMigrationEngine:
                 # data may be attached to session.metadata by prior phases. Fall back to
                 # sources as coarse proxy records so rules can at least evaluate source
                 # metadata (e.g., has required fields).
-                records: List[Dict[str, Any]] = session.metadata.get("migrated_records", [])
+                phase_key = str(phase or "validation").lower().strip()
+
+                records: List[Dict[str, Any]] = []
+                if phase_key == "profiling":
+                    records = session.metadata.get("profile_records", [])
+                    if not records:
+                        records = session.metadata.get("discovered_records", [])
+                else:
+                    records = session.metadata.get("migrated_records", [])
+
                 if not records and isinstance(session.sources, list):
                     records = [
                         s if isinstance(s, dict) else {"value": s}
@@ -666,7 +690,7 @@ class AdvancedMigrationEngine:
                         "execution_mode": rs.execution_mode,
                         "stop_on_critical": rs.stop_on_critical,
                     }
-                    rules_dict = [
+                    rules_dict: List[Dict[str, Any]] = [
                         {
                             "id": r.id,
                             "name": r.name,
@@ -686,7 +710,7 @@ class AdvancedMigrationEngine:
                         rule_set_dict,
                         rules_dict,
                         records,
-                        stop_on_critical=rs.stop_on_critical,
+                        stop_on_critical=bool(rs.stop_on_critical),
                     )
                     all_set_results.append(result)
 
@@ -707,13 +731,14 @@ class AdvancedMigrationEngine:
                         started_at=result.started_at,
                         completed_at=result.completed_at,
                         error_message=result.error_message,
-                        triggered_by="migration_engine",
+                        triggered_by=f"migration_engine_{phase_key}",
                         record_count=len(records),
                         data_source=f"migration:{session.session_id}",
                         execution_context={
                             "session_id": session.session_id,
                             "workflow_id": session.workflow_id,
                             "strategy": session.strategy,
+                            "phase": phase_key,
                         },
                     )
                     db.add(exec_record)
@@ -779,6 +804,7 @@ class AdvancedMigrationEngine:
                     quality_score = 100.0
 
                 summary = {
+                    "phase": phase_key,
                     "quality_score": round(quality_score, 2),
                     "rule_sets_executed": len(all_set_results),
                     "total_rules_passed": sum(r.rules_passed for r in all_set_results),
@@ -798,8 +824,9 @@ class AdvancedMigrationEngine:
                     ],
                 }
                 logger.info(
-                    "Migration %s rule validation: score=%.2f, sets=%d, quarantined=%d",
+                    "Migration %s %s rule validation: score=%.2f, sets=%d, quarantined=%d",
                     session.session_id,
+                    phase_key,
                     quality_score,
                     len(all_set_results),
                     total_quarantined,
@@ -815,6 +842,7 @@ class AdvancedMigrationEngine:
                 )
                 db.rollback()
                 return {
+                    "phase": str(phase or "validation").lower().strip(),
                     "quality_score": 0.0,
                     "error": str(e),
                     "rule_sets_executed": 0,
@@ -957,11 +985,13 @@ class AdvancedMigrationEngine:
         if not session:
             return False
 
-        if cancel and getattr(session, "task", None):
-            try:
-                session.task.cancel()
-            except Exception:  # pylint: disable=broad-except
-                pass
+        if cancel:
+            task_ref = getattr(session, "task", None)
+            if task_ref is not None:
+                try:
+                    task_ref.cancel()
+                except Exception:  # pylint: disable=broad-except
+                    pass
 
         self.sessions.pop(session_id, None)
         self.active_websockets.pop(session_id, None)
