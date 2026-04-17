@@ -21,8 +21,8 @@ class MCPClient:
         self.base_url = self.settings.MCP_SERVER_URL
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=1, max=3),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
         reraise=True
     )
@@ -37,8 +37,8 @@ class MCPClient:
                 raise
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=1, max=3),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout)),
         reraise=True
     )
@@ -53,8 +53,8 @@ class MCPClient:
                 raise
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=1, max=3),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
         reraise=True
     )
@@ -77,8 +77,8 @@ class MCPClient:
                 return False
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=1, max=3),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException)),
         reraise=True
     )

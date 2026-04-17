@@ -405,7 +405,10 @@ export default function DQScanDashboard() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setScanError(`Folder scan failed (HTTP ${res.status}): ${data?.detail || ''}`);
+        const hint = res.status === 503
+          ? ' — MCP agent cluster is not running. The direct-scan fallback also failed. Start the MCP server or check the target source.'
+          : '';
+        setScanError(`Folder scan failed (HTTP ${res.status}): ${data?.detail || ''}${hint}`);
       } else {
         // Normalise agentic response into report format
         const r = data?.result || data || {};
