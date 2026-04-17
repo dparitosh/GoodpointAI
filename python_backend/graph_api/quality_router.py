@@ -1582,25 +1582,27 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
         )
 
         # Persist report to DB
-        from models.quality_models import DQScanReport as DQScanReportModel
-        report_record = DQScanReportModel(
+        from models.quality_models import DataQualityScanReport as DataQualityScanReportModel
+        report_record = DataQualityScanReportModel(
             scan_id=scan_id,
             table_name=folder_path,
             data_source="folder",
             overall_score=overall_score * 100,
             issues_count=len(fs_issues),
-            rows_scanned=fs_row_count,
-            status="completed",
+            row_count=fs_row_count,
+            column_count=fs_column_count,
             scan_date=now,
-            profile={
-                "completeness": round(fs_completeness_score * 100, 2),
-                "accuracy": round(fs_accuracy_score * 100, 2),
-                "consistency": round(fs_consistency_score * 100, 2),
-                "validity": round(fs_validity_score * 100, 2),
+            report={
+                "profile": {
+                    "completeness": round(fs_completeness_score * 100, 2),
+                    "accuracy": round(fs_accuracy_score * 100, 2),
+                    "consistency": round(fs_consistency_score * 100, 2),
+                    "validity": round(fs_validity_score * 100, 2),
+                },
+                "issues": fs_issues,
+                "recommendations": fs_recommendations,
+                "metadata": {"scan_type": request.scan_type, "folder_path": folder_path},
             },
-            issues=fs_issues,
-            recommendations=fs_recommendations,
-            metadata={"scan_type": request.scan_type, "folder_path": folder_path},
         )
         try:
             db.add(report_record)
