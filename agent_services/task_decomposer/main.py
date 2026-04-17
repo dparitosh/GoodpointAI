@@ -90,7 +90,7 @@ class TaskDecomposerAgent(AgentService):
                 "priority": 5
             })
 
-        logger.info(f"Decomposed \\" {goal} \\" into {len(subtasks)} subtasks with strict dependency chains.")
+        logger.info(f"Decomposed '{goal}' into {len(subtasks)} subtasks with strict dependency chains.")
 
         return AgentTaskResponse(
             task_id=request.task_id,

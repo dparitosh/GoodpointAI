@@ -62,7 +62,7 @@ def _load_env_file(env_file: str) -> None:
 
 def check_command(cmd, name):
     try:
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, shell=(os.name == "nt"))
         print(f"[OK] {name} is installed.")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
