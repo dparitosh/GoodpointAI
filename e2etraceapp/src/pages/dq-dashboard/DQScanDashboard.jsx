@@ -384,7 +384,12 @@ export default function DQScanDashboard() {
         }
       }
     } catch (e) {
-      setScanError(`Scan request failed: ${e.message || 'network error'}`);
+      const msg = e.message || 'network error';
+      setScanError(
+        msg === 'Failed to fetch'
+          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          : `Scan request failed: ${msg}`
+      );
     }
     setScanningTable(null);
     setPickerTable('');
@@ -433,7 +438,12 @@ export default function DQScanDashboard() {
         setLiveMode(true);
       }
     } catch (e) {
-      setScanError(`Folder scan request failed: ${e.message || 'network error'}`);
+      const msg = e.message || 'network error';
+      setScanError(
+        msg === 'Failed to fetch'
+          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          : `Folder scan request failed: ${msg}`
+      );
     }
     setScanningTable(null);
     setPickerFolderSourceId('');

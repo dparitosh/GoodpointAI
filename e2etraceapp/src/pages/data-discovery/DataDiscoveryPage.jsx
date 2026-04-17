@@ -416,7 +416,12 @@ export default function DataDiscoveryPage() {
       if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
       setScanResult(data);
     } catch (e) {
-      setScanError(e.message || 'Quality scan failed');
+      const msg = e.message || 'Quality scan failed';
+      setScanError(
+        msg === 'Failed to fetch'
+          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          : msg
+      );
     } finally {
       setScanning(false);
     }
