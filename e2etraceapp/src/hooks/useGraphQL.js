@@ -227,13 +227,29 @@ export const useGraphQLCatalogue = () => {
     }
   }, [loadQueries, pagination.limit, pagination.offset]);
 
+  const deleteQuery = useCallback(async (queryId) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await graphIntegrationService.deleteQuery(queryId);
+      await loadQueries(pagination.limit, pagination.offset);
+    } catch (err) {
+      const errorMsg = err.message || 'Failed to delete query';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [loadQueries, pagination.limit, pagination.offset]);
+
   return {
     queries,
     isLoading,
     error,
     pagination,
     loadQueries,
-    saveQuery
+    saveQuery,
+    deleteQuery
   };
 };
 
