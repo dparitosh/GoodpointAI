@@ -325,8 +325,13 @@ export default function DataDiscoveryPage() {
     fetch(`${API_BASE}/api/data-sources`)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
+        // Include all file/folder-backed source types (backend uses 'local_folder', 'file', not 'folder')
+        const FILE_TYPES = new Set(['folder', 'local_folder', 'file', 's3', 'aws_s3', 'azure_blob', 'azure', 'onedrive', 'google_drive']);
         const folderSources = Array.isArray(data)
-          ? data.filter((s) => s.type === 'folder' || s.source_type === 'folder')
+          ? data.filter((s) => {
+              const t = (s.type || s.source_type || '').toLowerCase();
+              return FILE_TYPES.has(t) || !!(s.connection?.folder_path || s.connection?.file_path);
+            })
           : [];
         setSources(folderSources);
       })
@@ -353,9 +358,13 @@ export default function DataDiscoveryPage() {
     setScanError(null);
     setActiveReportId(null);
 
+    const selectedSource = sources.find((s) => s.id === selectedSourceId);
+    const resolvedPath = selectedSource
+      ? (selectedSource.connection?.folder_path || selectedSource.connection?.file_path || selectedSource.connection?.connection_string || '')
+      : folderPath.trim();
     const body = {
       source_id: selectedSourceId || undefined,
-      folder_path: selectedSourceId ? undefined : folderPath.trim(),
+      folder_path: resolvedPath || undefined,
       recursive,
       include_profiling: true,
       save_report: true,
@@ -386,9 +395,13 @@ export default function DataDiscoveryPage() {
     setScanResult(null);
     setScanError(null);
 
+    const selectedSrc = sources.find((s) => s.id === selectedSourceId);
+    const resolvedScanPath = selectedSrc
+      ? (selectedSrc.connection?.folder_path || selectedSrc.connection?.file_path || selectedSrc.connection?.connection_string || '')
+      : folderPath.trim();
     const body = {
       source_id: selectedSourceId || undefined,
-      folder_path: selectedSourceId ? undefined : folderPath.trim(),
+      folder_path: resolvedScanPath || undefined,
       scan_type: 'full',
       save_report: true,
     };
@@ -494,7 +507,7 @@ export default function DataDiscoveryPage() {
             >
               <option value="">— select a registered source —</option>
               {sources.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.connection_string || s.folder_path || s.id})</option>
+                <option key={s.id} value={s.id}>{s.name} ({s.connection?.folder_path || s.connection?.file_path || s.connection?.connection_string || s.folder_path || s.id})</option>
               ))}
             </select>
           </div>
@@ -505,7 +518,12 @@ export default function DataDiscoveryPage() {
               className="dd-input"
               type="text"
               placeholder="e.g. /data/uploads or C:\data\csv"
-              value={folderPath}
+              value={selectedSourceId
+                ? (sources.find((s) => s.id === selectedSourceId)?.connection?.folder_path
+                  || sources.find((s) => s.id === selectedSourceId)?.connection?.file_path
+                  || sources.find((s) => s.id === selectedSourceId)?.connection?.connection_string
+                  || '')
+                : folderPath}
               onChange={(e) => { setFolderPath(e.target.value); setSelected(''); }}
               disabled={!!selectedSourceId}
             />

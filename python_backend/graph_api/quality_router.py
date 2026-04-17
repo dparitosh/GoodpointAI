@@ -191,10 +191,14 @@ class SodaScanRequest(BaseModel):
     checks_yaml can be either:
     - full SodaCL YAML (including `checks for <table>:`)
     - or just the indented list of checks (we will wrap it).
+    - or omitted entirely — with auto_checks=True (the default) a comprehensive
+      set of checks covering row_count, schema drift, completeness, numeric stats,
+      freshness, and format validity is generated from table introspection.
     """
 
-    checks_yaml: str
+    checks_yaml: Optional[str] = None
     data_source_name: str = "postgres"
+    auto_checks: bool = True
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -282,6 +286,108 @@ def _wrap_sodacl_checks(schema: str, table: str, checks_yaml: str) -> str:
         ("  " + line if line.strip() else line) for line in raw.splitlines()
     ).rstrip() + "\n"
     return f"checks for {schema}.{table}:\n{indented}"
+
+
+# ── Soda auto-check type sets ────────────────────────────────────────────────
+_SODA_NUMERIC_DT = {
+    "smallint", "integer", "bigint", "numeric", "decimal",
+    "real", "double precision", "money",
+}
+_SODA_TIMESTAMP_DT = {
+    "timestamp without time zone", "timestamp with time zone",
+    "date", "timetz", "timestamptz",
+}
+_SODA_TEXT_DT = {
+    "character varying", "varchar", "text", "char", "character", "name",
+}
+_SODA_EMAIL_NAMES  = {"email", "email_address", "e_mail", "mail"}
+_SODA_PHONE_NAMES  = {"phone", "phone_number", "mobile", "telephone", "tel"}
+_SODA_URL_NAMES    = {"url", "website", "web_url", "link", "homepage"}
+_SODA_UUID_NAMES   = {"uuid", "guid", "unique_id", "uid"}
+
+
+def _generate_auto_sodacl(
+    schema: str,
+    table: str,
+    columns_with_types: List[Dict[str, str]],
+) -> str:
+    """Generate comprehensive SodaCL YAML covering all standard Soda metric categories.
+
+    Emitted checks
+    --------------
+    Table-level:   row_count > 0, schema drift (warn on delete/add/type-change),
+                   duplicate_count on likely PK columns.
+    Per-column:    missing_count = 0 (warn>0, fail>10%), missing_percent < 5.
+    Numeric cols:  min, max, avg, sum, stddev.
+    Timestamp cols: freshness (warn>1d, fail>7d).
+    Text cols:     invalid_count with format: email | phone number | url | uuid
+                   when column name matches well-known patterns.
+    """
+    lines: List[str] = [f"checks for {schema}.{table}:"]
+
+    # ── Table level ──────────────────────────────────────────────────────
+    lines.append("  # ── Table level")
+    lines.append("  - row_count > 0")
+    lines.append("  - schema:")
+    lines.append("      warn:")
+    lines.append("        when schema changes:")
+    lines.append("          - column delete")
+    lines.append("          - column add")
+    lines.append("          - column type change")
+    pk_candidates = [
+        c["name"] for c in columns_with_types
+        if c["name"].lower() in {"id", "uuid", "record_id", "pk", "key", "primary_key"}
+    ]
+    for pk in pk_candidates[:2]:
+        lines.append(f"  - duplicate_count({pk}) = 0")
+
+    # ── Per-column ───────────────────────────────────────────────────────
+    for col in columns_with_types:
+        name = col["name"]
+        dt = (col.get("data_type") or "").lower()
+        name_lower = name.lower()
+        lines.append(f"  # Column: {name}")
+
+        # Completeness
+        lines.append(f"  - missing_count({name}) = 0:")
+        lines.append(f"      warn: when > 0")
+        lines.append(f"      fail: when > 10%")
+        lines.append(f"  - missing_percent({name}) < 5")
+
+        # Numeric stats — metric-only (no threshold; value is captured in scan results)
+        if dt in _SODA_NUMERIC_DT:
+            lines.append(f"  - min({name})")
+            lines.append(f"  - max({name})")
+            lines.append(f"  - avg({name})")
+            lines.append(f"  - sum({name})")
+            lines.append(f"  - stddev({name})")
+
+        # Freshness
+        if dt in _SODA_TIMESTAMP_DT:
+            lines.append(f"  - freshness({name}) < 7d:")
+            lines.append(f"      warn: when > 1d")
+            lines.append(f"      fail: when > 7d")
+
+        # Format validity for text columns with recognisable naming patterns
+        if dt in _SODA_TEXT_DT:
+            if name_lower in _SODA_EMAIL_NAMES or name_lower.endswith("_email"):
+                lines.append(f"  - invalid_count({name}):")
+                lines.append(f"      valid format: email")
+                lines.append(f"      fail: when > 0")
+            elif name_lower in _SODA_PHONE_NAMES or name_lower.endswith("_phone"):
+                lines.append(f"  - invalid_count({name}):")
+                lines.append(f"      valid format: phone number")
+                lines.append(f"      warn: when > 0")
+            elif name_lower in _SODA_URL_NAMES or name_lower.endswith("_url"):
+                lines.append(f"  - invalid_count({name}):")
+                lines.append(f"      valid format: url")
+                lines.append(f"      warn: when > 0")
+            elif name_lower in _SODA_UUID_NAMES or name_lower.endswith(("_uuid", "_guid")):
+                lines.append(f"  - invalid_count({name}):")
+                lines.append(f"      valid format: uuid")
+                lines.append(f"      fail: when > 0")
+
+    return "\n".join(lines) + "\n"
 
 
 def _score_from_soda_checks(checks: List[Dict[str, Any]]) -> float:
@@ -859,49 +965,95 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
             return None
 
     def _safe_csv_count(path: Path) -> Tuple[int, int]:
-        """Return (row_count, column_count) deterministically.
+        """Return (row_count, column_count) with BOM-safe, encoding-resilient, delimiter-sniffed parsing.
 
-        row_count excludes the header row if present.
+        Tries utf-8-sig (handles Excel BOM), then cp1252 (Windows-ANSI), then latin-1.
+        Uses csv.Sniffer to auto-detect comma/semicolon/tab/pipe delimiter.
+        """
+        for enc in ("utf-8-sig", "cp1252", "latin-1"):
+            try:
+                with path.open("r", encoding=enc, newline="") as f:
+                    sample = f.read(4096)
+                    f.seek(0)
+                    try:
+                        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                    except csv.Error:
+                        dialect = csv.excel
+                    reader = csv.reader(f, dialect=dialect)
+                    header = next(reader, [])
+                    col_count = len(header)
+                    rows = sum(1 for _ in reader)
+                    return rows, col_count
+            except (UnicodeDecodeError, LookupError):
+                continue
+            except csv.Error as e:
+                fs_issues.append(
+                    _mk_issue(
+                        rule_id="validity_001",
+                        severity="high",
+                        description=f"CSV parse failed: {path.name}: {e}",
+                        affected_rows=1,
+                        suggestion="Fix delimiter/quoting issues",
+                    )
+                )
+                return 0, 0
+            except OSError as e:
+                fs_issues.append(
+                    _mk_issue(
+                        rule_id="validity_001",
+                        severity="high",
+                        description=f"CSV read failed: {path.name}: {e}",
+                        affected_rows=1,
+                        suggestion="Check file permissions/path and try again",
+                    )
+                )
+                return 0, 0
+        # All encodings failed
+        fs_issues.append(
+            _mk_issue(
+                rule_id="validity_001",
+                severity="high",
+                description=f"CSV decode failed (encoding): {path.name}",
+                affected_rows=1,
+                suggestion="Ensure the file is UTF-8, CP1252, or Latin-1 encoded",
+            )
+        )
+        return 0, 0
+
+    def _safe_excel_count(path: Path) -> Tuple[int, int]:
+        """Return (row_count, column_count) for an Excel file (.xlsx/.xls).
+
+        row_count excludes the header row.  Reads all sheets of the active sheet.
         """
         try:
-            with path.open("r", encoding="utf-8", newline="") as f:
-                reader = csv.reader(f)
-                header = next(reader, [])
-                col_count = len(header)
-                rows = 0
-                for _ in reader:
-                    rows += 1
-                return rows, col_count
-        except csv.Error as e:
+            import openpyxl  # noqa: PLC0415
+            wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+            ws = wb.active
+            all_rows = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if not all_rows:
+                return 0, 0
+            col_count = len(all_rows[0])
+            return max(0, len(all_rows) - 1), col_count  # exclude header
+        except ImportError:
             fs_issues.append(
                 _mk_issue(
                     rule_id="validity_001",
-                    severity="high",
-                    description=f"CSV parse failed: {path.name}: {e}",
+                    severity="low",
+                    description=f"openpyxl not installed; skipping Excel scan: {path.name}",
                     affected_rows=1,
-                    suggestion="Fix delimiter/quoting issues",
+                    suggestion="Install openpyxl: pip install openpyxl",
                 )
             )
             return 0, 0
-        except UnicodeDecodeError as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             fs_issues.append(
                 _mk_issue(
                     rule_id="validity_001",
                     severity="high",
-                    description=f"CSV decode failed (encoding): {path.name}: {e}",
+                    description=f"Excel read failed: {path.name}: {e}",
                     affected_rows=1,
-                    suggestion="Ensure the file is UTF-8 encoded",
-                )
-            )
-            return 0, 0
-        except OSError as e:
-            fs_issues.append(
-                _mk_issue(
-                    rule_id="validity_001",
-                    severity="high",
-                    description=f"CSV read failed: {path.name}: {e}",
-                    affected_rows=1,
-                    suggestion="Check file permissions/path and try again",
+                    suggestion="Check file is not password-protected or corrupt",
                 )
             )
             return 0, 0
@@ -911,7 +1063,7 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
     row_count = 0
     column_count = 0
 
-    allowed_exts = {"xml", "xsd", "json", "csv", "zip", "stp", "step"}
+    allowed_exts = {"xml", "xsd", "json", "csv", "xlsx", "xls", "zip", "stp", "step"}
 
     if p.exists() and p.is_file():
         ext = p.suffix.lower().lstrip(".")
@@ -937,6 +1089,11 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
             parsed_ok = 1 if cols > 0 else 0
             row_count = rows
             column_count = cols
+        elif ext in ("xlsx", "xls"):
+            rows, cols = _safe_excel_count(p)
+            parsed_ok = 1 if cols > 0 else 0
+            row_count = rows
+            column_count = cols
         else:
             fs_issues.append(
                 _mk_issue(
@@ -944,7 +1101,7 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
                     severity="medium",
                     description=f"Unsupported file type for deterministic scan: .{ext or '(none)'}",
                     affected_rows=1,
-                    suggestion="Provide a CSV/JSON/XML/XSD file or a directory path",
+                    suggestion="Provide a CSV/JSON/XML/XSD/Excel file or a directory path",
                 )
             )
 
@@ -953,6 +1110,8 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
         xml_count = 0
         xsd_count = 0
         _rglob_file_count = 0  # P-05: per-scan file counter
+        data_rows_total = 0   # actual data rows accumulated from structured files
+        data_cols_max = 0     # widest column count seen across structured files
 
         for child in p.rglob("*"):
             if not child.is_file():
@@ -984,13 +1143,30 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
                     parsed_ok += 1
             elif ext == "json":
                 parsed_total += 1
-                if _safe_json_load(child) is not None:
+                obj = _safe_json_load(child)
+                if obj is not None:
                     parsed_ok += 1
+                    if isinstance(obj, list):
+                        data_rows_total += len(obj)
+                        if obj and isinstance(obj[0], dict):
+                            data_cols_max = max(data_cols_max, len(obj[0]))
+                    elif isinstance(obj, dict):
+                        data_rows_total += 1
+                        data_cols_max = max(data_cols_max, len(obj))
             elif ext == "csv":
                 parsed_total += 1
-                _, cols = _safe_csv_count(child)
+                rows, cols = _safe_csv_count(child)
                 if cols > 0:
                     parsed_ok += 1
+                    data_rows_total += rows
+                    data_cols_max = max(data_cols_max, cols)
+            elif ext in ("xlsx", "xls"):
+                parsed_total += 1
+                rows, cols = _safe_excel_count(child)
+                if cols > 0:
+                    parsed_ok += 1
+                    data_rows_total += rows
+                    data_cols_max = max(data_cols_max, cols)
             elif ext not in allowed_exts and ext != "(none)":
                 fs_issues.append(
                     _mk_issue(
@@ -1002,8 +1178,13 @@ def _scan_filesystem_data_source(data_source: str) -> Tuple[
                     )
                 )
 
-        row_count = sum(extension_counts.values())
-        column_count = len(extension_counts)
+        # Use actual data rows when structured files were found; fall back to file count
+        if data_rows_total > 0:
+            row_count = data_rows_total
+            column_count = data_cols_max
+        else:
+            row_count = sum(extension_counts.values())
+            column_count = len(extension_counts)
 
         if xml_count > 0 and xsd_count == 0:
             fs_issues.append(
@@ -1873,7 +2054,13 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
             data_source_name=str(scan_request.data_source_name or "postgres").strip() or "postgres",
             _schema=schema,
         )
-        checks_yaml = _wrap_sodacl_checks(schema, table, str(scan_request.checks_yaml or "").strip())
+        raw_checks = (scan_request.checks_yaml or "").strip()
+        if raw_checks:
+            checks_yaml = _wrap_sodacl_checks(schema, table, raw_checks)
+        else:
+            # auto_checks=True (default): generate full SodaCL from table introspection
+            _cols_for_auto = _list_columns_with_types(db, schema, table)
+            checks_yaml = _generate_auto_sodacl(schema, table, _cols_for_auto)
 
         scan = Scan()
         scan.set_data_source_name(str(scan_request.data_source_name or "postgres").strip() or "postgres")

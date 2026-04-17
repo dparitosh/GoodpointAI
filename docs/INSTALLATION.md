@@ -50,13 +50,19 @@ Install these **before** starting. All must be on your system `PATH`.
 | :--- | :--- | :--- | :--- |
 | **Python** | 3.11+ | `python --version` | 3.12 recommended |
 | **Node.js** | 18+ | `node --version` | 20 LTS recommended; includes npm |
-| **PostgreSQL** | 14+ | `psql --version` | **Required** — the app does not start without it |
+| **PostgreSQL** | 14+ | `Get-Service *postgres*` | **Required** — the app does not start without it |
 | **Neo4j** | 5+ | *(n/a)* | Optional — graph lineage features |
 | **OpenSearch** | 2+ | *(n/a)* | Optional — vector/fulltext search |
 
 ---
 
 ## 3. Installation Steps (Windows)
+
+> **PowerShell Execution Policy:** If you get an error saying a script "cannot be loaded because it is not digitally signed", run this once in your terminal before proceeding:
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+> ```
+> This allows locally-created scripts to run. It only needs to be done once per user account.
 
 ### Step 1 — Clone the Repository
 
@@ -71,47 +77,70 @@ After cloning, your working directory is the **repo root** (`GoodpointAI/`). All
 
 ### Step 2 — Find Your PostgreSQL Port
 
-Before anything else, confirm which port PostgreSQL is listening on:
+Before anything else, confirm which port PostgreSQL is listening on. Run this in PowerShell:
 
 ```powershell
-# Option A: Check via Windows service
-netstat -ano | findstr LISTENING | findstr :5432
-# If no output, try 5433:
-netstat -ano | findstr LISTENING | findstr :5433
-
-# Option B: Check via psql
-psql -U postgres -h 127.0.0.1 -p 5432 -c "SELECT 1"
-# If that fails, try -p 5433
+# Check which port Postgres is using (look for 5432 or 5433 in the output)
+netstat -ano | Select-String "LISTENING" | Select-String "5432|5433"
 ```
 
-Write down your port number — you will need it in Step 4.
+**Example output:**
+```
+TCP    0.0.0.0:5433    0.0.0.0:0    LISTENING    6720
+```
+
+In this example the port is **5433**. Write down your port number — you need it in Steps 3 and 4.
 
 - Standard PostgreSQL installations use **port 5432**.
-- Some custom installations (e.g., EDB, pgAdmin bundles) use **port 5433**.
+- PostgreSQL 17 and some EDB/pgAdmin bundles default to **port 5433**.
 - The app works with either — just make sure your `.env` file matches.
+
+> **Tip:** You can also verify the service is running with: `Get-Service *postgres*`
 
 ---
 
 ### Step 3 — Create the `graphtrace` Database
 
-Connect to your PostgreSQL instance and create the database:
+> **This step creates the PostgreSQL database that the entire application uses.** Without this database, the backend will not start. The database is an empty shell — tables and data are created automatically later in Step 7.
+
+You need to create a database named `graphtrace`. Choose **one** of the methods below. Both require the `postgres` user password that was set when you installed PostgreSQL.
+
+#### Option A — pgAdmin (GUI, recommended for beginners)
+
+pgAdmin is installed automatically with PostgreSQL on Windows.
+
+1. Open **pgAdmin 4** from the Start Menu.
+2. In the left panel, expand **Servers** → click your local server (e.g., "PostgreSQL 17"). Enter your postgres password when prompted.
+3. Right-click **Databases** → **Create** → **Database…**
+4. Fill in:
+   - **Database:** `graphtrace`
+   - **Owner:** `postgres`
+5. Click **Save**.
+
+That's it — the database is created.
+
+#### Option B — PowerShell one-liner (using psql)
+
+> **Note:** `psql` is usually **not** on your system PATH. You need to use its full path. On most Windows installs it is at:
+> `C:\Program Files\PostgreSQL\<VERSION>\bin\psql.exe`
+
+Run a single command (replace `5433` with your port from Step 2):
 
 ```powershell
-# Replace 5432 with YOUR actual port from Step 2
-psql -U postgres -h 127.0.0.1 -p 5432
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -c "CREATE DATABASE graphtrace WITH OWNER = postgres ENCODING = 'UTF8' TEMPLATE = template0;"
 ```
 
-```sql
-CREATE DATABASE graphtrace
-  WITH OWNER = postgres
-       ENCODING = 'UTF8'
-       TEMPLATE = template0;
+It will prompt for your `postgres` password. After success you should see `CREATE DATABASE`.
 
--- (Optional) Create a dedicated application user
-CREATE USER graphtrace_app WITH PASSWORD 'your_chosen_password';
-GRANT ALL PRIVILEGES ON DATABASE graphtrace TO graphtrace_app;
+> **Don't know your postgres password?** It was set during PostgreSQL installation. If you forgot it, you can reset it via pgAdmin (right-click the server → Properties → Connection → Change password).
 
-\q
+#### Verify the database exists
+
+**pgAdmin:** Refresh Databases in the left panel — `graphtrace` should appear.
+
+**psql:**
+```powershell
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -c "SELECT datname FROM pg_database WHERE datname='graphtrace';"
 ```
 
 > If the `graphtrace` database already exists, skip this step.
@@ -125,18 +154,19 @@ GRANT ALL PRIVILEGES ON DATABASE graphtrace TO graphtrace_app;
 Copy-Item python_backend\.env.example python_backend\.env
 ```
 
-Open `python_backend\.env` in a text editor and set **your actual** values:
+Open `python_backend\.env` in a text editor and set **your actual** values.
+Replace `<YOUR_PORT>` with the port you found in **Step 2** (e.g., `5432` or `5433`), and `YOUR_REAL_PASSWORD` with the `postgres` user password that was set when you installed PostgreSQL:
 
 ```dotenv
-# REQUIRED — replace with your real PostgreSQL password and port
-DATABASE_URL=postgresql://postgres:YOUR_REAL_PASSWORD@127.0.0.1:5432/graphtrace
+# REQUIRED — replace <YOUR_PORT> with the port from Step 2, and YOUR_REAL_PASSWORD with your postgres password
+DATABASE_URL=postgresql://postgres:YOUR_REAL_PASSWORD@127.0.0.1:<YOUR_PORT>/graphtrace
 
 # REQUIRED — tells the backend to load this file
 GRAPH_TRACE_LOAD_DOTENV=true
 
 # Individual Postgres settings (DATABASE_URL takes precedence, but keep these in sync)
 POSTGRES_HOST=127.0.0.1
-POSTGRES_PORT=5432
+POSTGRES_PORT=<YOUR_PORT>
 POSTGRES_DATABASE=graphtrace
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=YOUR_REAL_PASSWORD
@@ -154,17 +184,20 @@ POSTGRES_PASSWORD=YOUR_REAL_PASSWORD
 - [ ] Port in `POSTGRES_PORT` matches `DATABASE_URL`
 - [ ] No placeholder values like `yourpassword` or `your_postgres_password` remain
 
-**Verify connectivity now:**
+**Verify connectivity now** (this connects to the `graphtrace` database you created in Step 3):
 ```powershell
-# Replace port if yours is different
-psql -U postgres -h 127.0.0.1 -p 5432 -d graphtrace -c "SELECT 1"
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -d graphtrace -c "SELECT 1"
 # Expected output: a single row with value 1
 ```
 
+Or verify via **pgAdmin**: expand Servers → your server → Databases → right-click `graphtrace` → **Query Tool** → run `SELECT 1;`.
+
+> **If you get `database "graphtrace" does not exist`** — you skipped Step 3. Go back and create the database first.
+
 > **If this fails** — fix it before continuing. Common causes:
-> - PostgreSQL not running: `Get-Service PostgreSQL*`
+> - PostgreSQL not running: `Get-Service *postgres*`
 > - Wrong port: re-check Step 2
-> - Wrong password: reset via `ALTER USER postgres WITH PASSWORD 'newpass';`
+> - Wrong password: reset via pgAdmin or `ALTER USER postgres WITH PASSWORD 'newpass';`
 
 ---
 

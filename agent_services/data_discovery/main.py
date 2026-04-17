@@ -102,28 +102,40 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         if ftype == "csv":
-            with path.open("r", encoding="utf-8", errors="replace", newline="") as f:
-                reader = csv.DictReader(f)
-                cols = reader.fieldnames or []
-                profile["column_count"] = len(cols)
-                rows = list(reader)
-                profile["row_count"] = len(rows)
-                if rows and cols:
-                    col_stats = []
-                    for col in cols:
-                        vals = [r.get(col) for r in rows]
-                        nulls = sum(1 for v in vals if v is None or str(v).strip() == "")
-                        unique_sample = list({str(v) for v in vals[:200] if v})[:5]
-                        col_stats.append({
-                            "name": col,
-                            "null_count": nulls,
-                            "null_rate": round(nulls / len(rows), 4) if rows else 0,
-                            "sample_values": unique_sample,
-                        })
-                    profile["columns"] = col_stats
-                    total_cells = len(rows) * len(cols)
-                    total_nulls = sum(c["null_count"] for c in col_stats)
-                    profile["null_rate"] = round(total_nulls / total_cells, 4) if total_cells else 0
+            # utf-8-sig strips Excel BOM (\ufeff); fall back to cp1252 for Windows-ANSI exports
+            for enc in ("utf-8-sig", "cp1252", "latin-1"):
+                try:
+                    with path.open("r", encoding=enc, newline="") as f:
+                        sample = f.read(4096)
+                        f.seek(0)
+                        try:
+                            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                        except csv.Error:
+                            dialect = csv.excel  # fallback: comma
+                        reader = csv.DictReader(f, dialect=dialect)
+                        cols = [c for c in (reader.fieldnames or []) if c is not None]
+                        profile["column_count"] = len(cols)
+                        rows = list(reader)
+                        profile["row_count"] = len(rows)
+                    break  # successfully parsed
+                except (UnicodeDecodeError, LookupError):
+                    continue
+            if rows and cols:
+                col_stats = []
+                for col in cols:
+                    vals = [r.get(col) for r in rows]
+                    nulls = sum(1 for v in vals if v is None or str(v).strip() == "")
+                    unique_sample = list({str(v) for v in vals[:200] if v})[:5]
+                    col_stats.append({
+                        "name": col,
+                        "null_count": nulls,
+                        "null_rate": round(nulls / len(rows), 4) if rows else 0,
+                        "sample_values": unique_sample,
+                    })
+                profile["columns"] = col_stats
+                total_cells = len(rows) * len(cols)
+                total_nulls = sum(c["null_count"] for c in col_stats)
+                profile["null_rate"] = round(total_nulls / total_cells, 4) if total_cells else 0
 
         elif ftype == "json":
             with path.open("r", encoding="utf-8", errors="replace") as f:
@@ -148,6 +160,33 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
             if children:
                 profile["column_count"] = len(list(children[0]))
                 profile["columns"] = [{"name": ch.tag} for ch in children[0]]
+
+        elif ftype == "excel":
+            import openpyxl
+            wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if rows:
+                header = [str(c) if c is not None else f"col_{i}" for i, c in enumerate(rows[0])]
+                data_rows = rows[1:]
+                profile["column_count"] = len(header)
+                profile["row_count"] = len(data_rows)
+                col_stats = []
+                for idx, col in enumerate(header):
+                    vals = [r[idx] if idx < len(r) else None for r in data_rows]
+                    nulls = sum(1 for v in vals if v is None or str(v).strip() == "")
+                    unique_sample = list({str(v) for v in vals[:200] if v is not None})[:5]
+                    col_stats.append({
+                        "name": col,
+                        "null_count": nulls,
+                        "null_rate": round(nulls / len(data_rows), 4) if data_rows else 0,
+                        "sample_values": unique_sample,
+                    })
+                profile["columns"] = col_stats
+                total_cells = len(data_rows) * len(header)
+                total_nulls = sum(c["null_count"] for c in col_stats)
+                profile["null_rate"] = round(total_nulls / total_cells, 4) if total_cells else 0
 
     except Exception as exc:
         profile["parse_ok"] = False
@@ -217,10 +256,16 @@ class DataDiscoveryAgent(AgentService):
         if source_id:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(f"{BACKEND_URL}/api/datasources/{source_id}")
+                    resp = await client.get(f"{BACKEND_URL}/api/data-sources/{source_id}")
                     if resp.status_code == 200:
                         ds = resp.json()
-                        return ds.get("connection_string") or ds.get("host") or ds.get("path")
+                        conn = ds.get("connection") or {}
+                        return (
+                            conn.get("folder_path")
+                            or conn.get("file_path")
+                            or conn.get("connection_string")
+                            or conn.get("uri")
+                        )
             except Exception as exc:
                 logger.warning("Could not resolve source_id %s: %s", source_id, exc)
         return None
