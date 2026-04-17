@@ -7,7 +7,7 @@ import uuid
 # Add parent dir to path so we can import base module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from base.agent_service import AgentService
-from base.models import AgentTaskRequest, AgentTaskResponse, AgentType
+from base.models import AgentTaskRequest, AgentTaskResponse, AgentType, AgentCapability
 
 logger = logging.getLogger("task_decomposer")
 
@@ -19,8 +19,18 @@ class TaskDecomposerAgent(AgentService):
             port=8027
         )
 
-    async def initialize(self):
-        logger.info(f"Initialized {self.agent_name} logic.")
+    def get_capabilities(self) -> List[AgentCapability]:
+        return [
+            AgentCapability(
+                name="decompose_goal",
+                description="Decompose a high-level goal into an ordered DAG of subtasks",
+                parameters={"goal": "string"}
+            ),
+        ]
+
+    async def process_task(self, request: AgentTaskRequest) -> Dict[str, Any]:
+        response = await self.execute_task(request)
+        return response.result
 
     async def execute_task(self, request: AgentTaskRequest) -> AgentTaskResponse:
         logger.info(f"Task Decomposer received task {request.task_id} of type {request.task_type}")

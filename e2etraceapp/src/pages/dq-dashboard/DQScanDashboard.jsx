@@ -341,12 +341,16 @@ export default function DQScanDashboard() {
       .then((r) => r.ok ? r.json() : { tables: [] })
       .then((d) => setAvailableTables(d.tables || []))
       .catch(() => setAvailableTables([]));
-    // Load registered folder datasources
+    // Load registered folder datasources (backend uses 'local_folder', 'file', not 'folder')
     fetch('/api/data-sources')
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
+        const FILE_TYPES = new Set(['folder', 'local_folder', 'file', 's3', 'aws_s3', 'azure_blob', 'azure', 'onedrive', 'google_drive']);
         const folders = Array.isArray(data)
-          ? data.filter((s) => s.type === 'folder' || s.source_type === 'folder')
+          ? data.filter((s) => {
+              const t = (s.type || s.source_type || '').toLowerCase();
+              return FILE_TYPES.has(t) || !!(s.connection?.folder_path || s.connection?.file_path);
+            })
           : [];
         setFolderSources(folders);
       })
@@ -389,7 +393,7 @@ export default function DQScanDashboard() {
   const runFolderScan = useCallback(async () => {
     if (!pickerFolderSourceId) return;
     const src = folderSources.find((s) => String(s.id) === String(pickerFolderSourceId));
-    const label = src ? (src.name || src.folder_path || pickerFolderSourceId) : pickerFolderSourceId;
+    const label = src ? (src.name || src.connection?.folder_path || src.connection?.file_path || pickerFolderSourceId) : pickerFolderSourceId;
     setTablePickerOpen(false);
     setScanningTable(label);
     setScanError(null);
@@ -437,6 +441,11 @@ export default function DQScanDashboard() {
   const totalIssues = reports.reduce((s, r) => s + (r.issues_count || 0), 0);
   const avgScore = reports.length ? (reports.reduce((s, r) => s + (r.overall_score || 0), 0) / reports.length).toFixed(1) : '–';
   const criticalCount = reports.reduce((s, r) => s + r.issues.filter((i) => i.severity === 'critical').reduce((a, i) => a + i.count, 0), 0);
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const scansToday = reports.filter((r) => r.scan_date?.startsWith(todayPrefix));
+  const lastRunSub = scansToday.length > 0
+    ? 'last run ' + new Date(Math.max(...scansToday.map((r) => new Date(r.scan_date).getTime()))).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' local'
+    : 'no scans today';
 
   const echartsOpts = { renderer: 'canvas' };
 
@@ -501,7 +510,7 @@ export default function DQScanDashboard() {
         <KpiCard label="Average DQ Score" value={`${avgScore}%`} sub={`${reports.length} tables scanned`} color="#3b82f6" icon={<i className="fas fa-chart-pie" />} />
         <KpiCard label="Total Rows Scanned" value={totalRows.toLocaleString()} sub="across all tables" color="#8b5cf6" icon={<i className="fas fa-table" />} />
         <KpiCard label="Total Issues" value={totalIssues} sub={`${criticalCount} critical`} color={criticalCount > 0 ? '#ef4444' : '#22c55e'} icon={<i className="fas fa-exclamation-triangle" />} />
-        <KpiCard label="Scans Today" value={reports.filter((r) => r.scan_date?.startsWith('2026-03-05')).length} sub="last run 08:16 UTC" color="#22c55e" icon={<i className="fas fa-check-circle" />} />
+        <KpiCard label="Scans Today" value={scansToday.length} sub={lastRunSub} color="#22c55e" icon={<i className="fas fa-check-circle" />} />
         <KpiCard label="Critical Issues" value={criticalCount} sub={criticalCount === 0 ? 'All clear' : 'Action required'} color={criticalCount > 0 ? '#ef4444' : '#22c55e'} icon={<i className="fas fa-bug" />} />
       </div>
 
@@ -688,7 +697,7 @@ export default function DQScanDashboard() {
                     <select className="dq-select" value={pickerFolderSourceId} onChange={(e) => setPickerFolderSourceId(e.target.value)}>
                       <option value="">— choose a folder source —</option>
                       {folderSources.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name || s.folder_path || s.id}</option>
+                        <option key={s.id} value={s.id}>{s.name || s.connection?.folder_path || s.connection?.file_path || s.id}</option>
                       ))}
                     </select>
                   )
