@@ -446,8 +446,9 @@ export default function DataDiscoveryPage() {
   });
 
   const totalSize = files.reduce((s, f) => s + (f.size_bytes || 0), 0);
-  const avgNullRate = files.length
-    ? files.reduce((s, f) => s + (f.null_rate || 0), 0) / files.filter((f) => f.null_rate != null).length
+  const nullRateFiles = files.filter((f) => f.null_rate != null);
+  const avgNullRate = nullRateFiles.length
+    ? nullRateFiles.reduce((s, f) => s + f.null_rate, 0) / nullRateFiles.length
     : 0;
 
   const toggleSort = (key) => {

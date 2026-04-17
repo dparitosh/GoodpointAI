@@ -19,9 +19,6 @@ class TaskDecomposerAgent(AgentService):
             port=8027
         )
 
-    async def initialize(self):
-        logger.info(f"Initialized {self.agent_name} logic.")
-
     def get_capabilities(self) -> List[AgentCapability]:
         return [
             AgentCapability(name="decompose_goal", description="Decompose high-level goals into dependency-ordered subtasks"),

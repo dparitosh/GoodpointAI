@@ -201,7 +201,7 @@ function KpiCard({ label, value, color, icon }) {
 }
 
 function TypePill({ type, count, active, onClick }) {
-  const m = typeMeta(type);
+  const m = type ? typeMeta(type) : { label: 'All', icon: 'fas fa-th-list', color: '#6b7280', page: null };
   return (
     <button
       className={`rh-type-pill${active ? ' rh-type-pill-active' : ''}`}
