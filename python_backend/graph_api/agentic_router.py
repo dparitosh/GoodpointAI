@@ -492,12 +492,16 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest, db: Session = Depends
     # Lazy import to avoid circular dependency at module load time.
     from graph_api.quality_router import (
         scan_table_quality,
+        run_generic_quality_scan,
         QualityScanRequest as DirectScanRequest,
+        GenericScanRequest as DirectGenericRequest,
     )
 
-    # Resolve a scan target from source_id, folder_path, or entity_type.
+    # Resolve the scan target from source_id, folder_path, or entity_type.
+    # Also detect whether we are dealing with a filesystem source vs a DB table.
     scan_target: Optional[str] = None
     data_source_path: Optional[str] = None
+    is_folder_source: bool = False
 
     if req.source_id:
         try:
@@ -506,7 +510,11 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest, db: Session = Depends
             ).first()
             if record:
                 scan_target = record.name
-                # Attempt to retrieve a filesystem path from the connection payload.
+                # Detect filesystem sources by type or connection payload.
+                if str(getattr(record, "source_type", "") or "").lower() in (
+                    "folder", "filesystem", "file", "csv", "local"
+                ):
+                    is_folder_source = True
                 try:
                     from core.crypto import decrypt_json
                     conn = decrypt_json(record.connection_ciphertext) if record.connection_ciphertext else {}
@@ -516,26 +524,49 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest, db: Session = Depends
                         or conn.get("path")
                         or None
                     )
+                    if data_source_path:
+                        is_folder_source = True
                 except Exception:  # noqa: BLE001
                     pass
         except Exception as db_err:
             logger.warning("Could not resolve source_id %s: %s", req.source_id, db_err)
 
     if not scan_target:
-        # Fall back to folder_path, entity_type, or a safe default
-        scan_target = (
-            req.folder_path
-            or req.entity_type
-            or "workflows"
-        )
+        scan_target = req.folder_path or req.entity_type or "workflows"
 
-    direct_request = DirectScanRequest(
-        table_name=scan_target,
-        data_source=data_source_path or req.folder_path or None,
-    )
+    # A folder_path that was sent explicitly (no source_id) is always a filesystem scan.
+    if req.folder_path and not req.source_id:
+        is_folder_source = True
+        data_source_path = data_source_path or req.folder_path
+
+    # Detect paths that slipped through: any target with a path separator or known
+    # file-extension is not a valid Postgres table name — route to folder scan.
+    import os as _os
+    if not is_folder_source and (
+        _os.sep in scan_target
+        or "/" in scan_target
+        or "\\" in scan_target
+        or any(scan_target.lower().endswith(ext) for ext in (".csv", ".json", ".xml", ".parquet", ".xlsx"))
+    ):
+        is_folder_source = True
+        data_source_path = data_source_path or scan_target
 
     try:
-        result = await scan_table_quality(scan_target, direct_request, db)
+        if is_folder_source:
+            # Route to the generic filesystem scan path.
+            generic_request = DirectGenericRequest(
+                datasource="folder",
+                scan_type=req.scan_type or "full",
+                table_name=data_source_path or scan_target,
+            )
+            result = await run_generic_quality_scan(generic_request, db)
+        else:
+            direct_request = DirectScanRequest(
+                table_name=scan_target,
+                data_source=data_source_path or req.folder_path or None,
+            )
+            result = await scan_table_quality(scan_target, direct_request, db)
+
         # Wrap in the agentic envelope so callers that inspect result.result still work.
         if isinstance(result, dict):
             result["_fallback"] = True
@@ -547,7 +578,7 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest, db: Session = Depends
             status_code=503,
             detail=(
                 "MCP orchestrator is not running and the direct scan fallback failed. "
-                f"Start the MCP server or check the table name. Details: {fallback_err}"
+                f"Start the MCP server or check the target source. Details: {fallback_err}"
             ),
         ) from fallback_err
 
