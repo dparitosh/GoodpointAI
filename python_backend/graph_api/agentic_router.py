@@ -119,6 +119,12 @@ async def process_agentic_task(
         # Delegate to MCP Server
         result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
         return AgenticTaskResult(**result_dict)
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+        logger.warning("MCP unavailable for /task: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="MCP agent cluster is not running. Start the MCP server to process agentic tasks.",
+        ) from e
     except Exception as e:
         logger.error("Task processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Task processing failed: {str(e)}") from e
@@ -162,6 +168,13 @@ async def process_chat_message(
                 session_id=session_id
             )
     
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+        logger.warning("MCP unavailable for /chat: %s", e)
+        session_id = chat_request.session_id or f"session_{int(datetime.now().timestamp())}"
+        return ChatResponse(
+            message="The AI agent cluster is currently unavailable. Start the MCP server to enable chat.",
+            session_id=session_id,
+        )
     except Exception as e:
         logger.error("Chat processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
@@ -169,8 +182,17 @@ async def process_chat_message(
 @router.get("/status", response_model=SystemStatus)
 async def get_system_status():
     """Get current agentic system status"""
-    status_data = await mcp_client.get_system_status()
-    return SystemStatus(**status_data)
+    try:
+        status_data = await mcp_client.get_system_status()
+        return SystemStatus(**status_data)
+    except Exception as e:
+        logger.warning("MCP unavailable for /status: %s", e)
+        return SystemStatus(
+            active_agents=[],
+            task_queue_size=0,
+            system_health="unavailable",
+            performance_metrics={"mcp_unavailable": True},
+        )
 
 @router.get("/agents", response_model=List[AgentDefinition])
 async def get_orchestrator_agents(
@@ -179,9 +201,12 @@ async def get_orchestrator_agents(
     limit: int = Query(100, ge=1, le=1000),
 ):
     """Get list of configured agents (paged)."""
-    agents_data = await mcp_client.list_agents()
-    agents = [AgentDefinition(**a) for a in agents_data]
-    
+    try:
+        agents_data = await mcp_client.list_agents()
+        agents = [AgentDefinition(**a) for a in agents_data]
+    except Exception as e:
+        logger.warning("MCP unavailable for /agents: %s", e)
+        agents = []
     response.headers["X-Total-Count"] = str(len(agents))
     return agents[skip : skip + limit]
 
@@ -193,18 +218,23 @@ async def reset_agent(agent_id: str):
 @router.get("/metrics")
 async def get_performance_metrics():
     """Get system performance metrics"""
-    status = await mcp_client.get_system_status()
-    # Extract metrics from status
-    # MCP server status.performance_metrics matches
-    
-    active_agent_count = len([a for a in status["active_agents"] if a.get("status") == "ready"])
-    
-    return {
-        "system_metrics": status["performance_metrics"],
-        "agent_count": len(status["active_agents"]),
-        "active_agents": active_agent_count,
-        "timestamp": datetime.now()
-    }
+    try:
+        status = await mcp_client.get_system_status()
+        active_agent_count = len([a for a in status["active_agents"] if a.get("status") == "ready"])
+        return {
+            "system_metrics": status["performance_metrics"],
+            "agent_count": len(status["active_agents"]),
+            "active_agents": active_agent_count,
+            "timestamp": datetime.now(),
+        }
+    except Exception as e:
+        logger.warning("MCP unavailable for /metrics: %s", e)
+        return {
+            "system_metrics": {"mcp_unavailable": True},
+            "agent_count": 0,
+            "active_agents": 0,
+            "timestamp": datetime.now(),
+        }
 
 #  SYSTEM STATUS ENDPOINTS
 
@@ -248,8 +278,14 @@ async def get_active_agents_list(
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error("Error getting active agents: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.warning("MCP unavailable for /agents/active: %s", e)
+        response.headers["X-Total-Count"] = "0"
+        return {
+            "status": "unavailable",
+            "active_agents": [],
+            "total_count": 0,
+            "timestamp": datetime.now().isoformat(),
+        }
 
 @router.get("/agents/metrics")
 async def get_agent_metrics():
@@ -278,8 +314,20 @@ async def get_agent_metrics():
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
-        logger.error("Error getting agent metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.warning("MCP unavailable for /agents/metrics: %s", e)
+        return {
+            "status": "unavailable",
+            "metrics": {
+                "total_tasks_processed": 0,
+                "tasks_completed": 0,
+                "tasks_failed": 0,
+                "average_response_time": 0.0,
+                "success_rate": 0.0,
+                "error_rate": 0.0,
+                "agent_utilization": {},
+            },
+            "timestamp": datetime.now().isoformat(),
+        }
 
 
 # ── Data Discovery via MCP ─────────────────────────────────────────────────
