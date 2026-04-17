@@ -155,8 +155,9 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [saveModalName, setSaveModalName] = useState('');
   const [saveModalDesc, setSaveModalDesc] = useState('');
 
-  // Saved queries filter
+  // Saved queries filter + text search
   const [filterSource, setFilterSource] = useState('all');
+  const [savedQuerySearch, setSavedQuerySearch] = useState('');
 
   // Spreadsheet Integration state
   const [spreadsheetConfig, setSpreadsheetConfig] = useState({
@@ -174,12 +175,19 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
 
   const spreadsheetColumns = useMemo(() => Object.keys(spreadsheetData?.[0] || {}), [spreadsheetData]);
 
-  const filteredSavedQueries = useMemo(
-    () => filterSource === 'all'
+  const filteredSavedQueries = useMemo(() => {
+    let qs = filterSource === 'all'
       ? savedQueries
-      : savedQueries.filter(q => (q.datasource || 'graphql') === filterSource),
-    [savedQueries, filterSource]
-  );
+      : savedQueries.filter(q => (q.datasource || 'graphql') === filterSource);
+    if (savedQuerySearch.trim()) {
+      const lower = savedQuerySearch.toLowerCase();
+      qs = qs.filter(q =>
+        (q.name || '').toLowerCase().includes(lower) ||
+        (q.description || '').toLowerCase().includes(lower)
+      );
+    }
+    return qs;
+  }, [savedQueries, filterSource, savedQuerySearch]);
 
   useEffect(() => {
     if (!Array.isArray(spreadsheetData) || spreadsheetData.length === 0) return;
@@ -1418,6 +1426,32 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                   <div className="qb-results-content">
                     <div className="qb-results-toolbar">
                       <span className="result-count">{Array.isArray(queryResults) ? queryResults.length : Object.keys(queryResults).length} records</span>
+                      <button
+                        className="qb-export-btn"
+                        title="Export results as CSV"
+                        onClick={() => {
+                          const rows = Array.isArray(queryResults) ? queryResults : [queryResults];
+                          if (!rows.length) return;
+                          const headers = Object.keys(rows[0]);
+                          const escape = v => {
+                            if (v == null) return '';
+                            const s = String(v);
+                            return s.includes(',') || s.includes('"') || s.includes('\n')
+                              ? `"${s.replace(/"/g, '""')}"`
+                              : s;
+                          };
+                          const csv = [headers.join(','), ...rows.map(r => headers.map(h => escape(r[h])).join(','))].join('\n');
+                          const blob = new Blob([csv], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `query_results_${new Date().toISOString().slice(0,10)}.csv`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        <i className="fas fa-download" />&nbsp;CSV
+                      </button>
                       <select value={chartType} onChange={e => setChartType(e.target.value)} className="qb-select-sm">
                         {CHART_TYPES.map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
                       </select>
@@ -1701,6 +1735,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                       <tr>
                         <th>Table</th>
                         <th>Source</th>
+                        <th>Score</th>
                         <th>Row Count</th>
                         <th>Missing Values</th>
                         <th>Invalid Values</th>
@@ -1730,6 +1765,20 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                             <span className="source-badge-compact" style={{ '--ds-color': DATA_SOURCE_CONFIG[report.source || dataSource]?.color }}>
                               {DATA_SOURCE_CONFIG[report.source || dataSource]?.icon}
                             </span>
+                          </td>
+                          <td className="metric-cell">
+                            {typeof report.overall_score === 'number' ? (
+                              <span className="score-badge" style={{
+                                background: report.overall_score >= 0.9 ? '#10b981' : report.overall_score >= 0.7 ? '#f59e0b' : '#ef4444',
+                                color: '#fff',
+                                borderRadius: '4px',
+                                padding: '2px 6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 600
+                              }}>
+                                {(report.overall_score * 100).toFixed(0)}%
+                              </span>
+                            ) : '—'}
                           </td>
                           <td className="metric-cell">{typeof report.row_count === 'number' ? report.row_count : '—'}</td>
                           <td className="metric-cell">{typeof report.missing_values === 'number' ? report.missing_values : '—'}</td>
@@ -2381,6 +2430,14 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
               <div className="saved-header">
                 <h2>Saved Queries</h2>
                 <div className="saved-actions">
+                  <input
+                    type="search"
+                    className="form-input-sm"
+                    placeholder="Search queries…"
+                    value={savedQuerySearch}
+                    onChange={e => setSavedQuerySearch(e.target.value)}
+                    style={{ minWidth: '180px' }}
+                  />
                   <div className="filter-by-ds">
                     <label>Filter by source:</label>
                     <select className="form-select-sm" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
