@@ -13,12 +13,14 @@ from enum import Enum
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from pydantic import BaseModel, Field
 import neo4j
+import httpx
 from sqlalchemy.orm import Session
 
 from .dependencies import get_driver
 from core.db_session import get_db
 from models.quality_models import DiscoveryReport
 from models.report_hub_models import UnifiedReport
+from models.configuration_models import DataSourceConfigRecord
 from services.mcp_client import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -310,9 +312,15 @@ async def discover_datasource(req: DiscoveryRequest, db: Session = Depends(get_d
     )
     try:
         result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
-    except Exception as e:
-        logger.error("Discovery task failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout, Exception) as mcp_err:
+        logger.error("Discovery task failed: %s", mcp_err)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "MCP orchestrator is unavailable. Start the MCP server to run discovery scans. "
+                f"Details: {mcp_err}"
+            ),
+        ) from mcp_err
 
     if req.save_report:
         try:
@@ -400,11 +408,15 @@ class QualityScanMCPRequest(BaseModel):
     entity_type: Optional[str] = None
 
 @router.post("/quality-scan", summary="Run a data quality scan via MCP orchestration")
-async def quality_scan_via_mcp(req: QualityScanMCPRequest):
+async def quality_scan_via_mcp(req: QualityScanMCPRequest, db: Session = Depends(get_db)):
     """
     Submit a DATA_QUALITY_SCAN task to the MCP orchestrator.
     Routes to the QualityMonitor agent which uses the Rule Engine
     and the backend quality scan endpoint.
+
+    When MCP is unavailable (not running / network error) the endpoint falls back
+    to the direct quality-scan path (/api/analytics/quality/scan or /scan) so that
+    the UI stays functional without a running MCP cluster.
     """
     if not req.source_id and not req.folder_path:
         raise HTTPException(status_code=400, detail="Provide source_id or folder_path")
@@ -422,7 +434,72 @@ async def quality_scan_via_mcp(req: QualityScanMCPRequest):
     try:
         result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
         return result_dict
-    except Exception as e:
-        logger.error("Quality scan task failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout, Exception) as mcp_err:
+        logger.warning(
+            "MCP unavailable for quality-scan (%s). Falling back to direct scan.",
+            mcp_err,
+        )
+
+    # ── Fallback: resolve target and call direct quality scan ─────────────────
+    # Lazy import to avoid circular dependency at module load time.
+    from graph_api.quality_router import (
+        scan_table_quality,
+        QualityScanRequest as DirectScanRequest,
+    )
+
+    # Resolve a scan target from source_id, folder_path, or entity_type.
+    scan_target: Optional[str] = None
+    data_source_path: Optional[str] = None
+
+    if req.source_id:
+        try:
+            record = db.query(DataSourceConfigRecord).filter(
+                DataSourceConfigRecord.id == req.source_id
+            ).first()
+            if record:
+                scan_target = record.name
+                # Attempt to retrieve a filesystem path from the connection payload.
+                try:
+                    from core.crypto import decrypt_json
+                    conn = decrypt_json(record.connection_ciphertext) if record.connection_ciphertext else {}
+                    data_source_path = (
+                        conn.get("folder_path")
+                        or conn.get("file_path")
+                        or conn.get("path")
+                        or None
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as db_err:
+            logger.warning("Could not resolve source_id %s: %s", req.source_id, db_err)
+
+    if not scan_target:
+        # Fall back to folder_path, entity_type, or a safe default
+        scan_target = (
+            req.folder_path
+            or req.entity_type
+            or "workflows"
+        )
+
+    direct_request = DirectScanRequest(
+        table_name=scan_target,
+        data_source=data_source_path or req.folder_path or None,
+    )
+
+    try:
+        result = await scan_table_quality(scan_target, direct_request, db)
+        # Wrap in the agentic envelope so callers that inspect result.result still work.
+        if isinstance(result, dict):
+            result["_fallback"] = True
+            result["_mcp_unavailable"] = True
+        return result
+    except Exception as fallback_err:
+        logger.error("Quality scan fallback also failed: %s", fallback_err)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "MCP orchestrator is not running and the direct scan fallback failed. "
+                f"Start the MCP server or check the table name. Details: {fallback_err}"
+            ),
+        ) from fallback_err
 
