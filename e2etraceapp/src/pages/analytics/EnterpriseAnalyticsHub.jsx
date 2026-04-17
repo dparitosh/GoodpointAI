@@ -114,8 +114,8 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [queryResults, setQueryResults] = useState(null);
   const [chartType, setChartType] = useState('bar');
   const [aggregation, setAggregation] = useState('count');
-  const [groupByField, _setGroupByField] = useState('');
-  const [valueField, _setValueField] = useState('');
+  const [groupByField, setGroupByField] = useState('');
+  const [valueField, setValueField] = useState('');
 
   // Visual Query Builder state (like jQuery QueryBuilder)
   const [visualBuilderMode, setVisualBuilderMode] = useState(true);
@@ -130,11 +130,11 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   // GraphQL specific
   const { schema } = useSchemaIntrospection();
   useGraphQLQuery();
-  const { queries: savedQueries, loadQueries, saveQuery } = useGraphQLCatalogue();
+  const { queries: savedQueries, loadQueries, saveQuery, deleteQuery: deletePersistedQuery } = useGraphQLCatalogue();
 
   // Natural Language Query state
   const [nlQuery, setNlQuery] = useState('');
-  const [nlSuggestions, _setNlSuggestions] = useState([]);
+  const [nlSuggestions, setNlSuggestions] = useState([]);
   const [nlQueryMetadata, setNlQueryMetadata] = useState(null);
 
   // Quality Reports state
@@ -149,6 +149,14 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [availableTables, setAvailableTables] = useState([]);
   const [scanModalLoading, setScanModalLoading] = useState(false);
   const [scanModalError, setScanModalError] = useState(null);
+
+  // Save query modal state
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveModalName, setSaveModalName] = useState('');
+  const [saveModalDesc, setSaveModalDesc] = useState('');
+
+  // Saved queries filter
+  const [filterSource, setFilterSource] = useState('all');
 
   // Spreadsheet Integration state
   const [spreadsheetConfig, setSpreadsheetConfig] = useState({
@@ -165,6 +173,13 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [spreadsheetAggregation, setSpreadsheetAggregation] = useState('sum');
 
   const spreadsheetColumns = useMemo(() => Object.keys(spreadsheetData?.[0] || {}), [spreadsheetData]);
+
+  const filteredSavedQueries = useMemo(
+    () => filterSource === 'all'
+      ? savedQueries
+      : savedQueries.filter(q => (q.datasource || 'graphql') === filterSource),
+    [savedQueries, filterSource]
+  );
 
   useEffect(() => {
     if (!Array.isArray(spreadsheetData) || spreadsheetData.length === 0) return;
@@ -416,13 +431,14 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     setQueryRules(prev => prev.map(r => r.id === ruleId ? { ...r, ...updates } : r));
   }, []);
 
-  const executeQuery = useCallback(async () => {
+  const executeQuery = useCallback(async (overrideText, overrideSource) => {
+    const ds = overrideSource || dataSource;
     // In visual builder mode, always generate from the builder to ensure a safe SELECT query
     // In code mode, use the manually entered queryText
-    const queryToExecute = visualBuilderMode 
-      ? generateQueryFromBuilder() 
-      : queryText.trim();
-    
+    const queryToExecute = overrideText != null
+      ? String(overrideText)
+      : (visualBuilderMode ? generateQueryFromBuilder() : queryText.trim());
+
     if (!queryToExecute) {
       setError('Please enter a query or use the visual builder');
       return;
@@ -430,11 +446,11 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     setLoading(true);
     setError(null);
     try {
-      const config = DATA_SOURCE_CONFIG[dataSource];
+      const config = DATA_SOURCE_CONFIG[ds];
       let response;
       let results;
 
-      switch (dataSource) {
+      switch (ds) {
         case 'graphql':
           response = await e2etraceFetchWithRetry(config.endpoint, {
             method: 'POST',
@@ -488,7 +504,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
           break;
 
         default:
-          throw new Error(`Unsupported data source: ${dataSource}`);
+          throw new Error(`Unsupported data source: ${ds}`);
       }
     } catch (err) {
       // Provide user-friendly error messages for common SQL validation errors
@@ -510,6 +526,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     setLoading(true);
     setError(null);
     setNlQueryMetadata(null);
+    setNlSuggestions([]);
     try {
       const response = await e2etraceFetchWithRetry('/api/analytics/nlq', {
         method: 'POST',
@@ -536,6 +553,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
         query_type: result.query_type,
         datasource: result.datasource
       });
+      setNlSuggestions(result.suggestions || result.related_queries || []);
     } catch (err) {
       setError(err.message || 'Natural language query failed');
     } finally {
@@ -543,16 +561,24 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     }
   }, [nlQuery, dataSource, schema]);
 
-  const handleSaveQuery = useCallback(async () => {
+  const handleSaveQuery = useCallback(() => {
     if (!queryText.trim()) { setError('No query to save'); return; }
-    const name = prompt('Enter a name for this query:');
-    if (!name?.trim()) return;
+    setSaveModalName('');
+    setSaveModalDesc('');
+    setSaveModalOpen(true);
+  }, [queryText]);
+
+  const handleConfirmSave = useCallback(async () => {
+    if (!saveModalName.trim()) return;
     try {
-      await saveQuery(name.trim(), queryText, `Saved from Analytics Hub - ${dataSource}`, 'graphql');
+      await saveQuery(saveModalName.trim(), queryText, saveModalDesc || `Saved from Analytics Hub - ${dataSource}`, 'graphql');
+      setSaveModalOpen(false);
+      setSaveModalName('');
+      setSaveModalDesc('');
     } catch {
       setError('Failed to save query');
     }
-  }, [queryText, dataSource, saveQuery]);
+  }, [saveModalName, saveModalDesc, queryText, dataSource, saveQuery]);
 
   const handleFileUpload = useCallback((event) => {
     const files = Array.from(event?.target?.files || []);
@@ -1395,6 +1421,20 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                       <select value={chartType} onChange={e => setChartType(e.target.value)} className="qb-select-sm">
                         {CHART_TYPES.map(ct => <option key={ct.id} value={ct.id}>{ct.name}</option>)}
                       </select>
+                      {chartType !== 'table' && Array.isArray(queryResults) && queryResults.length > 0 && (() => {
+                        const cols = Object.keys(queryResults[0] || {});
+                        if (cols.length < 2) return null;
+                        return (
+                          <>
+                            <select value={groupByField || cols[0]} onChange={e => setGroupByField(e.target.value)} className="qb-select-sm" title="X-Axis / Group By">
+                              {cols.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <select value={valueField || cols[1] || cols[0]} onChange={e => setValueField(e.target.value)} className="qb-select-sm" title="Y-Axis / Value">
+                              {cols.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </>
+                        );
+                      })()}
                     </div>
                     <div className="qb-results-display">
                       {chartType === 'table' ? renderDataTable() : generateChartOption ? (
@@ -2343,7 +2383,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                 <div className="saved-actions">
                   <div className="filter-by-ds">
                     <label>Filter by source:</label>
-                    <select className="form-select-sm" defaultValue="all">
+                    <select className="form-select-sm" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
                       <option value="all">All Sources</option>
                       {Object.entries(DATA_SOURCE_CONFIG).map(([key, config]) => (
                         <option key={key} value={key}>{config.name}</option>
@@ -2409,7 +2449,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                 </div>
               </div>
 
-              {savedQueries.length === 0 ? (
+              {filteredSavedQueries.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon" style={{ '--ds-color': DATA_SOURCE_CONFIG[dataSource]?.color }}>{DATA_SOURCE_CONFIG[dataSource]?.icon}</div>
                   <h3>No Saved Queries</h3>
@@ -2418,7 +2458,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                 </div>
               ) : (
                 <div className="queries-list">
-                  {savedQueries.map((q, i) => (
+                  {filteredSavedQueries.map((q, i) => (
                     <div key={i} className="query-card">
                       <div className="query-ds-badge" style={{ '--ds-color': DATA_SOURCE_CONFIG[q.datasource || 'graphql']?.color }}>
                         {DATA_SOURCE_CONFIG[q.datasource || 'graphql']?.icon}
@@ -2445,9 +2485,12 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                         <button
                           className="btn btn-sm"
                           onClick={async () => {
-                            setQueryText(q.query);
-                            setDataSource(q.datasource || 'graphql');
-                            await executeQuery();
+                            const qText = q.query;
+                            const qSource = q.datasource || 'graphql';
+                            setQueryText(qText);
+                            setDataSource(qSource);
+                            await executeQuery(qText, qSource);
+                            setActiveTab('query-builder');
                           }}
                           disabled={loading}
                         >
@@ -2457,7 +2500,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                           className="btn btn-sm btn-danger"
                           onClick={() => {
                             if (confirm(`Delete query "${q.name}"?`)) {
-                              // Delete logic here
+                              deletePersistedQuery(q.id).catch(err => setError(err.message || 'Failed to delete query'));
                             }
                           }}
                         >
@@ -2474,6 +2517,48 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
       </div>
       )}
 
+      {saveModalOpen && (
+        <div className="modal-overlay" onClick={() => setSaveModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h3>Save Query</h3>
+              <button className="modal-close" onClick={() => setSaveModalOpen(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Name *</label>
+              <input
+                className="query-input"
+                type="text"
+                value={saveModalName}
+                onChange={e => setSaveModalName(e.target.value)}
+                placeholder="My query name"
+                onKeyDown={e => e.key === 'Enter' && handleConfirmSave()}
+                style={{ width: '100%', marginBottom: '0.75rem' }}
+                autoFocus
+              />
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Description (optional)</label>
+              <input
+                className="query-input"
+                type="text"
+                value={saveModalDesc}
+                onChange={e => setSaveModalDesc(e.target.value)}
+                placeholder="Describe what this query does"
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setSaveModalOpen(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleConfirmSave}
+                disabled={!saveModalName.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {loading && (
         <div className="loading-overlay">
           <div className="spinner"></div>

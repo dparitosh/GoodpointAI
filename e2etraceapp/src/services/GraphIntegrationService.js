@@ -78,6 +78,16 @@ class GraphIntegrationService {
     return await response.json();
   }
 
+  async deleteQuery(queryId) {
+    const response = await fetch(
+      `${API_BASE}/api/graphql/catalogue/queries/${encodeURIComponent(queryId)}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok && response.status !== 204) {
+      throw new Error(`Failed to delete query: ${response.statusText}`);
+    }
+  }
+
   // Neo4j GraphRAG Operations
   async executeGraphRAGQuery(question, context = null, tools = null, topK = 5) {
     const response = await fetch(`${API_BASE}/api/neo4j-graphrag/query`, {
