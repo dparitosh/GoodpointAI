@@ -135,9 +135,52 @@ const DEMO_PAST_RUNS = [
       report_id: 'demo-pr-002',
       result: {
         files: [
-          { name: 'supplier_data.xlsx', path: '/data/suppliers/supplier_data.xlsx', file_type: 'xlsx', size_bytes: 512000, row_count: 876, column_count: 12, null_rate: 8.3, profile: {} },
-          { name: 'contacts.csv',       path: '/data/suppliers/contacts.csv',       file_type: 'csv',  size_bytes: 65536,  row_count: 244, column_count: 7,  null_rate: 5.1, profile: {} },
-          { name: 'agreements.json',    path: '/data/suppliers/agreements.json',    file_type: 'json', size_bytes: 43008,  row_count: 38,  column_count: 9,  null_rate: 0,   profile: {} },
+          {
+            name: 'supplier_data.xlsx', path: '/data/suppliers/supplier_data.xlsx', file_type: 'xlsx',
+            size_bytes: 512000, row_count: 876, column_count: 12, null_rate: 8.3,
+            profile: {
+              supplier_id:    { type: 'string',  null_rate: 0,    sample: ['SUP-001', 'SUP-002', 'SUP-003'] },
+              supplier_name:  { type: 'string',  null_rate: 1.2,  sample: ['Acme Corp', 'Globex Ltd', 'Initech'] },
+              country:        { type: 'string',  null_rate: 3.4,  sample: ['USA', 'Germany', 'India'] },
+              category:       { type: 'string',  null_rate: 5.7,  sample: ['Electronics', 'Fasteners', 'Plastics'] },
+              rating:         { type: 'float',   null_rate: 12.1, sample: [4.2, 3.8, 4.7] },
+              lead_time_days: { type: 'integer', null_rate: 8.0,  sample: [14, 21, 7] },
+              unit_cost_usd:  { type: 'float',   null_rate: 6.3,  sample: [12.50, 0.45, 3.20] },
+              currency:       { type: 'string',  null_rate: 2.1,  sample: ['USD', 'EUR', 'INR'] },
+              contact_email:  { type: 'string',  null_rate: 15.2, sample: ['ops@acme.com', null, 'supply@initech.com'] },
+              phone:          { type: 'string',  null_rate: 22.4, sample: ['+1-555-0100', null, '+49-30-12345'] },
+              status:         { type: 'string',  null_rate: 0,    sample: ['active', 'active', 'inactive'] },
+              onboarded_date: { type: 'date',    null_rate: 4.5,  sample: ['2021-03-15', '2019-07-01', '2023-01-10'] },
+            },
+          },
+          {
+            name: 'contacts.csv', path: '/data/suppliers/contacts.csv', file_type: 'csv',
+            size_bytes: 65536, row_count: 244, column_count: 7, null_rate: 5.1,
+            profile: {
+              contact_id:   { type: 'string',  null_rate: 0,    sample: ['C-001', 'C-002', 'C-003'] },
+              first_name:   { type: 'string',  null_rate: 0,    sample: ['Alice', 'Bob', 'Carol'] },
+              last_name:    { type: 'string',  null_rate: 0.4,  sample: ['Smith', 'Jones', 'Williams'] },
+              email:        { type: 'string',  null_rate: 3.3,  sample: ['alice@acme.com', 'bob@globex.com', null] },
+              phone:        { type: 'string',  null_rate: 18.4, sample: ['+1-555-0101', null, '+44-20-7946'] },
+              company:      { type: 'string',  null_rate: 1.6,  sample: ['Acme Corp', 'Globex Ltd', 'Initech'] },
+              country:      { type: 'string',  null_rate: 2.5,  sample: ['USA', 'Germany', 'UK'] },
+            },
+          },
+          {
+            name: 'agreements.json', path: '/data/suppliers/agreements.json', file_type: 'json',
+            size_bytes: 43008, row_count: 38, column_count: 9, null_rate: 0,
+            profile: {
+              agreement_id:   { type: 'string',  null_rate: 0,   sample: ['AGR-2021-001', 'AGR-2022-014', 'AGR-2023-007'] },
+              supplier_id:    { type: 'string',  null_rate: 0,   sample: ['SUP-001', 'SUP-002', 'SUP-001'] },
+              type:           { type: 'string',  null_rate: 0,   sample: ['NDA', 'MSA', 'SLA'] },
+              start_date:     { type: 'date',    null_rate: 0,   sample: ['2021-01-01', '2022-06-15', '2023-03-01'] },
+              end_date:       { type: 'date',    null_rate: 2.6, sample: ['2024-12-31', null, '2025-02-28'] },
+              value_usd:      { type: 'float',   null_rate: 0,   sample: [250000, 85000, 1200000] },
+              status:         { type: 'string',  null_rate: 0,   sample: ['active', 'expired', 'active'] },
+              signed_by:      { type: 'string',  null_rate: 5.3, sample: ['J. Doe', 'M. Lee', null] },
+              renewal_notice: { type: 'integer', null_rate: 7.9, sample: [30, 60, null] },
+            },
+          },
         ],
         by_type: { xlsx: 1, csv: 1, json: 1 },
         catalog: { avg_row_count: 386 },
@@ -258,14 +301,14 @@ function ProfileRow({ file }) {
                     <div className="dd-col-meta">
                       {stats.type && <span className="dd-col-type">{stats.type}</span>}
                       {stats.null_rate != null && (
-                        <span className="dd-col-null">
+                        <span className="dd-col-null" style={{ color: stats.null_rate > 15 ? '#ef4444' : stats.null_rate > 5 ? '#f59e0b' : '#6b7280' }}>
                           {stats.null_rate.toFixed(0)}% null
                         </span>
                       )}
                     </div>
                     {stats.sample && (
                       <div className="dd-col-samples">
-                        {stats.sample.slice(0, 3).map((v, i) => (
+                        {stats.sample.filter((v) => v != null).slice(0, 3).map((v, i) => (
                           <span key={i} className="dd-sample-val">{String(v)}</span>
                         ))}
                       </div>
