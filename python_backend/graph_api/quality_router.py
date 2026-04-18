@@ -2124,7 +2124,7 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
         # Soda uses non-zero exit codes to represent check failures; that's not an API error.
         # We only fail the API if the scan errored in a way that didn't yield results.
         if exit_code not in (0, 2) and not checks and (errors or warnings):
-            raise HTTPException(status_code=500, detail="Soda scan execution failed")
+            raise HTTPException(status_code=503, detail="Soda scan execution failed")
 
         return report_payload
 
