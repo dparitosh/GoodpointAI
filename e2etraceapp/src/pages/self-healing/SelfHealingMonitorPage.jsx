@@ -86,8 +86,13 @@ const SelfHealingMonitorPage = () => {
       };
 
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        setMetrics(data);
+        let data;
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (data && typeof data === 'object') setMetrics(data);
       };
 
       ws.onerror = (error) => {
@@ -254,7 +259,7 @@ const SelfHealingMonitorPage = () => {
   // Retry DLQ message
   const retryDLQMessage = async (taskId) => {
     try {
-      await fetch(`/api/self-healing/dead-letter-queue/${taskId}/retry`, {
+      await fetch(`${API_CONFIG.ENDPOINTS.SELF_HEALING_DLQ}/${taskId}/retry`, {
         method: 'POST'
       });
       await loadDLQ();
@@ -272,13 +277,13 @@ const SelfHealingMonitorPage = () => {
     }
 
     try {
-      await fetch(`/api/self-healing/dead-letter-queue/${taskId}`, {
+      await fetch(`${API_CONFIG.ENDPOINTS.SELF_HEALING_DLQ}/${taskId}`, {
         method: 'DELETE'
       });
       await loadDLQ();
     } catch (error) {
       console.error('Error removing DLQ message:', error);
-      alert('Failed to remove task');
+      toast.error('Failed to remove task');
     }
   };
 
