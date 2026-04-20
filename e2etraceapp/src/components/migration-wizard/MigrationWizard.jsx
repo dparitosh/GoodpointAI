@@ -1193,11 +1193,23 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       <h3>Discovery Agent</h3>
       <p className="step-description">Run discovery to generate SODA-driven insights and mapping hints</p>
 
+      {/* Warning when source/target not selected */}
+      {(!wizardData.sourceSystem || !wizardData.targetSystem) && (
+        <div className="inline-alert warning" style={{ marginBottom: 16 }}>
+          <i className="fas fa-exclamation-triangle" />
+          <div>
+            <strong>Source and target systems required</strong>
+            <p>Go back to <strong>Step 1 (Connect)</strong> to select your source and target systems before running discovery.</p>
+          </div>
+        </div>
+      )}
+
       <div className="discovery-actions">
         <button
           className="btn btn-primary"
           onClick={runDiscovery}
           disabled={!wizardData.sourceSystem || !wizardData.targetSystem || isLoading || wizardData.discoveryStatus === 'running'}
+          title={!wizardData.sourceSystem || !wizardData.targetSystem ? 'Complete Step 1 first to select source and target systems' : 'Run discovery to analyze your data'}
         >
           <i className="fas fa-search" /> {wizardData.discoveryStatus === 'running' ? 'Running Discovery...' : 'Run Discovery'}
         </button>
