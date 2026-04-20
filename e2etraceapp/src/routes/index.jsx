@@ -33,18 +33,18 @@ const router = createHashRouter([
     errorElement: <RouteErrorPage />,
     handle: { crumb: 'nav.home' },
     children: [
-      // Default route - Main Dashboard with Graph Visualization
+      // Default route - Corporate Landing Page
       {
         index: true,
-        element: <E2ETraceMainDashboard />,
-        handle: { crumb: 'nav.overview' }
-      },
-
-      // Landing Page - Platform overview (alternative entry)
-      {
-        path: 'landing',
         element: <LandingPage />,
         handle: { crumb: 'nav.landing' }
+      },
+
+      // Main Dashboard - Graph Visualization
+      {
+        path: 'dashboard',
+        element: <E2ETraceMainDashboard />,
+        handle: { crumb: 'nav.overview' }
       },
 
       // Conversational Search - AI-powered search across all data sources
