@@ -1582,8 +1582,7 @@ async def run_generic_quality_scan(request: GenericScanRequest, db: Session = De
         )
 
         # Persist report to DB
-        from models.quality_models import DataQualityScanReport as DataQualityScanReportModel
-        report_record = DataQualityScanReportModel(
+        report_record = DataQualityScanReport(
             scan_id=scan_id,
             table_name=folder_path,
             data_source="folder",

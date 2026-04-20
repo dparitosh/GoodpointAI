@@ -138,9 +138,9 @@ def _parse_json_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
         items = data
     elif isinstance(data, dict):
         if isinstance(data.get("records"), list):
-            items = data.get("records")
+            items = data["records"]
         elif isinstance(data.get("items"), list):
-            items = data.get("items")
+            items = data["items"]
         else:
             # single object
             items = [data]
@@ -339,7 +339,7 @@ async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
                     f'SELECT * FROM "{table_name}" LIMIT %s',  # noqa: S608
                     (limit,),
                 )
-                columns = [desc[0] for desc in cur.description]
+                columns = [desc[0] for desc in (cur.description or [])]
                 for db_row in cur.fetchall():
                     records.append(dict(zip(columns, db_row)))
 
@@ -399,7 +399,7 @@ async def _sample_sqlserver(conn: Dict[str, Any], limit: int) -> tuple:
                 # Use parameterised LIMIT via pyodbc; TOP doesn't support params directly,
                 # so we format only the integer-typed, already-validated `limit` value.
                 cur.execute(f"SELECT TOP (?) * FROM {full_table}", (int(limit),))
-                columns = [desc[0] for desc in cur.description]
+                columns = [desc[0] for desc in (cur.description or [])]
                 for row in cur.fetchall():
                     records.append(dict(zip(columns, row)))
 
@@ -417,10 +417,10 @@ async def _sample_oracle(conn: Dict[str, Any], limit: int) -> tuple:
     records: List[Dict[str, Any]] = []
 
     try:
-        import oracledb  # type: ignore (formerly cx_Oracle)
+        import oracledb  # type: ignore[import-untyped]
     except ImportError:
         try:
-            import cx_Oracle as oracledb  # type: ignore (legacy)
+            import cx_Oracle as oracledb  # type: ignore[import-untyped]
         except ImportError:
             warnings.append("oracledb driver not installed — cannot sample Oracle database")
             return records, warnings
@@ -453,7 +453,7 @@ async def _sample_oracle(conn: Dict[str, Any], limit: int) -> tuple:
                 full_table = f"{owner}.{table_name}"
                 # Use a parameterised bind variable (:lim) for the ROWNUM guard.
                 cur.execute(f"SELECT * FROM {full_table} WHERE ROWNUM <= :lim", {"lim": int(limit)})
-                columns = [desc[0] for desc in cur.description]
+                columns = [desc[0] for desc in (cur.description or [])]
                 for row in cur.fetchall():
                     # Convert Oracle-specific types to JSON-serializable types
                     serialized_row = []

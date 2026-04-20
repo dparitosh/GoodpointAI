@@ -9,6 +9,21 @@ GraphTrace is a local-first, full-stack application for **data lineage**, **PLM 
 - **Node.js 18+** (recommended: 20)
 - **PostgreSQL 14+** (required for persistence)
 
+### Installation
+```powershell
+# 1. Create virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 2. Install all dependencies (consolidated)
+pip install -r requirements.txt
+
+# 3. Install frontend dependencies
+cd e2etraceapp && npm install && cd ..
+
+# 4. Configure database connection (see docs/INSTALLATION.md Step 3-4)
+```
+
 ### Validate Environment
 ```powershell
 .\graphtrace.ps1 -Check

@@ -1,6 +1,5 @@
 import sys
 import os
-import asyncio
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -49,11 +48,11 @@ class DataAnalystAgent(AgentService):
             try:
                 # Remove prefix
                 if db_url.startswith("postgresql://"):
-                     rest = db_url[13:]
+                    rest = db_url[13:]
                 elif db_url.startswith("postgres://"):
-                     rest = db_url[11:]
-                else: 
-                     rest = db_url
+                    rest = db_url[11:]
+                else:
+                    rest = db_url
                 
                 if "@" in rest:
                     creds, location = rest.split("@")
@@ -105,7 +104,7 @@ class DataAnalystAgent(AgentService):
                 await conn.execute("SELECT 1")
             print(f"[{logger_name}] Postgres connectivity verified.")
         except Exception as e:
-             print(f"[{logger_name}] WARNING: Postgres connectivity failed: {e}")
+            print(f"[{logger_name}] WARNING: Postgres connectivity failed: {e}")
 
         # Chain upstream registration logic
         async with super()._lifespan(app):
@@ -229,8 +228,8 @@ class DataAnalystAgent(AgentService):
                         "timestamp": datetime.now().isoformat()
                     }
         except Exception as e:
-             # Log error here
-             return {"error": f"Neo4j execution failed: {str(e)}"}
+            # Log error here
+            return {"error": f"Neo4j execution failed: {str(e)}"}
 
 if __name__ == "__main__":
     agent = DataAnalystAgent()

@@ -19,10 +19,22 @@ import './MigrationWizard.css';
  * 5. Execute - Run migration and monitor progress
  */
 const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Initialize step from URL if available, otherwise use initialStep prop
+  const getInitialStepFromURL = () => {
+    const stepParam = searchParams.get('step');
+    if (stepParam && !isNaN(stepParam)) {
+      const step = parseInt(stepParam, 10);
+      if (step >= 1 && step <= 5) {
+        return step;
+      }
+    }
+    return initialStep;
+  };
   
   // Wizard state
-  const [currentStep, setCurrentStep] = useState(initialStep);
+  const [currentStep, setCurrentStep] = useState(getInitialStepFromURL);
   const [isLoading, setIsLoading] = useState(false);
   const [wizardData, setWizardData] = useState({
     // Step 0: Run identity
@@ -276,6 +288,35 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable method refs via hooks
   }, [loadDataSources, loadMappingTemplates, loadWorkbenchData, searchParams]);
+
+  // URL-based step navigation - Read step from URL on mount
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    if (stepParam && !isNaN(stepParam)) {
+      const step = parseInt(stepParam, 10);
+      if (step >= 1 && step <= 5 && step !== currentStep) {
+        setCurrentStep(step);
+      }
+    }
+  // Only run on mount or when URL changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // URL-based step navigation - Update URL when step changes
+  useEffect(() => {
+    if (!embedded && currentStep) {
+      const currentStepParam = searchParams.get('step');
+      const stepString = currentStep.toString();
+      
+      // Only update if step parameter is different to avoid unnecessary navigation
+      if (currentStepParam !== stepString) {
+        // Preserve all existing query parameters (e.g., source=workbench)
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('step', stepString);
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [currentStep, embedded, setSearchParams, searchParams]);
 
   // Step navigation
   const canProceed = useCallback((step) => {

@@ -27,7 +27,7 @@ agents = [
 ]
 
 processes_to_start = [
-    {"name": "Frontend", "cmd": "npm run dev", "cwd": "e2etraceapp", "color": "\\033[96m"},
+    {"name": "Frontend", "cmd": "npm run dev -- --host 127.0.0.1 --port 5173", "cwd": "e2etraceapp", "color": "\\033[96m"},
     {"name": "Backend", "cmd": f"{sys.executable} -m uvicorn main:app --port 8011", "cwd": "python_backend", "color": "\\033[92m"},
     {"name": "MCP_Srv", "cmd": f"{sys.executable} -m uvicorn mcp_server.main:app --port 8012", "cwd": ".", "color": "\\033[95m"}
 ]

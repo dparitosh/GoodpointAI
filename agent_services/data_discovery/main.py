@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -49,7 +50,7 @@ _EXT_MAP: Dict[str, str] = {
     ".csv": "csv", ".tsv": "csv",
     ".json": "json", ".jsonl": "json",
     ".xml": "xml",
-    ".xlsx": "excel", ".xls": "excel",
+    ".xlsx": "xlsx", ".xls": "xlsx",
     ".parquet": "parquet", ".avro": "avro",
     ".pdf": "pdf", ".txt": "text", ".log": "text",
     ".png": "image", ".jpg": "image", ".jpeg": "image",
@@ -58,6 +59,67 @@ _EXT_MAP: Dict[str, str] = {
 
 def _classify(ext: str) -> str:
     return _EXT_MAP.get(ext.lower(), "other")
+
+
+def _infer_semantic_type(series: pd.Series, dtype_str: str) -> str:
+    """Infer semantic/business type from a pandas Series."""
+    if series.empty or series.isnull().all():
+        return "empty"
+    
+    # Numeric types
+    if dtype_str.startswith("int") or dtype_str.startswith("uint"):
+        # Check if looks like an ID (high cardinality, sequential)
+        if series.nunique() / len(series) > 0.95:
+            return "identifier"
+        return "integer"
+    
+    if dtype_str.startswith("float"):
+        # Check if all values are actually integers stored as float
+        if (series.dropna() % 1 == 0).all():
+            return "integer (stored as float)"
+        return "decimal"
+    
+    # Date/time types
+    if dtype_str.startswith("datetime"):
+        return "timestamp"
+    
+    # Boolean
+    if dtype_str == "bool":
+        return "boolean"
+    
+    # String/object types - try to infer semantic meaning
+    if dtype_str == "object":
+        non_null = series.dropna()
+        if len(non_null) == 0:
+            return "text"
+        
+        # Sample values for pattern detection
+        sample = non_null.head(100).astype(str)
+        
+        # Check for dates
+        try:
+            pd.to_datetime(sample, errors='raise')
+            return "date/timestamp (as text)"
+        except (ValueError, TypeError):
+            pass
+        
+        # Check for numeric
+        try:
+            pd.to_numeric(sample, errors='raise')
+            return "numeric (as text)"
+        except (ValueError, TypeError):
+            pass
+        
+        # Check cardinality for categorical vs free text
+        cardinality_ratio = series.nunique() / len(series)
+        if cardinality_ratio < 0.05:
+            return "categorical"
+        elif cardinality_ratio < 0.5:
+            return "semi-categorical"
+        else:
+            return "text"
+    
+    return dtype_str
 
 
 def _discover_files(folder: str, recursive: bool = True) -> List[Dict[str, Any]]:
@@ -85,7 +147,7 @@ def _discover_files(folder: str, recursive: bool = True) -> List[Dict[str, Any]]
 
 
 def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
-    """Profile a single file — row count, column count, null rates, type hints."""
+    """Profile a single file — row count, column count, null rates, type hints using pandas DataFrame."""
     path = Path(file_meta["path"])
     ftype = file_meta["file_type"]
     profile: Dict[str, Any] = {
@@ -100,99 +162,233 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
         "parse_error": None,
     }
 
+    df = None
     try:
         if ftype == "csv":
-            # utf-8-sig strips Excel BOM (\ufeff); fall back to cp1252 for Windows-ANSI exports
+            # Try encodings for CSV
             for enc in ("utf-8-sig", "cp1252", "latin-1"):
                 try:
-                    with path.open("r", encoding=enc, newline="") as f:
-                        sample = f.read(4096)
-                        f.seek(0)
-                        try:
-                            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-                        except csv.Error:
-                            dialect = csv.excel  # fallback: comma
-                        reader = csv.DictReader(f, dialect=dialect)
-                        cols = [c for c in (reader.fieldnames or []) if c is not None]
-                        profile["column_count"] = len(cols)
-                        rows = list(reader)
-                        profile["row_count"] = len(rows)
-                    break  # successfully parsed
-                except (UnicodeDecodeError, LookupError):
+                    df = pd.read_csv(str(path), encoding=enc, nrows=0)  # First check header
+                    df = pd.read_csv(str(path), encoding=enc)
+                    break
+                except (UnicodeDecodeError, pd.errors.ParserError):
                     continue
-            if rows and cols:
-                col_stats = []
-                for col in cols:
-                    vals = [r.get(col) for r in rows]
-                    nulls = sum(1 for v in vals if v is None or str(v).strip() == "")
-                    unique_sample = list({str(v) for v in vals[:200] if v})[:5]
-                    col_stats.append({
-                        "name": col,
-                        "null_count": nulls,
-                        "null_rate": round(nulls / len(rows), 4) if rows else 0,
-                        "sample_values": unique_sample,
-                    })
-                profile["columns"] = col_stats
-                total_cells = len(rows) * len(cols)
-                total_nulls = sum(c["null_count"] for c in col_stats)
-                profile["null_rate"] = round(total_nulls / total_cells, 4) if total_cells else 0
-
+        elif ftype == "xlsx":
+            try:
+                # Try openpyxl engine first (modern .xlsx)
+                df = pd.read_excel(str(path), engine='openpyxl')
+            except ImportError:
+                profile["parse_error"] = "openpyxl not installed - cannot read .xlsx files"
+                profile["parse_ok"] = False
+            except Exception as e:
+                # Try without specifying engine (fallback to xlrd for .xls)
+                try:
+                    df = pd.read_excel(str(path))
+                except Exception as e2:
+                    profile["parse_error"] = f"Excel read failed: {str(e2)}"
+                    profile["parse_ok"] = False
+                    df = None
         elif ftype == "json":
-            with path.open("r", encoding="utf-8", errors="replace") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                profile["row_count"] = len(data)
-                if data and isinstance(data[0], dict):
-                    cols = list(data[0].keys())
-                    profile["column_count"] = len(cols)
-                    profile["columns"] = [{"name": c} for c in cols]
-            elif isinstance(data, dict):
-                profile["row_count"] = 1
-                profile["column_count"] = len(data)
-                profile["columns"] = [{"name": k} for k in data.keys()]
-
+            try:
+                df = pd.read_json(str(path))
+                if isinstance(df, pd.Series):
+                    df = df.to_frame().T
+            except Exception as e:
+                profile["parse_error"] = f"pd.read_json failed: {str(e)}"
+                profile["parse_ok"] = False
+                df = None
+        elif ftype == "parquet":
+            df = pd.read_parquet(str(path))
         elif ftype == "xml":
-            import xml.etree.ElementTree as ET
-            tree = ET.parse(str(path))
-            root_el = tree.getroot()
-            children = list(root_el)
-            profile["row_count"] = len(children)
-            if children:
-                profile["column_count"] = len(list(children[0]))
-                profile["columns"] = [{"name": ch.tag} for ch in children[0]]
+            df = pd.read_xml(str(path))
+        # Add more formats as needed
 
-        elif ftype == "excel":
-            import openpyxl
-            wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-            ws = wb.active
-            rows = list(ws.iter_rows(values_only=True))
-            wb.close()
-            if rows:
-                header = [str(c) if c is not None else f"col_{i}" for i, c in enumerate(rows[0])]
-                data_rows = rows[1:]
-                profile["column_count"] = len(header)
-                profile["row_count"] = len(data_rows)
-                col_stats = []
-                for idx, col in enumerate(header):
-                    vals = [r[idx] if idx < len(r) else None for r in data_rows]
-                    nulls = sum(1 for v in vals if v is None or str(v).strip() == "")
-                    unique_sample = list({str(v) for v in vals[:200] if v is not None})[:5]
-                    col_stats.append({
-                        "name": col,
-                        "null_count": nulls,
-                        "null_rate": round(nulls / len(data_rows), 4) if data_rows else 0,
-                        "sample_values": unique_sample,
-                    })
-                profile["columns"] = col_stats
-                total_cells = len(data_rows) * len(header)
-                total_nulls = sum(c["null_count"] for c in col_stats)
-                profile["null_rate"] = round(total_nulls / total_cells, 4) if total_cells else 0
+        if df is not None and not df.empty:
+            profile["row_count"] = int(len(df))
+            profile["column_count"] = int(len(df.columns))
+            col_stats = []
+            for col in df.columns:
+                # Basic stats
+                null_count = int(df[col].isnull().sum())
+                valid_count = int(len(df) - null_count)
+                null_rate = round(float(null_count) / len(df), 4) if len(df) > 0 else 0
+                
+                # Distinct values
+                distinct_values = df[col].dropna().unique()
+                distinct_count = int(len(distinct_values))
+                
+                # Sample values (convert to native Python types)
+                sample_values = [str(v) for v in distinct_values[:10]]
+                
+                # Infer semantic type
+                col_dtype = str(df[col].dtype)
+                semantic_type = _infer_semantic_type(df[col], col_dtype)
+                
+                # Distinct data types within the column (for mixed-type columns)
+                distinct_types = set()
+                for val in df[col].dropna().head(100):  # Sample first 100 non-null values
+                    distinct_types.add(type(val).__name__)
+                
+                # Statistics for numeric columns
+                stats = {}
+                if col_dtype.startswith(('int', 'uint', 'float')):
+                    try:
+                        stats["min"] = float(df[col].min())
+                        stats["max"] = float(df[col].max())
+                        stats["mean"] = float(round(df[col].mean(), 4))
+                        stats["median"] = float(df[col].median())
+                        stats["std_dev"] = float(round(df[col].std(), 4))
+                        stats["quartile_25"] = float(df[col].quantile(0.25))
+                        stats["quartile_75"] = float(df[col].quantile(0.75))
+                    except Exception:
+                        pass
+                
+                # Cardinality metrics
+                cardinality_ratio = round(float(distinct_count) / len(df), 4) if len(df) > 0 else 0
+                
+                # Top 5 most frequent values
+                try:
+                    value_counts = df[col].value_counts().head(5)
+                    top_values = [
+                        {"value": str(val), "count": int(count), "percentage": round(float(count) / len(df) * 100, 2)}
+                        for val, count in value_counts.items()
+                    ]
+                except Exception:
+                    top_values = []
+                
+                col_stats.append({
+                    "name": str(col),
+                    "null_count": null_count,
+                    "valid_count": valid_count,
+                    "null_rate": null_rate,
+                    "null_percentage": round(null_rate * 100, 2),
+                    "completeness": round((1 - null_rate) * 100, 2),
+                    "distinct_count": distinct_count,
+                    "cardinality_ratio": cardinality_ratio,
+                    "distinct_values": sample_values if distinct_count <= 10 else sample_values[:10],
+                    "sample_values": sample_values[:5],  # Backward compat
+                    "top_values": top_values,
+                    "type": col_dtype,
+                    "semantic_type": semantic_type,
+                    "python_types": sorted(list(distinct_types)),
+                    "statistics": stats,
+                })
+            profile["columns"] = col_stats
+            total_nulls = sum(c["null_count"] for c in col_stats)
+            total_cells = len(df) * len(df.columns)
+            profile["null_rate"] = round(float(total_nulls) / total_cells, 4) if total_cells > 0 else 0
+            profile["completeness"] = round((1 - profile["null_rate"]) * 100, 2)
+
+        profile["quality_checks"] = _run_quality_checks(df)
 
     except Exception as exc:
         profile["parse_ok"] = False
         profile["parse_error"] = str(exc)
 
     return profile
+
+
+def _run_quality_checks(df: Optional[pd.DataFrame]) -> List[Dict[str, Any]]:
+    """Run quality checks on a DataFrame — SODA Core if available, otherwise builtin checks.
+    
+    Returns a list of check results, each with:
+    - name: check description
+    - outcome: 'pass' or 'fail'
+    - fail: bool
+    - pass: bool
+    - value: int/float metric (optional)
+    - engine: 'soda' or 'builtin'
+    """
+    if df is None:
+        return [{"name": "quality_checks", "error": "No dataframe to evaluate"}]
+
+    # Try SODA Core first (fail gracefully if unavailable)
+    try:
+        from soda.scan import Scan  # type: ignore[import-untyped]
+        
+        scan = Scan()
+        # SODA Core 3.x API: add_pandas_dataframe(dataset_name, pandas_df, data_source_name='dask')
+        scan.add_pandas_dataframe(dataset_name="data", pandas_df=df, data_source_name="pandas")
+        sodacl = """
+checks for data:
+  - row_count > 0
+  - missing_count < 100
+  - duplicate_count = 0
+"""
+        scan.add_sodacl_yaml_str(sodacl)
+        exit_code = scan.execute()
+        
+        # Extract check results from SODA scan
+        checks = []
+        scan_results = scan.get_scan_results() or {}
+        for check in scan_results.get("checks", []):
+            checks.append({
+                "name": str(check.get("name") or check.get("identity", "unknown")),
+                "outcome": str(check.get("outcome", "unknown")).lower(),
+                "fail": bool(check.get("outcome", "").lower() == "fail"),
+                "pass": bool(check.get("outcome", "").lower() == "pass"),
+                "engine": "soda",
+            })
+        
+        if checks:
+            logger.info("SODA quality checks completed: %d checks, exit_code=%d", len(checks), exit_code)
+            return checks
+        
+        logger.warning("SODA scan returned no checks; falling back to builtin")
+    except ImportError:
+        logger.debug("SODA Core not installed; using builtin quality checks")
+    except Exception as exc:
+        logger.warning("SODA quality check failed (%s); using fallback checks", exc)
+
+    # Builtin quality checks (pandas-based)
+    total_rows = len(df)
+    missing_count = int(df.isnull().sum().sum())
+    duplicate_count = int(df.duplicated().sum())
+    
+    # Column-level nulls for reporting
+    max_null_rate = 0.0
+    if total_rows > 0:
+        for col in df.columns:
+            null_rate = df[col].isnull().sum() / total_rows
+            max_null_rate = max(max_null_rate, null_rate)
+
+    checks = [
+        {
+            "name": "row_count > 0",
+            "outcome": "pass" if total_rows > 0 else "fail",
+            "fail": bool(total_rows == 0),
+            "pass": bool(total_rows > 0),
+            "value": int(total_rows),
+            "engine": "builtin",
+        },
+        {
+            "name": "missing_count < 100",
+            "outcome": "pass" if missing_count < 100 else "fail",
+            "fail": bool(missing_count >= 100),
+            "pass": bool(missing_count < 100),
+            "value": int(missing_count),
+            "engine": "builtin",
+        },
+        {
+            "name": "duplicate_count = 0",
+            "outcome": "pass" if duplicate_count == 0 else "fail",
+            "fail": bool(duplicate_count != 0),
+            "pass": bool(duplicate_count == 0),
+            "value": int(duplicate_count),
+            "engine": "builtin",
+        },
+        {
+            "name": "max_null_rate < 50%",
+            "outcome": "pass" if max_null_rate < 0.5 else "fail",
+            "fail": bool(max_null_rate >= 0.5),
+            "pass": bool(max_null_rate < 0.5),
+            "value": float(round(max_null_rate * 100, 2)),
+            "engine": "builtin",
+        },
+    ]
+    
+    logger.info("Builtin quality checks completed: %d checks", len(checks))
+    return checks
 
 
 # ── Agent Class ───────────────────────────────────────────────────────────
@@ -308,10 +504,36 @@ class DataDiscoveryAgent(AgentService):
                 None,
                 lambda: [_profile_file(f) for f in files[:500]],  # cap at 500 for response size
             )
-            result["profiles"] = profiles
+            # Merge profile data directly into file entries for frontend compatibility.
+            # Also convert null_rate from 0-1 decimal fraction to 0-100 percent.
+            profile_by_path = {p["path"]: p for p in profiles}
+            for f in files:
+                p = profile_by_path.get(f["path"])
+                if not p:
+                    continue
+                f["row_count"] = p.get("row_count")
+                f["column_count"] = p.get("column_count")
+                nr = p.get("null_rate")
+                f["null_rate"] = round(nr * 100, 2) if nr is not None else None
+                f["profile"] = {}
+                for col in p.get("columns", []):
+                    col_nr = col.get("null_rate")
+                    f["profile"][col["name"]] = {
+                        "type": col.get("type"),
+                        "null_rate": round(col_nr * 100, 2) if col_nr is not None else None,
+                        "sample": col.get("sample_values", []),
+                    }
+                f["quality_checks"] = p.get("quality_checks", [])
+            result["profiles"] = profiles  # keep for backwards compat
             parse_errors = [p for p in profiles if not p["parse_ok"]]
             result["parse_errors"] = len(parse_errors)
             result["profiled_files"] = len(profiles)
+
+        # Compute catalog summary (avg row count for KPI card)
+        row_counts = [f["row_count"] for f in files if f.get("row_count") is not None]
+        result["catalog"] = {
+            "avg_row_count": round(sum(row_counts) / len(row_counts), 1) if row_counts else None,
+        }
 
         return result
 

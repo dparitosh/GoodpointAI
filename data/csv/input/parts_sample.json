@@ -1,0 +1,5 @@
+[
+  {"part_number": "PN-001", "name": "Bolt M8", "weight_kg": 0.012, "unit_cost": 0.45},
+  {"part_number": "PN-002", "name": "Nut M8", "weight_kg": 0.008, "unit_cost": 0.12},
+  {"part_number": "PN-003", "name": "Washer", "weight_kg": 0.003, "unit_cost": 0.18}
+]

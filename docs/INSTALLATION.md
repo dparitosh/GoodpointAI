@@ -211,15 +211,20 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 # Your prompt should now show (.venv)
 
-# Install backend + MCP server dependencies
-pip install -r python_backend\requirements.txt
-pip install -r mcp_server\requirements.txt
+# Install all dependencies (backend + MCP server + agent services)
+pip install -r requirements.txt
 
 # Install frontend dependencies
 cd e2etraceapp
 npm install
 cd ..
 ```
+
+> **Note:** The root `requirements.txt` consolidates all Python dependencies from `python_backend/`, `mcp_server/`, and `agent_services/` for simpler installation. If you prefer to install components separately:
+> ```powershell
+> pip install -r python_backend\requirements.txt
+> pip install -r mcp_server\requirements.txt
+> ```
 
 **Verify:**
 ```powershell

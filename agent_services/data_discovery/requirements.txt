@@ -4,3 +4,5 @@ httpx
 pydantic-settings
 python-dotenv
 pandas
+pyarrow
+soda-core

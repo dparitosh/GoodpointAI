@@ -341,6 +341,9 @@ export default function DataDiscoveryPage() {
   const [result, setResult]               = useState(DEMO_RESULT);
   const [error, setError]                 = useState(null);
 
+  // ── Export state
+  const [exporting, setExporting]         = useState(false);
+
   // ── Saved reports (past runs)
   const [savedReports, setSavedReports]   = useState(DEMO_PAST_RUNS);
   const [activeReportId, setActiveReportId] = useState(null);
@@ -430,7 +433,7 @@ export default function DataDiscoveryPage() {
       setError(e.message || 'Discovery failed');
       setStatus('error');
     }
-  }, [selectedSourceId, folderPath, recursive, loadSavedReports]);
+  }, [selectedSourceId, folderPath, recursive, loadSavedReports, sources]);
 
   const runQualityScan = useCallback(async () => {
     if (!selectedSourceId && !folderPath.trim()) return;
@@ -468,7 +471,116 @@ export default function DataDiscoveryPage() {
     } finally {
       setScanning(false);
     }
-  }, [selectedSourceId, folderPath]);
+  }, [selectedSourceId, folderPath, sources]);
+
+  // ── Export functions
+  const exportToJSON = useCallback(() => {
+    if (!result) return;
+    setExporting(true);
+    try {
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        discovery_result: result,
+        report_id: activeReportId,
+        source: folderPath || selectedSourceId,
+        file_count: files.length,
+        total_size_bytes: totalSize,
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `data-discovery-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }, [result, activeReportId, folderPath, selectedSourceId, files.length, totalSize]);
+
+  const exportToCSV = useCallback(() => {
+    if (!result || !files.length) return;
+    setExporting(true);
+    try {
+      // CSV header
+      const headers = [
+        'File Name',
+        'File Type',
+        'Size (KB)',
+        'Rows',
+        'Columns',
+        'Null Rate (%)',
+        'Completeness (%)',
+        'Cardinality (%)',
+        'Data Type',
+        'Semantic Type',
+        'Top Values',
+        'Distinct Count',
+      ];
+      
+      // Build CSV rows
+      const rows = [];
+      rows.push(headers.join(','));
+      
+      files.forEach((f) => {
+        const sizeKB = ((f.size_bytes || 0) / 1024).toFixed(2);
+        const nullRate = f.null_rate != null ? f.null_rate.toFixed(2) : '';
+        const completeness = f.completeness != null ? f.completeness.toFixed(2) : '';
+        
+        // Get first column's details as representative data
+        const profile = f.profile || {};
+        const firstColKey = Object.keys(profile)[0];
+        const firstCol = profile[firstColKey] || {};
+        
+        const cardinalityPct = firstCol.cardinality_ratio 
+          ? (firstCol.cardinality_ratio * 100).toFixed(2) 
+          : '';
+        const topValues = firstCol.top_values 
+          ? firstCol.top_values.map(tv => `${tv.value}(${tv.percentage}%)`).join('; ')
+          : '';
+        
+        const row = [
+          csvEscape(f.name || ''),
+          csvEscape(f.file_type || ''),
+          sizeKB,
+          f.row_count || '',
+          f.column_count || '',
+          nullRate,
+          completeness,
+          cardinalityPct,
+          csvEscape(firstCol.type || ''),
+          csvEscape(firstCol.semantic_type || ''),
+          csvEscape(topValues),
+          firstCol.distinct_count || '',
+        ];
+        rows.push(row.join(','));
+      });
+      
+      const csv = rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `data-discovery-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }, [result, files]);
+
+  const csvEscape = (value) => {
+    if (value === null || value === undefined) return '';
+    const s = String(value);
+    if (/[\n\r,"]/g.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
 
   // ── Derive display data from result
   const taskResult = result?.result || result || {};
@@ -521,6 +633,28 @@ export default function DataDiscoveryPage() {
           {liveMode
             ? <span className="dd-live-badge"><span className="dd-live-dot" />LIVE</span>
             : <span className="dd-demo-badge"><i className="fas fa-flask" /> DEMO</span>}
+          {status === 'done' && files.length > 0 && (
+            <>
+              <button
+                className="dd-btn dd-btn-secondary"
+                onClick={exportToJSON}
+                disabled={exporting}
+                title="Export discovery results as JSON"
+              >
+                {exporting
+                  ? <><i className="fas fa-spinner fa-spin" /> Exporting…</>
+                  : <><i className="fas fa-file-code" /> Export JSON</>}
+              </button>
+              <button
+                className="dd-btn dd-btn-secondary"
+                onClick={exportToCSV}
+                disabled={exporting}
+                title="Export file summary as CSV"
+              >
+                <i className="fas fa-file-csv" /> Export CSV
+              </button>
+            </>
+          )}
           {status === 'done' && (
             <button
               className="dd-btn dd-btn-secondary"

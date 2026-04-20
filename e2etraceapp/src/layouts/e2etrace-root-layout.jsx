@@ -35,7 +35,13 @@ const NAV_GROUPS = [
     href: '/migration',
     matchPrefixes: ['/migration'],
     items: [
-      { to: '/migration', labelKey: 'nav.migrationWizard', icon: 'fas fa-magic' },
+      { to: '/migration', labelKey: 'nav.newMigration', icon: 'fas fa-plus', end: true },
+      { to: '/migration?step=1', labelKey: 'nav.step1Connect', icon: 'fas fa-plug' },
+      { to: '/migration?step=2', labelKey: 'nav.step2Discovery', icon: 'fas fa-search' },
+      { to: '/migration?step=3', labelKey: 'nav.step3Map', icon: 'fas fa-arrows-alt-h' },
+      { to: '/migration?step=4', labelKey: 'nav.step4Validate', icon: 'fas fa-check-double' },
+      { to: '/migration?step=5', labelKey: 'nav.step5Execute', icon: 'fas fa-play-circle' },
+      { to: '/analytics?tab=workflows', labelKey: 'nav.viewAllWorkflows', icon: 'fas fa-list' },
     ],
   },
   {

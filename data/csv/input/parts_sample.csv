@@ -1,0 +1,11 @@
+part_number,name,category,material,weight_kg,unit_cost,supplier_id,status
+PN-001,Bolt M8,Fastener,Steel,0.012,0.45,SUP-001,active
+PN-002,Nut M8,Fastener,Steel,0.008,0.30,SUP-001,active
+PN-003,Washer M8,Hardware,Aluminium,0.003,0.12,SUP-003,active
+PN-004,Screw M6,Fastener,Steel,0.009,0.22,SUP-001,active
+PN-005,Spring Pin,Hardware,,0.005,0.18,SUP-002,active
+PN-006,Bracket L,Structural,Steel,0.145,2.50,SUP-003,obsolete
+PN-007,Cover Plate,Enclosure,Aluminium,0.280,8.90,,active
+PN-008,Seal Ring,Sealing,Rubber,0.015,0.65,SUP-004,active
+PN-009,Bearing 6205,Mechanical,Steel,0.089,4.20,SUP-002,active
+PN-010,O-Ring 50mm,Sealing,Rubber,0.003,,SUP-004,active
