@@ -478,6 +478,12 @@ export default function DataDiscoveryPage() {
     if (!result) return;
     setExporting(true);
     try {
+      const taskResult = result?.result || result || {};
+      const files = Array.isArray(taskResult.files) ? taskResult.files
+        : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
+        : [];
+      const totalSize = files.reduce((s, f) => s + (f.size_bytes || 0), 0);
+      
       const exportData = {
         exported_at: new Date().toISOString(),
         discovery_result: result,
@@ -498,10 +504,16 @@ export default function DataDiscoveryPage() {
     } finally {
       setExporting(false);
     }
-  }, [result, activeReportId, folderPath, selectedSourceId, files.length, totalSize]);
+  }, [result, activeReportId, folderPath, selectedSourceId]);
 
   const exportToCSV = useCallback(() => {
-    if (!result || !files.length) return;
+    if (!result) return;
+    const taskResult = result?.result || result || {};
+    const files = Array.isArray(taskResult.files) ? taskResult.files
+      : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
+      : [];
+    if (!files.length) return;
+    
     setExporting(true);
     try {
       // CSV header
@@ -571,7 +583,7 @@ export default function DataDiscoveryPage() {
     } finally {
       setExporting(false);
     }
-  }, [result, files]);
+  }, [result]);
 
   const csvEscape = (value) => {
     if (value === null || value === undefined) return '';

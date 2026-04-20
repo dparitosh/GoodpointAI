@@ -1270,32 +1270,47 @@ async def get_quality_reports(
     db: Session = Depends(get_db),
 ):
     """Get data quality reports (paged)."""
-    _require_postgres()
+    try:
+        _require_postgres()
+    except HTTPException as e:
+        # If Postgres not configured, return empty list instead of failing
+        logger.warning(f"Quality reports endpoint called without Postgres: {e.detail}")
+        response.headers["X-Total-Count"] = "0"
+        return []
 
-    q = db.query(DataQualityScanReport)
-    if table_name:
-        # Accept either raw table name or schema.table.
-        _, t = _parse_table_name(table_name)
-        q = q.filter(DataQualityScanReport.table_name == t)
+    try:
+        q = db.query(DataQualityScanReport)
+        if table_name:
+            # Accept either raw table name or schema.table.
+            _, t = _parse_table_name(table_name)
+            q = q.filter(DataQualityScanReport.table_name == t)
 
-    # P-06: use func.count() scalar instead of ORM q.count() to avoid subquery wrapping.
-    count_q = db.query(func.count(DataQualityScanReport.scan_id))  # type: ignore[attr-defined]
-    if table_name:
-        count_q = count_q.filter(  # type: ignore[arg-type]
-            DataQualityScanReport.table_name == _parse_table_name(table_name)[1]
+        # P-06: use func.count() scalar instead of ORM q.count() to avoid subquery wrapping.
+        count_q = db.query(func.count(DataQualityScanReport.scan_id))  # type: ignore[attr-defined]
+        if table_name:
+            count_q = count_q.filter(  # type: ignore[arg-type]
+                DataQualityScanReport.table_name == _parse_table_name(table_name)[1]
+            )
+        total_count: int = count_q.scalar() or 0
+        rows = (
+            q.order_by(DataQualityScanReport.scan_date.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-    total_count: int = count_q.scalar() or 0
-    rows = (
-        q.order_by(DataQualityScanReport.scan_date.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-    response.headers["X-Total-Count"] = str(total_count)
-    return [
-        _normalize_quality_report_payload(r.report, fallback_overall_score=r.overall_score)
-        for r in rows
-    ]
+        response.headers["X-Total-Count"] = str(total_count)
+        return [
+            _normalize_quality_report_payload(r.report, fallback_overall_score=r.overall_score)
+            for r in rows
+        ]
+    except SQLAlchemyError as e:
+        logger.error(f"Database error fetching quality reports: {e}")
+        response.headers["X-Total-Count"] = "0"
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error fetching quality reports: {e}")
+        response.headers["X-Total-Count"] = "0"
+        return []
 
 @router.get("/reports/{scan_id}", response_model=DataQualityReport)
 async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
