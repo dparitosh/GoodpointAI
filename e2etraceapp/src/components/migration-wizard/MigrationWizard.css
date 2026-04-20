@@ -1517,3 +1517,344 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ============= DISCOVERY SUMMARY CARD (Step 3 - UX Enhancement) ============= */
+.discovery-summary-card {
+  background: var(--bg-tertiary, #0f172a);
+  border: 1px solid var(--dark-border-color, #334155);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.discovery-summary-card .summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dark-border-color);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.discovery-summary-card .summary-header i {
+  color: var(--accent-color, #3b82f6);
+  margin-right: 8px;
+}
+
+.discovery-summary-card .run-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-color, #3b82f6);
+  cursor: help;
+}
+
+.discovery-summary-card .run-badge i {
+  font-size: 11px;
+  margin-right: 0;
+}
+
+.discovery-summary-card .summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.discovery-summary-card .metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 12px;
+  background: rgba(59, 130, 246, 0.05);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.discovery-summary-card .metric:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateY(-2px);
+}
+
+.discovery-summary-card .metric-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent-color, #3b82f6);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.discovery-summary-card .metric-label {
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.discovery-summary-card .summary-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dark-border-color);
+}
+
+.discovery-summary-card .view-details-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-color, #3b82f6);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.discovery-summary-card .view-details-link:hover {
+  color: var(--accent-hover-color, #2563eb);
+  gap: 8px;
+}
+
+.discovery-summary-card .view-details-link i {
+  font-size: 12px;
+}
+
+.discovery-summary-card .debug-panel {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.discovery-summary-card .debug-panel summary {
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
+.discovery-summary-card .debug-panel pre {
+  margin: 0;
+  max-height: 300px;
+  overflow: auto;
+}
+
+/* ============= SEQUENTIAL ACTION FLOW (Step 2 - UX Enhancement) ============= */
+.discovery-actions .action-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.03);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.discovery-actions .action-group:hover {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.discovery-actions .step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: var(--accent-color, #3b82f6);
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+.discovery-actions .action-group button {
+  flex: 0 0 auto;
+  min-width: 180px;
+}
+
+.discovery-actions .action-help {
+  flex: 1;
+  margin: 6px 0 0 0;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ============= MAPPING WORKFLOW GUIDE (Step 3 - UX Enhancement) ============= */
+.mapping-workflow-guide {
+  background: var(--bg-tertiary, #0f172a);
+  border: 1px solid var(--dark-border-color, #334155);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.mapping-workflow-guide h4 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mapping-workflow-guide h4 i {
+  color: var(--accent-color, #3b82f6);
+}
+
+.mapping-workflow-guide .guide-intro {
+  margin: 0 0 20px 0;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 14px;
+}
+
+.mapping-workflow-guide .workflow-methods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.mapping-workflow-guide .workflow-method {
+  background: rgba(59, 130, 246, 0.03);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
+  padding: 16px;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.mapping-workflow-guide .workflow-method:hover {
+  background: rgba(59, 130, 246, 0.05);
+  border-color: rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.mapping-workflow-guide .workflow-method.recommended {
+  background: rgba(59, 130, 246, 0.08);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+}
+
+.mapping-workflow-guide .workflow-method.recommended:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.mapping-workflow-guide .method-badge {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mapping-workflow-guide .method-badge.recommended {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+.mapping-workflow-guide .method-badge i {
+  font-size: 10px;
+}
+
+.mapping-workflow-guide .method-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mapping-workflow-guide .method-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.mapping-workflow-guide .method-header i {
+  font-size: 20px;
+  color: var(--accent-color, #3b82f6);
+}
+
+.mapping-workflow-guide .method-header h5 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.mapping-workflow-guide .method-content p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.5;
+}
+
+.mapping-workflow-guide .template-selector-inline {
+  margin-top: 8px;
+}
+
+.mapping-workflow-guide .template-selector-inline select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary, #1e293b);
+  border: 1px solid var(--dark-border-color, #334155);
+  border-radius: 4px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mapping-workflow-guide .template-selector-inline select:hover {
+  border-color: var(--accent-color, #3b82f6);
+}
+
+.mapping-workflow-guide .template-selector-inline select:focus {
+  outline: none;
+  border-color: var(--accent-color, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.mapping-workflow-guide .manual-mapping-hints {
+  margin-top: 8px;
+}
+
+.mapping-workflow-guide .manual-mapping-hints .hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.5;
+}
+
+.mapping-workflow-guide .manual-mapping-hints .hint i {
+  color: #f59e0b;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.mapping-workflow-guide .manual-mapping-hints .hint strong {
+  color: var(--text-primary, #fff);
+}

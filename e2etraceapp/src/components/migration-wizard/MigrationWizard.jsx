@@ -6,6 +6,7 @@ import { useGraphQLTransform } from '../../hooks/useGraphQL.js';
 import { useAISuggestions, useGraphRAGHealth } from '../../hooks/useGraphRAG.js';
 import { useAgenticSystemStatus } from '../../hooks/useAgenticAI.js';
 import { XStateVisualizer } from '../xstate-visualizer/XStateVisualizer';
+import { toast } from '../../hooks/useToast';
 import './MigrationWizard.css';
 
 /**
@@ -664,7 +665,27 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       ...prev,
       discoveryAccepted: true
     }));
-  }, []);
+    
+    // Show success confirmation toast
+    const fieldsDetected = wizardData.discoveryIntrospect?.inferred_fields?.length || 
+                          extractSchemaFields(wizardData.sourceSchema).length || 0;
+    const qualityScore = wizardData.discoveryIntrospect?.soda_result?.score_pct || 
+                        wizardData.discoveryIntrospect?.quality_score || null;
+    const suggestionCount = wizardData.discoveryIntrospect?.suggested_mappings?.length || 0;
+    
+    let message = '✅ Discovery Accepted!';
+    const details = [];
+    if (fieldsDetected > 0) details.push(`${fieldsDetected} fields discovered`);
+    if (qualityScore !== null) details.push(`Quality: ${qualityScore}%`);
+    if (suggestionCount > 0) details.push(`${suggestionCount} AI suggestions ready`);
+    
+    if (details.length > 0) {
+      message += '\n' + details.join(' • ');
+    }
+    message += '\nReady to proceed to field mapping.';
+    
+    toast.success(message, 6000);
+  }, [wizardData.discoveryIntrospect, wizardData.sourceSchema]);
 
   // Step 3: AI-powered mapping suggestions with fallback
   const getAIMappingSuggestions = useCallback(async () => {
@@ -1205,22 +1226,32 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       )}
 
       <div className="discovery-actions">
-        <button
-          className="btn btn-primary"
-          onClick={runDiscovery}
-          disabled={!wizardData.sourceSystem || !wizardData.targetSystem || isLoading || wizardData.discoveryStatus === 'running'}
-          title={!wizardData.sourceSystem || !wizardData.targetSystem ? 'Complete Step 1 first to select source and target systems' : 'Run discovery to analyze your data'}
-        >
-          <i className="fas fa-search" /> {wizardData.discoveryStatus === 'running' ? 'Running Discovery...' : 'Run Discovery'}
-        </button>
+        <div className="action-group">
+          <span className="step-number">1</span>
+          <button
+            className="btn btn-primary"
+            onClick={runDiscovery}
+            disabled={!wizardData.sourceSystem || !wizardData.targetSystem || isLoading || wizardData.discoveryStatus === 'running'}
+            title={!wizardData.sourceSystem || !wizardData.targetSystem ? 'Complete Step 1 first to select source and target systems' : 'Run discovery to analyze your data'}
+          >
+            <i className="fas fa-search" /> {wizardData.discoveryStatus === 'running' ? 'Running Discovery...' : 'Run Discovery'}
+          </button>
+          <p className="action-help">Analyze data quality and generate AI mapping suggestions</p>
+        </div>
 
-        <button
-          className="btn btn-success"
-          onClick={acceptDiscovery}
-          disabled={wizardData.discoveryStatus !== 'completed' || wizardData.discoveryAccepted}
-        >
-          <i className="fas fa-check" /> {wizardData.discoveryAccepted ? 'Discovery Accepted' : 'Accept Discovery'}
-        </button>
+        {wizardData.discoveryStatus === 'completed' && (
+          <div className="action-group">
+            <span className="step-number">2</span>
+            <button
+              className="btn btn-success"
+              onClick={acceptDiscovery}
+              disabled={wizardData.discoveryAccepted}
+            >
+              <i className="fas fa-check" /> {wizardData.discoveryAccepted ? 'Discovery Accepted ✓' : 'Accept & Continue'}
+            </button>
+            <p className="action-help">Review results above, then accept to proceed to field mapping</p>
+          </div>
+        )}
       </div>
 
       {wizardData.discoveryRunId && (
@@ -1342,35 +1373,99 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       <p className="step-description">Map source fields to target fields with AI assistance</p>
 
       {wizardData.discoveryIntrospect && (
-        <div className="schema-panels" style={{ marginBottom: 24 }}>
-          <div className="schema-panel">
-            <div className="schema-header">
-              <h4><i className="fas fa-microscope" /> Introspect (Discovery Outcome)</h4>
-              <span className="discovery-meta">Run: <strong>{wizardData.discoveryRunId}</strong></span>
-            </div>
-            <div className="schema-content">
-              {wizardData.discoveryInsights?.length > 0 && (
-                <div className="discovery-insights" style={{ marginBottom: 12 }}>
-                  {wizardData.discoveryInsights.slice(0, 3).map((insight) => (
-                    <div key={insight.id} className={`discovery-insight ${insight.severity || 'info'}`}>
-                      <div className="discovery-insight-title">{insight.title}</div>
-                      <div className="discovery-insight-detail">{insight.detail}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <pre className="schema-preview">{JSON.stringify(wizardData.discoveryIntrospect, null, 2)}</pre>
-            </div>
+        <div className="discovery-summary-card" style={{ marginBottom: 24 }}>
+          <div className="summary-header">
+            <i className="fas fa-microscope" /> Discovery Results Summary
+            {wizardData.discoveryRunId && (
+              <span className="run-badge" title={`Discovery Run ID: ${wizardData.discoveryRunId}`}>
+                <i className="fas fa-fingerprint" /> {wizardData.discoveryRunId.slice(0, 8)}...
+              </span>
+            )}
           </div>
-          <div className="schema-panel">
-            <div className="schema-header">
-              <h4><i className="fas fa-table" /> Sample Preview</h4>
+          
+          {wizardData.discoveryInsights?.length > 0 && (
+            <div className="discovery-insights" style={{ marginBottom: 16 }}>
+              {wizardData.discoveryInsights.slice(0, 3).map((insight) => (
+                <div key={insight.id} className={`discovery-insight ${insight.severity || 'info'}`}>
+                  <div className="discovery-insight-title">{insight.title}</div>
+                  <div className="discovery-insight-detail">{insight.detail}</div>
+                </div>
+              ))}
             </div>
-            <div className="schema-content">
-              <pre className="schema-preview">{JSON.stringify((wizardData.discoverySample && Array.isArray(wizardData.discoverySample.records)
-                ? wizardData.discoverySample.records.slice(0, 8)
-                : null), null, 2)}</pre>
+          )}
+          
+          <div className="summary-metrics">
+            <div className="metric">
+              <span className="metric-value">
+                {wizardData.discoveryIntrospect?.inferred_fields?.length || 
+                 wizardData.discoveryIntrospect?.fields_detected || 
+                 extractSchemaFields(wizardData.sourceSchema).length || 0}
+              </span>
+              <span className="metric-label">Fields Detected</span>
             </div>
+            <div className="metric">
+              <span className="metric-value">
+                {wizardData.discoveryIntrospect?.soda_result?.score_pct || 
+                 wizardData.discoveryIntrospect?.quality_score || '—'}
+                {(wizardData.discoveryIntrospect?.soda_result?.score_pct || 
+                  wizardData.discoveryIntrospect?.quality_score) && '%'}
+              </span>
+              <span className="metric-label">Quality Score</span>
+            </div>
+            <div className="metric">
+              <span className="metric-value">
+                {wizardData.discoveryIntrospect?.suggested_mappings?.length ||
+                 wizardData.aiSuggestedMappings?.length || 0}
+              </span>
+              <span className="metric-label">AI Suggestions</span>
+            </div>
+            {wizardData.discoverySample?.records && (
+              <div className="metric">
+                <span className="metric-value">
+                  {Array.isArray(wizardData.discoverySample.records) 
+                    ? wizardData.discoverySample.records.length 
+                    : 0}
+                </span>
+                <span className="metric-label">Sample Records</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="summary-actions">
+            <a href="#/data-discovery" className="view-details-link" target="_blank" rel="noopener noreferrer">
+              <i className="fas fa-external-link-alt" /> View Full Discovery Report
+            </a>
+            
+            {/* Developer debug panel - only shown in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <details className="debug-panel" style={{ marginTop: 12 }}>
+                <summary style={{ cursor: 'pointer', color: '#999', fontSize: '0.85em' }}>
+                  🛠️ Developer Debug Info
+                </summary>
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Discovery Introspect:</strong>
+                    <pre className="schema-preview" style={{ fontSize: '0.75em' }}>
+                      {JSON.stringify(wizardData.discoveryIntrospect, null, 2)}
+                    </pre>
+                  </div>
+                  {wizardData.discoverySample && (
+                    <div>
+                      <strong>Sample Data (first 8 records):</strong>
+                      <pre className="schema-preview" style={{ fontSize: '0.75em' }}>
+                        {JSON.stringify(
+                          Array.isArray(wizardData.discoverySample.records)
+                            ? wizardData.discoverySample.records.slice(0, 8)
+                            : wizardData.discoverySample,
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </div>
         </div>
       )}
@@ -1383,7 +1478,80 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         </div>
       )}
       
-      <div className="mapping-tools">
+      {/* Mapping Workflow Guide - UX Enhancement */}
+      <div className="mapping-workflow-guide">
+        <h4><i className="fas fa-map-signs" /> How to Create Field Mappings</h4>
+        <p className="guide-intro">Choose the method that best fits your workflow:</p>
+        
+        <div className="workflow-methods">
+          <div className="workflow-method recommended">
+            <span className="method-badge recommended">
+              <i className="fas fa-star" /> Recommended
+            </span>
+            <div className="method-content">
+              <div className="method-header">
+                <i className="fas fa-magic" />
+                <h5>1. AI-Powered Suggestions</h5>
+              </div>
+              <p>Let AI analyze your schemas and suggest intelligent field mappings based on field names, types, and patterns.</p>
+              <button 
+                className="btn btn-primary btn-sm btn-ai"
+                onClick={getAIMappingSuggestions}
+                disabled={isLoading || (!wizardData.sourceSchema && !wizardData.targetSchema)}
+                title="Get AI-powered field mapping suggestions"
+              >
+                <i className="fas fa-magic" /> {isLoading ? 'Analyzing...' : 'Get AI Suggestions'}
+              </button>
+            </div>
+          </div>
+          
+          <div className="workflow-method">
+            <div className="method-content">
+              <div className="method-header">
+                <i className="fas fa-file-alt" />
+                <h5>2. Use a Template</h5>
+              </div>
+              <p>Apply pre-configured mappings for common migration scenarios (e.g., Teamcenter to SAP, Excel to Database).</p>
+              <div className="template-selector-inline">
+                <select 
+                  value={wizardData.selectedTemplate?.id || ''}
+                  onChange={(e) => {
+                    const template = mappingTemplates.find(t => t.id === e.target.value);
+                    if (template) {
+                      applyTemplate(template);
+                      toast.success(`Template "${template.name}" applied successfully!`, 4000);
+                    }
+                  }}
+                  className="form-control form-control-sm"
+                >
+                  <option value="">Select a template...</option>
+                  {mappingTemplates.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div className="workflow-method">
+            <div className="method-content">
+              <div className="method-header">
+                <i className="fas fa-hand-pointer" />
+                <h5>3. Manual Mapping</h5>
+              </div>
+              <p>Click field tags below or use the mappings table to manually define each field relationship.</p>
+              <div className="manual-mapping-hints">
+                <span className="hint">
+                  <i className="fas fa-lightbulb" /> <strong>Tip:</strong> Click source field tags to quickly add mappings
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Legacy mapping tools section - kept for compatibility */}
+      <div className="mapping-tools" style={{ display: 'none' }}>
         <button 
           className="btn btn-primary btn-ai"
           onClick={getAIMappingSuggestions}
