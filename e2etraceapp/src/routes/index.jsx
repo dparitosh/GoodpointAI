@@ -4,6 +4,7 @@
  */
 import { Navigate, Outlet, createHashRouter } from 'react-router-dom';
 import { E2ETraceRootLayout } from '../layouts/e2etrace-root-layout.jsx';
+import E2ETraceMainDashboard from '../pages/dashboard/e2etrace-main-dashboard.jsx';
 import LandingPage from '../pages/landing/LandingPage.jsx';
 import MigrationPage from '../pages/migration/MigrationPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
@@ -32,11 +33,18 @@ const router = createHashRouter([
     errorElement: <RouteErrorPage />,
     handle: { crumb: 'nav.home' },
     children: [
-      // Default route - Hero / Platform overview
+      // Default route - Main Dashboard with Graph Visualization
       {
         index: true,
-        element: <LandingPage />,
+        element: <E2ETraceMainDashboard />,
         handle: { crumb: 'nav.overview' }
+      },
+
+      // Landing Page - Platform overview (alternative entry)
+      {
+        path: 'landing',
+        element: <LandingPage />,
+        handle: { crumb: 'nav.landing' }
       },
 
       // Conversational Search - AI-powered search across all data sources
