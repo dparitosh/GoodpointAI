@@ -218,6 +218,12 @@
   color: var(--accent-color, #4361ee);
 }
 
+/* Wizard step content container */
+.wizard-step-content {
+  display: block;
+  width: 100%;
+}
+
 .wizard-step-content h3 {
   font-size: 24px;
   font-weight: 600;
@@ -454,6 +460,11 @@
 }
 
 /* ============= STEP 2: DISCOVERY ============= */
+.discovery-step {
+  display: block;
+  width: 100%;
+}
+
 .discovery-actions {
   display: flex;
   gap: 12px;
