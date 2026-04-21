@@ -10,6 +10,7 @@ import MigrationPage from '../pages/migration/MigrationPage.jsx';
 import GraphExplorerPage from '../pages/graph-explorer/GraphExplorerPage.jsx';
 import { ObservabilityDashboard } from '../pages/observability/ObservabilityDashboard.jsx';
 import WorkflowDetailPage from '../pages/workflow-manager/WorkflowDetailPage.jsx';
+import MyWorkflowsPage from '../pages/workflows/MyWorkflowsPage.jsx';
 import LineageVisualizerPage from '../pages/lineage/LineageVisualizerPage.jsx';
 import SelfHealingMonitorPage from '../pages/self-healing/SelfHealingMonitorPage.jsx';
 import MultiModalAnalyzerPage from '../pages/multimodal/MultiModalAnalyzerPage.jsx';
@@ -59,6 +60,13 @@ const router = createHashRouter([
         path: 'migration',
         element: <MigrationPage />,
         handle: { crumb: 'nav.migration' },
+      },
+
+      // My Workflows - list of all workflow instances
+      {
+        path: 'workflows',
+        element: <MyWorkflowsPage />,
+        handle: { crumb: 'nav.myWorkflows' },
       },
 
       // Settings

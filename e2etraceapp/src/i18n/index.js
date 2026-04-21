@@ -21,6 +21,7 @@ const resources = {
         step4Validate: '4. Validate',
         step5Execute: '5. Execute',
         viewAllWorkflows: 'My Workflows',
+        myWorkflows: 'My Workflows',
         migrationTools: 'Migration Tools',
         insightsReports: 'Insights & Reports',
         advancedTools: 'Advanced Tools',

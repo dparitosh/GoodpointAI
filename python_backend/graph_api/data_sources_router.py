@@ -111,6 +111,10 @@ def _detect_format_from_name(name: str) -> str:
         return "csv"
     if lower.endswith(".json"):
         return "json"
+    if lower.endswith(".xml"):
+        return "xml"
+    if lower.endswith((".xlsx", ".xls")):
+        return "xlsx"
     return "unknown"
 
 
@@ -120,13 +124,106 @@ def _parse_csv_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
 
     # Handle common UTF-8 BOM prefix written by Windows tools.
     text = content.decode("utf-8-sig", errors="replace")
-    reader = csv.DictReader(io.StringIO(text))
+    # Auto-detect delimiter: check for semicolons (common in European/Microsoft exports).
+    sample = text[:4096]
+    detected_dialect = None
+    if sample.strip():
+        try:
+            detected_dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        except csv.Error:
+            pass  # Sniffer failed; fall back to default comma delimiter
+    reader = csv.DictReader(io.StringIO(text), dialect=detected_dialect or "excel")
     rows: List[Dict[str, Any]] = []
     for row in reader:
         rows.append(dict(row))
         if len(rows) >= limit:
             break
     return rows
+
+
+def _parse_xml_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
+    """Parse an XML document into a flat list of records.
+
+    Strategy: find the most-repeated element (assumed to be the row element)
+    and flatten its attributes + child text values into a dict.
+    """
+    import xml.etree.ElementTree as ET  # stdlib — no extra dependency
+
+    root = ET.fromstring(content.decode("utf-8-sig", errors="replace"))
+
+    # Collect all direct children; if root has no children treat root as only record.
+    children = list(root)
+    if not children:
+        record: Dict[str, Any] = dict(root.attrib)
+        if root.text and root.text.strip():
+            record["_text"] = root.text.strip()
+        return [record]
+
+    # Group children by tag and use the most common tag as the row element.
+    from collections import Counter
+    tag_counts = Counter(c.tag for c in children)
+    row_tag = tag_counts.most_common(1)[0][0]
+
+    rows: List[Dict[str, Any]] = []
+    for child in children:
+        if child.tag != row_tag:
+            continue
+        rec: Dict[str, Any] = {}
+        # Attributes
+        rec.update(child.attrib)
+        # Direct child text values
+        for sub in child:
+            key = sub.tag.split("}")[-1]  # strip namespace
+            val = (sub.text or "").strip()
+            if key in rec:
+                key = f"{key}_2"
+            rec[key] = val
+        if rec:
+            rows.append(rec)
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _parse_xlsx_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
+    """Parse an XLSX/XLS file into records using openpyxl (xlsx) or xlrd (xls)."""
+    import io
+
+    try:
+        import openpyxl  # type: ignore
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        rows_iter = ws.iter_rows(values_only=True)
+        header_row = next(rows_iter, None)
+        if not header_row:
+            return []
+        headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(header_row)]
+        records: List[Dict[str, Any]] = []
+        for row in rows_iter:
+            records.append({headers[i]: (row[i] if i < len(row) else None) for i in range(len(headers))})
+            if len(records) >= limit:
+                break
+        return records
+    except ImportError:
+        pass
+
+    # Fallback to xlrd for legacy .xls files
+    try:
+        import xlrd  # type: ignore
+        wb = xlrd.open_workbook(file_contents=content)
+        ws = wb.sheet_by_index(0)
+        if ws.nrows < 1:
+            return []
+        headers = [str(ws.cell_value(0, c)) for c in range(ws.ncols)]
+        records = []
+        for r in range(1, min(ws.nrows, limit + 1)):
+            records.append({headers[c]: ws.cell_value(r, c) for c in range(ws.ncols)})
+        return records
+    except ImportError as exc:
+        raise RuntimeError(
+            "XLSX/XLS parsing requires openpyxl (pip install openpyxl) "
+            "or xlrd (pip install xlrd) to be installed."
+        ) from exc
 
 
 def _parse_json_bytes(content: bytes, *, limit: int) -> List[Dict[str, Any]]:
@@ -162,6 +259,16 @@ def _parse_records(content: bytes, *, name_hint: str, limit: int) -> Tuple[str, 
         return fmt, _parse_csv_bytes(content, limit=limit)
     if fmt == "json":
         return fmt, _parse_json_bytes(content, limit=limit)
+    if fmt == "xml":
+        try:
+            return fmt, _parse_xml_bytes(content, limit=limit)
+        except Exception:  # pylint: disable=broad-exception-caught
+            return "unknown", []
+    if fmt == "xlsx":
+        try:
+            return fmt, _parse_xlsx_bytes(content, limit=limit)
+        except Exception:  # pylint: disable=broad-exception-caught
+            return "unknown", []
     # best-effort: try json then csv
     try:
         return "json", _parse_json_bytes(content, limit=limit)
@@ -273,8 +380,11 @@ async def _sample_system_connection(
             records, warnings, fmt = await _sample_plm_system(conn_dict, conn_type, limit)
         elif conn_type in _FILE_STORAGE_TYPES:
             # R-02: _sample_file_storage contains blocking S3/Azure/file I/O.
+            # Admin-registered connections are already vetted; skip the global
+            # allowed-root check so configured folder paths work regardless of
+            # whether they were added to GRAPH_TRACE_ALLOWED_LOCAL_ROOTS.
             records, warnings, fmt = await asyncio.to_thread(
-                _sample_file_storage, conn_dict, conn_type, limit
+                _sample_file_storage, conn_dict, conn_type, limit, True
             )
         else:
             warnings.append(
@@ -693,7 +803,7 @@ async def _sample_plm_system(
 
 
 def _sample_file_storage(
-    conn: Dict[str, Any], conn_type: str, limit: int
+    conn: Dict[str, Any], conn_type: str, limit: int, _trusted: bool = False
 ) -> tuple:
     """Sample records from file-based storage connections (S3, Azure Blob, local folder)."""
     warnings: List[str] = []
@@ -708,21 +818,35 @@ def _sample_file_storage(
             warnings.append("folder_path is required for local folder sampling")
             return records, warnings, fmt
         folder_path = Path(folder)
-        if not _is_under_allowed_root(folder_path):
+        if not _trusted and not _is_under_allowed_root(folder_path):
             warnings.append("Local folder path is outside allowed data directories")
             return records, warnings, fmt
-        # Find the first parseable file
-        for ext in ("*.csv", "*.json", "*.xml"):
-            files = sorted(folder_path.glob(ext))
-            if files:
-                target = files[0]
-                try:
-                    content = target.read_bytes()[:512 * 1024]
-                    fmt, records = _parse_records(content, name_hint=target.name, limit=limit)
+        # Find the first parseable file with actual records; skip empty files.
+        all_files: List[Path] = []
+        for ext in ("*.csv", "*.CSV", "*.json", "*.JSON", "*.xml", "*.XML", "*.xlsx", "*.XLSX", "*.xls", "*.XLS"):
+            all_files.extend(sorted(folder_path.glob(ext)))
+        # Deduplicate while preserving order (case-insensitive glob on Windows may overlap)
+        seen: set = set()
+        unique_files: List[Path] = []
+        for f in all_files:
+            key = str(f).lower()
+            if key not in seen:
+                seen.add(key)
+                unique_files.append(f)
+        for target in unique_files:
+            if target.stat().st_size < 4:
+                # Skip empty or BOM-only files
+                continue
+            try:
+                content = target.read_bytes()[:512 * 1024]
+                parsed_fmt, parsed_records = _parse_records(content, name_hint=target.name, limit=limit)
+                if parsed_records:
+                    fmt = parsed_fmt
+                    records = parsed_records
                     warnings.append(f"Sampled from: {target.name}")
-                except Exception as exc:  # pylint: disable=broad-exception-caught
-                    warnings.append(f"Error reading {target.name}: {str(exc)}")
-                break
+                    break
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                warnings.append(f"Error reading {target.name}: {str(exc)}")
         if not records:
             warnings.append("No parseable files found in folder")
 

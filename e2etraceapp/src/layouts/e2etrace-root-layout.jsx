@@ -42,7 +42,7 @@ const NAV_GROUPS = [
       { to: '/migration?step=3', labelKey: 'nav.step3Map', icon: 'fas fa-arrows-alt-h' },
       { to: '/migration?step=4', labelKey: 'nav.step4Validate', icon: 'fas fa-check-double' },
       { to: '/migration?step=5', labelKey: 'nav.step5Execute', icon: 'fas fa-play-circle' },
-      { to: '/analytics?tab=workflows', labelKey: 'nav.viewAllWorkflows', icon: 'fas fa-list' },
+      { to: '/workflows', labelKey: 'nav.myWorkflows', icon: 'fas fa-list-alt' },
     ],
   },
   {

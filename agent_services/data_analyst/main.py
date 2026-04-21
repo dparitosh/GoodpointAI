@@ -133,17 +133,23 @@ class DataAnalystAgent(AgentService):
             query = task.payload.get("sql_query")
             if not query:
                 return {"error": "No sql_query provided in payload"}
-                
+
+            # Security: only allow SELECT statements
+            stripped = query.strip().lstrip("(").upper()
+            if not stripped.startswith("SELECT"):
+                return {"error": "Only SELECT queries are permitted"}
+
+            # Enforce a row limit to prevent unbounded memory usage
+            safe_query = f"SELECT * FROM ({query}) _q LIMIT 1000"
+
             try:
                 async with self.pg_pool.acquire() as conn:
-                    # Fetch results (limiting to 1000 for safety)
-                    rows = await conn.fetch(query)
-                    # Convert to list of dicts
+                    rows = await conn.fetch(safe_query)
                     result_data = [dict(row) for row in rows]
                     return {
                         "analysis_type": "sql_query",
                         "row_count": len(result_data),
-                        "data": result_data[:100] # Return first 100 rows
+                        "data": result_data[:100]  # Return first 100 rows
                     }
             except Exception as e:
                 return {"error": f"Postgres execution failed: {str(e)}"}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '../../config/api-config.js';
@@ -36,7 +36,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   
   // Wizard state
   const [currentStep, setCurrentStep] = useState(getInitialStepFromURL);
-  const [isLoading, setIsLoading] = useState(false);
+  // Per-operation loading flags — prevents unrelated buttons from being disabled during an operation
+  const [opLoading, setOpLoading] = useState({ discovery: false, suggestions: false, validation: false, execute: false });
+  // Guard against double-firing the initial data load (React StrictMode / HMR)
+  const initialLoadRef = useRef(false);
   const [wizardData, setWizardData] = useState({
     // Step 0: Run identity
     workflowName: '',
@@ -59,6 +62,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     fieldMappings: [],
     aiSuggestedMappings: [],
     selectedTemplate: null,
+    // Rule engine (pre-transform, quality, post-transform)
+    rules: [],
+    activeRulePhase: 'pre',
     // Step 4: Validation
     validationResults: [],
     qualityChecks: { passed: 0, failed: 0, warnings: 0 },
@@ -68,7 +74,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     processedRecords: 0,
     totalRecords: 0,
     errors: [],
-    runId: null
+    runId: null,
+    // Saved workflow instance ID (set when user leaves step 1)
+    savedWorkflowId: null
   });
   
   // Available data sources
@@ -89,6 +97,14 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     4: { complete: false, valid: false },
     5: { complete: false, valid: false }
   });
+
+  // Derived loading helpers
+  const anyLoading = Object.values(opLoading).some(Boolean);
+  const loadingMessage = opLoading.discovery ? 'Running discovery analysis...'
+    : opLoading.suggestions ? 'Generating mapping suggestions...'
+    : opLoading.validation ? 'Running validation checks...'
+    : opLoading.execute ? 'Executing migration pipeline...'
+    : 'Processing...';
 
   // Define steps as a memoized constant to avoid dependency array issues
   const steps = useMemo(() => [
@@ -277,9 +293,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Load initial data — placed after all three useCallback refs are initialised
   // to avoid the temporal dead zone (TDZ) for const declarations.
   useEffect(() => {
+    // Guard against double-fire in React StrictMode or HMR
+    if (initialLoadRef.current) return;
+    initialLoadRef.current = true;
+
     loadDataSources();
     loadMappingTemplates();
-    
+
     // Run health checks once on mount (avoid polling spam)
     graphRAGHealth.checkHealth().catch(() => {});
     agenticSystem.checkStatus().catch(() => {});
@@ -352,15 +372,40 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   }, [wizardData]);
 
-  const nextStep = useCallback(() => {
+  const nextStep = useCallback(async () => {
     if (currentStep < 5 && canProceed(currentStep)) {
+      // Persist a workflow instance when the user leaves step 1 for the first time
+      if (currentStep === 1 && !wizardData.savedWorkflowId) {
+        try {
+          const src = wizardData.sourceSystem;
+          const tgt = wizardData.targetSystem;
+          const payload = {
+            name: wizardData.workflowName.trim(),
+            description: `Migration from ${src.name} to ${tgt.name}`,
+            source: { id: String(src.id), name: src.name, type: src.source_type || src.type || 'unknown', connection_details: { path: src.path || src.connection_string || '' } },
+            target: { id: String(tgt.id), name: tgt.name, type: tgt.source_type || tgt.type || 'unknown', connection_details: { path: tgt.path || tgt.connection_string || '' } },
+            workflow_config: { nodes: [], edges: [] }
+          };
+          const res = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOWS + '/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            const wf = await res.json();
+            setWizardData(prev => ({ ...prev, savedWorkflowId: wf.id }));
+          }
+        } catch (_e) {
+          // Non-fatal: wizard continues even if persistence fails
+        }
+      }
       setStepStatus(prev => ({
         ...prev,
         [currentStep]: { complete: true, valid: true }
       }));
       setCurrentStep(prev => prev + 1);
     }
-  }, [currentStep, canProceed]);
+  }, [currentStep, canProceed, wizardData]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 1) {
@@ -405,7 +450,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const runDiscovery = useCallback(async () => {
     if (!wizardData.sourceSystem || !wizardData.targetSystem) return;
 
-    setIsLoading(true);
+    setOpLoading(prev => ({ ...prev, discovery: true }));
     setWizardData(prev => ({
       ...prev,
       discoveryStatus: 'running',
@@ -495,7 +540,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       let inferredSourceSchema = null;
       let aiSuggestedMappings = [];
       let inferredSourceFields = [];
-      
+      let agentTaskSucceeded = false;
+
       try {
         // Use the dedicated discovery endpoint which routes to DataDiscoveryAgent via MCP
         const agentResponse = await e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}/api/agentic/task`, {
@@ -517,6 +563,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         
         if (taskResult.success && taskResult.result) {
            const res = taskResult.result;
+           agentTaskSucceeded = true;
            sodaResult = res.quality_scan;
            
            // Extract inferred schema
@@ -548,10 +595,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
          // Fallback logic could go here, but for now we warn and proceed partial
       }
 
-      // Legacy SODA result handling for UI compatibility
-      try {
+      // Legacy SODA — skip if agentic discovery already supplied quality data (avoids duplicate requests)
+      if (!agentTaskSucceeded) try {
         // Run the staged-data DQ scan (internal completeness check, no Soda Core required)
         const sodaResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/dq/scan`,
+
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -616,14 +664,6 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         });
       }
 
-      // Seed mapping suggestions based on canonical defaults if not provided by Agent
-      const defaultMappingSuggestions = aiSuggestedMappings.length > 0 ? aiSuggestedMappings : [
-        { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
-        { sourceField: 'name', targetField: 'name', transformation: 'TRIM', confidence: '90%' },
-        { sourceField: 'category', targetField: 'classification', transformation: null, confidence: '85%' },
-        { sourceField: 'revision', targetField: 'description', transformation: null, confidence: '70%' }
-      ];
-
       // If Agent didn't provide schema, infer from first record
       if (inferredSourceFields.length === 0) {
           const first = Array.isArray(stagedRecords) && stagedRecords.length > 0 ? stagedRecords[0] : null;
@@ -631,7 +671,23 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           inferredSourceFields = keys;
       }
 
-      const canonicalTargetFields = ['part_number', 'name', 'classification', 'description'];
+      // Seed mapping suggestions: prefer Agent output, then identity-map real source
+      // fields, and only fall back to PLM defaults when no real schema is available.
+      const defaultMappingSuggestions = aiSuggestedMappings.length > 0
+        ? aiSuggestedMappings
+        : inferredSourceFields.length > 0
+          ? inferredSourceFields.map(f => ({ sourceField: f, targetField: f, transformation: null, confidence: '70%' }))
+          : [
+              { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
+              { sourceField: 'name', targetField: 'name', transformation: 'TRIM', confidence: '90%' },
+              { sourceField: 'category', targetField: 'classification', transformation: null, confidence: '85%' },
+              { sourceField: 'revision', targetField: 'description', transformation: null, confidence: '70%' }
+            ];
+
+      // Use actual source fields as the canonical target schema when no Agent output is available.
+      const canonicalTargetFields = inferredSourceFields.length > 0
+        ? inferredSourceFields
+        : ['part_number', 'name', 'classification', 'description'];
       
       const finalSourceSchema = inferredSourceSchema || (inferredSourceFields.length > 0
         ? { fields: inferredSourceFields.map((name) => ({ name })) }
@@ -677,7 +733,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         }]
       }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, discovery: false }));
     }
   }, [wizardData.sourceSystem, wizardData.targetSystem]);
 
@@ -708,49 +764,44 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     toast.success(message, 6000);
   }, [wizardData.discoveryIntrospect, wizardData.sourceSchema]);
 
-  // Step 3: AI-powered mapping suggestions with fallback
+  // Step 3: AI-powered mapping suggestions via schema analysis.
+  // Uses reliable schema-based smart matching that returns the correct
+  // {sourceField, targetField, transformation, confidence} shape required by the UI.
+  // Falls back to discoveryIntrospect fields when schemas are not yet loaded.
   const getAIMappingSuggestions = useCallback(async () => {
-    setIsLoading(true);
+    setOpLoading(prev => ({ ...prev, suggestions: true }));
     try {
-      // Try AI suggestions first
-      if (wizardData.sourceSchema && wizardData.targetSchema) {
-        const suggestions = await aiSuggestions.getMappingSuggestions(
-          wizardData.sourceSchema,
-          wizardData.targetSchema
-        );
-        if (suggestions && suggestions.length > 0) {
-          setWizardData(prev => ({
-            ...prev,
-            aiSuggestedMappings: suggestions
-          }));
-          return;
-        }
-      }
-      
-      // Fallback: Generate suggestions from schema fields
-      const sourceFields = extractSchemaFields(wizardData.sourceSchema);
+      // Merge schema fields with any fields inferred during Discovery (Step 2)
+      const sourceFields = [
+        ...extractSchemaFields(wizardData.sourceSchema),
+        ...(wizardData.discoveryIntrospect?.inferred_source_fields || [])
+      ].filter((v, i, a) => v && a.indexOf(v) === i);  // dedupe + remove empty
+
       const targetFields = extractSchemaFields(wizardData.targetSchema);
-      
-      // Smart matching based on field names
+
+      if (sourceFields.length === 0) {
+        // No schema yet — surface existing discovery mappings or prompt user
+        if (wizardData.aiSuggestedMappings?.length > 0) {
+          toast.success(`Using ${wizardData.aiSuggestedMappings.length} mapping suggestions from Discovery`, 3000);
+        } else {
+          toast.warning('Run Discovery first (Step 2) to enable AI mapping suggestions', 4000);
+        }
+        return;
+      }
+
       const suggestions = sourceFields.map(sourceField => {
-        // Find best matching target field
-        const exactMatch = targetFields.find(t => t.toLowerCase() === sourceField.toLowerCase());
-        const partialMatch = targetFields.find(t => 
-          t.toLowerCase().includes(sourceField.toLowerCase()) || 
-          sourceField.toLowerCase().includes(t.toLowerCase())
+        const lf = sourceField.toLowerCase();
+        const exactMatch = targetFields.find(t => t.toLowerCase() === lf);
+        const partialMatch = targetFields.find(t =>
+          t.toLowerCase().includes(lf) || lf.includes(t.toLowerCase())
         );
         const targetField = exactMatch || partialMatch || sourceField;
-        
-        // Suggest transformation based on field type
+
         let transformation = null;
-        if (sourceField.toLowerCase().includes('date') || sourceField.toLowerCase().includes('time')) {
-          transformation = 'TIMESTAMP';
-        } else if (sourceField.toLowerCase().includes('amount') || sourceField.toLowerCase().includes('price') || sourceField.toLowerCase().includes('quantity')) {
-          transformation = 'NUMBER';
-        } else if (sourceField.toLowerCase().includes('name') || sourceField.toLowerCase().includes('type')) {
-          transformation = 'TRIM';
-        }
-        
+        if (lf.includes('date') || lf.includes('time')) transformation = 'TIMESTAMP';
+        else if (lf.includes('amount') || lf.includes('price') || lf.includes('qty') || lf.includes('quantity')) transformation = 'NUMBER';
+        else if (lf.includes('name') || lf.includes('label') || lf.includes('title')) transformation = 'TRIM';
+
         return {
           sourceField,
           targetField,
@@ -758,28 +809,22 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           confidence: exactMatch ? '95%' : partialMatch ? '75%' : '50%'
         };
       });
-      
-      setWizardData(prev => ({
-        ...prev,
-        aiSuggestedMappings: suggestions
-      }));
+
+      setWizardData(prev => ({ ...prev, aiSuggestedMappings: suggestions }));
     } catch (error) {
       console.error('AI suggestions failed:', error);
-      // Provide basic fallback suggestions
+      // Canonical fallback when schemas cannot be parsed
       const fallbackSuggestions = [
         { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
         { sourceField: 'name', targetField: 'name', transformation: 'TRIM', confidence: '90%' },
         { sourceField: 'description', targetField: 'description', transformation: null, confidence: '85%' },
         { sourceField: 'category', targetField: 'classification', transformation: null, confidence: '80%' }
       ];
-      setWizardData(prev => ({
-        ...prev,
-        aiSuggestedMappings: fallbackSuggestions
-      }));
+      setWizardData(prev => ({ ...prev, aiSuggestedMappings: fallbackSuggestions }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, suggestions: false }));
     }
-  }, [wizardData.sourceSchema, wizardData.targetSchema, aiSuggestions]);
+  }, [wizardData.sourceSchema, wizardData.targetSchema, wizardData.aiSuggestedMappings, wizardData.discoveryIntrospect]);
   
   // Helper function to extract field names from schema
   const extractSchemaFields = (schema) => {
@@ -817,6 +862,26 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }));
   }, []);
 
+  // ── Rule Engine CRUD ──────────────────────────────────────────────────────
+  const addRule = useCallback((phase) => {
+    const id = `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    setWizardData(prev => ({
+      ...prev,
+      rules: [...prev.rules, { id, phase, name: '', field: '*', condition: '', condition_value: '', action: '', action_value: '', enabled: true }]
+    }));
+  }, []);
+
+  const removeRule = useCallback((id) => {
+    setWizardData(prev => ({ ...prev, rules: prev.rules.filter(r => r.id !== id) }));
+  }, []);
+
+  const updateRule = useCallback((id, patch) => {
+    setWizardData(prev => ({
+      ...prev,
+      rules: prev.rules.map(r => r.id === id ? { ...r, ...patch } : r)
+    }));
+  }, []);
+
   const applyTemplate = useCallback((template) => {
     if (!template?.field_mappings) return;
     setWizardData(prev => ({
@@ -832,7 +897,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   // Step 4: Validation & transformation
   const runValidation = useCallback(async () => {
-    setIsLoading(true);
+    setOpLoading(prev => ({ ...prev, validation: true }));
     try {
       const validationInsights = await aiSuggestions.getValidationInsights(
         { schema: wizardData.sourceSchema, mappings: wizardData.fieldMappings },
@@ -858,7 +923,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         validationRun: true
       }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, validation: false }));
     }
   }, [wizardData.sourceSchema, wizardData.fieldMappings, aiSuggestions]);
 
@@ -872,7 +937,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       return;
     }
     
-    setIsLoading(true);
+    setOpLoading(prev => ({ ...prev, validation: true }));
     try {
       const plmBaseUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/plm/etl`;
       const response = await e2etraceFetchWithRetry(
@@ -915,14 +980,14 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         validationResults: [...prev.validationResults, { id: Date.now(), insight: 'SODA scan unavailable - Soda Core may not be installed', severity: 'warning' }]
       }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, validation: false }));
     }
   }, [wizardData.runId]);
 
   const testTransformation = useCallback(async () => {
     if (!wizardData.fieldMappings.length) return;
-    
-    setIsLoading(true);
+
+    setOpLoading(prev => ({ ...prev, validation: true }));
     try {
       const result = await graphqlTransform.transform(
         { sample: true, source: wizardData.sourceSchema },
@@ -954,13 +1019,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         validationRun: true
       }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, validation: false }));
     }
   }, [wizardData, graphqlTransform]);
 
   // Step 5: Execute migration - Complete 5-step workflow
   const executeMigration = useCallback(async () => {
-    setIsLoading(true);
+    setOpLoading(prev => ({ ...prev, execute: true }));
     setWizardData(prev => ({ ...prev, migrationStatus: 'running', migrationStep: 'creating' }));
     
     try {
@@ -1112,7 +1177,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         errors: [...prev.errors, error.message]
       }));
     } finally {
-      setIsLoading(false);
+      setOpLoading(prev => ({ ...prev, execute: false }));
     }
   }, [wizardData, onComplete]);
 
@@ -1166,31 +1231,55 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               </p>
             </div>
           ) : (
-            <div className="source-list">
-              {availableSources.map(source => (
-                <div 
-                  key={source.id}
-                  className={`source-option ${wizardData.sourceSystem?.id === source.id ? 'selected' : ''}`}
-                  onClick={() => selectSource('source', source)}
+            <div className="source-dropdown-wrap">
+              <div className="source-select-row">
+                <i className={`fas ${getSourceIcon(wizardData.sourceSystem?.type)} source-select-icon`} />
+                <select
+                  className="source-select"
+                  value={wizardData.sourceSystem?.id || ''}
+                  onChange={e => {
+                    const s = availableSources.find(x => x.id === e.target.value);
+                    if (s) selectSource('source', s);
+                  }}
                 >
-                  <div className="source-icon">
-                    <i className={`fas ${getSourceIcon(source.type)}`} />
+                  <option value="">— Select a source system —</option>
+                  {availableSources.map(source => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}  ({source.type})  [{source.status || 'configured'}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {wizardData.sourceSystem && (
+                <div className="source-selection-preview">
+                  <div className="ssp-icon">
+                    <i className={`fas ${getSourceIcon(wizardData.sourceSystem.type)}`} />
                   </div>
-                  <div className="source-info">
-                    <span className="source-name">{source.name}</span>
-                    <span className="source-type">{source.type}</span>
-                    {source.connection?.folder_path && (
-                      <span className="source-path" title={source.connection.folder_path}>{source.connection.folder_path}</span>
+                  <div className="ssp-info">
+                    <span className="ssp-name">{wizardData.sourceSystem.name}</span>
+                    <span className="ssp-type">{wizardData.sourceSystem.type}</span>
+                    {wizardData.sourceSystem.connection?.folder_path && (
+                      <span className="ssp-path" title={wizardData.sourceSystem.connection.folder_path}>
+                        {wizardData.sourceSystem.connection.folder_path}
+                      </span>
                     )}
-                    {source.description && !source.connection?.folder_path && (
-                      <span className="source-path" title={source.description}>{source.description}</span>
+                    {wizardData.sourceSystem.description && !wizardData.sourceSystem.connection?.folder_path && (
+                      <span className="ssp-path" title={wizardData.sourceSystem.description}>
+                        {wizardData.sourceSystem.description}
+                      </span>
                     )}
                   </div>
-                  <div className="source-status connected">
-                    <i className={source?.status === 'connected' || source?.status === 'active' ? 'fas fa-check-circle' : 'fas fa-cog'} /> {source?.status || 'configured'}
-                  </div>
+                  <span className={`ssp-status ${
+                    wizardData.sourceSystem.status === 'active' || wizardData.sourceSystem.status === 'connected'
+                      ? 'ssp-active' : 'ssp-inactive'
+                  }`}>
+                    <i className={`fas ${
+                      wizardData.sourceSystem.status === 'active' || wizardData.sourceSystem.status === 'connected'
+                        ? 'fa-check-circle' : 'fa-circle'
+                    }`} /> {wizardData.sourceSystem.status || 'configured'}
+                  </span>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -1203,31 +1292,57 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <h4><i className="fas fa-bullseye" /> Target System</h4>
           <p>Where should the data go?</p>
           
-          <div className="source-list">
-            {availableSources.map(source => (
-              <div 
-                key={source.id}
-                className={`source-option ${wizardData.targetSystem?.id === source.id ? 'selected' : ''} ${wizardData.sourceSystem?.id === source.id ? 'disabled' : ''}`}
-                onClick={() => wizardData.sourceSystem?.id !== source.id && selectSource('target', source)}
+          <div className="source-dropdown-wrap">
+            <div className="source-select-row">
+              <i className={`fas ${getSourceIcon(wizardData.targetSystem?.type)} source-select-icon`} />
+              <select
+                className="source-select"
+                value={wizardData.targetSystem?.id || ''}
+                onChange={e => {
+                  const s = availableSources.find(x => x.id === e.target.value);
+                  if (s && wizardData.sourceSystem?.id !== s.id) selectSource('target', s);
+                }}
               >
-                <div className="source-icon">
-                  <i className={`fas ${getSourceIcon(source.type)}`} />
+                <option value="">— Select a target system —</option>
+                {availableSources
+                  .filter(s => s.id !== wizardData.sourceSystem?.id)
+                  .map(source => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}  ({source.type})  [{source.status || 'configured'}]
+                    </option>
+                  ))}
+              </select>
+            </div>
+            {wizardData.targetSystem && (
+              <div className="source-selection-preview">
+                <div className="ssp-icon">
+                  <i className={`fas ${getSourceIcon(wizardData.targetSystem.type)}`} />
                 </div>
-                <div className="source-info">
-                  <span className="source-name">{source.name}</span>
-                  <span className="source-type">{source.type}</span>
-                  {source.connection?.folder_path && (
-                    <span className="source-path" title={source.connection.folder_path}>{source.connection.folder_path}</span>
+                <div className="ssp-info">
+                  <span className="ssp-name">{wizardData.targetSystem.name}</span>
+                  <span className="ssp-type">{wizardData.targetSystem.type}</span>
+                  {wizardData.targetSystem.connection?.folder_path && (
+                    <span className="ssp-path" title={wizardData.targetSystem.connection.folder_path}>
+                      {wizardData.targetSystem.connection.folder_path}
+                    </span>
                   )}
-                  {source.description && !source.connection?.folder_path && (
-                    <span className="source-path" title={source.description}>{source.description}</span>
+                  {wizardData.targetSystem.description && !wizardData.targetSystem.connection?.folder_path && (
+                    <span className="ssp-path" title={wizardData.targetSystem.description}>
+                      {wizardData.targetSystem.description}
+                    </span>
                   )}
                 </div>
-                <div className="source-status connected">
-                  <i className={source?.status === 'connected' || source?.status === 'active' ? 'fas fa-check-circle' : 'fas fa-cog'} /> {source?.status || 'configured'}
-                </div>
+                <span className={`ssp-status ${
+                  wizardData.targetSystem.status === 'active' || wizardData.targetSystem.status === 'connected'
+                    ? 'ssp-active' : 'ssp-inactive'
+                }`}>
+                  <i className={`fas ${
+                    wizardData.targetSystem.status === 'active' || wizardData.targetSystem.status === 'connected'
+                      ? 'fa-check-circle' : 'fa-circle'
+                  }`} /> {wizardData.targetSystem.status || 'configured'}
+                </span>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -1266,10 +1381,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <button
             className="btn btn-primary"
             onClick={runDiscovery}
-            disabled={!wizardData.sourceSystem || !wizardData.targetSystem || isLoading || wizardData.discoveryStatus === 'running'}
+            disabled={!wizardData.sourceSystem || !wizardData.targetSystem || opLoading.discovery}
             title={!wizardData.sourceSystem || !wizardData.targetSystem ? 'Complete Step 1 first to select source and target systems' : 'Run discovery to analyze your data'}
           >
-            <i className="fas fa-search" /> {wizardData.discoveryStatus === 'running' ? 'Running Discovery...' : 'Run Discovery'}
+            {opLoading.discovery
+              ? <><i className="fas fa-spinner fa-spin" /> Running Discovery...</>
+              : <><i className="fas fa-search" /> Run Discovery</>}
           </button>
           <p className="action-help">Analyze data quality and generate AI mapping suggestions</p>
         </div>
@@ -1472,7 +1589,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             </a>
             
             {/* Developer debug panel - only shown in development */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <details className="debug-panel" style={{ marginTop: 12 }}>
                 <summary style={{ cursor: 'pointer', color: '#999', fontSize: '0.85em' }}>
                   🛠️ Developer Debug Info
@@ -1532,10 +1649,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               <button 
                 className="btn btn-primary btn-sm btn-ai"
                 onClick={getAIMappingSuggestions}
-                disabled={isLoading || (!wizardData.sourceSchema && !wizardData.targetSchema)}
+                disabled={opLoading.suggestions}
                 title="Get AI-powered field mapping suggestions"
               >
-                <i className="fas fa-magic" /> {isLoading ? 'Analyzing...' : 'Get AI Suggestions'}
+                {opLoading.suggestions
+                  ? <><i className="fas fa-spinner fa-spin" /> Analyzing...</>
+                  : <><i className="fas fa-magic" /> Get AI Suggestions</>}
               </button>
             </div>
           </div>
@@ -1585,33 +1704,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         </div>
       </div>
       
-      {/* Legacy mapping tools section - kept for compatibility */}
-      <div className="mapping-tools" style={{ display: 'none' }}>
-        <button 
-          className="btn btn-primary btn-ai"
-          onClick={getAIMappingSuggestions}
-          disabled={isLoading}
-          title="Get AI-powered field mapping suggestions"
-        >
-          <i className="fas fa-magic" /> {isLoading ? 'Loading...' : 'Get AI Suggestions'}
-        </button>
-        
-        <div className="template-selector">
-          <label>Apply Template:</label>
-          <select 
-            value={wizardData.selectedTemplate?.id || ''}
-            onChange={(e) => {
-              const template = mappingTemplates.find(t => t.id === e.target.value);
-              if (template) applyTemplate(template);
-            }}
-          >
-            <option value="">Select template...</option>
-            {mappingTemplates.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+      {/* Legacy mapping tools section removed — superseded by workflow guide above */}
       
       {/* Available Fields Reference */}
       <div className="available-fields-panel">
@@ -1654,7 +1747,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             <button 
               className="btn btn-sm btn-success"
               onClick={() => {
-                wizardData.aiSuggestedMappings.forEach(s => addFieldMapping({
+                wizardData.aiSuggestedMappings.filter(s => s.sourceField).forEach(s => addFieldMapping({
                   source_field: s.sourceField,
                   target_field: s.targetField,
                   transformation: s.transformation
@@ -1665,23 +1758,31 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             </button>
           </div>
           <div className="suggestions-list">
-            {wizardData.aiSuggestedMappings.map((suggestion, idx) => (
-              <div key={idx} className="suggestion-item">
-                <span className="mapping-arrow">{suggestion.sourceField} → {suggestion.targetField}</span>
-                {suggestion.transformation && <span className="transform-badge">{suggestion.transformation}</span>}
-                <span className="confidence">{suggestion.confidence || 'N/A'}</span>
-                <button 
-                  className="btn btn-sm btn-success"
-                  onClick={() => addFieldMapping({
-                    source_field: suggestion.sourceField,
-                    target_field: suggestion.targetField,
-                    transformation: suggestion.transformation
-                  })}
-                >
-                  <i className="fas fa-plus" />
-                </button>
-              </div>
-            ))}
+            {wizardData.aiSuggestedMappings.filter(s => s.sourceField).map((suggestion, idx) => {
+              const conf = suggestion.confidence;
+              const confNum = typeof conf === 'number' ? conf : parseFloat(conf);
+              const confClass = !isNaN(confNum)
+                ? confNum >= 0.75 ? 'high' : confNum >= 0.5 ? 'medium' : 'low'
+                : 'low';
+              const confLabel = !isNaN(confNum) ? `${Math.round(confNum * 100)}%` : (conf || 'N/A');
+              return (
+                <div key={idx} className="suggestion-item">
+                  <span className="mapping-arrow">{suggestion.sourceField} → {suggestion.targetField}</span>
+                  {suggestion.transformation && <span className="transform-badge">{suggestion.transformation}</span>}
+                  <span className={`confidence ${confClass}`}>{confLabel}</span>
+                  <button
+                    className="btn btn-sm btn-success"
+                    onClick={() => addFieldMapping({
+                      source_field: suggestion.sourceField,
+                      target_field: suggestion.targetField,
+                      transformation: suggestion.transformation
+                    })}
+                  >
+                    <i className="fas fa-plus" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1758,6 +1859,146 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           </tbody>
         </table>
       </div>
+
+      {/* ── Rule Engine ────────────────────────────────────────────────── */}
+      <div className="re-panel">
+        <div className="re-panel-header">
+          <span className="re-panel-title">
+            <i className="fas fa-sliders-h" /> Rule Engine
+          </span>
+          <span className="re-panel-subtitle">
+            Configure pre-transform filters, data quality gates, and post-transform assertions
+          </span>
+          <span className="re-badge">{wizardData.rules.length} rule{wizardData.rules.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Phase tabs */}
+        <div className="re-tabs">
+          {[
+            { key: 'pre',     icon: 'fa-filter',        label: 'Pre-Transform',   desc: 'Filter & normalise before mapping' },
+            { key: 'quality', icon: 'fa-shield-alt',    label: 'Quality Check',   desc: 'Gate records on data quality' },
+            { key: 'post',    icon: 'fa-flag-checkered',label: 'Post-Transform',  desc: 'Assert & route after mapping' },
+          ].map(tab => {
+            const count = wizardData.rules.filter(r => r.phase === tab.key).length;
+            return (
+              <button
+                key={tab.key}
+                className={`re-tab ${wizardData.activeRulePhase === tab.key ? 'active' : ''}`}
+                onClick={() => setWizardData(prev => ({ ...prev, activeRulePhase: tab.key }))}
+              >
+                <i className={`fas ${tab.icon}`} />
+                <span className="re-tab-label">{tab.label}</span>
+                {count > 0 && <span className="re-tab-count">{count}</span>}
+                <span className="re-tab-desc">{tab.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Rule rows for active phase */}
+        {(() => {
+          const phase = wizardData.activeRulePhase;
+          const phaseRules = wizardData.rules.filter(r => r.phase === phase);
+
+          const CONDITIONS = {
+            pre:     ['IS_NULL', 'IS_EMPTY', 'MATCHES_REGEX', 'NOT_IN_LIST', 'CUSTOM'],
+            quality: ['IS_NULL', 'IS_NOT_UNIQUE', 'OUT_OF_RANGE', 'FAILS_REGEX', 'BELOW_MIN_LENGTH', 'ABOVE_MAX_LENGTH', 'CUSTOM'],
+            post:    ['IS_NULL', 'OUT_OF_RANGE', 'MATCHES_REGEX', 'CUSTOM'],
+          };
+          const ACTIONS = {
+            pre:     ['SET_DEFAULT', 'SKIP_RECORD', 'COERCE_TYPE', 'TRIM', 'TO_UPPER', 'TO_LOWER', 'REGEX_REPLACE'],
+            quality: ['REJECT_RECORD', 'FLAG_WARNING', 'SET_DEFAULT', 'QUARANTINE'],
+            post:    ['REJECT_RECORD', 'FLAG_WARNING', 'ROUTE_TO_DLQ', 'AUDIT_LOG', 'ASSERT'],
+          };
+
+          const sourceFields = extractSchemaFields(wizardData.sourceSchema);
+
+          return (
+            <div className="re-rules-area">
+              {phaseRules.length === 0 ? (
+                <div className="re-empty">
+                  <i className="fas fa-plus-circle" />
+                  <span>No {phase} rules yet. Add one below.</span>
+                </div>
+              ) : (
+                <div className="re-rules-list">
+                  <div className="re-rules-header">
+                    <span>Rule Name</span>
+                    <span>Field</span>
+                    <span>Condition</span>
+                    <span>Value</span>
+                    <span>Action</span>
+                    <span>Action Value</span>
+                    <span>On</span>
+                    <span></span>
+                  </div>
+                  {phaseRules.map(rule => (
+                    <div key={rule.id} className={`re-rule-row ${rule.enabled ? '' : 're-rule-disabled'}`}>
+                      <input
+                        className="re-input re-name"
+                        placeholder="Rule name…"
+                        value={rule.name}
+                        onChange={e => updateRule(rule.id, { name: e.target.value })}
+                      />
+                      <select
+                        className="re-select re-field"
+                        value={rule.field}
+                        onChange={e => updateRule(rule.id, { field: e.target.value })}
+                      >
+                        <option value="*">All fields</option>
+                        {sourceFields.map(f => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                      <select
+                        className="re-select re-condition"
+                        value={rule.condition}
+                        onChange={e => updateRule(rule.id, { condition: e.target.value })}
+                      >
+                        <option value="">-- condition --</option>
+                        {CONDITIONS[phase].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <input
+                        className="re-input re-cond-val"
+                        placeholder="e.g. pattern, range…"
+                        value={rule.condition_value}
+                        onChange={e => updateRule(rule.id, { condition_value: e.target.value })}
+                      />
+                      <select
+                        className="re-select re-action"
+                        value={rule.action}
+                        onChange={e => updateRule(rule.id, { action: e.target.value })}
+                      >
+                        <option value="">-- action --</option>
+                        {ACTIONS[phase].map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                      <input
+                        className="re-input re-action-val"
+                        placeholder="e.g. default val…"
+                        value={rule.action_value}
+                        onChange={e => updateRule(rule.id, { action_value: e.target.value })}
+                      />
+                      <label className="re-toggle" title={rule.enabled ? 'Enabled' : 'Disabled'}>
+                        <input
+                          type="checkbox"
+                          checked={rule.enabled}
+                          onChange={e => updateRule(rule.id, { enabled: e.target.checked })}
+                        />
+                        <span className="re-toggle-track" />
+                      </label>
+                      <button className="re-btn-delete" title="Remove rule" onClick={() => removeRule(rule.id)}>
+                        <i className="fas fa-trash-alt" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button className="re-btn-add" onClick={() => addRule(phase)}>
+                <i className="fas fa-plus" /> Add {phase === 'pre' ? 'Pre-Transform' : phase === 'quality' ? 'Quality' : 'Post-Transform'} Rule
+              </button>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
   };
@@ -1771,21 +2012,21 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         <button 
           className="btn btn-primary"
           onClick={runValidation}
-          disabled={isLoading}
+          disabled={opLoading.validation}
         >
-          <i className="fas fa-check-double" /> Run Validation
+          <i className="fas fa-check-double" /> {opLoading.validation ? 'Running...' : 'Run Validation'}
         </button>
         <button 
           className="btn btn-secondary"
           onClick={testTransformation}
-          disabled={isLoading || !wizardData.fieldMappings.length}
+          disabled={opLoading.validation || !wizardData.fieldMappings.length}
         >
           <i className="fas fa-exchange-alt" /> Test Transform
         </button>
         <button 
           className="btn btn-info"
           onClick={runSodaScan}
-          disabled={isLoading || !wizardData.runId}
+          disabled={opLoading.validation || !wizardData.runId}
           title={!wizardData.runId ? 'Run migration first to enable SODA scan' : 'Run SODA data quality checks'}
         >
           <i className="fas fa-shield-alt" /> SODA Quality Scan
@@ -1881,9 +2122,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <button 
             className="btn btn-primary btn-lg"
             onClick={executeMigration}
-            disabled={isLoading || wizardData.qualityChecks.failed > 0}
+            disabled={opLoading.execute || wizardData.qualityChecks.failed > 0}
           >
-            <i className="fas fa-play" /> Start Migration
+            <i className="fas fa-play" /> {opLoading.execute ? 'Running...' : 'Start Migration'}
           </button>
           {wizardData.qualityChecks.failed > 0 && (
             <p className="warning">Please resolve validation errors before executing</p>
@@ -2059,10 +2300,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       
       {/* Step Content */}
       <div className="wizard-content">
-        {isLoading && (
+        {anyLoading && (
           <div className="loading-overlay">
             <i className="fas fa-spinner fa-spin" />
-            <span>Processing...</span>
+            <span><i className="fas fa-circle-notch fa-spin" style={{ marginRight: 8, opacity: 0.7 }} />{loadingMessage}</span>
           </div>
         )}
         {renderStepContent()}

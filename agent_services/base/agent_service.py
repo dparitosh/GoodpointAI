@@ -62,15 +62,16 @@ class AgentService(ABC):
         @self.app.post("/execute", response_model=AgentTaskResponse)
         async def execute_task(task: AgentTaskRequest):
             logger.info(f"Received task {task.task_id} of type {task.task_type}")
-            start_time = asyncio.get_event_loop().time()
-            
+            loop = asyncio.get_running_loop()
+            start_time = loop.time()
+
             try:
                 # Execute the abstract process_task method
                 result = await self.process_task(task)
-                
+
                 # Calculate duration
-                duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
-                
+                duration_ms = (loop.time() - start_time) * 1000
+
                 return AgentTaskResponse(
                     task_id=task.task_id,
                     status=TaskStatus.COMPLETED,
@@ -79,7 +80,7 @@ class AgentService(ABC):
                 )
             except Exception as e:
                 logger.error(f"Task execution failed: {e}", exc_info=True)
-                duration_ms = (asyncio.get_event_loop().time() - start_time) * 1000
+                duration_ms = (loop.time() - start_time) * 1000
                 return AgentTaskResponse(
                     task_id=task.task_id,
                     status=TaskStatus.FAILED,
