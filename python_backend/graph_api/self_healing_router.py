@@ -32,7 +32,7 @@ from pydantic import BaseModel
 import neo4j
 import json
 
-from .dependencies import get_driver, get_ws_driver
+from .dependencies import get_driver
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/self-healing", tags=["Self-Healing Orchestration"])
@@ -464,18 +464,20 @@ class SelfHealingService:
 
 
 @router.websocket("/ws/monitor")
-async def websocket_monitor(
-    websocket: WebSocket,
-    driver: neo4j.AsyncDriver = Depends(get_ws_driver),
-):
+async def websocket_monitor(websocket: WebSocket):
     """WebSocket stream for the Self-Healing monitor UI.
 
     Sends a small, UI-compatible metrics payload periodically.
+    Tolerates missing Neo4j driver: still streams in-memory orchestration state
+    so the dashboard can show "Connected" even when Neo4j is offline.
     """
     await websocket.accept()
+    driver = getattr(websocket.app.state, "driver", None)
     try:
         while True:
-            service = SelfHealingService(driver)
+            service = SelfHealingService(driver) if driver is not None else None
+            dlq_messages = list(getattr(service, "dlq_messages", []) or []) if service else []
+            circuit_states = getattr(service, "circuit_states", {}) if service else {}
             payload = {
                 "total_tasks": 0,
                 "successful_tasks": 0,
@@ -483,10 +485,10 @@ async def websocket_monitor(
                 "retried_tasks": 0,
                 "circuit_breaker_trips": 0,
                 "alternative_routes_used": 0,
-                "dlq_messages": len(service.dlq_messages),
+                "dlq_messages": len(dlq_messages),
                 "active_tasks": 0,
-                "dlq_size": len(service.dlq_messages),
-                "circuit_breakers": len(service.circuit_states),
+                "dlq_size": len(dlq_messages),
+                "circuit_breakers": len(circuit_states),
             }
             await websocket.send_json(payload)
             await asyncio.sleep(2)

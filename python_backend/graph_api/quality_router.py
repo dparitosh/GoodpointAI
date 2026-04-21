@@ -82,14 +82,51 @@ class DataQualityReport(BaseModel):
     profiling: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-def _normalize_quality_report_payload(payload: Any, *, fallback_overall_score: float | None = None) -> Dict[str, Any]:
+def _normalize_quality_report_payload(
+    payload: Any,
+    *,
+    fallback_overall_score: float | None = None,
+    fallback_scan_id: str | None = None,
+    fallback_table_name: str | None = None,
+    fallback_scan_date: Any = None,
+    fallback_row_count: int | None = None,
+    fallback_column_count: int | None = None,
+) -> Dict[str, Any]:
     """Normalize persisted report JSON to the current API response contract.
 
-    Older records may be missing per-dimension score fields; returning them as-is
-    triggers FastAPI response-model validation errors (500).
+    Older records may be missing per-dimension score fields or even top-level
+    identity fields (table_name/scan_id/scan_date/row_count/column_count);
+    returning them as-is triggers FastAPI response-model validation errors (500).
+    Fallbacks come from the owning DB row.
     """
 
     report: Dict[str, Any] = dict(payload or {}) if isinstance(payload, dict) else {}
+
+    # Backfill identity / metadata fields from owning row when missing.
+    if not report.get("scan_id") and fallback_scan_id is not None:
+        report["scan_id"] = fallback_scan_id
+    if not report.get("table_name") and fallback_table_name is not None:
+        report["table_name"] = fallback_table_name
+    if report.get("scan_date") is None and fallback_scan_date is not None:
+        try:
+            report["scan_date"] = (
+                fallback_scan_date.isoformat()
+                if hasattr(fallback_scan_date, "isoformat")
+                else str(fallback_scan_date)
+            )
+        except Exception:
+            report["scan_date"] = str(fallback_scan_date)
+    if report.get("row_count") is None and fallback_row_count is not None:
+        report["row_count"] = int(fallback_row_count)
+    if report.get("column_count") is None and fallback_column_count is not None:
+        report["column_count"] = int(fallback_column_count)
+
+    # Ensure list-typed required fields exist.
+    if not isinstance(report.get("issues"), list):
+        report["issues"] = []
+    if not isinstance(report.get("recommendations"), list):
+        report["recommendations"] = []
+
     overall_score_raw = report.get("overall_score")
     if overall_score_raw is None:
         overall_score_raw = fallback_overall_score
@@ -1300,7 +1337,15 @@ async def get_quality_reports(
         )
         response.headers["X-Total-Count"] = str(total_count)
         return [
-            _normalize_quality_report_payload(r.report, fallback_overall_score=r.overall_score)
+            _normalize_quality_report_payload(
+                r.report,
+                fallback_overall_score=r.overall_score,
+                fallback_scan_id=r.scan_id,
+                fallback_table_name=r.table_name,
+                fallback_scan_date=r.scan_date,
+                fallback_row_count=r.row_count,
+                fallback_column_count=r.column_count,
+            )
             for r in rows
         ]
     except SQLAlchemyError as e:
@@ -1319,7 +1364,15 @@ async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
     row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Quality report not found")
-    return _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    return _normalize_quality_report_payload(
+        row.report,
+        fallback_overall_score=row.overall_score,
+        fallback_scan_id=row.scan_id,
+        fallback_table_name=row.table_name,
+        fallback_scan_date=row.scan_date,
+        fallback_row_count=row.row_count,
+        fallback_column_count=row.column_count,
+    )
 
 
 @router.get("/reports/{scan_id}/export")
@@ -1334,7 +1387,15 @@ async def export_quality_report(
     if not row:
         raise HTTPException(status_code=404, detail="Quality report not found")
 
-    report = _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    report = _normalize_quality_report_payload(
+        row.report,
+        fallback_overall_score=row.overall_score,
+        fallback_scan_id=row.scan_id,
+        fallback_table_name=row.table_name,
+        fallback_scan_date=row.scan_date,
+        fallback_row_count=row.row_count,
+        fallback_column_count=row.column_count,
+    )
     filename_base = f"quality_report_{row.table_name}_{scan_id[:8]}"
 
     if format == "json":
@@ -1398,7 +1459,15 @@ async def get_quality_insights(scan_id: str, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Quality report not found")
 
-    report = _normalize_quality_report_payload(row.report, fallback_overall_score=row.overall_score)
+    report = _normalize_quality_report_payload(
+        row.report,
+        fallback_overall_score=row.overall_score,
+        fallback_scan_id=row.scan_id,
+        fallback_table_name=row.table_name,
+        fallback_scan_date=row.scan_date,
+        fallback_row_count=row.row_count,
+        fallback_column_count=row.column_count,
+    )
 
     issues_summary = "; ".join(
         f"{i.get('severity')} – {i.get('description')}"
