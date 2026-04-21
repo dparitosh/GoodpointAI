@@ -985,18 +985,33 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setWizardData(prev => ({ ...prev, runId, processedRecords: 1, totalRecords: 5 }));
       
       // STEP 2: Stage records (extract from source)
-      setWizardData(prev => ({ ...prev, migrationStep: 'Step 2: Staging records...', processedRecords: 2 }));
+      setWizardData(prev => ({ ...prev, migrationStep: 'Step 2: Extracting records from source...', processedRecords: 2 }));
       
-      // Prepare records from schema or use sample data
-      const records = wizardData.sourceSchema?.entities?.slice(0, 5).map(entity => ({
-        part_number: `PART-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        name: entity.name || 'Unnamed Part',
-        category: entity.type || 'General',
-        revision: 'A'
-      })) || [
-        { part_number: `PART-${Date.now()}-A`, name: 'Sample Part A', category: 'General', revision: 'A' },
-        { part_number: `PART-${Date.now()}-B`, name: 'Sample Part B', category: 'General', revision: 'B' }
-      ];
+      // Extract REAL records from the configured source via /api/data-sources/{id}/sample
+      // Strict policy: NO mock/sample/demo data (matches backend policy)
+      const sourceId = wizardData.sourceSystem?.id;
+      if (!sourceId) {
+        throw new Error('No source system selected. Please complete Step 1 (Connect) first.');
+      }
+
+      let records = [];
+      try {
+        const sampleUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/data-sources/${encodeURIComponent(sourceId)}/sample?limit=500`;
+        const sampleResponse = await e2etraceFetchWithRetry(sampleUrl, { method: 'GET' });
+        if (!sampleResponse.ok) {
+          throw new Error(`Failed to extract records (HTTP ${sampleResponse.status}). Verify the source connection in Admin Settings.`);
+        }
+        const samplePayload = await sampleResponse.json();
+        records = Array.isArray(samplePayload?.records) ? samplePayload.records : [];
+      } catch (extractError) {
+        throw new Error(`Source extraction failed: ${extractError.message}`);
+      }
+
+      if (records.length === 0) {
+        throw new Error('Source returned no records. Verify the source contains data and the connection is valid.');
+      }
+
+      setWizardData(prev => ({ ...prev, totalRecords: records.length }));
       
       await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/stage`, {
         method: 'POST',
@@ -1010,22 +1025,18 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       // STEP 3: Transform using field mappings
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 3: Transforming data...', processedRecords: 3 }));
       
-      // Build part_mapping from fieldMappings or use defaults
+      // Build part_mapping from user-defined fieldMappings (Step 3)
+      // Strict policy: NO hardcoded fallback mappings
       const partMapping = wizardData.fieldMappings.reduce((acc, m) => {
         const src = (m?.source_field || '').trim();
         const dest = (m?.target_field || '').trim();
         if (src && dest) acc[src] = dest;
         return acc;
-      }, {}) || {
-        part_number: 'part_number',
-        name: 'name',
-        category: 'classification',
-        revision: 'description'
-      };
+      }, {});
       
-      // Ensure required mappings exist
-      if (!partMapping.part_number) partMapping.part_number = 'part_number';
-      if (!partMapping.name) partMapping.name = 'name';
+      if (Object.keys(partMapping).length === 0) {
+        throw new Error('No field mappings defined. Please complete Step 3 (Map) and define at least one field mapping.');
+      }
       
       await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/transform`, {
         method: 'POST',
