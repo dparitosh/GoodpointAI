@@ -303,7 +303,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // URL-based step navigation - Update URL when step changes
+  // URL-based step navigation - Update URL when step changes (PREVENT CIRCULAR DEPENDENCY)
   useEffect(() => {
     if (!embedded && currentStep) {
       const currentStepParam = searchParams.get('step');
@@ -317,7 +317,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         setSearchParams(newParams, { replace: true });
       }
     }
-  }, [currentStep, embedded, setSearchParams, searchParams]);
+  // Remove searchParams from deps to prevent circular updates with line 294 useEffect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, embedded, setSearchParams]);
 
   // Step navigation
   const canProceed = useCallback((step) => {
