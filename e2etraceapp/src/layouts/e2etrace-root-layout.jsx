@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { E2ETraceBreadcrumbs } from '../components/e2etrace-breadcrumbs';
+import { ResumeMigration } from '../components/ResumeMigration';
 import WorkflowProgress from '../components/WorkflowProgress';
 import { useE2ETraceTheme } from '../contexts/e2etrace-theme-context.jsx';
 import { useTranslation } from 'react-i18next';
@@ -196,6 +197,7 @@ export const E2ETraceRootLayout = () => {
           {!isFullBleedPage ? (
             <>
               <E2ETraceBreadcrumbs />
+              <ResumeMigration />
             </>
           ) : null}
           <main className={isFullBleedPage ? 'e2etrace-page-content-full' : 'e2etrace-page-content'}>

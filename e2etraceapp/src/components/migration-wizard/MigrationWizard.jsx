@@ -279,6 +279,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   useEffect(() => {
     loadDataSources();
     loadMappingTemplates();
+    
+    // Run health checks once on mount (avoid polling spam)
     graphRAGHealth.checkHealth().catch(() => {});
     agenticSystem.checkStatus().catch(() => {});
 
@@ -287,8 +289,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     if (source === 'workbench') {
       loadWorkbenchData();
     }
+  // Only run once on mount - don't re-run when searchParams changes
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable method refs via hooks
-  }, [loadDataSources, loadMappingTemplates, loadWorkbenchData, searchParams]);
+  }, []);
 
   // URL-based step navigation - Read step from URL on mount
   useEffect(() => {
@@ -320,6 +323,22 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Remove searchParams from deps to prevent circular updates with line 294 useEffect
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, embedded, setSearchParams]);
+
+  // Persist migration progress to localStorage for "Resume Migration" feature
+  useEffect(() => {
+    // Only persist if there's meaningful progress (beyond step 1)
+    if (currentStep > 1 || wizardData.sourceSystem || wizardData.targetSystem) {
+      const migrationProgress = {
+        step: currentStep,
+        workflowName: wizardData.workflowName,
+        sourceSystem: wizardData.sourceSystem?.name || null,
+        targetSystem: wizardData.targetSystem?.name || null,
+        stepStatus,
+        timestamp: new Date().toISOString(),
+      };
+      localStorage.setItem('migration_in_progress', JSON.stringify(migrationProgress));
+    }
+  }, [currentStep, wizardData.workflowName, wizardData.sourceSystem, wizardData.targetSystem, stepStatus]);
 
   // Step navigation
   const canProceed = useCallback((step) => {
@@ -1067,6 +1086,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         ...prev,
         5: { complete: true, valid: true }
       }));
+      
+      // Clear migration progress from localStorage on successful completion
+      localStorage.removeItem('migration_in_progress');
       
       if (onComplete) onComplete({ runId, syncResult });
       
