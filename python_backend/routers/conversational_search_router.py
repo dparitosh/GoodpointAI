@@ -963,7 +963,7 @@ async def search_health(db: Session = Depends(get_db)):
     if opensearch_service:
         try:
             health = opensearch_service.health()
-            opensearch_ok = health.get("status") in ["green", "yellow"]
+            opensearch_ok = health.get("status") == "healthy" and health.get("connected", False)
         except Exception:
             pass
     
