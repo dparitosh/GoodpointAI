@@ -1,7 +1,26 @@
+import io
 import sys
 import os
 
+# PowerShell 5 / cp1252 compatibility
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "buffer"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 print(f"Python: {sys.version}")
+
+_PIP_INSTALL = {
+    "PyMuPDF":       "pip install PyMuPDF",
+    "openpyxl":      "pip install openpyxl",
+    "python-docx":   "pip install python-docx",
+    "opencv-python": "pip install opencv-python-headless",
+    "pytesseract":   "pip install pytesseract  (also install tesseract-ocr binary: https://github.com/tesseract-ocr/tesseract)",
+    "sqlalchemy":    "pip install sqlalchemy==2.0.35",
+    "psycopg":       "pip install psycopg[binary]==3.2.3",
+    "fastapi":       "pip install fastapi==0.115.0",
+    "uvicorn":       "pip install uvicorn[standard]==0.32.0",
+}
 
 results = {}
 
@@ -57,9 +76,31 @@ try:
 except ImportError as e:
     results["pytesseract"] = f"FAIL: {e}"
 
+# ---- Core backend libraries ----
+for _lib, _mod in [("sqlalchemy", "sqlalchemy"), ("psycopg", "psycopg"), ("fastapi", "fastapi"), ("uvicorn", "uvicorn")]:
+    try:
+        __import__(_mod)
+        results[_lib] = "OK"
+    except ImportError as _e:
+        results[_lib] = f"FAIL: {_e}"
+
 print("-" * 40)
 print("LIBRARY STATUS REPORT")
 print("-" * 40)
+failures = 0
 for lib, status in results.items():
-    print(f"{lib:<15}: {status}")
+    ok = status.startswith("OK") or status.startswith("PARTIAL")
+    tag = "[OK]    " if status.startswith("OK") else ("[WARN]  " if status.startswith("PARTIAL") else "[FAIL]  ")
+    print(f"{tag}{lib:<20}: {status}")
+    if status.startswith("FAIL"):
+        failures += 1
+        hint = _PIP_INSTALL.get(lib)
+        if hint:
+            print(f"         Fix: {hint}")
 print("-" * 40)
+if failures:
+    print(f"{failures} library/libraries failed. Install missing packages with the Fix commands above.")
+    sys.exit(1)
+else:
+    print("All libraries OK.")
+    sys.exit(0)

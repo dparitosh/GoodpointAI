@@ -1,7 +1,14 @@
+import io
 import os
 import sys
 import subprocess
 from typing import Dict
+
+# PowerShell 5 / cp1252 compatibility
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "buffer"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 def _repo_root() -> str:
@@ -60,6 +67,26 @@ def _load_env_file(env_file: str) -> None:
     for k, v in env_map.items():
         os.environ.setdefault(k, v)
 
+_INSTALL_HINTS = {
+    "Python":  "Download from https://www.python.org/downloads/ and ensure it is added to PATH.",
+    "Node.js": "Download from https://nodejs.org/ (LTS) and ensure 'node' is on PATH.",
+    "NPM":     "NPM ships with Node.js. Re-install Node.js from https://nodejs.org/.",
+}
+
+
+def check_venv() -> bool:
+    """Warn if the current interpreter is not inside the .venv virtual environment."""
+    exe = sys.executable.replace("\\", "/").lower()
+    if ".venv" not in exe and "venv" not in exe:
+        print("[WARN] Not running inside a virtual environment.")
+        print("       Activate with:  .venv\\Scripts\\Activate.ps1  (PowerShell)")
+        print("       Or:             .venv\\Scripts\\activate.bat   (cmd)")
+        print("       Then re-run this script.")
+        return False
+    print(f"[OK]  Virtual environment: {sys.executable}")
+    return True
+
+
 def check_command(cmd, name, fallbacks=None):
     candidates = [cmd]
     if fallbacks:
@@ -68,12 +95,15 @@ def check_command(cmd, name, fallbacks=None):
     for candidate in candidates:
         try:
             subprocess.run(candidate, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            print(f"[OK] {name} is installed.")
+            print(f"[OK]  {name} is installed.")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
 
+    hint = _INSTALL_HINTS.get(name, "")
     print(f"[FAIL] {name} is missing or not in PATH!")
+    if hint:
+        print(f"       Fix: {hint}")
     return False
 
 def check_env_vars():
@@ -172,9 +202,11 @@ def main():
     print("====================================")
     print("   GraphTrace Health & Diagnostics  ")
     print("====================================")
-    
+
+    check_venv()
+
     sys_ok = all([
-        check_command(["python", "--version"], "Python"),
+        check_command([sys.executable, "--version"], "Python"),
         check_command(["node", "--version"], "Node.js"),
         check_command(["npm", "--version"], "NPM", fallbacks=[["npm.cmd", "--version"]])
     ])
