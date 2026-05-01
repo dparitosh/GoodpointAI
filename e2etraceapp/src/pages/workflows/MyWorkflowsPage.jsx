@@ -74,7 +74,7 @@ function WorkflowRow({ wf, onOpen, onExecute, executing }) {
   const canRun = ['configured', 'completed', 'failed', 'cancelled'].includes((wf.status || '').toLowerCase());
 
   return (
-    <tr className="mwp-row" onClick={() => onOpen(wf.id)}>
+    <tr className="mwp-row" onClick={() => onOpen(wf)}>
       <td className="mwp-col-name">
         <span className="mwp-row-name" title={wf.name}>{wf.name}</span>
         {wf.description && <span className="mwp-row-desc">{wf.description}</span>}
@@ -101,7 +101,7 @@ function WorkflowRow({ wf, onOpen, onExecute, executing }) {
             <i className={executing === wf.id ? 'fas fa-spinner fa-spin' : 'fas fa-play'} />
           </button>
         )}
-        <button className="btn-open" onClick={() => onOpen(wf.id)}>
+        <button className="btn-open" onClick={() => onOpen(wf)}>
           <i className="fas fa-arrow-right" /> Open
         </button>
       </td>
@@ -144,6 +144,15 @@ export default function MyWorkflowsPage() {
       alert(`Could not execute workflow: ${err.message}`);
     } finally {
       setExecuting(null);
+    }
+  }, [navigate]);
+
+  const handleOpen = useCallback((wf) => {
+    const resumable = ['configured', 'paused'].includes((wf.status || '').toLowerCase());
+    if (resumable) {
+      navigate(`/migration?resumeWorkflowId=${encodeURIComponent(wf.id)}`);
+    } else {
+      navigate(`/workflow/${wf.id}`);
     }
   }, [navigate]);
 
@@ -257,7 +266,7 @@ export default function MyWorkflowsPage() {
                 <WorkflowRow
                   key={wf.id}
                   wf={wf}
-                  onOpen={id => navigate(`/workflow/${id}`)}
+                  onOpen={handleOpen}
                   onExecute={handleExecute}
                   executing={executing}
                 />

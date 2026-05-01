@@ -215,10 +215,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       const sources = await response.json();
       // Show all sources that are configured in Admin Settings (even if not currently connected).
       // This keeps the wizard usable for end-users who must select from the configured catalog.
-      setAvailableSources(Array.isArray(sources) ? sources : []);
+      const list = Array.isArray(sources) ? sources : [];
+      setAvailableSources(list);
+      return list;
     } catch (error) {
       console.error('Error loading data sources:', error);
       setAvailableSources([]);
+      return [];
     }
   // useCallback stable: only uses React state setters which are guaranteed stable.
   }, []);
@@ -300,18 +303,53 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     if (initialLoadRef.current) return;
     initialLoadRef.current = true;
 
-    loadDataSources();
-    loadMappingTemplates();
+    const init = async () => {
+      const sources = await loadDataSources();
+      loadMappingTemplates();
 
-    // Run health checks once on mount (avoid polling spam)
-    graphRAGHealth.checkHealth().catch(() => {});
-    agenticSystem.checkStatus().catch(() => {});
+      // Run health checks once on mount (avoid polling spam)
+      graphRAGHealth.checkHealth().catch(() => {});
+      agenticSystem.checkStatus().catch(() => {});
 
-    // Check for pre-loaded data from Data Workbench
-    const source = searchParams.get('source');
-    if (source === 'workbench') {
-      loadWorkbenchData();
-    }
+      // Check for pre-loaded data from Data Workbench
+      const source = searchParams.get('source');
+      if (source === 'workbench') {
+        loadWorkbenchData();
+        return;
+      }
+
+      // Resume an existing workflow: pre-populate wizard fields and jump to step 2
+      const resumeId = searchParams.get('resumeWorkflowId');
+      if (resumeId) {
+        try {
+          const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+          const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS(resumeId)}`);
+          if (res.ok) {
+            const wf = await res.json();
+            const srcMatch = sources.find(s => s.id === wf.source_id) || null;
+            const tgtMatch = sources.find(s => s.id === wf.target_id) || null;
+            setWizardData(prev => ({
+              ...prev,
+              workflowName: wf.name || '',
+              savedWorkflowId: wf.id,
+              savedWorkflowName: wf.name || '',
+              sourceSystem: srcMatch || (wf.source_id
+                ? { id: wf.source_id, name: wf.source_name, type: wf.source_type }
+                : null),
+              targetSystem: tgtMatch || (wf.target_id
+                ? { id: wf.target_id, name: wf.target_name, type: wf.target_type }
+                : null),
+            }));
+            setStepStatus(prev => ({ ...prev, 1: { complete: true, valid: true } }));
+            setCurrentStep(2);
+          }
+        } catch (e) {
+          console.error('Failed to resume workflow:', e);
+        }
+      }
+    };
+
+    init();
   // Only run once on mount - don't re-run when searchParams changes
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable method refs via hooks
   }, []);

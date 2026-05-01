@@ -468,8 +468,8 @@ const WorkflowDetailPage = () => {
         }
       } else {
         console.error('Workflow not found:', workflowId);
-        navigate('/analytics', {
-          state: { error: 'Workflow not found' } 
+        navigate('/workflows', {
+          state: { error: 'Workflow not found' }
         });
       }
     } catch (error) {
@@ -534,7 +534,7 @@ const WorkflowDetailPage = () => {
     return (
       <div className="workflow-detail-error">
         <h2>Workflow Not Found</h2>
-        <button onClick={() => navigate('/analytics')}>← Back to Analytics</button>
+        <button onClick={() => navigate('/workflows')}>← Back to My Workflows</button>
       </div>
     );
   }
@@ -543,8 +543,8 @@ const WorkflowDetailPage = () => {
     <div className="workflow-detail-page">
       {/* Header */}
       <div className="workflow-detail-header">
-        <button className="btn-back" onClick={() => navigate('/analytics')}>
-          ← Back to Analytics
+        <button className="btn-back" onClick={() => navigate('/workflows')}>
+          ← Back to My Workflows
         </button>
         
         <div className="header-info">
@@ -561,6 +561,15 @@ const WorkflowDetailPage = () => {
         </div>
 
         <div className="header-actions">
+          {(workflow.status === 'configured' || workflow.status === 'paused') && (
+            <button
+              className="btn-action btn-resume"
+              onClick={() => navigate(`/migration?resumeWorkflowId=${encodeURIComponent(workflow.id)}`)}
+            >
+              <i className="fas fa-edit" aria-hidden="true" /> Resume in Wizard
+            </button>
+          )}
+
           {workflow.status === 'draft' || workflow.status === 'configured' || workflow.status === 'paused' ? (
             <button 
               className="btn-action btn-start"
@@ -695,15 +704,7 @@ const WorkflowDetailPage = () => {
         </div>
       )}
 
-      {/* Execution Metadata */}
-      {workflow.execution_metadata && (
-        <div className="execution-metadata-section">
-          <h3>Execution Details</h3>
-          <pre className="metadata-json">
-            {JSON.stringify(workflow.execution_metadata, null, 2)}
-          </pre>
-        </div>
-      )}
+      {/* Execution Metadata — omit raw JSON dump; visible details are surfaced in config cards and archive above */}
 
       {/* Archive / History */}
       <div className="execution-metadata-section">
@@ -834,7 +835,7 @@ const WorkflowDetailPage = () => {
               </div>
             </div>
 
-            <details className="archive-raw">
+            <details className="archive-raw" style={{ display: 'none' }}>
               <summary>Raw archive JSON</summary>
               <pre className="metadata-json">{JSON.stringify(archive, null, 2)}</pre>
             </details>
