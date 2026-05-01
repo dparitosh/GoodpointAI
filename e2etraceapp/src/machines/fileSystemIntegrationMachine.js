@@ -23,7 +23,23 @@ export const fileSystemIntegrationMachine = createMachine({
     config: {
       uploadDir: './data/uploads',
       maxFileSize: 100, // MB
-      allowedExtensions: ['.xml', '.json', '.csv', '.xlsx']
+      // Extensions mirror python_backend/services/file_batch_processor.py ALL_SUPPORTED.
+      // The live list is also served by GET /api/multimodal/supported-formats so
+      // the UI can dynamically validate uploads. This static list is the offline fallback.
+      allowedExtensions: [
+        // Spreadsheet / tabular
+        '.xlsx', '.xls', '.xlsm', '.csv', '.tsv',
+        // Documents
+        '.pdf', '.docx', '.doc',
+        // Images
+        '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp',
+        // CAD
+        '.dwg', '.dxf', '.step', '.stp', '.iges', '.igs',
+        // Structured data
+        '.json', '.xml',
+        // Video
+        '.mp4', '.avi', '.mov', '.mkv',
+      ]
     }
   },
   

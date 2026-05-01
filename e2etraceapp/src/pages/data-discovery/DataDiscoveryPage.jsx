@@ -465,7 +465,7 @@ export default function DataDiscoveryPage() {
       const msg = e.message || 'Quality scan failed';
       setScanError(
         msg === 'Failed to fetch'
-          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          ? 'Cannot reach the backend server. Ensure the server is running and try again.'
           : msg
       );
     } finally {

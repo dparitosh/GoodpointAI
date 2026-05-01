@@ -1322,7 +1322,7 @@ export default function AdminConfigManager() {
       if (errorMsg.includes('Status 500')) {
         setError('Backend error: Database may not be running or tables not created. Run: python -m scripts.init_db_schema');
       } else if (errorMsg.includes('Failed to fetch')) {
-        setError('Cannot connect to backend. Ensure the server is running on port 8011.');
+        setError('Cannot connect to backend. Ensure the server is running and try again.');
       } else {
         setError(errorMsg);
       }

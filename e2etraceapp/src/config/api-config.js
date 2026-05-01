@@ -63,6 +63,9 @@ const DEFAULT_CONFIG = {
     ANALYTICS_NODES: '/api/analytics/nodes',
     ANALYTICS_RELATIONSHIPS: '/api/analytics/relationships',
     DATA_QUALITY: '/api/analytics/quality/dashboard',
+    DATA_QUALITY_REPORTS: '/api/analytics/quality/reports',
+    DATA_QUALITY_TABLES: '/api/analytics/quality/tables',
+    DATA_QUALITY_SCAN: (table) => `/api/analytics/quality/scan/${encodeURIComponent(table)}`,
     DATA_QUALITY_RULES: '/api/data-quality/rules',
     DATA_QUALITY_SCRUB: '/api/data-quality/scrub',
     DATA_QUALITY_DUPLICATES: '/api/data-quality/duplicates',
@@ -183,6 +186,23 @@ const DEFAULT_CONFIG = {
     // User & System Settings
     USER_PREFERENCES: '/api/user/preferences',
     SYSTEM_SETTINGS: '/api/system/settings',
+
+    // Multi-Modal Analysis
+    MULTIMODAL_SUPPORTED_FORMATS: '/api/multimodal/supported-formats',
+    MULTIMODAL_ANALYZE_FILE: '/api/multimodal/analyze-file',
+    MULTIMODAL_BATCH_ANALYZE: '/api/multimodal/batch-analyze',
+    MULTIMODAL_VISION_MODELS: '/api/multimodal/vision-models',
+    MULTIMODAL_DIRECTORY_DISCOVER: '/api/multimodal/discover-directory',
+
+    // Admin Configuration (LLM / Embeddings / Connections / Feature Flags)
+    ADMIN_LLM_PROVIDERS: '/api/admin/config/llm-providers',
+    ADMIN_EMBEDDING_MODELS: '/api/admin/config/embedding-models',
+    ADMIN_CONNECTIONS: '/api/admin/config/connections',
+    ADMIN_FEATURE_FLAGS: '/api/admin/config/feature-flags',
+    ADMIN_AUDIT_LOGS: '/api/admin/config/audit-logs',
+    ADMIN_SYSTEM_CONFIGS: '/api/admin/config/system',
+    ADMIN_HEALTH: '/api/admin/config/health',
+    ADMIN_ALL_CONFIGS: '/api/admin/config/all',
   }
 };
 

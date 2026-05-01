@@ -9,6 +9,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { useReportHub } from '../../hooks/useReportHub.js';
+import { apiClient } from '../../utils/apiClient.js';
+import { API_CONFIG } from '../../config/api-config.js';
 import './DQScanDashboard.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,8 +321,7 @@ export default function DQScanDashboard() {
 
   // Attempt live data load on mount
   useEffect(() => {
-    fetch('/api/analytics/quality/reports')
-      .then((r) => r.ok ? r.json() : null)
+    apiClient.get(API_CONFIG.ENDPOINTS.DATA_QUALITY_REPORTS)
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           const merged = data.map((r) => ({
@@ -337,13 +338,11 @@ export default function DQScanDashboard() {
 
   const loadTables = useCallback(() => {
     // Load DB tables
-    fetch('/api/analytics/quality/tables')
-      .then((r) => r.ok ? r.json() : { tables: [] })
+    apiClient.get(API_CONFIG.ENDPOINTS.DATA_QUALITY_TABLES)
       .then((d) => setAvailableTables(d.tables || []))
       .catch(() => setAvailableTables([]));
     // Load registered folder datasources (backend uses 'local_folder', 'file', not 'folder')
-    fetch('/api/data-sources')
-      .then((r) => r.ok ? r.json() : [])
+    apiClient.get(API_CONFIG.ENDPOINTS.DATA_SOURCES)
       .then((data) => {
         const FILE_TYPES = new Set(['folder', 'local_folder', 'file', 's3', 'aws_s3', 'azure_blob', 'azure', 'onedrive', 'google_drive']);
         const folders = Array.isArray(data)
@@ -372,22 +371,17 @@ export default function DQScanDashboard() {
     setScanningTable(pickerTable);
     setScanError(null);
     try {
-      const res = await fetch(`/api/analytics/quality/scan/${encodeURIComponent(pickerTable)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        setScanError(`Scan failed (HTTP ${res.status}): ${errBody.slice(0, 200)}`);
-      } else {
-        const refreshed = await fetch('/api/analytics/quality/reports').then((r) => r.json());
-        if (Array.isArray(refreshed) && refreshed.length > 0) {
-          setReports(refreshed.map((r) => ({ ...r, profile: r.profile || { completeness: 80, uniqueness: 100, validity: 80, freshness: 70 }, issues: r.issues || [] })));
-          setLiveMode(true);
-        }
+      await apiClient.post(API_CONFIG.ENDPOINTS.DATA_QUALITY_SCAN(pickerTable), {});
+      const refreshed = await apiClient.get(API_CONFIG.ENDPOINTS.DATA_QUALITY_REPORTS);
+      if (Array.isArray(refreshed) && refreshed.length > 0) {
+        setReports(refreshed.map((r) => ({ ...r, profile: r.profile || { completeness: 80, uniqueness: 100, validity: 80, freshness: 70 }, issues: r.issues || [] })));
+        setLiveMode(true);
       }
     } catch (e) {
       const msg = e.message || 'network error';
       setScanError(
         msg === 'Failed to fetch'
-          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          ? 'Cannot reach the backend server. Ensure the server is running and try again.'
           : `Scan request failed: ${msg}`
       );
     }
@@ -403,45 +397,33 @@ export default function DQScanDashboard() {
     setScanningTable(label);
     setScanError(null);
     try {
-      const res = await fetch('/api/agentic/quality-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source_id: pickerFolderSourceId, scan_type: 'full', save_report: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const hint = res.status === 503
-          ? ' — MCP agent cluster is not running. The direct-scan fallback also failed. Start the MCP server or check the target source.'
-          : '';
-        setScanError(`Folder scan failed (HTTP ${res.status}): ${data?.detail || ''}${hint}`);
-      } else {
-        // Normalise agentic response into report format
-        const r = data?.result || data || {};
-        const newReport = {
-          scan_id: `folder-${pickerFolderSourceId}-${Date.now()}`,
-          table_name: label,
-          data_source: 'folder',
-          overall_score: r.overall_score != null ? (r.overall_score <= 1 ? r.overall_score * 100 : r.overall_score) : 75,
-          rows_scanned: r.rows_scanned || r.total_rows || 0,
-          issues_count: r.issues_count || (Array.isArray(r.issues) ? r.issues.length : 0),
-          issues: Array.isArray(r.issues) ? r.issues : [],
-          scan_date: new Date().toISOString(),
-          status: r.status || 'completed',
-          profile: {
-            completeness: r.completeness != null ? (r.completeness <= 1 ? r.completeness * 100 : r.completeness) : 80,
-            uniqueness:   r.uniqueness   != null ? (r.uniqueness   <= 1 ? r.uniqueness   * 100 : r.uniqueness)   : 90,
-            validity:     r.validity     != null ? (r.validity     <= 1 ? r.validity     * 100 : r.validity)     : 80,
-            freshness:    r.freshness    != null ? (r.freshness    <= 1 ? r.freshness    * 100 : r.freshness)    : 70,
-          },
-        };
-        setReports((prev) => [newReport, ...prev]);
-        setLiveMode(true);
-      }
+      const data = await apiClient.post(API_CONFIG.ENDPOINTS.AGENTIC_QUALITY_SCAN, { source_id: pickerFolderSourceId, scan_type: 'full', save_report: true });
+      // Normalise agentic response into report format
+      const r = data?.result || data || {};
+      const newReport = {
+        scan_id: `folder-${pickerFolderSourceId}-${Date.now()}`,
+        table_name: label,
+        data_source: 'folder',
+        overall_score: r.overall_score != null ? (r.overall_score <= 1 ? r.overall_score * 100 : r.overall_score) : 75,
+        rows_scanned: r.rows_scanned || r.total_rows || 0,
+        issues_count: r.issues_count || (Array.isArray(r.issues) ? r.issues.length : 0),
+        issues: Array.isArray(r.issues) ? r.issues : [],
+        scan_date: new Date().toISOString(),
+        status: r.status || 'completed',
+        profile: {
+          completeness: r.completeness != null ? (r.completeness <= 1 ? r.completeness * 100 : r.completeness) : 80,
+          uniqueness:   r.uniqueness   != null ? (r.uniqueness   <= 1 ? r.uniqueness   * 100 : r.uniqueness)   : 90,
+          validity:     r.validity     != null ? (r.validity     <= 1 ? r.validity     * 100 : r.validity)     : 80,
+          freshness:    r.freshness    != null ? (r.freshness    <= 1 ? r.freshness    * 100 : r.freshness)    : 70,
+        },
+      };
+      setReports((prev) => [newReport, ...prev]);
+      setLiveMode(true);
     } catch (e) {
       const msg = e.message || 'network error';
       setScanError(
         msg === 'Failed to fetch'
-          ? 'Cannot reach the backend (port 8011). Start the backend server and try again.'
+          ? 'Cannot reach the backend server. Ensure the server is running and try again.'
           : `Folder scan request failed: ${msg}`
       );
     }

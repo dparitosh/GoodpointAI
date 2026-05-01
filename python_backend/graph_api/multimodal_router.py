@@ -110,7 +110,7 @@ class MultiModalService:
         self.supported_image_formats = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp'}
         self.supported_pdf_formats = {'.pdf'}
         self.supported_cad_formats = {'.dwg', '.dxf', '.step', '.stp', '.iges', '.igs'}
-        self.supported_excel_formats = {'.xlsx', '.xls', '.xlsm', '.csv'}
+        self.supported_excel_formats = {'.xlsx', '.xls', '.xlsm', '.csv', '.tsv'}
         self.supported_word_formats = {'.docx', '.doc'}
         self.supported_video_formats = {'.mp4', '.avi', '.mov', '.mkv'}
     

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 _IMAGE_EXT  = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
 _PDF_EXT    = {".pdf"}
 _CAD_EXT    = {".dwg", ".dxf", ".step", ".stp", ".iges", ".igs"}
-_EXCEL_EXT  = {".xlsx", ".xls", ".xlsm", ".csv"}
+_EXCEL_EXT  = {".xlsx", ".xls", ".xlsm", ".csv", ".tsv"}
 _WORD_EXT   = {".docx", ".doc"}
 _VIDEO_EXT  = {".mp4", ".avi", ".mov", ".mkv"}
 

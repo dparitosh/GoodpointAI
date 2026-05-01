@@ -25,6 +25,7 @@ import {
 } from '../../hooks/useGraphQL';
 import './EnterpriseAnalyticsHub.css';
 import { useReportHub } from '../../hooks/useReportHub.js';
+import { useFileFormats } from '../../hooks/useFileFormats.js';
 
 const DATA_SOURCE_CONFIG = {
   postgres: { name: 'PostgreSQL', icon: 'PG', color: '#336791', endpoint: '/api/analytics/sql', queryType: 'SQL' },
@@ -95,6 +96,9 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const resolvedInitial = (tabFromUrl && VALID_TABS.includes(tabFromUrl)) ? tabFromUrl : initialTab;
+
+  // File format helpers \u2014 backend-driven, fallback built-in
+  const { acceptTabular, acceptAnalytics } = useFileFormats();
 
   // Core state
   const [activeTab, setActiveTabState] = useState(resolvedInitial);
@@ -1030,7 +1034,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
         return;
       }
 
-      setError('Unsupported file type. Please select a .xlsx or .csv file.');
+      setError(`Unsupported file type. Supported: ${acceptTabular.replace(/,/g, ', ')}`);
     } catch (err) {
       setError(`Failed to import spreadsheet: ${err?.message || String(err)}`);
     }
@@ -2063,7 +2067,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                 <input
                   ref={spreadsheetFileInputRef}
                   type="file"
-                  accept=".xlsx,.csv"
+                  accept={acceptTabular}
                   style={{ display: 'none' }}
                   onChange={onSpreadsheetFileSelected}
                 />
@@ -2293,7 +2297,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileUpload}
-                  accept=".json,.csv,.txt,.xml,.xlsx,.parquet"
+                  accept={acceptAnalytics}
                   multiple
                   style={{ display: 'none' }}
                 />
@@ -2301,7 +2305,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                   <div className="dropzone-content">
                     <span className="dropzone-icon">FILE</span>
                     <span className="dropzone-text">Click to upload or drag files here</span>
-                    <span className="dropzone-formats">Supported: JSON, CSV, TXT, XML, XLSX, Parquet</span>
+                    <span className="dropzone-formats">Supported: {acceptAnalytics.replace(/,/g, ', ')}</span>
                   </div>
                 </div>
               </div>

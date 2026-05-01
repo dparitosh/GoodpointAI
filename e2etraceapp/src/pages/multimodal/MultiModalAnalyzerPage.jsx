@@ -12,9 +12,9 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import './MultiModalAnalyzerPage.css';
-
-// Prefer relative URLs so Vite proxy (dev) and same-origin deploys work by default.
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+import { apiClient } from '../../utils/apiClient.js';
+import API_CONFIG from '../../config/api-config.js';
+import { useFileFormats } from '../../hooks/useFileFormats.js';
 
 const MultiModalAnalyzerPage = () => {
   const [file, setFile] = useState(null);
@@ -22,7 +22,9 @@ const MultiModalAnalyzerPage = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
-  const [supportedFormats, setSupportedFormats] = useState(null);
+
+  // Supported formats — fetched from backend once, fallback built-in
+  const { extsByCategory: supportedFormats, acceptAll } = useFileFormats();
 
   // Configuration
   const [visionModel, setVisionModel] = useState('llava:latest');
@@ -31,14 +33,6 @@ const MultiModalAnalyzerPage = () => {
   const [temperature, setTemperature] = useState(0.2);
 
   const fileInputRef = useRef(null);
-
-  // Load supported formats on mount
-  React.useEffect(() => {
-    fetch(`${API_BASE}/api/multimodal/supported-formats`)
-      .then(res => res.json())
-      .then(data => setSupportedFormats(data))
-      .catch(err => console.error('Failed to load supported formats:', err));
-  }, []);
 
   // Drag and drop handlers
   const handleDrag = useCallback((e) => {
@@ -80,22 +74,27 @@ const MultiModalAnalyzerPage = () => {
     setError(null);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('vision_model', visionModel);
-    formData.append('extraction_method', extractionMethod);
-    formData.append('enable_ocr', ocrEnabled);
-    formData.append('temperature', temperature);
-
     try {
-      const response = await fetch(`${API_BASE}/api/multimodal/analyze-file`, {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('vision_model', visionModel);
+      formData.append('extraction_method', extractionMethod);
+      formData.append('enable_ocr', ocrEnabled);
+      formData.append('temperature', temperature);
+
+      // Use raw fetch for multipart/form-data; apiClient.post sets JSON content-type
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
+      const response = await fetch(`${API_BASE}${API_CONFIG.ENDPOINTS.MULTIMODAL_ANALYZE_FILE}`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Analysis failed');
+        const ct = response.headers.get('content-type') || '';
+        const errBody = ct.includes('application/json')
+          ? await response.json().catch(() => ({}))
+          : {};
+        throw new Error(errBody.detail || `Analysis failed (HTTP ${response.status})`);
       }
 
       const data = await response.json();
@@ -298,7 +297,7 @@ const MultiModalAnalyzerPage = () => {
                 type="file"
                 onChange={handleFileInputChange}
                 style={{ display: 'none' }}
-                accept=".pdf,.png,.jpg,.jpeg,.bmp,.webp,.tiff,.xls,.xlsx,.csv,.xlsm,.doc,.docx,.dwg,.dxf,.step,.igs,.iges,.stp"
+                accept={acceptAll}
               />
 
               <button
