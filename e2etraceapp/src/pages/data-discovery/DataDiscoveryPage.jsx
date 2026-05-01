@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
 import './DataDiscoveryPage.css';
 
@@ -255,9 +256,63 @@ function FileTypeBar({ byType }) {
   );
 }
 
-function ProfileRow({ file }) {
+// Derive DQ rule results from profile column stats
+function deriveDqRules(profile, rowCount) {
+  const rules = [];
+  Object.entries(profile || {}).forEach(([col, stats]) => {
+    const nr = stats.null_rate ?? 0;
+    const completeness = 100 - nr;
+    // Non-null check
+    const nnStatus = nr === 0 ? 'pass' : nr < 5 ? 'warn' : 'fail';
+    rules.push({
+      rule: 'not_null',
+      column: col,
+      status: nnStatus,
+      detail: nr === 0 ? 'No nulls detected' : `${nr.toFixed(1)}% null values`,
+      affected: rowCount != null ? Math.round((nr / 100) * rowCount) : null,
+    });
+    // Completeness check
+    const compStatus = completeness >= 95 ? 'pass' : completeness >= 80 ? 'warn' : 'fail';
+    rules.push({
+      rule: 'completeness',
+      column: col,
+      status: compStatus,
+      detail: `${completeness.toFixed(1)}% complete`,
+      affected: rowCount != null ? Math.round((nr / 100) * rowCount) : null,
+    });
+    // Valid type check (pass if type is known)
+    if (stats.type) {
+      rules.push({
+        rule: 'valid_type',
+        column: col,
+        status: 'pass',
+        detail: `Detected as ${stats.type}`,
+        affected: 0,
+      });
+    }
+  });
+  return rules;
+}
+
+const DQ_STATUS_COLORS = { pass: '#22c55e', warn: '#f59e0b', fail: '#ef4444' };
+const DQ_STATUS_ICONS  = { pass: 'fas fa-check-circle', warn: 'fas fa-exclamation-circle', fail: 'fas fa-times-circle' };
+
+function ProfileRow({ file, onRunQualityScan }) {
   const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
   const hasProfile = file.profile && Object.keys(file.profile).length > 0;
+
+  const dqRules = hasProfile ? deriveDqRules(file.profile, file.row_count) : [];
+  const nullColumns = Object.entries(file.profile || {})
+    .filter(([, s]) => s.null_rate != null && s.null_rate > 0)
+    .sort(([, a], [, b]) => b.null_rate - a.null_rate);
+
+  const dqSummary = {
+    pass: dqRules.filter((r) => r.status === 'pass').length,
+    warn: dqRules.filter((r) => r.status === 'warn').length,
+    fail: dqRules.filter((r) => r.status === 'fail').length,
+  };
+
   return (
     <>
       <tr className={expanded ? 'dd-row-expanded' : ''}>
@@ -285,6 +340,9 @@ function ProfileRow({ file }) {
             ? (
               <button className="dd-expand-btn" onClick={() => setExpanded(!expanded)}>
                 {expanded ? 'Hide' : 'Profile'}
+                {!expanded && dqSummary.fail > 0 && (
+                  <span className="dd-profile-fail-badge">{dqSummary.fail} fail</span>
+                )}
               </button>
             )
             : <span className="dd-no-profile">—</span>}
@@ -294,28 +352,163 @@ function ProfileRow({ file }) {
         <tr className="dd-profile-row">
           <td colSpan={7}>
             <div className="dd-profile-panel">
-              <div className="dd-profile-cols">
-                {Object.entries(file.profile).map(([col, stats]) => (
-                  <div key={col} className="dd-col-stat">
-                    <div className="dd-col-name">{col}</div>
-                    <div className="dd-col-meta">
-                      {stats.type && <span className="dd-col-type">{stats.type}</span>}
-                      {stats.null_rate != null && (
-                        <span className="dd-col-null" style={{ color: stats.null_rate > 15 ? '#ef4444' : stats.null_rate > 5 ? '#f59e0b' : '#6b7280' }}>
-                          {stats.null_rate.toFixed(0)}% null
-                        </span>
+              {/* Tab bar */}
+              <div className="dd-profile-tabs">
+                <button
+                  className={`dd-profile-tab${activeTab === 'profile' ? ' dd-profile-tab--active' : ''}`}
+                  onClick={() => setActiveTab('profile')}
+                >
+                  <i className="fas fa-columns" /> Column Profile
+                </button>
+                <button
+                  className={`dd-profile-tab${activeTab === 'dq' ? ' dd-profile-tab--active' : ''}`}
+                  onClick={() => setActiveTab('dq')}
+                >
+                  <i className="fas fa-shield-alt" /> DQ Rules
+                  {dqSummary.fail > 0 && <span className="dd-tab-fail-badge">{dqSummary.fail}</span>}
+                  {dqSummary.fail === 0 && dqSummary.warn > 0 && <span className="dd-tab-warn-badge">{dqSummary.warn}</span>}
+                </button>
+                <button
+                  className={`dd-profile-tab${activeTab === 'nulls' ? ' dd-profile-tab--active' : ''}`}
+                  onClick={() => setActiveTab('nulls')}
+                >
+                  <i className="fas fa-exclamation-triangle" /> Null Report
+                  {nullColumns.length > 0 && <span className="dd-tab-warn-badge">{nullColumns.length}</span>}
+                </button>
+              </div>
+
+              {/* Column Profile tab */}
+              {activeTab === 'profile' && (
+                <div className="dd-profile-cols">
+                  {Object.entries(file.profile).map(([col, stats]) => (
+                    <div key={col} className="dd-col-stat">
+                      <div className="dd-col-name">{col}</div>
+                      <div className="dd-col-meta">
+                        {stats.type && <span className="dd-col-type">{stats.type}</span>}
+                        {stats.null_rate != null && (
+                          <span className="dd-col-null" style={{ color: stats.null_rate > 15 ? '#ef4444' : stats.null_rate > 5 ? '#f59e0b' : '#6b7280' }}>
+                            {stats.null_rate.toFixed(0)}% null
+                          </span>
+                        )}
+                      </div>
+                      {stats.sample && (
+                        <div className="dd-col-samples">
+                          {stats.sample.filter((v) => v != null).slice(0, 3).map((v, i) => (
+                            <span key={i} className="dd-sample-val">{String(v)}</span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    {stats.sample && (
-                      <div className="dd-col-samples">
-                        {stats.sample.filter((v) => v != null).slice(0, 3).map((v, i) => (
-                          <span key={i} className="dd-sample-val">{String(v)}</span>
-                        ))}
-                      </div>
-                    )}
+                  ))}
+                </div>
+              )}
+
+              {/* DQ Rules tab */}
+              {activeTab === 'dq' && (
+                <div className="dd-dq-report">
+                  <div className="dd-dq-summary">
+                    <span className="dd-dq-badge dd-dq-pass"><i className="fas fa-check-circle" /> {dqSummary.pass} pass</span>
+                    <span className="dd-dq-badge dd-dq-warn"><i className="fas fa-exclamation-circle" /> {dqSummary.warn} warn</span>
+                    <span className="dd-dq-badge dd-dq-fail"><i className="fas fa-times-circle" /> {dqSummary.fail} fail</span>
                   </div>
-                ))}
-              </div>
+                  <table className="dd-dq-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Rule</th>
+                        <th>Column</th>
+                        <th>Detail</th>
+                        <th>Rows Affected</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dqRules.map((r, i) => (
+                        <tr key={i} className={`dd-dq-row dd-dq-row--${r.status}`}>
+                          <td>
+                            <span className="dd-dq-status" style={{ color: DQ_STATUS_COLORS[r.status] }}>
+                              <i className={DQ_STATUS_ICONS[r.status]} /> {r.status}
+                            </span>
+                          </td>
+                          <td><code className="dd-dq-rule-name">{r.rule}</code></td>
+                          <td><span className="dd-col-name" style={{ display: 'inline' }}>{r.column}</span></td>
+                          <td className="dd-dq-detail">{r.detail}</td>
+                          <td className="dd-num">{r.affected != null ? fmtNum(r.affected) : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="dd-dq-footer">
+                    <button className="dd-btn dd-btn-secondary dd-btn-sm" onClick={() => onRunQualityScan && onRunQualityScan(file)}>
+                      <i className="fas fa-play" /> Run Full Quality Scan
+                    </button>
+                    <span className="dd-dq-note">Rules derived from column profiling. Run a full quality scan for definitive results.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Null Values Report tab */}
+              {activeTab === 'nulls' && (
+                <div className="dd-null-report">
+                  {nullColumns.length === 0 ? (
+                    <div className="dd-null-clean">
+                      <i className="fas fa-check-circle" style={{ color: '#22c55e' }} /> No null values detected in any column.
+                    </div>
+                  ) : (
+                    <>
+                      <p className="dd-null-intro">
+                        <strong>{nullColumns.length}</strong> column{nullColumns.length !== 1 ? 's' : ''} contain null values.
+                        {file.row_count != null && <> File has {fmtNum(file.row_count)} rows.</>}
+                      </p>
+                      <table className="dd-null-table">
+                        <thead>
+                          <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Null Rate</th>
+                            <th>Null Rows</th>
+                            <th>Completeness</th>
+                            <th>Severity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {nullColumns.map(([col, stats]) => {
+                            const nr = stats.null_rate;
+                            const severity = nr >= 20 ? 'high' : nr >= 5 ? 'medium' : 'low';
+                            const severityColor = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#22c55e';
+                            const nullRows = file.row_count != null ? Math.round((nr / 100) * file.row_count) : null;
+                            return (
+                              <tr key={col} className="dd-null-row">
+                                <td><span className="dd-col-name" style={{ display: 'inline' }}>{col}</span></td>
+                                <td><span className="dd-col-type">{stats.type || '—'}</span></td>
+                                <td>
+                                  <div className="dd-null-bar-wrap">
+                                    <div className="dd-null-bar-track">
+                                      <div className="dd-null-bar-fill" style={{ width: `${Math.min(nr, 100)}%`, background: severityColor }} />
+                                    </div>
+                                    <span style={{ color: severityColor, fontWeight: 600, fontSize: '0.8rem', minWidth: 42 }}>{nr.toFixed(1)}%</span>
+                                  </div>
+                                </td>
+                                <td className="dd-num">{nullRows != null ? fmtNum(nullRows) : '—'}</td>
+                                <td className="dd-num" style={{ color: DQ_STATUS_COLORS[nr >= 5 ? (nr >= 20 ? 'fail' : 'warn') : 'pass'] }}>
+                                  {(100 - nr).toFixed(1)}%
+                                </td>
+                                <td>
+                                  <span className="dd-severity-badge" style={{ background: `${severityColor}22`, color: severityColor }}>{severity}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div className="dd-dq-footer">
+                        <button className="dd-btn dd-btn-secondary dd-btn-sm" onClick={() => onRunQualityScan && onRunQualityScan(file)}>
+                          <i className="fas fa-play" /> Run Full Quality Scan
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </td>
         </tr>
@@ -327,6 +520,8 @@ function ProfileRow({ file }) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function DataDiscoveryPage() {
+  const [searchParams] = useSearchParams();
+
   // ── Source selection
   const [sources, setSources]             = useState([]);
   const [selectedSourceId, setSelected]   = useState('');
@@ -348,6 +543,9 @@ export default function DataDiscoveryPage() {
   const [savedReports, setSavedReports]   = useState(DEMO_PAST_RUNS);
   const [activeReportId, setActiveReportId] = useState(null);
 
+  // ── Workflow guidance banner (shown when navigating from migration wizard)
+  const [fromWizard, setFromWizard]       = useState(false);
+
   // ── Quality scan state
   const [scanning, setScanning]           = useState(false);
   const [scanResult, setScanResult]       = useState(null);
@@ -368,6 +566,9 @@ export default function DataDiscoveryPage() {
 
   // Load registered folder datasources + saved reports on mount
   useEffect(() => {
+    const paramSource = searchParams.get('source');
+    if (paramSource) setFromWizard(true);
+
     fetch(`${API_BASE}/api/data-sources`)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
@@ -380,10 +581,14 @@ export default function DataDiscoveryPage() {
             })
           : [];
         setSources(folderSources);
+        // Auto-select source coming from wizard URL param
+        if (paramSource && folderSources.find((s) => s.id === paramSource)) {
+          setSelected(paramSource);
+        }
       })
       .catch(() => setSources([]));
     loadSavedReports();
-  }, [loadSavedReports]);
+  }, [loadSavedReports, searchParams]);
 
   // Restore a past saved report into the active view
   const restoreReport = useCallback((saved) => {
@@ -434,6 +639,35 @@ export default function DataDiscoveryPage() {
       setStatus('error');
     }
   }, [selectedSourceId, folderPath, recursive, loadSavedReports, sources]);
+
+  // Auto-restore most recent past run for the pre-selected source from wizard
+  useEffect(() => {
+    const paramSource = searchParams.get('source');
+    if (!paramSource || savedReports === DEMO_PAST_RUNS) return; // only run once real reports loaded
+    const matchingRuns = savedReports.filter(
+      (r) => r.source_id === paramSource || String(r.source_id) === String(paramSource)
+    );
+    if (matchingRuns.length > 0) {
+      // Sort by created_at desc, pick newest
+      const newest = matchingRuns.sort((a, b) =>
+        new Date(b.created_at) - new Date(a.created_at)
+      )[0];
+      restoreReport(newest);
+      setLiveMode(true);
+    } else {
+      // No past run for this source — set to idle so user knows to click Discover
+      setStatus('idle');
+      setResult(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedReports]);
+
+  // Run quality scan triggered from ProfileRow "Run Full Quality Scan" button
+  const runQualityScanForFile = useCallback((file) => {
+    // Scroll to top so user sees the scan running
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    runQualityScan();
+  }, [runQualityScan]);
 
   const runQualityScan = useCallback(async () => {
     if (!selectedSourceId && !folderPath.trim()) return;
@@ -692,6 +926,24 @@ export default function DataDiscoveryPage() {
 
       {/* ── SOURCE SELECTOR ─────────────────────────────────────── */}
       <div className="dd-card dd-source-card">
+
+      {/* ── WORKFLOW GUIDANCE BANNER ─────────────────────────────── */}
+      {fromWizard && (
+        <div className="dd-guidance-banner">
+          <div className="dd-guidance-icon"><i className="fas fa-info-circle" /></div>
+          <div className="dd-guidance-body">
+            <strong>Next steps in your migration workflow:</strong>
+            <ol className="dd-guidance-steps">
+              <li>Your source is pre-selected below. Click <strong>Discover</strong> to profile its files.</li>
+              <li>Review the file list and click <strong>Profile</strong> on any file to inspect column stats, DQ rules, and null values.</li>
+              <li>Click <strong>Quality Scan</strong> to run a full DQ scan across all files.</li>
+              <li>Return to the Migration Wizard to proceed to <strong>Map Fields</strong> (Step 3).</li>
+            </ol>
+          </div>
+          <button className="dd-guidance-close" onClick={() => setFromWizard(false)}><i className="fas fa-times" /></button>
+        </div>
+      )}
+
         <div className="dd-source-row">
           <div className="dd-source-group">
             <label className="dd-label">Registered Folder Source</label>
@@ -882,7 +1134,7 @@ export default function DataDiscoveryPage() {
                         <td colSpan={7} className="dd-empty-row">No files match the current filter</td>
                       </tr>
                     )
-                    : sorted.map((f, i) => <ProfileRow key={f.path || i} file={f} />)}
+                    : sorted.map((f, i) => <ProfileRow key={f.path || i} file={f} onRunQualityScan={runQualityScanForFile} />)}
                 </tbody>
               </table>
             </div>

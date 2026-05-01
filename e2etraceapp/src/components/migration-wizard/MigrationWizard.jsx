@@ -1550,7 +1550,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             ))}
           </div>
           <div className="ddp-footer-link">
-            <a href="#/data-discovery" target="_blank" rel="noreferrer">
+            <a
+              href={`#/data-discovery${wizardData.sourceSystem?.id ? `?source=${encodeURIComponent(wizardData.sourceSystem.id)}` : ''}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               <i className="fas fa-external-link-alt" /> View full discovery catalogue
             </a>
           </div>
@@ -1628,7 +1632,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           </div>
           
           <div className="summary-actions">
-            <a href="#/data-discovery" className="view-details-link" target="_blank" rel="noopener noreferrer">
+            <a
+              href={`#/data-discovery${wizardData.sourceSystem?.id ? `?source=${encodeURIComponent(wizardData.sourceSystem.id)}` : ''}`}
+              className="view-details-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <i className="fas fa-external-link-alt" /> View Full Discovery Report
             </a>
             
