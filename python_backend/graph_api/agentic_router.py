@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from .dependencies import get_driver
 from core.db_session import get_db
-from models.quality_models import DiscoveryReport
+from models.quality_models import DiscoveryReport, DataQualityRule, DataQualityResult
 from models.report_hub_models import UnifiedReport
 from models.workflow_models import WorkflowExecution, MigrationStage
 from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
@@ -489,6 +489,9 @@ class DiscoveryRequest(BaseModel):
     recursive: bool = True
     include_profiling: bool = True
     save_report: bool = True
+    # When True, enabled dq_rules from the DB are evaluated against the profiled data
+    # and a violation summary is included in the response under "dq_rule_violations".
+    evaluate_dq_rules: bool = False
 
 @router.post("/discovery", summary="Discover and profile a folder data source via MCP")
 async def discover_datasource(req: DiscoveryRequest, db: Session = Depends(get_db)):
@@ -565,6 +568,20 @@ async def discover_datasource(req: DiscoveryRequest, db: Session = Depends(get_d
             logger.warning("Failed to persist discovery report: %s", persist_err)
             db.rollback()
 
+    # ── Post-discovery DQ rule evaluation ─────────────────────────────────
+    # When evaluate_dq_rules=True, run enabled dq_rules from the DB against
+    # the profile data returned by the agent and attach a summary to the response.
+    if req.evaluate_dq_rules:
+        try:
+            violations = _evaluate_dq_rules_on_profile(result_dict, db)
+            result_dict["dq_rule_violations"] = violations
+            result_dict["dq_rule_violations_count"] = len(violations)
+            result_dict["dq_rules_evaluated"] = True
+        except Exception as dq_err:
+            logger.warning("DQ rule evaluation post-discovery failed: %s", dq_err)
+            result_dict["dq_rules_evaluated"] = False
+            result_dict["dq_rule_violations"] = []
+
     return result_dict
 
 
@@ -595,6 +612,194 @@ async def list_discovery_reports(
         }
         for r in rows
     ]
+
+
+# ── Discovery → field mapping inference ───────────────────────────────────
+
+# PLM canonical target field registry used by infer-mappings.
+# Keys are the canonical target field name; values are synonym lists (lowercase).
+_PLM_FIELD_SYNONYMS: dict[str, list[str]] = {
+    "part_number":    ["part_number", "partno", "part_no", "pn", "item_number", "item_no", "id", "part_id"],
+    "name":           ["name", "part_name", "title", "label", "description_short"],
+    "description":    ["description", "desc", "long_description", "notes"],
+    "classification": ["classification", "category", "class", "type", "part_type", "group"],
+    "revision":       ["revision", "rev", "version", "ver"],
+    "status":         ["status", "state", "lifecycle_state", "maturity"],
+    "unit_of_measure":["unit_of_measure", "uom", "unit", "measure"],
+    "weight":         ["weight", "mass", "weight_kg", "weight_lb"],
+    "material":       ["material", "material_type", "raw_material"],
+    "created_by":     ["created_by", "author", "creator", "owner"],
+    "created_at":     ["created_at", "created_date", "date_created", "creation_date"],
+}
+
+_TRANSFORM_HINTS: dict[str, str] = {
+    "name": "TRIM",
+    "description": "TRIM",
+    "classification": "TRIM",
+    "part_number": "TRIM",
+    "weight": "NUMBER",
+    "created_at": "TIMESTAMP",
+}
+
+
+def _infer_mapping_for_field(source_field: str) -> dict:
+    """Return the best PLM target field + confidence for a single source field."""
+    lf = source_field.strip().lower().replace(" ", "_").replace("-", "_")
+    for target, synonyms in _PLM_FIELD_SYNONYMS.items():
+        if lf == target or lf in synonyms:
+            return {
+                "sourceField": source_field,
+                "targetField": target,
+                "transformation": _TRANSFORM_HINTS.get(target),
+                "confidence": "High",
+                "match_type": "synonym",
+            }
+    # Partial / substring match
+    for target, synonyms in _PLM_FIELD_SYNONYMS.items():
+        if any(s in lf or lf in s for s in synonyms):
+            return {
+                "sourceField": source_field,
+                "targetField": target,
+                "transformation": _TRANSFORM_HINTS.get(target),
+                "confidence": "Medium",
+                "match_type": "partial",
+            }
+    # No match — map to itself
+    return {
+        "sourceField": source_field,
+        "targetField": source_field,
+        "transformation": None,
+        "confidence": "Low",
+        "match_type": "identity",
+    }
+
+
+def _evaluate_dq_rules_on_profile(result_dict: dict, db: Session) -> list[dict]:
+    """
+    Evaluate enabled dq_rules from the DB against the column profile data
+    returned by the discovery agent.
+
+    Returns a list of violation dicts for rules that failed based on the
+    profile statistics (null_rate, uniqueness, row_count, etc.).
+    """
+    inner = result_dict.get("result") or result_dict
+    files = inner.get("files") or inner.get("discovered_files") or []
+
+    # Build a flat column-profile dict from all profiled files
+    # Structure: { column_name: { null_rate, type, sample, ... } }
+    col_profiles: dict[str, dict] = {}
+    total_row_count = 0
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        total_row_count += int(f.get("row_count") or 0)
+        profile = f.get("profile") or {}
+        for col, stats in profile.items():
+            if col not in col_profiles:
+                col_profiles[col] = stats if isinstance(stats, dict) else {}
+
+    rules = db.query(DataQualityRule).filter(DataQualityRule.enabled == 1).all()
+    violations: list[dict] = []
+
+    for rule in rules:
+        cond = rule.condition or {}
+        op = cond.get("op", "")
+        field = cond.get("field", "")
+        stats = col_profiles.get(field, {})
+
+        violated = False
+        detail = ""
+
+        if op == "not_null":
+            null_rate = float(stats.get("null_rate") or 0)
+            if null_rate > 0:
+                violated = True
+                detail = f"null_rate={null_rate:.1f}% for field '{field}'"
+
+        elif op == "completeness_pct":
+            threshold = float(cond.get("threshold") or 80)
+            null_rate = float(stats.get("null_rate") or 0)
+            completeness = 100.0 - null_rate
+            if completeness < threshold:
+                violated = True
+                detail = f"completeness={completeness:.1f}% < threshold={threshold}% for field '{field}'"
+
+        elif op == "row_count_gt":
+            minimum = int(cond.get("min") or 1)
+            if total_row_count <= minimum:
+                violated = True
+                detail = f"row_count={total_row_count} <= min={minimum}"
+
+        elif op == "unique":
+            if field and field not in col_profiles:
+                # Can't evaluate uniqueness without stats
+                pass
+
+        if violated:
+            violations.append({
+                "rule_id": rule.id,
+                "rule_name": rule.name,
+                "entity_type": rule.entity_type,
+                "severity": rule.severity,
+                "detail": detail,
+            })
+
+    return violations
+
+
+@router.get(
+    "/discovery/{report_id}/infer-mappings",
+    summary="Infer field mappings from a saved discovery report",
+)
+async def infer_mappings_from_discovery(
+    report_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Read a saved discovery report and return field mapping suggestions.
+
+    Each suggestion maps a discovered source column to the best-matching
+    PLM canonical target field with a confidence level and optional
+    built-in transformation hint.
+
+    Used by Migration Wizard step 2 → step 3 to pre-populate field mappings.
+    """
+    report = db.query(DiscoveryReport).filter(DiscoveryReport.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Discovery report not found")
+
+    inner = (report.result or {}).get("result") or report.result or {}
+    files = inner.get("files") or inner.get("discovered_files") or []
+
+    # Collect all unique column names across all discovered files
+    source_fields: list[str] = []
+    seen: set[str] = set()
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        profile = f.get("profile") or {}
+        for col in profile:
+            if col not in seen:
+                source_fields.append(col)
+                seen.add(col)
+
+    # Fallback: use inferred_schema if profile is absent
+    if not source_fields:
+        inferred = inner.get("inferred_schema") or {}
+        source_fields = list(inferred.keys())
+
+    suggestions = [_infer_mapping_for_field(sf) for sf in source_fields]
+
+    # Also run DQ rule evaluation on the profile so the caller gets a quality signal
+    dq_violations = _evaluate_dq_rules_on_profile(report.result or {}, db)
+
+    return {
+        "report_id": report_id,
+        "source_fields_count": len(source_fields),
+        "mappings": suggestions,
+        "dq_violations": dq_violations,
+        "dq_violations_count": len(dq_violations),
+    }
 
 
 # ── Data Quality Scan via MCP ──────────────────────────────────────────────

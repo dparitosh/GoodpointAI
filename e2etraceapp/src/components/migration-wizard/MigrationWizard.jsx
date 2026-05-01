@@ -79,7 +79,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     // Saved workflow instance ID (set when user leaves step 1)
     savedWorkflowId: null,
     // Name that was persisted (used to detect renames on step 1 revisit)
-    savedWorkflowName: null
+    savedWorkflowName: null,
+    // Backend rule_set_id created when wizard rules are persisted in step 4
+    savedRuleSetId: null,
   });
   
   // Available data sources
@@ -809,32 +811,85 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   }, [wizardData.sourceSystem, wizardData.targetSystem]);
 
-  const acceptDiscovery = useCallback(() => {
+  const acceptDiscovery = useCallback(async () => {
     setWizardData(prev => ({
       ...prev,
       discoveryAccepted: true
     }));
-    
+
+    // ── Call backend infer-mappings if we have a saved discovery report_id ──
+    // The backend reads the column profile from the discovery_reports table and
+    // matches source fields against the PLM canonical target schema.
+    const reportId = wizardData.discoverySodaResult?.report_id
+      || wizardData.discoveryIntrospect?.report_id
+      || null;
+
+    if (reportId) {
+      try {
+        const res = await fetch(API_CONFIG.ENDPOINTS.DISCOVERY_INFER_MAPPINGS(reportId));
+        if (res.ok) {
+          const inferData = await res.json();
+          const backendMappings = (inferData.mappings || []).map(m => ({
+            sourceField: m.sourceField,
+            targetField: m.targetField,
+            transformation: m.transformation || null,
+            confidence: m.confidence === 'High' ? '95%' : m.confidence === 'Medium' ? '75%' : '50%',
+          }));
+
+          if (backendMappings.length > 0) {
+            setWizardData(prev => ({
+              ...prev,
+              // Prefer backend-inferred mappings; only keep prior suggestions not covered
+              aiSuggestedMappings: backendMappings,
+              // Pre-populate fieldMappings so Map step has something on arrival
+              fieldMappings: prev.fieldMappings.length === 0 ? backendMappings : prev.fieldMappings,
+            }));
+          }
+
+          // Surface any DQ rule violations as extra insights
+          const violations = inferData.dq_violations || [];
+          if (violations.length > 0) {
+            const criticalCount = violations.filter(v => v.severity === 'critical' || v.severity === 'high').length;
+            setWizardData(prev => ({
+              ...prev,
+              discoveryInsights: [
+                ...prev.discoveryInsights,
+                {
+                  id: `dq-rules-${Date.now()}`,
+                  title: 'DQ rule violations detected',
+                  severity: criticalCount > 0 ? 'warning' : 'info',
+                  detail: `${violations.length} DQ rule(s) failed on discovered data${criticalCount > 0 ? ` (${criticalCount} critical/high)` : ''}.`,
+                },
+              ],
+            }));
+          }
+        }
+      } catch (inferErr) {
+        // Non-fatal: wizard still works without backend inference
+        console.warn('Backend mapping inference unavailable:', inferErr?.message || inferErr);
+      }
+    }
+
     // Show success confirmation toast
-    const fieldsDetected = wizardData.discoveryIntrospect?.inferred_fields?.length || 
+    const fieldsDetected = wizardData.discoveryIntrospect?.inferred_fields?.length ||
                           extractSchemaFields(wizardData.sourceSchema).length || 0;
-    const qualityScore = wizardData.discoveryIntrospect?.soda_result?.score_pct || 
+    const qualityScore = wizardData.discoveryIntrospect?.soda_result?.score_pct ||
                         wizardData.discoveryIntrospect?.quality_score || null;
     const suggestionCount = wizardData.discoveryIntrospect?.suggested_mappings?.length || 0;
-    
+
     let message = '✅ Discovery Accepted!';
     const details = [];
     if (fieldsDetected > 0) details.push(`${fieldsDetected} fields discovered`);
     if (qualityScore !== null) details.push(`Quality: ${qualityScore}%`);
     if (suggestionCount > 0) details.push(`${suggestionCount} AI suggestions ready`);
-    
+
     if (details.length > 0) {
       message += '\n' + details.join(' • ');
     }
     message += '\nReady to proceed to field mapping.';
-    
+
     toast.success(message, 6000);
-  }, [wizardData.discoveryIntrospect, wizardData.sourceSchema]);
+  }, [wizardData.discoveryIntrospect, wizardData.sourceSchema, wizardData.discoverySodaResult]);
 
   // Step 3: AI-powered mapping suggestions via schema analysis.
   // Uses reliable schema-based smart matching that returns the correct
@@ -982,20 +1037,86 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const runValidation = useCallback(async () => {
     setOpLoading(prev => ({ ...prev, validation: true }));
     try {
+      // ── 1. Persist wizard rules to the backend rule engine ──────────────
+      // Rules are saved as a proper RuleSet so they survive session reloads
+      // and can be re-executed independently of the wizard.
+      let ruleSetId = null;
+      const enabledRules = (wizardData.rules || []).filter(r => r.enabled && r.condition);
+      if (enabledRules.length > 0) {
+        try {
+          const saveRes = await fetch(API_CONFIG.ENDPOINTS.RULES_FROM_WIZARD, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workflow_name: wizardData.workflowName || 'Wizard',
+              workflow_id: wizardData.savedWorkflowId || null,
+              rules: enabledRules,
+            }),
+          });
+          if (saveRes.ok) {
+            const saveData = await saveRes.json();
+            ruleSetId = saveData.rule_set_id;
+          }
+        } catch (saveErr) {
+          console.warn('Could not persist wizard rules to backend:', saveErr?.message || saveErr);
+        }
+      }
+
+      // ── 2. Execute the saved rule set against sample data ───────────────
+      let ruleViolations = [];
+      if (ruleSetId) {
+        try {
+          // Build a representative sample record from discovery schema or field mappings
+          const sampleRecord = {};
+          const sourceFields = extractSchemaFields(wizardData.sourceSchema);
+          sourceFields.forEach(f => { sampleRecord[f] = null; }); // null triggers not_null rules
+          (wizardData.fieldMappings || []).forEach(m => {
+            if (m.sourceField) sampleRecord[m.sourceField] = sampleRecord[m.sourceField] ?? '';
+          });
+
+          const execRes = await fetch(API_CONFIG.ENDPOINTS.RULES_EXECUTE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rule_set_id: ruleSetId,
+              entity_data: sampleRecord,
+              entity_id: 'validation_sample',
+            }),
+          });
+          if (execRes.ok) {
+            const execData = await execRes.json();
+            ruleViolations = execData.violations || [];
+          }
+        } catch (execErr) {
+          console.warn('Rule execution unavailable:', execErr?.message || execErr);
+        }
+      }
+
+      // ── 3. AI schema / mapping validation insights ──────────────────────
       const validationInsights = await aiSuggestions.getValidationInsights(
         { schema: wizardData.sourceSchema, mappings: wizardData.fieldMappings },
         { nodeCompleteness: true, relationshipIntegrity: true, dataTypeConsistency: true }
       );
-      
-      const passed = validationInsights.filter(v => v.severity === 'success' || v.severity === 'info').length;
-      const failed = validationInsights.filter(v => v.severity === 'error').length;
-      const warnings = validationInsights.filter(v => v.severity === 'warning').length;
-      
+
+      // ── 4. Merge rule violations into validation results ─────────────────
+      const ruleInsights = ruleViolations.map((v, i) => ({
+        id: `rule-${i}-${Date.now()}`,
+        insight: `Rule "${v.rule_name}" failed: ${v.message || v.severity}`,
+        severity: v.severity === 'critical' || v.severity === 'blocker' ? 'error' : 'warning',
+        recommendation: `Action: ${v.action || 'review'}`,
+      }));
+
+      const allInsights = [...validationInsights, ...ruleInsights];
+      const passed = allInsights.filter(v => v.severity === 'success' || v.severity === 'info').length;
+      const failed = allInsights.filter(v => v.severity === 'error').length;
+      const warnings = allInsights.filter(v => v.severity === 'warning').length;
+
       setWizardData(prev => ({
         ...prev,
-        validationResults: validationInsights,
+        validationResults: allInsights,
         qualityChecks: { passed, failed, warnings },
-        validationRun: true
+        validationRun: true,
+        savedRuleSetId: ruleSetId,
       }));
     } catch (error) {
       console.error('Validation failed:', error);
@@ -1008,7 +1129,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, validation: false }));
     }
-  }, [wizardData.sourceSchema, wizardData.fieldMappings, aiSuggestions]);
+  }, [wizardData.sourceSchema, wizardData.fieldMappings, wizardData.rules, wizardData.workflowName, wizardData.savedWorkflowId, aiSuggestions]);
 
   // SODA Data Quality Scan
   const runSodaScan = useCallback(async () => {

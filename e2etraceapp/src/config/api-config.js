@@ -86,6 +86,14 @@ const DEFAULT_CONFIG = {
     DATA_MAPPING_APPLY_TEMPLATE: (templateId) => `/api/data-mapping/templates/${templateId}/apply`,
     DATA_MAPPING_FIELD_SUGGESTIONS: (sourceId) => `/api/data-mapping/field-suggestions/${sourceId}`,
     DATA_MAPPING_ANALYTICS: '/api/data-mapping/mapping-analytics',
+
+    // Discovery → Mapping inference (uses saved discovery report_id to suggest field mappings)
+    DISCOVERY_INFER_MAPPINGS: (reportId) => `/api/agentic/discovery/${encodeURIComponent(reportId)}/infer-mappings`,
+
+    // Rule Engine — wizard integration
+    RULES_FROM_WIZARD: '/api/rules/v1/from-wizard',
+    RULES_EXECUTE: '/api/rules/v1/execute',
+    RULES_DQ_CHECKS_YAML: '/api/rules/v1/dq-rules/checks-yaml',
     
     // Configuration Management
     NEO4J_CONFIG: '/api/config/neo4j',
