@@ -395,9 +395,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           if (res.ok) {
             const wf = await res.json();
             setWizardData(prev => ({ ...prev, savedWorkflowId: wf.id }));
+          } else if (res.status === 409) {
+            const errData = await res.json().catch(() => ({}));
+            showToast(errData.detail || 'A workflow with this name already exists. Please choose a different name.', 'error');
+            return; // block step advancement
           }
         } catch (_e) {
-          // Non-fatal: wizard continues even if persistence fails
+          // Non-fatal: wizard continues even if other persistence errors occur
         }
       }
       setStepStatus(prev => ({

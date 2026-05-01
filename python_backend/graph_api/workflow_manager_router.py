@@ -974,6 +974,16 @@ async def create_workflow(
 ):
     await _ensure_store_loaded(db)
 
+    # Enforce name uniqueness (case-insensitive)
+    new_name_lower = workflow.name.lower()
+    async with _WORKFLOWS_STORE_LOCK:
+        for existing in WORKFLOWS_STORE.values():
+            if (existing.get("name") or "").lower() == new_name_lower:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A workflow named '{workflow.name}' already exists. Choose a unique name.",
+                )
+
     workflow_id = _make_workflow_id()
     created_at = _now_utc()
 
@@ -1111,6 +1121,17 @@ async def update_workflow(
 
     if _normalize_status(current.get("status")) == WorkflowStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Cannot update running workflow")
+
+    # Enforce name uniqueness when name is changing (case-insensitive)
+    if workflow_update.name is not None:
+        new_name_lower = workflow_update.name.lower()
+        async with _WORKFLOWS_STORE_LOCK:
+            for wf_id, existing in WORKFLOWS_STORE.items():
+                if wf_id != workflow_id and (existing.get("name") or "").lower() == new_name_lower:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"A workflow named '{workflow_update.name}' already exists. Choose a unique name.",
+                    )
 
     updated = dict(current)
     if workflow_update.name is not None:
@@ -1623,6 +1644,17 @@ async def instantiate_workflow_from_template(
         raise HTTPException(status_code=400, detail="Template must define source_type and target_type")
 
     wf_name = (name or "").strip() or str(template.get("name") or "").strip() or f"{source_id} → {target_id}"
+
+    # Enforce name uniqueness (case-insensitive)
+    await _ensure_store_loaded(db)
+    wf_name_lower = wf_name.lower()
+    async with _WORKFLOWS_STORE_LOCK:
+        for existing in WORKFLOWS_STORE.values():
+            if (existing.get("name") or "").lower() == wf_name_lower:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A workflow named '{wf_name}' already exists. Choose a unique name.",
+                )
 
     created_at = _now_utc()
     workflow_id = _make_workflow_id()
