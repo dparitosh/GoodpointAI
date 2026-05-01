@@ -77,7 +77,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     errors: [],
     runId: null,
     // Saved workflow instance ID (set when user leaves step 1)
-    savedWorkflowId: null
+    savedWorkflowId: null,
+    // Name that was persisted (used to detect renames on step 1 revisit)
+    savedWorkflowName: null
   });
   
   // Available data sources
@@ -375,33 +377,60 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   const nextStep = useCallback(async () => {
     if (currentStep < 5 && canProceed(currentStep)) {
-      // Persist a workflow instance when the user leaves step 1 for the first time
-      if (currentStep === 1 && !wizardData.savedWorkflowId) {
-        try {
-          const src = wizardData.sourceSystem;
-          const tgt = wizardData.targetSystem;
-          const payload = {
-            name: wizardData.workflowName.trim(),
-            description: `Migration from ${src.name} to ${tgt.name}`,
-            source: { id: String(src.id), name: src.name, type: src.source_type || src.type || 'unknown', connection_details: { path: src.path || src.connection_string || '' } },
-            target: { id: String(tgt.id), name: tgt.name, type: tgt.source_type || tgt.type || 'unknown', connection_details: { path: tgt.path || tgt.connection_string || '' } },
-            workflow_config: { nodes: [], edges: [] }
-          };
-          const res = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.WORKFLOWS + '/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            const wf = await res.json();
-            setWizardData(prev => ({ ...prev, savedWorkflowId: wf.id }));
-          } else if (res.status === 409) {
-            const errData = await res.json().catch(() => ({}));
-            showToast(errData.detail || 'A workflow with this name already exists. Please choose a different name.', 'error');
-            return; // block step advancement
+      // On leaving step 1, enforce workflow name uniqueness before advancing
+      if (currentStep === 1) {
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+        const nameToSave = wizardData.workflowName.trim();
+
+        if (!wizardData.savedWorkflowId) {
+          // First time leaving step 1 — create a new workflow instance
+          try {
+            const src = wizardData.sourceSystem;
+            const tgt = wizardData.targetSystem;
+            const payload = {
+              name: nameToSave,
+              description: `Migration from ${src.name} to ${tgt.name}`,
+              source: { id: String(src.id), name: src.name, type: src.source_type || src.type || 'unknown', connection_details: { path: src.path || src.connection_string || '' } },
+              target: { id: String(tgt.id), name: tgt.name, type: tgt.source_type || tgt.type || 'unknown', connection_details: { path: tgt.path || tgt.connection_string || '' } },
+              workflow_config: { nodes: [], edges: [] }
+            };
+            // Use plain fetch so we can inspect res.status (e2etraceFetchWithRetry throws on 4xx)
+            const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOWS}/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+              const wf = await res.json();
+              setWizardData(prev => ({ ...prev, savedWorkflowId: wf.id, savedWorkflowName: nameToSave }));
+            } else if (res.status === 409) {
+              const errData = await res.json().catch(() => ({}));
+              showToast(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 'error');
+              return; // block step advancement
+            }
+            // Other non-OK statuses are non-fatal — wizard continues
+          } catch (_e) {
+            // Network error: non-fatal, wizard continues
           }
-        } catch (_e) {
-          // Non-fatal: wizard continues even if other persistence errors occur
+        } else if (wizardData.savedWorkflowName !== nameToSave) {
+          // User went back and changed the name — PATCH to enforce uniqueness
+          try {
+            const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOWS}/${wizardData.savedWorkflowId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: nameToSave })
+            });
+            if (res.ok) {
+              setWizardData(prev => ({ ...prev, savedWorkflowName: nameToSave }));
+            } else if (res.status === 409) {
+              const errData = await res.json().catch(() => ({}));
+              showToast(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 'error');
+              return; // block step advancement
+            }
+            // Other non-OK statuses are non-fatal
+          } catch (_e) {
+            // Network error: non-fatal, wizard continues
+          }
         }
       }
       setStepStatus(prev => ({
