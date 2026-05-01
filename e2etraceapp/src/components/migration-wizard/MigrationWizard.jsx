@@ -1405,6 +1405,18 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             <p className="action-help">Review results above, then accept to proceed to field mapping</p>
           </div>
         )}
+        {wizardData.discoveryStatus === 'failed' && !wizardData.discoveryAccepted && (
+          <div className="action-group">
+            <span className="step-number">2</span>
+            <button
+              className="btn btn-warning"
+              onClick={acceptDiscovery}
+            >
+              <i className="fas fa-forward" /> Continue Without Discovery
+            </button>
+            <p className="action-help">Discovery failed — you can still map fields manually or use a template in the next step</p>
+          </div>
+        )}
       </div>
 
       {wizardData.discoveryRunId && (
