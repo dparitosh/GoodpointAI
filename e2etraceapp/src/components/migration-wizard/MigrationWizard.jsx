@@ -781,12 +781,23 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       const targetFields = extractSchemaFields(wizardData.targetSchema);
 
       if (sourceFields.length === 0) {
-        // No schema yet — surface existing discovery mappings or prompt user
+        // No schema loaded (discovery was skipped or failed).
+        // If we already have suggestions from a prior run, just surface them.
         if (wizardData.aiSuggestedMappings?.length > 0) {
           toast.success(`Using ${wizardData.aiSuggestedMappings.length} mapping suggestions from Discovery`, 3000);
-        } else {
-          toast.warning('Run Discovery first (Step 2) to enable AI mapping suggestions', 4000);
+          return;
         }
+        // No schema and no prior suggestions — apply canonical PLM fallback so
+        // the user gets something actionable without running Discovery.
+        const fallbackSuggestions = [
+          { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
+          { sourceField: 'name',        targetField: 'name',        transformation: 'TRIM', confidence: '90%' },
+          { sourceField: 'description', targetField: 'description', transformation: null, confidence: '85%' },
+          { sourceField: 'category',    targetField: 'classification', transformation: null, confidence: '80%' },
+          { sourceField: 'revision',    targetField: 'revision',    transformation: null, confidence: '75%' }
+        ];
+        setWizardData(prev => ({ ...prev, aiSuggestedMappings: fallbackSuggestions }));
+        toast.info('Showing default PLM field suggestions — run Discovery for schema-matched results', 4000);
         return;
       }
 
@@ -1712,6 +1723,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                   <i className="fas fa-lightbulb" /> <strong>Tip:</strong> Click source field tags to quickly add mappings
                 </span>
               </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ marginTop: 8 }}
+                onClick={() => addFieldMapping({ source_field: '', target_field: '', transformation: null })}
+              >
+                <i className="fas fa-plus" /> Add Mapping Row
+              </button>
             </div>
           </div>
         </div>
@@ -1773,11 +1791,15 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <div className="suggestions-list">
             {wizardData.aiSuggestedMappings.filter(s => s.sourceField).map((suggestion, idx) => {
               const conf = suggestion.confidence;
-              const confNum = typeof conf === 'number' ? conf : parseFloat(conf);
+              // conf may be a string like "95%" or a decimal like 0.95 — normalise to 0–100
+              const confRaw = typeof conf === 'number' ? conf : parseFloat(conf);
+              const confNum = !isNaN(confRaw)
+                ? (confRaw <= 1 ? confRaw * 100 : confRaw)   // 0.95 → 95, 95 → 95
+                : NaN;
               const confClass = !isNaN(confNum)
-                ? confNum >= 0.75 ? 'high' : confNum >= 0.5 ? 'medium' : 'low'
+                ? confNum >= 75 ? 'high' : confNum >= 50 ? 'medium' : 'low'
                 : 'low';
-              const confLabel = !isNaN(confNum) ? `${Math.round(confNum * 100)}%` : (conf || 'N/A');
+              const confLabel = !isNaN(confNum) ? `${Math.round(confNum)}%` : (conf || 'N/A');
               return (
                 <div key={idx} className="suggestion-item">
                   <span className="mapping-arrow">{suggestion.sourceField} → {suggestion.targetField}</span>
