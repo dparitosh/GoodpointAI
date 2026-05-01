@@ -1,11 +1,10 @@
 /**
  * API Client Utility
- * 
+ *
  * Centralized API client with:
  * - Automatic timeout handling
- * - Request/response logging
- * - Error handling
- * - Request deduplication (future enhancement)
+ * - Safe error body parsing (JSON + text fallback)
+ * - Only retries on transient server errors (502/503/504/408)
  */
 
 // Prefer VITE_API_BASE_URL (documented and used elsewhere); keep VITE_API_URL as a legacy fallback.
@@ -13,8 +12,28 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_A
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
 /**
+ * Parse an error response body safely.
+ * Checks Content-Type before attempting JSON parse; falls back to plain text.
+ * @param {Response} response
+ * @returns {Promise<string>} Human-readable error message
+ */
+async function _parseErrorBody(response) {
+  try {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await response.json();
+      return body?.detail || body?.message || body?.error || JSON.stringify(body);
+    }
+    const text = await response.text();
+    return text.slice(0, 500) || `HTTP ${response.status}: ${response.statusText}`;
+  } catch {
+    return `HTTP ${response.status}: ${response.statusText}`;
+  }
+}
+
+/**
  * Fetch with timeout support
- * @param {string} url - The URL to fetch
+ * @param {string} url
  * @param {Object} options - Fetch options
  * @param {number} timeout - Timeout in milliseconds
  * @returns {Promise<Response>}
@@ -26,7 +45,7 @@ export async function fetchWithTimeout(url, options = {}, timeout = DEFAULT_TIME
   try {
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal
+      signal: controller.signal,
     });
     clearTimeout(timeoutId);
     return response;
@@ -48,103 +67,84 @@ class APIClient {
     this.timeout = timeout;
   }
 
-  /**
-   * Build full URL
-   */
+  /** Build full URL — tolerates leading slashes on the endpoint */
   buildURL(endpoint) {
-    // Remove leading slash if present to avoid double slashes
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     return this.baseURL ? `${this.baseURL}/${cleanEndpoint}` : `/${cleanEndpoint}`;
   }
 
-  /**
-   * GET request
-   */
+  /** GET request */
   async get(endpoint, options = {}) {
     const url = this.buildURL(endpoint);
-    const response = await fetchWithTimeout(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    }, options.timeout || this.timeout);
+    const response = await fetchWithTimeout(
+      url,
+      { method: 'GET', headers: { 'Content-Type': 'application/json', ...options.headers }, ...options },
+      options.timeout || this.timeout,
+    );
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const detail = await _parseErrorBody(response);
+      throw new Error(detail);
     }
-
     return response.json();
   }
 
-  /**
-   * POST request
-   */
+  /** POST request */
   async post(endpoint, data = null, options = {}) {
     const url = this.buildURL(endpoint);
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        body: data !== null ? JSON.stringify(data) : null,
+        ...options,
       },
-      body: data ? JSON.stringify(data) : null,
-      ...options
-    }, options.timeout || this.timeout);
+      options.timeout || this.timeout,
+    );
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const detail = await _parseErrorBody(response);
+      throw new Error(detail);
     }
-
     return response.json();
   }
 
-  /**
-   * PUT request
-   */
+  /** PUT request */
   async put(endpoint, data = null, options = {}) {
     const url = this.buildURL(endpoint);
-    const response = await fetchWithTimeout(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        body: data !== null ? JSON.stringify(data) : null,
+        ...options,
       },
-      body: data ? JSON.stringify(data) : null,
-      ...options
-    }, options.timeout || this.timeout);
+      options.timeout || this.timeout,
+    );
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const detail = await _parseErrorBody(response);
+      throw new Error(detail);
     }
-
     return response.json();
   }
 
-  /**
-   * DELETE request
-   */
+  /** DELETE request */
   async delete(endpoint, options = {}) {
     const url = this.buildURL(endpoint);
-    const response = await fetchWithTimeout(url, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    }, options.timeout || this.timeout);
+    const response = await fetchWithTimeout(
+      url,
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...options.headers }, ...options },
+      options.timeout || this.timeout,
+    );
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const detail = await _parseErrorBody(response);
+      throw new Error(detail);
     }
-
-    // DELETE might return empty response
+    // 204 No Content → return null; otherwise parse JSON
     return response.status === 204 ? null : response.json();
   }
 }

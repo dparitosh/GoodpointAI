@@ -24,7 +24,6 @@ export default function E2ETraceMainDashboard() {
   const [selectedNodeCount, setSelectedNodeCount] = useState(0);
   const [filteredNodeCount, setFilteredNodeCount] = useState(0);
   const [colorScheme, setColorScheme] = useState('default');
-  const [graphStats, setGraphStats] = useState({});
   
   // State managed by custom hooks
   const [tableElements, setTableElements] = useState([]);
@@ -48,11 +47,9 @@ export default function E2ETraceMainDashboard() {
     });
   }, [graphData, colorScheme]);
 
-  // Calculate graph statistics as a derived value (not a side effect in useMemo)
-  useEffect(() => {
-    const stats = calculateGraphStats(cyElements);
-    setGraphStats(stats);
-  }, [cyElements]);
+  // Calculate graph statistics as a derived value — avoids the extra render
+  // that a useEffect+setState pair would cause.
+  const graphStats = useMemo(() => calculateGraphStats(cyElements), [cyElements]);
 
   // Enhanced search handler with highlighting
   const handleAdvancedSearch = useCallback((query) => {

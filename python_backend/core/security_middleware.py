@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 import time
 from dataclasses import dataclass
@@ -101,7 +102,8 @@ def enforce_api_key_if_configured(request: Request) -> Optional[Response]:
     # If API key is configured, accept either x-api-key or bearer token that matches.
     if expected_api_key:
         provided = _extract_api_key(request)
-        if provided and provided == expected_api_key:
+        # Use constant-time comparison to prevent timing-based key enumeration attacks.
+        if provided and hmac.compare_digest(provided, expected_api_key):
             request.state.principal = AuthPrincipal(subject="api_key", roles=("admin",), auth_type="api_key")
             return None
 

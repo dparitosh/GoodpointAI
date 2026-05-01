@@ -94,7 +94,11 @@ async def execute_sql_query(request: SQLQueryRequest):
         
         # Basic SQL injection protection - only allow SELECT
         sql_upper = sql_query.upper()
-        if not sql_upper.startswith('SELECT'):
+        # Strip leading whitespace/comments before checking for SELECT to prevent
+        # bypass patterns like "/* comment */ DROP TABLE".
+        sql_stripped = re.sub(r'/\*.*?\*/', '', sql_upper, flags=re.DOTALL)
+        sql_stripped = re.sub(r'--[^\n]*', '', sql_stripped).strip()
+        if not sql_stripped.startswith('SELECT'):
             logger.warning("SQL query rejected - not SELECT: %s", sql_query[:100])
             raise HTTPException(
                 status_code=400,
@@ -102,7 +106,7 @@ async def execute_sql_query(request: SQLQueryRequest):
             )
         
         # Block dangerous DML/DDL keywords (word-boundary match avoids false positives like 'created_at')
-        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE']
+        dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE', 'UNION']
         for keyword in dangerous_keywords:
             if re.search(r'\b' + keyword + r'\b', sql_upper):
                 logger.warning("SQL query rejected - dangerous keyword '%s'", keyword)
@@ -112,12 +116,12 @@ async def execute_sql_query(request: SQLQueryRequest):
                 )
         # Block SQL comment markers and multi-statement separators separately
         # (word boundaries don't work for non-word character sequences like '--')
-        for marker in ('--', ';'):
-            if marker in sql_upper:
+        for marker in ('--', ';', '/*', '*/'):
+            if marker in sql_query:
                 logger.warning("SQL query rejected - forbidden marker '%s'", marker)
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Forbidden SQL marker '{marker}' not allowed in query"
+                    detail=f"Forbidden SQL marker not allowed in query"
                 )
         
         # Reference list of allowed tables (can be used for validation)

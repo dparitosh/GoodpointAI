@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API_CONFIG from '../../config/api-config';
+import { apiClient } from '../../utils/apiClient';
 import './MyWorkflowsPage.css';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -123,11 +124,7 @@ export default function MyWorkflowsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(API_CONFIG.ENDPOINTS.WORKFLOWS + '/', {
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiClient.get(API_CONFIG.ENDPOINTS.WORKFLOWS + '/');
       setWorkflows(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message || 'Failed to load workflows');
@@ -141,11 +138,7 @@ export default function MyWorkflowsPage() {
   const handleExecute = useCallback(async (workflowId) => {
     setExecuting(workflowId);
     try {
-      const res = await fetch(`/api/workflows/${workflowId}/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiClient.post(`/api/workflows/${workflowId}/execute`);
       navigate(`/workflow/${workflowId}`);
     } catch (err) {
       alert(`Could not execute workflow: ${err.message}`);
@@ -156,15 +149,18 @@ export default function MyWorkflowsPage() {
 
   const statusOptions = ['all', ...Object.keys(STATUS_META)];
 
-  const visible = workflows.filter(wf => {
-    const matchSearch = !search
-      || (wf.name || '').toLowerCase().includes(search.toLowerCase())
-      || (wf.description || '').toLowerCase().includes(search.toLowerCase())
-      || (wf.source_name || '').toLowerCase().includes(search.toLowerCase())
-      || (wf.target_name || '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || (wf.status || '').toLowerCase() === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const visible = useMemo(() => {
+    const q = search.toLowerCase();
+    return workflows.filter(wf => {
+      const matchSearch = !q
+        || (wf.name || '').toLowerCase().includes(q)
+        || (wf.description || '').toLowerCase().includes(q)
+        || (wf.source_name || '').toLowerCase().includes(q)
+        || (wf.target_name || '').toLowerCase().includes(q);
+      const matchStatus = filterStatus === 'all' || (wf.status || '').toLowerCase() === filterStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [workflows, search, filterStatus]);
 
   return (
     <div className="mwp-page">
