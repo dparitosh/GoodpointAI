@@ -297,16 +297,65 @@ function deriveDqRules(profile, rowCount) {
 const DQ_STATUS_COLORS = { pass: '#22c55e', warn: '#f59e0b', fail: '#ef4444' };
 const DQ_STATUS_ICONS  = { pass: 'fas fa-check-circle', warn: 'fas fa-exclamation-circle', fail: 'fas fa-times-circle' };
 
-function ProfileRow({ file, onRunQualityScan }) {
-  const [expanded, setExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState('profile');
+// Simplified table row — Review button selects the file for the profile panel below
+function ProfileRow({ file, isSelected, onSelect }) {
   const hasProfile = file.profile && Object.keys(file.profile).length > 0;
-
   const dqRules = hasProfile ? deriveDqRules(file.profile, file.row_count) : [];
-  const nullColumns = Object.entries(file.profile || {})
+  const failCount = dqRules.filter((r) => r.status === 'fail').length;
+
+  return (
+    <tr className={isSelected ? 'dd-row-selected' : ''}>
+      <td>
+        <span className="dd-file-icon">
+          <i className={`fas fa-file${file.file_type === 'csv' ? '-csv' : file.file_type === 'pdf' ? '-pdf' : file.file_type === 'excel' || file.file_type === 'xlsx' ? '-excel' : '-alt'}`} />
+        </span>
+        <span className="dd-file-name" title={file.path}>{file.name || file.path}</span>
+      </td>
+      <td>
+        <span className="dd-type-badge" style={{ background: `${typeColor(file.file_type)}22`, color: typeColor(file.file_type) }}>
+          {file.file_type || '—'}
+        </span>
+      </td>
+      <td className="dd-num">{fmtSize(file.size_bytes)}</td>
+      <td className="dd-num">{fmtNum(file.row_count)}</td>
+      <td className="dd-num">{fmtNum(file.column_count)}</td>
+      <td className="dd-num">
+        {file.null_rate != null
+          ? <span style={{ color: file.null_rate > 20 ? '#ef4444' : '#6b7280' }}>{file.null_rate.toFixed(1)}%</span>
+          : '—'}
+      </td>
+      <td>
+        {hasProfile
+          ? (
+            <button
+              className={`dd-expand-btn${isSelected ? ' dd-expand-btn--active' : ''}`}
+              onClick={() => onSelect(isSelected ? null : file)}
+              title={isSelected ? 'Deselect file' : 'View profile, DQ rules and null report'}
+            >
+              {isSelected ? <><i className="fas fa-check" /> Selected</> : 'Review'}
+              {!isSelected && failCount > 0 && (
+                <span className="dd-profile-fail-badge">{failCount} fail</span>
+              )}
+            </button>
+          )
+          : <span className="dd-no-profile">no profile</span>}
+      </td>
+    </tr>
+  );
+}
+
+// Full profile review panel — rendered below the file table
+function FileProfilePanel({ file, allFiles, onSelectFile, onRunQualityScan }) {
+  const [activeTab, setActiveTab] = useState('profile');
+
+  // Reset to profile tab when file changes
+  useEffect(() => { setActiveTab('profile'); }, [file?.path]);
+
+  const hasProfile = file && file.profile && Object.keys(file.profile).length > 0;
+  const dqRules    = hasProfile ? deriveDqRules(file.profile, file.row_count) : [];
+  const nullColumns = Object.entries((file?.profile) || {})
     .filter(([, s]) => s.null_rate != null && s.null_rate > 0)
     .sort(([, a], [, b]) => b.null_rate - a.null_rate);
-
   const dqSummary = {
     pass: dqRules.filter((r) => r.status === 'pass').length,
     warn: dqRules.filter((r) => r.status === 'warn').length,
@@ -314,206 +363,229 @@ function ProfileRow({ file, onRunQualityScan }) {
   };
 
   return (
-    <>
-      <tr className={expanded ? 'dd-row-expanded' : ''}>
-        <td>
-          <span className="dd-file-icon">
-            <i className={`fas fa-file${file.file_type === 'csv' ? '-csv' : file.file_type === 'pdf' ? '-pdf' : file.file_type === 'excel' || file.file_type === 'xlsx' ? '-excel' : '-alt'}`} />
-          </span>
-          <span className="dd-file-name" title={file.path}>{file.name || file.path}</span>
-        </td>
-        <td>
-          <span className="dd-type-badge" style={{ background: `${typeColor(file.file_type)}22`, color: typeColor(file.file_type) }}>
-            {file.file_type || '—'}
-          </span>
-        </td>
-        <td className="dd-num">{fmtSize(file.size_bytes)}</td>
-        <td className="dd-num">{fmtNum(file.row_count)}</td>
-        <td className="dd-num">{fmtNum(file.column_count)}</td>
-        <td className="dd-num">
-          {file.null_rate != null
-            ? <span style={{ color: file.null_rate > 20 ? '#ef4444' : '#6b7280' }}>{file.null_rate.toFixed(1)}%</span>
-            : '—'}
-        </td>
-        <td>
-          {hasProfile
-            ? (
-              <button className="dd-expand-btn" onClick={() => setExpanded(!expanded)}>
-                {expanded ? 'Hide' : 'Profile'}
-                {!expanded && dqSummary.fail > 0 && (
-                  <span className="dd-profile-fail-badge">{dqSummary.fail} fail</span>
-                )}
-              </button>
-            )
-            : <span className="dd-no-profile">—</span>}
-        </td>
-      </tr>
-      {expanded && hasProfile && (
-        <tr className="dd-profile-row">
-          <td colSpan={7}>
-            <div className="dd-profile-panel">
-              {/* Tab bar */}
-              <div className="dd-profile-tabs">
-                <button
-                  className={`dd-profile-tab${activeTab === 'profile' ? ' dd-profile-tab--active' : ''}`}
-                  onClick={() => setActiveTab('profile')}
-                >
-                  <i className="fas fa-columns" /> Column Profile
-                </button>
-                <button
-                  className={`dd-profile-tab${activeTab === 'dq' ? ' dd-profile-tab--active' : ''}`}
-                  onClick={() => setActiveTab('dq')}
-                >
-                  <i className="fas fa-shield-alt" /> DQ Rules
-                  {dqSummary.fail > 0 && <span className="dd-tab-fail-badge">{dqSummary.fail}</span>}
-                  {dqSummary.fail === 0 && dqSummary.warn > 0 && <span className="dd-tab-warn-badge">{dqSummary.warn}</span>}
-                </button>
-                <button
-                  className={`dd-profile-tab${activeTab === 'nulls' ? ' dd-profile-tab--active' : ''}`}
-                  onClick={() => setActiveTab('nulls')}
-                >
-                  <i className="fas fa-exclamation-triangle" /> Null Report
-                  {nullColumns.length > 0 && <span className="dd-tab-warn-badge">{nullColumns.length}</span>}
-                </button>
-              </div>
+    <div className="dd-card dd-profile-review-card">
+      {/* File selector header */}
+      <div className="dd-profile-review-header">
+        <span className="dd-profile-review-title"><i className="fas fa-chart-line" /> File Profile Review</span>
+        <div className="dd-profile-file-selector">
+          <label className="dd-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Select file:</label>
+          <select
+            className="dd-select"
+            value={file?.path || ''}
+            onChange={(e) => {
+              const selected = allFiles.find((f) => f.path === e.target.value);
+              onSelectFile(selected || null);
+            }}
+          >
+            <option value="">— choose a file to review —</option>
+            {allFiles.map((f) => {
+              const fp = f.profile && Object.keys(f.profile).length > 0;
+              const rules = fp ? deriveDqRules(f.profile, f.row_count) : [];
+              const fails = rules.filter((r) => r.status === 'fail').length;
+              return (
+                <option key={f.path} value={f.path}>
+                  {f.name || f.path}
+                  {f.null_rate != null ? `  •  ${f.null_rate.toFixed(1)}% null` : ''}
+                  {fails > 0 ? `  •  ⚠ ${fails} DQ fail` : ''}
+                  {!fp ? '  (no profile)' : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      </div>
 
-              {/* Column Profile tab */}
-              {activeTab === 'profile' && (
-                <div className="dd-profile-cols">
-                  {Object.entries(file.profile).map(([col, stats]) => (
-                    <div key={col} className="dd-col-stat">
-                      <div className="dd-col-name">{col}</div>
-                      <div className="dd-col-meta">
-                        {stats.type && <span className="dd-col-type">{stats.type}</span>}
-                        {stats.null_rate != null && (
-                          <span className="dd-col-null" style={{ color: stats.null_rate > 15 ? '#ef4444' : stats.null_rate > 5 ? '#f59e0b' : '#6b7280' }}>
-                            {stats.null_rate.toFixed(0)}% null
-                          </span>
-                        )}
-                      </div>
-                      {stats.sample && (
-                        <div className="dd-col-samples">
-                          {stats.sample.filter((v) => v != null).slice(0, 3).map((v, i) => (
-                            <span key={i} className="dd-sample-val">{String(v)}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+      {!file && (
+        <div className="dd-empty-state" style={{ padding: '2rem 1rem' }}>
+          <i className="fas fa-mouse-pointer dd-empty-icon" style={{ fontSize: '2rem' }} />
+          <div className="dd-empty-title">Click <strong>Review</strong> on any file above, or select from the dropdown</div>
+          <div className="dd-empty-sub">Column stats, DQ rules and null values will appear here</div>
+        </div>
+      )}
 
-              {/* DQ Rules tab */}
-              {activeTab === 'dq' && (
-                <div className="dd-dq-report">
-                  <div className="dd-dq-summary">
-                    <span className="dd-dq-badge dd-dq-pass"><i className="fas fa-check-circle" /> {dqSummary.pass} pass</span>
-                    <span className="dd-dq-badge dd-dq-warn"><i className="fas fa-exclamation-circle" /> {dqSummary.warn} warn</span>
-                    <span className="dd-dq-badge dd-dq-fail"><i className="fas fa-times-circle" /> {dqSummary.fail} fail</span>
+      {file && !hasProfile && (
+        <div className="dd-empty-state" style={{ padding: '2rem 1rem' }}>
+          <i className="fas fa-info-circle dd-empty-icon" style={{ fontSize: '2rem', color: '#94a3b8' }} />
+          <div className="dd-empty-title">No profile data for <em>{file.name || file.path}</em></div>
+          <div className="dd-empty-sub">Run Discovery with profiling enabled to generate column stats.</div>
+        </div>
+      )}
+
+      {file && hasProfile && (
+        <div className="dd-profile-panel">
+          {/* File meta bar */}
+          <div className="dd-profile-meta-bar">
+            <span className="dd-type-badge" style={{ background: `${typeColor(file.file_type)}22`, color: typeColor(file.file_type) }}>{file.file_type}</span>
+            {file.size_bytes != null && <span className="dd-meta-pill"><i className="fas fa-hdd" /> {fmtSize(file.size_bytes)}</span>}
+            {file.row_count != null && <span className="dd-meta-pill"><i className="fas fa-table" /> {fmtNum(file.row_count)} rows</span>}
+            {file.column_count != null && <span className="dd-meta-pill"><i className="fas fa-columns" /> {file.column_count} cols</span>}
+            {file.null_rate != null && (
+              <span className="dd-meta-pill" style={{ color: file.null_rate > 10 ? '#dc2626' : '#475569' }}>
+                <i className="fas fa-exclamation-triangle" /> {file.null_rate.toFixed(1)}% null overall
+              </span>
+            )}
+          </div>
+
+          {/* Tab bar */}
+          <div className="dd-profile-tabs">
+            <button
+              className={`dd-profile-tab${activeTab === 'profile' ? ' dd-profile-tab--active' : ''}`}
+              onClick={() => setActiveTab('profile')}
+            >
+              <i className="fas fa-columns" /> Column Profile
+            </button>
+            <button
+              className={`dd-profile-tab${activeTab === 'dq' ? ' dd-profile-tab--active' : ''}`}
+              onClick={() => setActiveTab('dq')}
+            >
+              <i className="fas fa-shield-alt" /> DQ Rules
+              {dqSummary.fail > 0 && <span className="dd-tab-fail-badge">{dqSummary.fail}</span>}
+              {dqSummary.fail === 0 && dqSummary.warn > 0 && <span className="dd-tab-warn-badge">{dqSummary.warn}</span>}
+            </button>
+            <button
+              className={`dd-profile-tab${activeTab === 'nulls' ? ' dd-profile-tab--active' : ''}`}
+              onClick={() => setActiveTab('nulls')}
+            >
+              <i className="fas fa-exclamation-triangle" /> Null Report
+              {nullColumns.length > 0 && <span className="dd-tab-warn-badge">{nullColumns.length}</span>}
+            </button>
+          </div>
+
+          {/* Column Profile tab */}
+          {activeTab === 'profile' && (
+            <div className="dd-profile-cols">
+              {Object.entries(file.profile).map(([col, stats]) => (
+                <div key={col} className="dd-col-stat">
+                  <div className="dd-col-name">{col}</div>
+                  <div className="dd-col-meta">
+                    {stats.type && <span className="dd-col-type">{stats.type}</span>}
+                    {stats.null_rate != null && (
+                      <span className="dd-col-null" style={{ color: stats.null_rate > 15 ? '#ef4444' : stats.null_rate > 5 ? '#f59e0b' : '#6b7280' }}>
+                        {stats.null_rate.toFixed(0)}% null
+                      </span>
+                    )}
                   </div>
-                  <table className="dd-dq-table">
+                  {stats.sample && (
+                    <div className="dd-col-samples">
+                      {stats.sample.filter((v) => v != null).slice(0, 3).map((v, i) => (
+                        <span key={i} className="dd-sample-val">{String(v)}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* DQ Rules tab */}
+          {activeTab === 'dq' && (
+            <div className="dd-dq-report">
+              <div className="dd-dq-summary">
+                <span className="dd-dq-badge dd-dq-pass"><i className="fas fa-check-circle" /> {dqSummary.pass} pass</span>
+                <span className="dd-dq-badge dd-dq-warn"><i className="fas fa-exclamation-circle" /> {dqSummary.warn} warn</span>
+                <span className="dd-dq-badge dd-dq-fail"><i className="fas fa-times-circle" /> {dqSummary.fail} fail</span>
+              </div>
+              <table className="dd-dq-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Rule</th>
+                    <th>Column</th>
+                    <th>Detail</th>
+                    <th>Rows Affected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dqRules.map((r, i) => (
+                    <tr key={i} className={`dd-dq-row dd-dq-row--${r.status}`}>
+                      <td>
+                        <span className="dd-dq-status" style={{ color: DQ_STATUS_COLORS[r.status] }}>
+                          <i className={DQ_STATUS_ICONS[r.status]} /> {r.status}
+                        </span>
+                      </td>
+                      <td><code className="dd-dq-rule-name">{r.rule}</code></td>
+                      <td><span className="dd-col-name" style={{ display: 'inline' }}>{r.column}</span></td>
+                      <td className="dd-dq-detail">{r.detail}</td>
+                      <td className="dd-num">{r.affected != null ? fmtNum(r.affected) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="dd-dq-footer">
+                <button className="dd-btn dd-btn-secondary dd-btn-sm" onClick={() => onRunQualityScan && onRunQualityScan(file)}>
+                  <i className="fas fa-play" /> Run Full Quality Scan
+                </button>
+                <span className="dd-dq-note">Rules derived from column profiling. Run a full scan for definitive results.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Null Values Report tab */}
+          {activeTab === 'nulls' && (
+            <div className="dd-null-report">
+              {nullColumns.length === 0 ? (
+                <div className="dd-null-clean">
+                  <i className="fas fa-check-circle" style={{ color: '#22c55e' }} /> No null values detected in any column.
+                </div>
+              ) : (
+                <>
+                  <p className="dd-null-intro">
+                    <strong>{nullColumns.length}</strong> column{nullColumns.length !== 1 ? 's' : ''} contain null values.
+                    {file.row_count != null && <> File has {fmtNum(file.row_count)} rows.</>}
+                  </p>
+                  <table className="dd-null-table">
                     <thead>
                       <tr>
-                        <th>Status</th>
-                        <th>Rule</th>
                         <th>Column</th>
-                        <th>Detail</th>
-                        <th>Rows Affected</th>
+                        <th>Type</th>
+                        <th>Null Rate</th>
+                        <th>Null Rows</th>
+                        <th>Completeness</th>
+                        <th>Severity</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {dqRules.map((r, i) => (
-                        <tr key={i} className={`dd-dq-row dd-dq-row--${r.status}`}>
-                          <td>
-                            <span className="dd-dq-status" style={{ color: DQ_STATUS_COLORS[r.status] }}>
-                              <i className={DQ_STATUS_ICONS[r.status]} /> {r.status}
-                            </span>
-                          </td>
-                          <td><code className="dd-dq-rule-name">{r.rule}</code></td>
-                          <td><span className="dd-col-name" style={{ display: 'inline' }}>{r.column}</span></td>
-                          <td className="dd-dq-detail">{r.detail}</td>
-                          <td className="dd-num">{r.affected != null ? fmtNum(r.affected) : '—'}</td>
-                        </tr>
-                      ))}
+                      {nullColumns.map(([col, stats]) => {
+                        const nr = stats.null_rate;
+                        const severity = nr >= 20 ? 'high' : nr >= 5 ? 'medium' : 'low';
+                        const severityColor = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#22c55e';
+                        const nullRows = file.row_count != null ? Math.round((nr / 100) * file.row_count) : null;
+                        return (
+                          <tr key={col} className="dd-null-row">
+                            <td><span className="dd-col-name" style={{ display: 'inline' }}>{col}</span></td>
+                            <td><span className="dd-col-type">{stats.type || '—'}</span></td>
+                            <td>
+                              <div className="dd-null-bar-wrap">
+                                <div className="dd-null-bar-track">
+                                  <div className="dd-null-bar-fill" style={{ width: `${Math.min(nr, 100)}%`, background: severityColor }} />
+                                </div>
+                                <span style={{ color: severityColor, fontWeight: 600, fontSize: '0.8rem', minWidth: 42 }}>{nr.toFixed(1)}%</span>
+                              </div>
+                            </td>
+                            <td className="dd-num">{nullRows != null ? fmtNum(nullRows) : '—'}</td>
+                            <td className="dd-num" style={{ color: DQ_STATUS_COLORS[nr >= 5 ? (nr >= 20 ? 'fail' : 'warn') : 'pass'] }}>
+                              {(100 - nr).toFixed(1)}%
+                            </td>
+                            <td>
+                              <span className="dd-severity-badge" style={{ background: `${severityColor}22`, color: severityColor }}>{severity}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   <div className="dd-dq-footer">
                     <button className="dd-btn dd-btn-secondary dd-btn-sm" onClick={() => onRunQualityScan && onRunQualityScan(file)}>
                       <i className="fas fa-play" /> Run Full Quality Scan
                     </button>
-                    <span className="dd-dq-note">Rules derived from column profiling. Run a full quality scan for definitive results.</span>
                   </div>
-                </div>
-              )}
-
-              {/* Null Values Report tab */}
-              {activeTab === 'nulls' && (
-                <div className="dd-null-report">
-                  {nullColumns.length === 0 ? (
-                    <div className="dd-null-clean">
-                      <i className="fas fa-check-circle" style={{ color: '#22c55e' }} /> No null values detected in any column.
-                    </div>
-                  ) : (
-                    <>
-                      <p className="dd-null-intro">
-                        <strong>{nullColumns.length}</strong> column{nullColumns.length !== 1 ? 's' : ''} contain null values.
-                        {file.row_count != null && <> File has {fmtNum(file.row_count)} rows.</>}
-                      </p>
-                      <table className="dd-null-table">
-                        <thead>
-                          <tr>
-                            <th>Column</th>
-                            <th>Type</th>
-                            <th>Null Rate</th>
-                            <th>Null Rows</th>
-                            <th>Completeness</th>
-                            <th>Severity</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {nullColumns.map(([col, stats]) => {
-                            const nr = stats.null_rate;
-                            const severity = nr >= 20 ? 'high' : nr >= 5 ? 'medium' : 'low';
-                            const severityColor = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#22c55e';
-                            const nullRows = file.row_count != null ? Math.round((nr / 100) * file.row_count) : null;
-                            return (
-                              <tr key={col} className="dd-null-row">
-                                <td><span className="dd-col-name" style={{ display: 'inline' }}>{col}</span></td>
-                                <td><span className="dd-col-type">{stats.type || '—'}</span></td>
-                                <td>
-                                  <div className="dd-null-bar-wrap">
-                                    <div className="dd-null-bar-track">
-                                      <div className="dd-null-bar-fill" style={{ width: `${Math.min(nr, 100)}%`, background: severityColor }} />
-                                    </div>
-                                    <span style={{ color: severityColor, fontWeight: 600, fontSize: '0.8rem', minWidth: 42 }}>{nr.toFixed(1)}%</span>
-                                  </div>
-                                </td>
-                                <td className="dd-num">{nullRows != null ? fmtNum(nullRows) : '—'}</td>
-                                <td className="dd-num" style={{ color: DQ_STATUS_COLORS[nr >= 5 ? (nr >= 20 ? 'fail' : 'warn') : 'pass'] }}>
-                                  {(100 - nr).toFixed(1)}%
-                                </td>
-                                <td>
-                                  <span className="dd-severity-badge" style={{ background: `${severityColor}22`, color: severityColor }}>{severity}</span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                      <div className="dd-dq-footer">
-                        <button className="dd-btn dd-btn-secondary dd-btn-sm" onClick={() => onRunQualityScan && onRunQualityScan(file)}>
-                          <i className="fas fa-play" /> Run Full Quality Scan
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                </>
               )}
             </div>
-          </td>
-        </tr>
+          )}
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -545,6 +617,9 @@ export default function DataDiscoveryPage() {
 
   // ── Workflow guidance banner (shown when navigating from migration wizard)
   const [fromWizard, setFromWizard]       = useState(false);
+
+  // ── Selected file for profile review panel
+  const [selectedProfileFile, setSelectedProfileFile] = useState(null);
 
   // ── Quality scan state
   const [scanning, setScanning]           = useState(false);
@@ -608,6 +683,7 @@ export default function DataDiscoveryPage() {
     setScanResult(null);
     setScanError(null);
     setActiveReportId(null);
+    setSelectedProfileFile(null);
 
     const selectedSource = sources.find((s) => s.id === selectedSourceId);
     const resolvedPath = selectedSource
@@ -1134,11 +1210,26 @@ export default function DataDiscoveryPage() {
                         <td colSpan={7} className="dd-empty-row">No files match the current filter</td>
                       </tr>
                     )
-                    : sorted.map((f, i) => <ProfileRow key={f.path || i} file={f} onRunQualityScan={runQualityScanForFile} />)}
+                    : sorted.map((f, i) => (
+                      <ProfileRow
+                        key={f.path || i}
+                        file={f}
+                        isSelected={selectedProfileFile?.path === f.path}
+                        onSelect={setSelectedProfileFile}
+                      />
+                    ))}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {/* File Profile Review Panel */}
+          <FileProfilePanel
+            file={selectedProfileFile}
+            allFiles={files}
+            onSelectFile={setSelectedProfileFile}
+            onRunQualityScan={runQualityScanForFile}
+          />
         </>
       )}
 
