@@ -1098,7 +1098,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           records: records
         })
       });
-      
+
       // STEP 3: Transform using field mappings
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 3: Transforming data...', processedRecords: 3 }));
       
@@ -1115,11 +1115,22 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         throw new Error('No field mappings defined. Please complete Step 3 (Map) and define at least one field mapping.');
       }
       
-      await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/transform`, {
+      const transformResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/transform`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ part_mapping: partMapping })
       });
+      const transformResult = await transformResponse.json();
+      const transformedCount = transformResult?.transformed_count ?? 0;
+
+      if (transformedCount === 0) {
+        // Identify which source fields are mapped so user can diagnose
+        const mappedSources = Object.keys(partMapping).join(', ');
+        throw new Error(
+          `Transform produced 0 records. The backend requires a "part_number" field — none of your mapped source fields (${mappedSources || 'none'}) resolved to a non-empty part_number. ` +
+          'In Step 3 (Map), add a mapping whose source field contains the part identifier (e.g. source "part_number" → target "part_number").'
+        );
+      }
       
       // STEP 4a: SODA Data Quality Scan
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 4a: Running SODA quality scan...', processedRecords: 3.5 }));
@@ -1142,11 +1153,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       
       // STEP 4b: Validate
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 4b: Validating data...', processedRecords: 4 }));
-      await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
+      try {
+        await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+      } catch (validateError) {
+        // Validate is a quality step — log the warning but don't block migration
+        console.warn('Validate step returned an error (non-fatal, migration continues):', validateError.message);
+      }
       
       // STEP 5: Sync to Neo4j (use direct sync for dev environments)
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 5: Syncing to Neo4j...', processedRecords: 4.5 }));

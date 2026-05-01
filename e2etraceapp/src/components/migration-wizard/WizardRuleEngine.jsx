@@ -12,35 +12,31 @@ const ACTIONS = {
   post:    ['REJECT_RECORD', 'FLAG_WARNING', 'ROUTE_TO_DLQ', 'AUDIT_LOG', 'ASSERT'],
 };
 
-const PHASE_TABS = [
-  { key: 'pre',     icon: 'fa-filter',         label: 'Pre-Transform',  desc: 'Filter & normalise before mapping' },
-  { key: 'quality', icon: 'fa-shield-alt',     label: 'Quality Check',  desc: 'Gate records on data quality' },
-  { key: 'post',    icon: 'fa-flag-checkered', label: 'Post-Transform', desc: 'Assert & route after mapping' },
+const PHASES = [
+  { key: 'pre',     icon: 'fa-filter',         label: 'Pre-Transform',  color: '#6366f1', desc: 'Filter & normalise before mapping' },
+  { key: 'quality', icon: 'fa-shield-alt',     label: 'Quality Check',  color: '#f59e0b', desc: 'Gate records on data quality' },
+  { key: 'post',    icon: 'fa-flag-checkered', label: 'Post-Transform', color: '#10b981', desc: 'Assert & route after mapping' },
 ];
 
+const PHASE_META = Object.fromEntries(PHASES.map(p => [p.key, p]));
+
 /**
- * WizardRuleEngine — self-contained Rule Engine panel used within the Map step.
+ * WizardRuleEngine — unified Rule Engine table showing pre-transform, quality,
+ * and post-transform rules as categories in one place.
  *
  * Props:
- *   rules           – array of rule objects from wizardData.rules
- *   activePhase     – 'pre' | 'quality' | 'post'
- *   sourceFields    – string[] of source field names (from extractSchemaFields)
- *   onPhaseChange   – (phase: string) => void
- *   onAddRule       – (phase: string) => void
- *   onRemoveRule    – (id: string) => void
- *   onUpdateRule    – (id: string, patch: object) => void
+ *   rules        – array of rule objects from wizardData.rules
+ *   activePhase  – kept for API compat (not used for display filtering)
+ *   sourceFields – string[] of source field names
+ *   onPhaseChange, onAddRule, onRemoveRule, onUpdateRule – callbacks
  */
 const WizardRuleEngine = ({
   rules,
-  activePhase,
   sourceFields,
-  onPhaseChange,
   onAddRule,
   onRemoveRule,
   onUpdateRule,
 }) => {
-  const phaseRules = rules.filter(r => r.phase === activePhase);
-
   return (
     <div className="re-panel">
       <div className="re-panel-header">
@@ -53,35 +49,29 @@ const WizardRuleEngine = ({
         <span className="re-badge">{rules.length} rule{rules.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* Phase tabs */}
-      <div className="re-tabs">
-        {PHASE_TABS.map(tab => {
-          const count = rules.filter(r => r.phase === tab.key).length;
-          return (
-            <button
-              key={tab.key}
-              className={`re-tab ${activePhase === tab.key ? 'active' : ''}`}
-              onClick={() => onPhaseChange(tab.key)}
-            >
-              <i className={`fas ${tab.icon}`} />
-              <span className="re-tab-label">{tab.label}</span>
-              {count > 0 && <span className="re-tab-count">{count}</span>}
-              <span className="re-tab-desc">{tab.desc}</span>
-            </button>
-          );
-        })}
+      {/* Category legend */}
+      <div className="re-legend">
+        {PHASES.map(p => (
+          <span key={p.key} className="re-legend-item">
+            <span className="re-category-badge" style={{ background: p.color }}>
+              <i className={`fas ${p.icon}`} /> {p.label}
+            </span>
+            <span className="re-legend-desc">{p.desc}</span>
+          </span>
+        ))}
       </div>
 
-      {/* Rule rows for active phase */}
+      {/* Unified table */}
       <div className="re-rules-area">
-        {phaseRules.length === 0 ? (
+        {rules.length === 0 ? (
           <div className="re-empty">
             <i className="fas fa-plus-circle" />
-            <span>No {activePhase} rules yet. Add one below.</span>
+            <span>No rules yet. Use the buttons below to add a rule in any category.</span>
           </div>
         ) : (
           <div className="re-rules-list">
-            <div className="re-rules-header">
+            <div className="re-rules-header re-rules-header--unified">
+              <span>Category</span>
               <span>Rule Name</span>
               <span>Field</span>
               <span>Condition</span>
@@ -91,70 +81,90 @@ const WizardRuleEngine = ({
               <span>On</span>
               <span></span>
             </div>
-            {phaseRules.map(rule => (
-              <div key={rule.id} className={`re-rule-row ${rule.enabled ? '' : 're-rule-disabled'}`}>
-                <input
-                  className="re-input re-name"
-                  placeholder="Rule name…"
-                  value={rule.name}
-                  onChange={e => onUpdateRule(rule.id, { name: e.target.value })}
-                />
-                <select
-                  className="re-select re-field"
-                  value={rule.field}
-                  onChange={e => onUpdateRule(rule.id, { field: e.target.value })}
-                >
-                  <option value="*">All fields</option>
-                  {sourceFields.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-                <select
-                  className="re-select re-condition"
-                  value={rule.condition}
-                  onChange={e => onUpdateRule(rule.id, { condition: e.target.value })}
-                >
-                  <option value="">-- condition --</option>
-                  {CONDITIONS[activePhase].map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <input
-                  className="re-input re-cond-val"
-                  placeholder="e.g. pattern, range…"
-                  value={rule.condition_value}
-                  onChange={e => onUpdateRule(rule.id, { condition_value: e.target.value })}
-                />
-                <select
-                  className="re-select re-action"
-                  value={rule.action}
-                  onChange={e => onUpdateRule(rule.id, { action: e.target.value })}
-                >
-                  <option value="">-- action --</option>
-                  {ACTIONS[activePhase].map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-                <input
-                  className="re-input re-action-val"
-                  placeholder="e.g. default val…"
-                  value={rule.action_value}
-                  onChange={e => onUpdateRule(rule.id, { action_value: e.target.value })}
-                />
-                <label className="re-toggle" title={rule.enabled ? 'Enabled' : 'Disabled'}>
+            {rules.map(rule => {
+              const meta = PHASE_META[rule.phase] || PHASE_META.pre;
+              return (
+                <div key={rule.id} className={`re-rule-row re-rule-row--unified ${rule.enabled ? '' : 're-rule-disabled'}`}>
+                  {/* Category badge */}
+                  <span className="re-category-badge" style={{ background: meta.color }}>
+                    <i className={`fas ${meta.icon}`} /> {meta.label}
+                  </span>
                   <input
-                    type="checkbox"
-                    checked={rule.enabled}
-                    onChange={e => onUpdateRule(rule.id, { enabled: e.target.checked })}
+                    className="re-input re-name"
+                    placeholder="Rule name…"
+                    value={rule.name}
+                    onChange={e => onUpdateRule(rule.id, { name: e.target.value })}
                   />
-                  <span className="re-toggle-track" />
-                </label>
-                <button className="re-btn-delete" title="Remove rule" onClick={() => onRemoveRule(rule.id)}>
-                  <i className="fas fa-trash-alt" />
-                </button>
-              </div>
-            ))}
+                  <select
+                    className="re-select re-field"
+                    value={rule.field}
+                    onChange={e => onUpdateRule(rule.id, { field: e.target.value })}
+                  >
+                    <option value="*">All fields</option>
+                    {sourceFields.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                  <select
+                    className="re-select re-condition"
+                    value={rule.condition}
+                    onChange={e => onUpdateRule(rule.id, { condition: e.target.value })}
+                  >
+                    <option value="">-- condition --</option>
+                    {(CONDITIONS[rule.phase] || CONDITIONS.pre).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="re-input re-cond-val"
+                    placeholder="e.g. pattern, range…"
+                    value={rule.condition_value}
+                    onChange={e => onUpdateRule(rule.id, { condition_value: e.target.value })}
+                  />
+                  <select
+                    className="re-select re-action"
+                    value={rule.action}
+                    onChange={e => onUpdateRule(rule.id, { action: e.target.value })}
+                  >
+                    <option value="">-- action --</option>
+                    {(ACTIONS[rule.phase] || ACTIONS.pre).map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="re-input re-action-val"
+                    placeholder="e.g. default val…"
+                    value={rule.action_value}
+                    onChange={e => onUpdateRule(rule.id, { action_value: e.target.value })}
+                  />
+                  <label className="re-toggle" title={rule.enabled ? 'Enabled' : 'Disabled'}>
+                    <input
+                      type="checkbox"
+                      checked={rule.enabled}
+                      onChange={e => onUpdateRule(rule.id, { enabled: e.target.checked })}
+                    />
+                    <span className="re-toggle-track" />
+                  </label>
+                  <button className="re-btn-delete" title="Remove rule" onClick={() => onRemoveRule(rule.id)}>
+                    <i className="fas fa-trash-alt" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        <button className="re-btn-add" onClick={() => onAddRule(activePhase)}>
-          <i className="fas fa-plus" /> Add{' '}
-          {activePhase === 'pre' ? 'Pre-Transform' : activePhase === 'quality' ? 'Quality' : 'Post-Transform'} Rule
-        </button>
+        {/* Add buttons — one per category */}
+        <div className="re-add-row">
+          {PHASES.map(p => (
+            <button
+              key={p.key}
+              className="re-btn-add"
+              style={{ borderColor: p.color, color: p.color }}
+              onClick={() => onAddRule(p.key)}
+            >
+              <i className={`fas ${p.icon}`} /> Add {p.label} Rule
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
