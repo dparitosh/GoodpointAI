@@ -40,6 +40,7 @@ from agent_services.base.models import AgentCapability, AgentTaskRequest, AgentT
 
 logger = logging.getLogger(__name__)
 
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8012")
 # Backend URL — all DB access goes through the FastAPI backend, not direct ORM
 BACKEND_URL = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://localhost:8011")
 
@@ -466,6 +467,52 @@ class DataDiscoveryAgent(AgentService):
                 logger.warning("Could not resolve source_id %s: %s", source_id, exc)
         return None
 
+    async def _dispatch_dq_handoff(
+        self,
+        source_id: Optional[str],
+        folder_path: str,
+        parent_task_id: str,
+    ) -> Optional[str]:
+        """Fire-and-forget: submit a DATA_QUALITY_SCAN task to the quality_monitor
+        agent via the MCP server.  Returns the new task_id, or None if MCP is
+        not reachable (non-blocking — discovery result is returned regardless)."""
+        import time
+
+        dq_task_id = f"task_dq_{int(time.time() * 1000)}"
+        task_payload = {
+            "id": dq_task_id,
+            "type": "data_quality_scan",
+            "required_capabilities": ["scan_datasource_quality"],
+            "payload": {
+                "source_id": source_id,
+                "folder_path": folder_path,
+                "scan_type": "full",
+                "triggered_by": "data_discovery_handoff",
+                "parent_task_id": parent_task_id,
+            },
+            "priority": 5,
+            "timeout": 120,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    f"{MCP_SERVER_URL}/mcp/v1/tasks",
+                    json=task_payload,
+                )
+                if resp.status_code in (200, 201):
+                    logger.info(
+                        "DQ handoff dispatched: task_id=%s source_id=%s folder=%s",
+                        dq_task_id, source_id, folder_path,
+                    )
+                    return dq_task_id
+                logger.warning(
+                    "DQ handoff failed: MCP returned %s — %s",
+                    resp.status_code, resp.text[:200],
+                )
+        except Exception as exc:
+            logger.warning("DQ handoff skipped (MCP not reachable): %s", exc)
+        return None
+
     async def _handle_discovery(self, task: AgentTaskRequest) -> Dict[str, Any]:
         payload = task.payload
         source_id = payload.get("source_id")
@@ -534,6 +581,17 @@ class DataDiscoveryAgent(AgentService):
         result["catalog"] = {
             "avg_row_count": round(sum(row_counts) / len(row_counts), 1) if row_counts else None,
         }
+
+        # Hand off to quality_monitor agent now that discovery is complete.
+        # Fire-and-forget via MCP — the DQ scan runs asynchronously; we include
+        # the dq_task_id in the result so the caller can poll for it.
+        dq_task_id = await self._dispatch_dq_handoff(
+            source_id=source_id,
+            folder_path=folder_path,
+            parent_task_id=task.task_id,
+        )
+        result["dq_task_id"] = dq_task_id
+        result["dq_status"] = "dispatched" if dq_task_id else "skipped_mcp_unavailable"
 
         return result
 
