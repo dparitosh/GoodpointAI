@@ -118,6 +118,11 @@ async def stage_records(run_id: str, payload: StageRecordsRequest, db: Session =
     records = payload.records or []
     staged_count = 0
     skipped_count = 0
+    # Track hashes seen within this request batch to catch intra-batch duplicates
+    # before they reach the DB.  The DB-level dedup query only sees committed rows,
+    # so two identical records in the same payload would both pass that check and
+    # then collide on the unique constraint at commit time.
+    _batch_hashes: set[str] = set()
 
     for rec in records:
         if not isinstance(rec, dict):
@@ -133,7 +138,12 @@ async def stage_records(run_id: str, payload: StageRecordsRequest, db: Session =
             json.dumps(rec, sort_keys=True, default=str).encode()
         ).hexdigest()
 
-        # Skip if an identical record (same run + content) already exists.
+        # Skip duplicates within this batch (not yet committed, invisible to DB query).
+        if content_hash in _batch_hashes:
+            skipped_count += 1
+            continue
+
+        # Skip if an identical record (same run + content) already exists in DB.
         existing = (
             db.query(PLMStagedRecord.id)
             .filter(
@@ -146,6 +156,7 @@ async def stage_records(run_id: str, payload: StageRecordsRequest, db: Session =
             skipped_count += 1
             continue
 
+        _batch_hashes.add(content_hash)
         staged = PLMStagedRecord(
             run_id=run_id,
             object_type=payload.object_type or "part",
