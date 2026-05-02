@@ -13,6 +13,10 @@ class AgentType(str, Enum):
     DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
     TASK_DECOMPOSER = "task_decomposer"
+    SCHEMA_CORRELATOR = "schema_correlator"
+    PLM_DIRECTOR = "plm_director"
+    REPORTING_AGENT = "reporting_agent"
+    DATA_PROFILER = "data_profiler"
 
 class TaskPriority(int, Enum):
     LOW = 1

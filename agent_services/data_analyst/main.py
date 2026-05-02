@@ -73,7 +73,7 @@ class DataAnalystAgent(AgentService):
         self.pg_pool = None
 
     @asynccontextmanager
-    async def _lifespan(self, app: FastAPI):
+    async def _lifespan(self, _app: FastAPI):
         # Initialize Neo4j
         logger_name = f"{self.agent_name}.lifespan"
         print(f"[{logger_name}] Initializing Neo4j driver for {self.neo4j_uri}...")
@@ -107,7 +107,7 @@ class DataAnalystAgent(AgentService):
             print(f"[{logger_name}] WARNING: Postgres connectivity failed: {e}")
 
         # Chain upstream registration logic
-        async with super()._lifespan(app):
+        async with super()._lifespan(_app):
             yield
         
         # Cleanup
@@ -121,10 +121,42 @@ class DataAnalystAgent(AgentService):
         return [
             AgentCapability(name="data_analysis", description="Analyze graph patterns and node distributions"),
             AgentCapability(name="graph_query", description="Execute read-only queries against Neo4j"),
-            AgentCapability(name="sql_query", description="Execute read-only queries against Postgres")
+            AgentCapability(name="sql_query", description="Execute read-only queries against Postgres"),
+            AgentCapability(name="execute_cypher_queries", description="Execute Cypher graph queries and return structured results"),
+            AgentCapability(name="generate_insights", description="Generate analytical insights from graph and relational data"),
+            AgentCapability(name="statistical_analysis", description="Perform statistical analysis on datasets"),
         ]
 
     async def process_task(self, task: AgentTaskRequest):
+        caps = set(task.payload.get("required_capabilities", []))
+
+        # Route execute_cypher_queries / graph_query to Neo4j handler
+        if (
+            "execute_cypher_queries" in caps
+            or task.payload.get("analysis_type") == "cypher_query"
+            or "cypher_query" in task.payload
+        ):
+            if not self.neo4j_driver:
+                return {"error": "Neo4j driver not initialized"}
+            query = task.payload.get("cypher_query") or task.payload.get("query")
+            if not query:
+                return {"error": "No cypher_query provided in payload"}
+            # Security: only allow read-only clauses
+            stripped = query.strip().upper()
+            if not any(stripped.startswith(kw) for kw in ("MATCH", "RETURN", "WITH", "CALL", "SHOW")):
+                return {"error": "Only read-only Cypher queries (MATCH/RETURN/WITH/CALL) are permitted"}
+            try:
+                async with self.neo4j_driver.session() as session:
+                    result = await session.run(query)
+                    records = [dict(r) async for r in result]
+                    return {
+                        "analysis_type": "cypher_query",
+                        "row_count": len(records),
+                        "data": records[:200],
+                    }
+            except Exception as e:
+                return {"error": f"Cypher execution failed: {str(e)}"}
+
         # Handle SQL tasks
         if task.payload.get("analysis_type") == "sql_query" or "sql_query" in task.payload:
             if not self.pg_pool:
@@ -237,6 +269,8 @@ class DataAnalystAgent(AgentService):
             # Log error here
             return {"error": f"Neo4j execution failed: {str(e)}"}
 
+agent = DataAnalystAgent()
+app = agent.app
+
 if __name__ == "__main__":
-    agent = DataAnalystAgent()
     agent.start()

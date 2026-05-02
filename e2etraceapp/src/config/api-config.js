@@ -34,6 +34,7 @@ const DEFAULT_CONFIG = {
     AGENTIC_AGENTS: '/api/agentic/agents',
     AGENTIC_DISCOVERY: '/api/agentic/discovery',
     AGENTIC_QUALITY_SCAN: '/api/agentic/quality-scan',
+    AGENTIC_SEMANTIC_PROFILE: '/api/agentic/semantic-profile',
     AGENTIC_WORKFLOW_FROM_GOAL: '/api/agentic/workflows/from-goal',
 
     // File patterns

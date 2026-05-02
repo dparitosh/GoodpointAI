@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
@@ -974,15 +975,15 @@ async def create_workflow(
 ):
     await _ensure_store_loaded(db)
 
-    # Enforce name uniqueness (case-insensitive)
-    new_name_lower = workflow.name.lower()
-    async with _WORKFLOWS_STORE_LOCK:
-        for existing in WORKFLOWS_STORE.values():
-            if (existing.get("name") or "").lower() == new_name_lower:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"A workflow named '{workflow.name}' already exists. Choose a unique name.",
-                )
+    # Enforce name uniqueness (case-insensitive) — query DB directly for reliability
+    existing = db.query(WorkflowInstance).filter(
+        func.lower(WorkflowInstance.name) == workflow.name.strip().lower()
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A workflow named '{workflow.name}' already exists. Choose a unique name.",
+        )
 
     workflow_id = _make_workflow_id()
     created_at = _now_utc()
@@ -1122,16 +1123,17 @@ async def update_workflow(
     if _normalize_status(current.get("status")) == WorkflowStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Cannot update running workflow")
 
-    # Enforce name uniqueness when name is changing (case-insensitive)
+    # Enforce name uniqueness when name is changing (case-insensitive) — query DB directly for reliability
     if workflow_update.name is not None:
-        new_name_lower = workflow_update.name.lower()
-        async with _WORKFLOWS_STORE_LOCK:
-            for wf_id, existing in WORKFLOWS_STORE.items():
-                if wf_id != workflow_id and (existing.get("name") or "").lower() == new_name_lower:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"A workflow named '{workflow_update.name}' already exists. Choose a unique name.",
-                    )
+        conflict = db.query(WorkflowInstance).filter(
+            func.lower(WorkflowInstance.name) == workflow_update.name.strip().lower(),
+            WorkflowInstance.id != workflow_id,
+        ).first()
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A workflow named '{workflow_update.name}' already exists. Choose a unique name.",
+            )
 
     updated = dict(current)
     if workflow_update.name is not None:

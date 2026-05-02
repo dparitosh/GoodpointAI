@@ -42,9 +42,9 @@ $stopped += Stop-ByPort -Port 8011 -Label "Backend/uvicorn"
 Write-Host "`nMCP Server (port 8012):" -ForegroundColor White
 $stopped += Stop-ByPort -Port 8012 -Label "MCP Server"
 
-# ── Agent services (ports 8020-8027) ────────────────────────────────────────
-Write-Host "`nAgent Services (ports 8020-8027):" -ForegroundColor White
-foreach ($port in 8020..8027) {
+# ── Agent services (ports 8020-8031) ────────────────────────────────────────
+Write-Host "`nAgent Services (ports 8020-8031):" -ForegroundColor White
+foreach ($port in 8020..8031) {
     $stopped += Stop-ByPort -Port $port -Label "Agent:$port"
 }
 

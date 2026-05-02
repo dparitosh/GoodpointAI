@@ -1,19 +1,18 @@
 import sys
 import os
 import asyncio
-import json
 import uuid
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 
 # Data handling
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 # SODA
 try:
@@ -54,7 +53,7 @@ class ETLOrchestratorAgent(AgentService):
         self.db_engine = None
 
     @asynccontextmanager
-    async def _lifespan(self, app: FastAPI):
+    async def _lifespan(self, _app: FastAPI):
         # Initialize resources
         logger_name = f"{self.agent_name}.lifespan"
         print(f"[{logger_name}] Initializing Neo4j driver...")
@@ -79,7 +78,7 @@ class ETLOrchestratorAgent(AgentService):
                 print(f"[{logger_name}] WARNING: SQL Database connection failed: {e}")
 
         # Chain upstream registration
-        async with super()._lifespan(app):
+        async with super()._lifespan(_app):
             yield
         
         # Cleanup
@@ -131,7 +130,7 @@ class ETLOrchestratorAgent(AgentService):
         # Import batch processor (lives in python_backend)
         try:
             from services.file_batch_processor import (
-                FileBatchProcessor, FileRecord, _classify_ext, discover_files
+                FileBatchProcessor, FileRecord, _classify_ext
             )
         except ImportError as exc:
             return {"status": "error", "error": f"file_batch_processor unavailable: {exc}"}
@@ -219,7 +218,6 @@ class ETLOrchestratorAgent(AgentService):
         
         # 2. Intelligent Mapping (Agentic Logic)
         # Instead of strict hardcoding, we score potential matches
-        mapping_scores = {}
         target_columns = ["part_number", "name", "description", "classification"]
         
         mapping = {}
@@ -261,7 +259,7 @@ class ETLOrchestratorAgent(AgentService):
                 # Warning: ensuring table exists is out of scope for this snippet, assumes PLMPart exists
                 df_transformed.to_sql("plm_parts", self.db_engine, if_exists="append", index=False, method="multi")
             except Exception as e:
-                logger.warning(f"Failed to persist transformed data: {e}")
+                logger.warning("Failed to persist transformed data: %s", e)
         
         # 4. Rule Engine Validation
         rule_result = None
@@ -407,6 +405,8 @@ class ETLOrchestratorAgent(AgentService):
         finally:
             db.close()
 
+agent = ETLOrchestratorAgent()
+app = agent.app
+
 if __name__ == "__main__":
-    agent = ETLOrchestratorAgent()
     agent.start()

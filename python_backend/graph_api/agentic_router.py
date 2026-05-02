@@ -39,6 +39,10 @@ class AgentType(str, Enum):
     DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
     TASK_DECOMPOSER = "task_decomposer"
+    SCHEMA_CORRELATOR = "schema_correlator"
+    PLM_DIRECTOR = "plm_director"
+    REPORTING_AGENT = "reporting_agent"
+    DATA_PROFILER = "data_profiler"
 
 class TaskType(str, Enum):
     DATA_ANALYSIS = "data_analysis"
@@ -51,6 +55,10 @@ class TaskType(str, Enum):
     DATA_QUALITY_SCAN = "data_quality_scan"
     FILE_BATCH_PROCESSING = "file_batch_processing"
     WORKFLOW_DECOMPOSITION = "workflow_decomposition"
+    SEMANTIC_PROFILE = "semantic_profile"
+    SCHEMA_CORRELATION = "schema_correlation"
+    PLM_MIGRATION_ORCHESTRATION = "plm_migration_orchestration"
+    REPORT_GENERATION = "report_generation"
 
 # ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
 
@@ -612,6 +620,124 @@ async def list_discovery_reports(
         }
         for r in rows
     ]
+
+
+# ── Semantic Profile via DataProfilerAgent (MCP) ───────────────────────────
+
+class SemanticProfileRequest(BaseModel):
+    """
+    Request body for POST /api/agentic/semantic-profile.
+
+    Accepts either pre-computed file_profiles (from a prior DataDiscovery run)
+    or a folder_path / source_name for the DataProfilerAgent to resolve itself.
+    The column_corpus and entity_inference fields are optional enrichment inputs
+    that can be piped from an upstream SchemaCorrelator result.
+    """
+    source_name: Optional[str] = None
+    folder_path: Optional[str] = None
+    file_profiles: List[Dict[str, Any]] = Field(default_factory=list)
+    column_corpus: List[Dict[str, Any]] = Field(default_factory=list)
+    entity_inference: Dict[str, Any] = Field(default_factory=dict)
+    min_relationship_similarity: float = Field(default=0.85, ge=0.5, le=1.0)
+    entity_confidence_threshold: float = Field(default=0.30, ge=0.0, le=1.0)
+    enrich_from_schema_correlator: bool = False
+    fetch_live_profiles: bool = False
+    sample_rows: int = Field(default=500, ge=1, le=10_000)
+    save_report: bool = True
+
+    # Discovery run linkage (optional — ties results to a wizard session)
+    discovery_run_id: Optional[str] = None
+
+
+@router.post(
+    "/semantic-profile",
+    summary="Infer column semantics and entity classifications via DataProfilerAgent",
+)
+async def semantic_profile(
+    req: SemanticProfileRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Submit a SEMANTIC_PROFILE task to the MCP orchestrator.
+
+    Routes to DataProfilerAgent (port 8031) which implements the LLM Tool Prompt:
+      • Column semantic meaning (part_id → identifier / Part, etc.)
+      • Entity classification (Part, BOM, Supplier, Document, ECO, Revision)
+      • Cross-file relationship detection via column name similarity
+      • Schema alignment grouping
+
+    Returns structured insights with confidence scores.
+    When save_report=True the insights are persisted to the unified reports hub.
+    """
+    if not req.source_name and not req.folder_path and not req.file_profiles:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide source_name, folder_path, or file_profiles",
+        )
+
+    task = AgenticTask(
+        type=TaskType.SEMANTIC_PROFILE,
+        required_capabilities=["semantic_profile", "infer_column_semantics", "classify_entities"],
+        payload={
+            "source_name":                   req.source_name,
+            "folder_path":                   req.folder_path,
+            "file_profiles":                 req.file_profiles,
+            "column_corpus":                 req.column_corpus,
+            "entity_inference":              req.entity_inference,
+            "min_relationship_similarity":   req.min_relationship_similarity,
+            "entity_confidence_threshold":   req.entity_confidence_threshold,
+            "enrich_from_schema_correlator": req.enrich_from_schema_correlator,
+            "fetch_live_profiles":           req.fetch_live_profiles,
+            "sample_rows":                   req.sample_rows,
+        },
+    )
+
+    try:
+        result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout, Exception) as mcp_err:
+        logger.error("Semantic profile task failed: %s", mcp_err)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "MCP agent cluster is not running. Start the MCP server (and DataProfilerAgent "
+                f"on port 8031) to run semantic profiling. Details: {mcp_err}"
+            ),
+        ) from mcp_err
+
+    # Persist to unified reports hub if requested
+    if req.save_report:
+        try:
+            inner = result_dict.get("result") or result_dict
+            insights = inner.get("semantic_insights") or inner
+            summary = insights.get("summary") or {}
+            label = req.source_name or req.folder_path or "semantic-profile"
+            unified = UnifiedReport(
+                report_id=str(uuid.uuid4()),
+                report_type="semantic_profile",
+                title=f"Semantic Profile: {label}",
+                source_page="data-discovery",
+                status="info",
+                summary={
+                    "source_name":               req.source_name,
+                    "folder_path":               req.folder_path,
+                    "total_columns_analysed":    summary.get("total_columns_analysed", 0),
+                    "high_confidence_semantics": summary.get("high_confidence_semantics", 0),
+                    "top_entity_class":          summary.get("top_entity_class"),
+                    "relationship_count":        summary.get("relationship_count", 0),
+                    "discovery_run_id":          req.discovery_run_id,
+                },
+                result=result_dict,
+                tags=["semantic_profile", "data_profiler"],
+            )
+            db.add(unified)
+            db.commit()
+            result_dict["report_id"] = unified.report_id
+            logger.info("Semantic profile report saved: %s", unified.report_id)
+        except Exception as persist_err:
+            logger.warning("Failed to persist semantic profile report: %s", persist_err)
+            db.rollback()
+
+    return result_dict
 
 
 # ── Discovery → field mapping inference ───────────────────────────────────

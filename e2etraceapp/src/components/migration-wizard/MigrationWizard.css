@@ -837,6 +837,157 @@
 }
 .ddp-footer-link a:hover { text-decoration: underline; }
 
+/* ── Semantic Analysis panel ─────────────────────────────────────────────── */
+
+/* Entity classification chips */
+.ddp-entity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color, #1e293b);
+}
+.ddp-entity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: default;
+}
+.entity-conf {
+  font-weight: 400;
+  font-size: 10px;
+  opacity: 0.75;
+}
+/* Per-entity colours */
+.entity-part     { background: #1d4ed822; color: #60a5fa; border-color: #3b82f644; }
+.entity-bom      { background: #7c3aed22; color: #c084fc; border-color: #a855f744; }
+.entity-supplier { background: #065f4622; color: #34d399; border-color: #10b98144; }
+.entity-document { background: #92400e22; color: #fbbf24; border-color: #f59e0b44; }
+.entity-eco      { background: #9f123822; color: #fb7185; border-color: #f4365644; }
+.entity-revision { background: #0c4a6e22; color: #38bdf8; border-color: #0ea5e944; }
+.entity-unknown  { background: #1e293b;   color: #64748b; border-color: #33415533; }
+
+/* Column semantics table */
+.ddp-col-semantics {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0;
+}
+.ddp-col-sem-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid #1e293b55;
+}
+.ddp-col-sem-row:last-child { border-bottom: none; }
+.ddp-col-name {
+  font-family: monospace;
+  color: #93c5fd;
+  min-width: 120px;
+}
+.ddp-col-canon {
+  font-family: monospace;
+  color: #64748b;
+  font-size: 11px;
+  min-width: 100px;
+}
+.ddp-col-role {
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 80px;
+  text-align: center;
+}
+/* Role colour coding */
+.role-identifier   { background: #1d4ed833; color: #60a5fa; }
+.role-foreign_key  { background: #7c3aed33; color: #c084fc; }
+.role-name         { background: #065f4633; color: #34d399; }
+.role-date         { background: #92400e33; color: #fbbf24; }
+.role-quantity     { background: #0c4a6e33; color: #38bdf8; }
+.role-status       { background: #4c1d9533; color: #a78bfa; }
+.role-metric       { background: #831843;   color: #f9a8d4; }
+.role-unknown      { background: #1e293b;   color: #64748b; }
+
+.ddp-col-entity {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #334155;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.ddp-col-conf {
+  margin-left: auto;
+  font-size: 11px;
+  color: #64748b;
+}
+.ddp-col-more {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+  border-top: 1px solid #1e293b55;
+}
+.ddp-sem-footer {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #64748b;
+  border-top: 1px solid var(--border-color, #1e293b);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Semantic summary row in mapping step discovery card ─────────────────── */
+.sem-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 0 4px 0;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-color, #1e293b55);
+}
+.sem-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.sem-summary-item i { color: #60a5fa; font-size: 11px; }
+
+/* ── Semantic role badge on field-tag in available-fields panel ─────────── */
+.field-sem-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  background: #1e3a5f;
+  color: #7dd3fc;
+  border: 1px solid #3b82f633;
+}
+/* Role-tinted badges */
+.field-tag.sem-identifier .field-sem-badge { background: #1d4ed844; color: #93c5fd; border-color: #3b82f666; }
+.field-tag.sem-foreign_key .field-sem-badge { background: #5b21b644; color: #c084fc; border-color: #a855f766; }
+.field-tag.sem-name .field-sem-badge        { background: #064e3b44; color: #6ee7b7; border-color: #10b98166; }
+.field-tag.sem-date .field-sem-badge        { background: #78350f44; color: #fcd34d; border-color: #f59e0b66; }
+.field-tag.sem-quantity .field-sem-badge    { background: #0c4a6e44; color: #7dd3fc; border-color: #0ea5e966; }
+.field-tag.sem-status .field-sem-badge      { background: #4c1d9544; color: #c4b5fd; border-color: #8b5cf666; }
+
+
 /* Legacy schema styling (retained for optional schema previews elsewhere) */
 .schema-panels {
   display: grid;

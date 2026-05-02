@@ -56,6 +56,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     discoverySample: null,
     discoveryIntrospect: null,
     discoveryError: null,
+    // Step 2: Semantic profiling (DataProfilerAgent — column semantics, entity classification)
+    semanticProfile: null,         // { column_semantics, entity_classifications, ... } | null
+    semanticProfileStatus: 'idle', // idle | running | completed | failed
     // Optional schema data (used by mapping/validation if available)
     sourceSchema: null,
     targetSchema: null,
@@ -445,7 +448,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               setWizardData(prev => ({ ...prev, savedWorkflowId: wf.id, savedWorkflowName: nameToSave }));
             } else if (res.status === 409) {
               const errData = await res.json().catch(() => ({}));
-              showToast(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 'error');
+              toast.error(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 6000);
               return; // block step advancement
             }
             // Other non-OK statuses are non-fatal — wizard continues
@@ -464,7 +467,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               setWizardData(prev => ({ ...prev, savedWorkflowName: nameToSave }));
             } else if (res.status === 409) {
               const errData = await res.json().catch(() => ({}));
-              showToast(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 'error');
+              toast.error(errData.detail || `A workflow named "${nameToSave}" already exists. Choose a unique name.`, 6000);
               return; // block step advancement
             }
             // Other non-OK statuses are non-fatal
@@ -506,6 +509,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       discoveryInsights: [],
       discoveryError: null,
       discoveryIntrospect: null,
+      semanticProfile: null,
+      semanticProfileStatus: 'idle',
       sourceSchema: null,
       targetSchema: null
     }));
@@ -588,6 +593,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         console.warn('Data source sampling unavailable, falling back to synthetic sample:', e?.message || e);
       }
 
+      const _syntheticFallback = !stagedRecords;
       if (!stagedRecords) {
         const now = Date.now();
         stagedRecords = [
@@ -738,11 +744,18 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         });
       }
 
-      // If Agent didn't provide schema, infer from first record
-      if (inferredSourceFields.length === 0) {
-          const first = Array.isArray(stagedRecords) && stagedRecords.length > 0 ? stagedRecords[0] : null;
-          const keys = first && typeof first === 'object' && !Array.isArray(first) ? Object.keys(first) : [];
-          inferredSourceFields = keys;
+      // If Agent didn't provide schema, infer from union of all staged record keys
+      // (not just the first record — different files may have different columns)
+      if (inferredSourceFields.length === 0 && !_syntheticFallback) {
+          const keySet = new Set();
+          if (Array.isArray(stagedRecords)) {
+            for (const rec of stagedRecords) {
+              if (rec && typeof rec === 'object' && !Array.isArray(rec)) {
+                Object.keys(rec).forEach(k => keySet.add(k));
+              }
+            }
+          }
+          inferredSourceFields = Array.from(keySet);
       }
 
       // Seed mapping suggestions: prefer Agent output, then identity-map real source
@@ -779,6 +792,64 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         issues_preview: issues.slice(0, 5),
         recommendations: recommendations.slice(0, 10)
       };
+
+      // ── Fire DataProfilerAgent (non-blocking) ───────────────────────────────
+      // Runs concurrently after discovery. Result updates semanticProfile when ready.
+      // Builds file_profiles from the inferred column list (or staged record keys as fallback).
+      const _semCols = inferredSourceFields.length > 0
+        ? inferredSourceFields
+        : stagedRecords.length > 0
+          ? [...new Set(stagedRecords.flatMap(r => (r && typeof r === 'object' ? Object.keys(r) : [])))]
+          : [];
+
+      if (_semCols.length > 0) {
+        const _semPayload = {
+          source_name: wizardData.sourceSystem?.name || 'source',
+          file_profiles: [{
+            file: wizardData.sourceSystem?.name || 'source',
+            columns: _semCols.map(k => ({
+              name: k,
+              dtype: typeof (stagedRecords[0]?.[k] ?? 'string'),
+              cardinality_ratio: 0.8,
+              null_rate: 0.05
+            }))
+          }],
+          min_relationship_similarity: 0.85,
+        };
+        // setWizardData with running status before the fetch so the spinner shows immediately
+        setWizardData(prev => ({ ...prev, semanticProfileStatus: 'running' }));
+        e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_SEMANTIC_PROFILE}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_name:      _semPayload.source_name,
+            folder_path:      wizardData.sourceSystem?.folder_path || null,
+            file_profiles:    _semPayload.file_profiles,
+            discovery_run_id: discoveryRunId,
+            sample_rows:      500,
+            save_report:      true,
+          })
+        })
+          .then(r => r.json())
+          .then(profileResult => {
+            const si = profileResult?.result?.semantic_insights
+                    || profileResult?.semantic_insights
+                    || profileResult?.result;
+            if (si && (si.column_semantics || si.entity_classifications)) {
+              setWizardData(prev => ({
+                ...prev,
+                semanticProfile: si,
+                semanticProfileStatus: 'completed'
+              }));
+            } else {
+              setWizardData(prev => ({ ...prev, semanticProfileStatus: 'idle' }));
+            }
+          })
+          .catch(profileError => {
+            console.warn('Semantic profiling unavailable:', profileError?.message || profileError);
+            setWizardData(prev => ({ ...prev, semanticProfileStatus: 'failed' }));
+          });
+      }
 
       setWizardData(prev => ({
         ...prev,
@@ -1666,7 +1737,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       </div>
 
       {/* ── Inferred source fields ─────────────────────────── */}
-      {wizardData.discoveryIntrospect?.inferred_source_fields?.length > 0 && (
+      {wizardData.discoveryIntrospect?.inferred_source_fields?.length > 0 ? (
         <div className="discovery-data-panel">
           <div className="ddp-header">
             <i className="fas fa-columns" /> Inferred Source Fields
@@ -1678,7 +1749,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             ))}
           </div>
         </div>
-      )}
+      ) : wizardData.discoverySample?.stagedFrom === 'synthetic' && wizardData.discoveryStatus === 'completed' ? (
+        <div className="discovery-data-panel">
+          <div className="ddp-header">
+            <i className="fas fa-exclamation-triangle" /> Source Fields Not Detected
+          </div>
+          <p style={{ padding: '8px 12px', margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary, #888)' }}>
+            Could not connect to the source system for live sampling. Configure a reachable data source (file, database, or API) to detect real fields. You can manually define field mappings in the next step.
+          </p>
+        </div>
+      ) : null}
 
       {/* ── Sample records ─────────────────────────────────── */}
       {(() => {
@@ -1746,6 +1826,86 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               <i className="fas fa-external-link-alt" /> View full discovery catalogue
             </a>
           </div>
+        </div>
+      )}
+
+      {/* ── Semantic Analysis (DataProfilerAgent) ─────────────────────────────
+           Shows entity classifications and column semantic roles inferred by
+           DataProfilerAgent from the staged column list. Fires concurrently
+           with discovery and renders when the result arrives.
+      ── */}
+      {(wizardData.semanticProfileStatus === 'running' || wizardData.semanticProfile) && (
+        <div className="discovery-data-panel">
+          <div className="ddp-header">
+            <i className={`fas ${wizardData.semanticProfileStatus === 'running' ? 'fa-spinner fa-spin' : 'fa-brain'}`} />
+            Semantic Analysis
+            {wizardData.semanticProfileStatus === 'running' && (
+              <span className="ddp-badge">analysing columns…</span>
+            )}
+            {wizardData.semanticProfile?.summary?.total_columns_analysed > 0 && (
+              <span className="ddp-badge">
+                {wizardData.semanticProfile.summary.total_columns_analysed} columns
+              </span>
+            )}
+            {wizardData.semanticProfile?.summary?.top_entity_class && (
+              <span className="ddp-source-tag">
+                dominant: {wizardData.semanticProfile.summary.top_entity_class}
+              </span>
+            )}
+          </div>
+
+          {/* Entity classification chips */}
+          {wizardData.semanticProfile?.entity_classifications?.length > 0 && (
+            <div className="ddp-entity-row">
+              {wizardData.semanticProfile.entity_classifications.map((ec, i) => (
+                <span
+                  key={i}
+                  className={`ddp-entity-chip entity-${(ec.entity_class || 'unknown').toLowerCase()}`}
+                  title={`Confidence: ${Math.round((ec.confidence || 0) * 100)}%${ec.reasoning ? `\n${ec.reasoning}` : ''}`}
+                >
+                  {ec.entity_class}
+                  <span className="entity-conf">{Math.round((ec.confidence || 0) * 100)}%</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Column semantics table */}
+          {wizardData.semanticProfile?.column_semantics?.length > 0 && (
+            <div className="ddp-col-semantics">
+              {wizardData.semanticProfile.column_semantics.slice(0, 12).map((cs, i) => (
+                <div key={i} className="ddp-col-sem-row">
+                  <span className="ddp-col-name">{cs.column}</span>
+                  {cs.canonical_name && cs.canonical_name !== cs.column && (
+                    <span className="ddp-col-canon" title="Canonical name">→ {cs.canonical_name}</span>
+                  )}
+                  <span className={`ddp-col-role role-${cs.semantic_role || 'unknown'}`}>
+                    {cs.semantic_role || '—'}
+                  </span>
+                  {cs.entity_hint && (
+                    <span className="ddp-col-entity">{cs.entity_hint}</span>
+                  )}
+                  <span className="ddp-col-conf">{Math.round((cs.confidence || 0) * 100)}%</span>
+                </div>
+              ))}
+              {wizardData.semanticProfile.column_semantics.length > 12 && (
+                <div className="ddp-col-more">
+                  +{wizardData.semanticProfile.column_semantics.length - 12} more columns
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cross-file relationship summary */}
+          {wizardData.semanticProfile?.summary?.relationship_count > 0 && (
+            <div className="ddp-sem-footer">
+              <i className="fas fa-link" />
+              {wizardData.semanticProfile.summary.relationship_count} cross-column relationship
+              {wizardData.semanticProfile.summary.relationship_count !== 1 ? 's' : ''} detected
+              &nbsp;·&nbsp;
+              {wizardData.semanticProfile.summary.high_confidence_semantics || 0} high-confidence columns
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1818,6 +1978,25 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               </div>
             )}
           </div>
+
+          {/* ── Semantic insights summary (from DataProfilerAgent) ── */}
+          {wizardData.semanticProfile?.summary && (
+            <div className="sem-summary-row">
+              <span className="sem-summary-item" title="Dominant entity class in this dataset">
+                <i className="fas fa-tags" />
+                {wizardData.semanticProfile.summary.top_entity_class || '—'} entity
+              </span>
+              <span className="sem-summary-item" title="Cross-column relationships detected">
+                <i className="fas fa-link" />
+                {wizardData.semanticProfile.summary.relationship_count || 0} relationship
+                {wizardData.semanticProfile.summary.relationship_count !== 1 ? 's' : ''}
+              </span>
+              <span className="sem-summary-item" title="Columns with high-confidence semantic classification">
+                <i className="fas fa-check-circle" />
+                {wizardData.semanticProfile.summary.high_confidence_semantics || 0} confident columns
+              </span>
+            </div>
+          )}
           
           <div className="summary-actions">
             <a
@@ -1960,11 +2139,34 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <h5><i className="fas fa-arrow-right" /> Source Fields ({sourceFields.length})</h5>
           {sourceFields.length > 0 ? (
             <div className="fields-list">
-              {sourceFields.slice(0, 15).map((field, idx) => (
-                <span key={idx} className="field-tag source" title="Click to add mapping" onClick={() => addFieldMapping({ source_field: field, target_field: '', transformation: null })}>
-                  {field}
-                </span>
-              ))}
+              {sourceFields.slice(0, 15).map((field, idx) => {
+                const sem = wizardData.semanticProfile?.column_semantics?.find(
+                  cs => cs.column === field || cs.canonical_name === field
+                );
+                const titleParts = ['Click to add mapping'];
+                if (sem) {
+                  titleParts.push(`Role: ${sem.semantic_role}`);
+                  if (sem.entity_hint) titleParts.push(`Entity: ${sem.entity_hint}`);
+                  titleParts.push(`Confidence: ${Math.round((sem.confidence || 0) * 100)}%`);
+                }
+                return (
+                  <span
+                    key={idx}
+                    className={`field-tag source${sem?.semantic_role ? ` sem-${sem.semantic_role}` : ''}`}
+                    title={titleParts.join(' · ')}
+                    onClick={() => addFieldMapping({
+                      source_field: field,
+                      target_field: sem?.canonical_name || '',
+                      transformation: null
+                    })}
+                  >
+                    {field}
+                    {sem?.semantic_role && (
+                      <span className="field-sem-badge">{sem.semantic_role}</span>
+                    )}
+                  </span>
+                );
+              })}
               {sourceFields.length > 15 && <span className="more-fields">+{sourceFields.length - 15} more</span>}
             </div>
           ) : (

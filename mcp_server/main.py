@@ -1,15 +1,17 @@
 import logging
 import contextlib
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+
 from fastapi import FastAPI, HTTPException, Response
 from neo4j import AsyncGraphDatabase
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from typing import Optional
-
+from pydantic import BaseModel, Field
 import neo4j
 
 from .config import get_settings
 from .orchestrator import AgenticOrchestrator
-from .models import AgenticTask, AgenticTaskResult, SystemStatus, AgentDefinition
+from .models import AgenticTask, AgenticTaskResult, SystemStatus, AgentDefinition, AgenticSubtask, TaskType, TaskStatus
 from .state_manager import StateManager
 from .queue_client import MessageQueueClient
 from .dag_executor import DAGExecutor
@@ -113,6 +115,83 @@ async def get_task_status(task_id: str):
     if task_id in orchestrator.task_results:
         return orchestrator.task_results[task_id]
     raise HTTPException(status_code=404, detail="Task not found")
+
+
+class DagSubmission(BaseModel):
+    """Submit a pre-decomposed subtask DAG for parallel/sequential execution.
+
+    The ``subtasks`` list is executed by DAGExecutor in dependency order.
+    Each subtask ``type`` must be a valid TaskType value.
+    Each subtask ``dependencies`` list references other subtask ``id`` values.
+    """
+    parent_task_id: str = Field(default_factory=lambda: f"dag_{int(datetime.now().timestamp() * 1000)}")
+    goal: str = ""
+    subtasks: List[Dict[str, Any]]
+    priority: int = 5
+
+
+@app.post("/mcp/v1/tasks/dag", response_model=AgenticTaskResult)
+async def submit_dag(submission: DagSubmission):
+    """Execute a list of subtasks as a dependency-ordered DAG.
+
+    Subtask format::
+
+        {
+            "id": "st_abc",
+            "type": "data_discovery",           # TaskType value
+            "required_capabilities": ["discover_files"],
+            "payload": {...},
+            "dependencies": [],                  # ids of subtasks that must finish first
+            "priority": 5
+        }
+    """
+    orchestrator: AgenticOrchestrator = app.state.orchestrator
+    dag_executor: DAGExecutor = app.state.dag_executor
+
+    wrapper_id = submission.parent_task_id
+
+    # Build AgenticSubtask objects
+    built_subtasks: List[AgenticSubtask] = []
+    for raw in submission.subtasks:
+        raw_type = raw.get("type", "data_analysis")
+        try:
+            task_type = TaskType(raw_type)
+        except ValueError:
+            task_type = TaskType.DATA_ANALYSIS
+        built_subtasks.append(
+            AgenticSubtask(
+                id=raw.get("id", f"st_{int(datetime.now().timestamp() * 1000)}"),
+                parent_task_id=wrapper_id,
+                type=task_type,
+                required_capabilities=raw.get("required_capabilities", []),
+                payload=raw.get("payload", {}),
+                dependencies=raw.get("dependencies", []),
+                priority=raw.get("priority", 5),
+            )
+        )
+
+    wrapper_task = AgenticTask(
+        id=wrapper_id,
+        type=TaskType.TASK_DECOMPOSITION,
+        required_capabilities=[],
+        payload={"goal": submission.goal, "source": "dag_endpoint"},
+        subtasks=built_subtasks,
+        priority=submission.priority,
+    )
+
+    result = await dag_executor.execute_task_with_subtasks(wrapper_task)
+    return result
+
+
+@app.get("/mcp/v1/capabilities")
+async def list_capabilities():
+    """Return a deduplicated map of capability → [agent_id, …] for the director pattern."""
+    orchestrator: AgenticOrchestrator = app.state.orchestrator
+    cap_map: Dict[str, List[str]] = {}
+    for agent_id, agent in orchestrator.agents.items():
+        for cap in agent.capabilities:
+            cap_map.setdefault(cap.name, []).append(agent_id)
+    return {"capabilities": cap_map, "agent_count": len(orchestrator.agents)}
 
 @app.get("/mcp/v1/system/status", response_model=SystemStatus)
 async def get_system_status():

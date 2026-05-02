@@ -13,6 +13,10 @@ class AgentType(str, Enum):
     DATA_DISCOVERY_AGENT = "data_discovery_agent"
     CHAT_COORDINATOR = "chat_coordinator"
     TASK_DECOMPOSER = "task_decomposer"
+    SCHEMA_CORRELATOR = "schema_correlator"
+    PLM_DIRECTOR = "plm_director"
+    REPORTING_AGENT = "reporting_agent"
+    DATA_PROFILER = "data_profiler"
 
 #  AGENT TYPE DEFINITIONS — add DATA_DISCOVERY_AGENT before CHAT_COORDINATOR
 
@@ -29,6 +33,10 @@ class TaskType(str, Enum):
     DATA_QUALITY_SCAN = "data_quality_scan"
     FILE_BATCH_PROCESSING = "file_batch_processing"
     TASK_DECOMPOSITION = "task_decomposition"
+    SCHEMA_CORRELATION = "schema_correlation"
+    PLM_MIGRATION_ORCHESTRATION = "plm_migration_orchestration"
+    REPORT_GENERATION = "report_generation"
+    SEMANTIC_PROFILE = "semantic_profile"
 
 class TaskStatus(str, Enum):
     PENDING = "pending"

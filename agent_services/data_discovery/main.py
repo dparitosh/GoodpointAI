@@ -15,12 +15,9 @@ Capabilities
 
 import sys
 import os
-import csv
-import json
 import logging
 import asyncio
 import uuid
-from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,7 +25,6 @@ from typing import Any, Dict, List, Optional
 import httpx
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
@@ -181,7 +177,7 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
             except ImportError:
                 profile["parse_error"] = "openpyxl not installed - cannot read .xlsx files"
                 profile["parse_ok"] = False
-            except Exception as e:
+            except Exception:
                 # Try without specifying engine (fallback to xlrd for .xls)
                 try:
                     df = pd.read_excel(str(path))
@@ -425,6 +421,13 @@ class DataDiscoveryAgent(AgentService):
                 name="infer_schema",
                 description="Infer column types and schema from CSV/JSON/XML samples",
             ),
+            AgentCapability(
+                name="batch_discover_segment",
+                description=(
+                    "Discover and profile a named offset/limit segment of files — "
+                    "enables parallel Wave-1 batches for corpora with 200+ files"
+                ),
+            ),
         ]
 
     async def process_task(self, task: AgentTaskRequest) -> Dict[str, Any]:
@@ -446,8 +449,8 @@ class DataDiscoveryAgent(AgentService):
 
     # ── Handlers ──────────────────────────────────────────────────────────
 
-    async def _resolve_folder_path(self, source_id: Optional[str], folder_path: Optional[str]) -> Optional[str]:
-        """Resolve a folder path — either directly or by looking up a data source."""
+    async def _resolve_folder_path(self, source_id: Optional[str], folder_path: Optional[str], source_name: Optional[str] = None) -> Optional[str]:
+        """Resolve a folder path — either directly, by source_id, or by matching source name."""
         if folder_path:
             return folder_path
         if source_id:
@@ -465,6 +468,30 @@ class DataDiscoveryAgent(AgentService):
                         )
             except Exception as exc:
                 logger.warning("Could not resolve source_id %s: %s", source_id, exc)
+        if source_name:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(f"{BACKEND_URL}/api/data-sources", params={"limit": 200})
+                    if resp.status_code == 200:
+                        sources = resp.json()
+                        if isinstance(sources, dict):
+                            sources = sources.get("items", sources.get("data", []))
+                        name_lower = source_name.lower()
+                        for ds in sources:
+                            ds_name = (ds.get("name") or ds.get("source_name") or "").lower()
+                            if name_lower in ds_name or ds_name in name_lower:
+                                conn = ds.get("connection") or {}
+                                path = (
+                                    conn.get("folder_path")
+                                    or conn.get("file_path")
+                                    or conn.get("connection_string")
+                                    or conn.get("uri")
+                                )
+                                if path:
+                                    logger.info("Resolved source name '%s' to folder: %s", source_name, path)
+                                    return path
+            except Exception as exc:
+                logger.warning("Could not resolve source_name %s: %s", source_name, exc)
         return None
 
     async def _dispatch_dq_handoff(
@@ -516,7 +543,14 @@ class DataDiscoveryAgent(AgentService):
     async def _handle_discovery(self, task: AgentTaskRequest) -> Dict[str, Any]:
         payload = task.payload
         source_id = payload.get("source_id")
-        folder_path = payload.get("folder_path") or await self._resolve_folder_path(source_id, None)
+        source_name = payload.get("source_name") or payload.get("source") or None
+        # Ignore generic placeholder values
+        if source_name in ("unknown", "", None):
+            source_name = None
+        folder_path = (
+            payload.get("folder_path")
+            or await self._resolve_folder_path(source_id, None, source_name)
+        )
         recursive = bool(payload.get("recursive", True))
         include_profiling = bool(payload.get("include_profiling", True))
 
@@ -547,10 +581,19 @@ class DataDiscoveryAgent(AgentService):
         }
 
         if include_profiling and files:
-            profiles = await loop.run_in_executor(
-                None,
-                lambda: [_profile_file(f) for f in files[:500]],  # cap at 500 for response size
-            )
+            # Parallel profiling: one thread-pool task per file (capped at 500 files).
+            # A semaphore limits concurrent pandas reads to avoid memory pressure on large corpora.
+            _PROFILE_CONCURRENCY = min(32, len(files))
+            _sem = asyncio.Semaphore(_PROFILE_CONCURRENCY)
+
+            async def _profile_one(f: Dict[str, Any]) -> Dict[str, Any]:
+                async with _sem:
+                    return await loop.run_in_executor(None, _profile_file, f)
+
+            profiles = list(await asyncio.gather(
+                *[_profile_one(f) for f in files[:500]],
+                return_exceptions=False,
+            ))
             # Merge profile data directly into file entries for frontend compatibility.
             # Also convert null_rate from 0-1 decimal fraction to 0-100 percent.
             profile_by_path = {p["path"]: p for p in profiles}
@@ -682,6 +725,9 @@ class DataDiscoveryAgent(AgentService):
         return {"status": "completed", "catalog_entry": catalog_entry}
 
 
+# Module-level singleton so uvicorn can find `app`
+agent = DataDiscoveryAgent()
+app = agent.app
+
 if __name__ == "__main__":
-    agent = DataDiscoveryAgent()
     agent.start()

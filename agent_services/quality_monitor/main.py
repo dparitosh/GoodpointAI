@@ -1,10 +1,9 @@
 import sys
 import os
-import asyncio
 import httpx
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -39,7 +38,7 @@ class QualityMonitorAgent(AgentService):
         self.driver = None
 
     @asynccontextmanager
-    async def _lifespan(self, app: FastAPI):
+    async def _lifespan(self, _app: FastAPI):
         # Initialize resources
         logger_name = f"{self.agent_name}.lifespan"
         try:
@@ -52,7 +51,7 @@ class QualityMonitorAgent(AgentService):
         except Exception as e:
             print(f"[{logger_name}] WARNING: Neo4j connectivity failed: {e}")
 
-        async with super()._lifespan(app):
+        async with super()._lifespan(_app):
             yield
         
         if self.driver:
@@ -66,120 +65,6 @@ class QualityMonitorAgent(AgentService):
             AgentCapability(name="generate_quality_reports", description="Generate quality reports"),
             AgentCapability(name="execute_rules", description="Execute Rule Engine rule sets against data"),
         ]
-
-    def _run_rule_engine_direct(self, records: List[Dict[str, Any]], entity_type: str = None) -> Dict[str, Any]:
-        """Execute Rule Engine rule sets against the provided records.
-
-        Loads active rule sets from Postgres, runs them synchronously, and
-        returns a summary with quality_score.
-        """
-        try:
-            from core.db_session import SessionLocal
-            from models.rule_engine_models import RuleSet, Rule, RuleStatus
-            from services.rule_engine import RuleEngine
-        except Exception as e:
-            return {
-                "quality_score": 0.0,
-                "error": f"Rule engine import failed: {e}",
-                "rule_sets_executed": 0,
-            }
-
-        db = SessionLocal()
-        try:
-            query = db.query(RuleSet).filter(
-                RuleSet.is_active == True,  # noqa: E712
-                RuleSet.status == RuleStatus.ACTIVE.value,
-            )
-            if entity_type:
-                from sqlalchemy import or_
-                query = query.filter(
-                    or_(
-                        RuleSet.target_entity_type == entity_type,
-                        RuleSet.target_entity_type == None,  # noqa: E711
-                    )
-                )
-            rule_sets = query.all()
-
-            if not rule_sets:
-                return {
-                    "quality_score": 100.0,
-                    "rule_sets_executed": 0,
-                    "message": "No active rule sets configured",
-                }
-
-            engine = RuleEngine(db)
-            all_results = []
-
-            for rs in rule_sets:
-                rules = (
-                    db.query(Rule)
-                    .filter(
-                        Rule.rule_set_id == rs.id,
-                        Rule.status == RuleStatus.ACTIVE.value,
-                        Rule.enabled == True,  # noqa: E712
-                    )
-                    .order_by(Rule.sequence_order)
-                    .all()
-                )
-                if not rules:
-                    continue
-
-                rule_set_dict = {
-                    "id": rs.id,
-                    "name": rs.name,
-                    "execution_mode": rs.execution_mode,
-                    "stop_on_critical": rs.stop_on_critical,
-                }
-                rules_dict = [
-                    {
-                        "id": r.id,
-                        "name": r.name,
-                        "expression": r.expression,
-                        "level": r.level or "entity",
-                        "severity": r.severity or "warning",
-                        "action_on_fail": r.action_on_fail or "log",
-                        "parent_rule_id": r.parent_rule_id,
-                        "dependency_condition": r.dependency_condition,
-                        "sequence_order": r.sequence_order,
-                        "parameters": r.parameters or {},
-                    }
-                    for r in rules
-                ]
-
-                result = engine.execute_rule_set(
-                    rule_set_dict, rules_dict, records,
-                    stop_on_critical=rs.stop_on_critical,
-                )
-                all_results.append({
-                    "rule_set_id": rs.id,
-                    "rule_set_name": rs.name,
-                    "status": result.status,
-                    "overall_pass_rate": round(result.overall_pass_rate, 2),
-                    "rules_passed": result.rules_passed,
-                    "rules_failed": result.rules_failed,
-                    "total_failures": result.total_failures,
-                    "duration_ms": result.duration_ms,
-                })
-
-            if all_results:
-                quality_score = sum(r["overall_pass_rate"] for r in all_results) / len(all_results)
-            else:
-                quality_score = 100.0
-
-            return {
-                "quality_score": round(quality_score, 2),
-                "rule_sets_executed": len(all_results),
-                "results": all_results,
-            }
-
-        except Exception as e:
-            return {
-                "quality_score": 0.0,
-                "error": str(e),
-                "rule_sets_executed": 0,
-            }
-        finally:
-            db.close()
 
     async def process_task(self, task: AgentTaskRequest):
         caps = set(task.payload.get("required_capabilities", []))
@@ -249,7 +134,7 @@ class QualityMonitorAgent(AgentService):
         except Exception as exc:
             return {"status": "error", "error": str(exc)}
 
-    async def _run_rule_engine_via_api(self, records: List[Dict[str, Any]], entity_type: str = None) -> Dict[str, Any]:
+    async def _run_rule_engine_via_api(self, records: List[Dict[str, Any]], entity_type: Optional[str] = None) -> Dict[str, Any]:
         """Call the backend rule engine execution endpoint."""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -266,7 +151,7 @@ class QualityMonitorAgent(AgentService):
         # Direct ORM fallback (only when backend API unavailable)
         return self._run_rule_engine_direct(records, entity_type)
 
-    def _run_rule_engine_direct(self, records: List[Dict[str, Any]], entity_type: str = None) -> Dict[str, Any]:
+    def _run_rule_engine_direct(self, records: List[Dict[str, Any]], entity_type: Optional[str] = None) -> Dict[str, Any]:
         """Execute Rule Engine rule sets against the provided records (direct ORM fallback).
 
         Used only when the backend API is unavailable.
@@ -380,7 +265,9 @@ class QualityMonitorAgent(AgentService):
             db.close()
 
 
+agent = QualityMonitorAgent()
+app = agent.app
+
 if __name__ == "__main__":
-    agent = QualityMonitorAgent()
     agent.start()
 

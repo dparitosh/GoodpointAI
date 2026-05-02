@@ -22,8 +22,8 @@ except subprocess.CalledProcessError as e:
 
 agents = [
     "chat_coordinator", "data_analyst", "data_discovery",
-    "etl_orchestrator", "quality_monitor", "query_planner", 
-    "visualization_agent", "task_decomposer"
+    "etl_orchestrator", "quality_monitor", "query_planner",
+    "visualization_agent", "task_decomposer", "reporting_agent", "data_profiler"
 ]
 
 processes_to_start = [

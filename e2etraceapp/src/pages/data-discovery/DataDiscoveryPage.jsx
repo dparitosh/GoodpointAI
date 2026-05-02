@@ -738,13 +738,6 @@ export default function DataDiscoveryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedReports]);
 
-  // Run quality scan triggered from ProfileRow "Run Full Quality Scan" button
-  const runQualityScanForFile = useCallback((file) => {
-    // Scroll to top so user sees the scan running
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    runQualityScan();
-  }, [runQualityScan]);
-
   const runQualityScan = useCallback(async () => {
     if (!selectedSourceId && !folderPath.trim()) return;
     setScanning(true);
@@ -782,6 +775,13 @@ export default function DataDiscoveryPage() {
       setScanning(false);
     }
   }, [selectedSourceId, folderPath, sources]);
+
+  // Run quality scan triggered from ProfileRow "Run Full Quality Scan" button
+  const runQualityScanForFile = useCallback((_file) => {
+    // Scroll to top so user sees the scan running
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    runQualityScan();
+  }, [runQualityScan]);
 
   // ── Export functions
   const exportToJSON = useCallback(() => {

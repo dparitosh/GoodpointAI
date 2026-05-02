@@ -66,6 +66,10 @@ class AgenticOrchestrator:
             AgentType.CHAT_COORDINATOR: "http://127.0.0.1:8025",
             AgentType.DATA_ANALYST: "http://127.0.0.1:8020",
             AgentType.TASK_DECOMPOSER: "http://127.0.0.1:8027",
+            AgentType.SCHEMA_CORRELATOR: "http://127.0.0.1:8028",
+            AgentType.PLM_DIRECTOR: "http://127.0.0.1:8029",
+            AgentType.REPORTING_AGENT: "http://127.0.0.1:8030",
+            AgentType.DATA_PROFILER: "http://127.0.0.1:8031",
         }
 
         agent_configs = {
@@ -75,7 +79,11 @@ class AgenticOrchestrator:
                     AgentCapability(name="analyze_data_patterns", description="Analyze Neo4j graph patterns"),
                     AgentCapability(name="generate_insights", description="Generate analytical insights"),
                     AgentCapability(name="data_quality_assessment", description="Assess data quality"),
-                    AgentCapability(name="statistical_analysis", description="Perform statistical analysis")
+                    AgentCapability(name="statistical_analysis", description="Perform statistical analysis"),
+                    AgentCapability(name="data_analysis", description="Analyze data patterns, distributions and statistics"),
+                    AgentCapability(name="graph_query", description="Execute read-only queries against Neo4j"),
+                    AgentCapability(name="sql_query", description="Execute read-only queries against Postgres"),
+                    AgentCapability(name="execute_cypher_queries", description="Execute Cypher graph queries and return structured results"),
                 ]
             },
             AgentType.QUERY_PLANNER: {
@@ -142,6 +150,45 @@ class AgenticOrchestrator:
                     AgentCapability(name="decompose_task", description="Breaks down complex natural language requests into an executable DAG of subtasks"),
                     AgentCapability(name="decompose_goal", description="Decompose high-level goal into dependency-ordered subtasks"),
                     AgentCapability(name="build_task_dag", description="Build executable DAG from subtasks and dependencies"),
+                ]
+            },
+            AgentType.SCHEMA_CORRELATOR: {
+                "name": "Schema Correlator Agent",
+                "capabilities": [
+                    AgentCapability(name="correlate_schemas", description="Cross-file column frequency and type-consistency analysis across 200+ files"),
+                    AgentCapability(name="detect_schema_drift", description="Detect columns with inconsistent types across files (e.g. int vs text)"),
+                    AgentCapability(name="find_fk_candidates", description="Detect potential foreign-key relationships between files using naming patterns"),
+                    AgentCapability(name="cluster_files_by_schema", description="Group files by Jaccard schema similarity for unified-schema migration"),
+                    AgentCapability(name="generate_corpus_report", description="Generate full structured JSON profiling report with ETL, Quality, and Transformation recommendations"),
+                ]
+            },
+            AgentType.PLM_DIRECTOR: {
+                "name": "PLM Data Migration Director",
+                "capabilities": [
+                    AgentCapability(name="orchestrate_plm_migration", description="Run the full three-wave PLM corpus migration DAG: DataDiscovery ‖ SchemaCorrelator → QualityMonitor ‖ DataAnalyst → ETLOrchestrator"),
+                    AgentCapability(name="generate_migration_plan", description="Build a phased migration plan from schema drift, FK candidates, and schema cluster analysis"),
+                    AgentCapability(name="aggregate_corpus_report", description="Merge per-file profiles with cross-file corpus analysis into a unified PLMMigrationReport"),
+                    AgentCapability(name="detect_cross_file_patterns", description="Identify schema drift, FK relationships, and schema clusters across 200+ heterogeneous PLM files"),
+                ]
+            },
+            AgentType.REPORTING_AGENT: {
+                "name": "PLM Reporting Agent",
+                "capabilities": [
+                    AgentCapability(name="generate_plm_report", description="Consume PLM profiling artifacts and emit a strict-JSON PLM Data Profiling Report (INTENT PROMPT contract)"),
+                    AgentCapability(name="evaluate_dynamic_conditions", description="Re-evaluate new schema patterns, drift, unknown file types, and DQ threshold without restarting the pipeline"),
+                    AgentCapability(name="update_schema_cluster", description="Add an auto-detected schema cluster and re-evaluate FK relationships"),
+                    AgentCapability(name="trigger_reprofiling", description="Invoke selective re-profiling on files affected by high-severity schema drift"),
+                    AgentCapability(name="route_unknown_files", description="Route files with unknown/unsupported types to ETLOrchestrator for extraction"),
+                ]
+            },
+            AgentType.DATA_PROFILER: {
+                "name": "Data Profiler Agent",
+                "capabilities": [
+                    AgentCapability(name="semantic_profile", description="Analyze dataset profiles and infer column semantic meaning, cross-file relationships, and entity classification with confidence scores"),
+                    AgentCapability(name="infer_column_semantics", description="Column-level semantic role inference (identifier, FK, name, date, …) using cardinality + null-rate signals"),
+                    AgentCapability(name="classify_entities", description="Vote-based per-file entity classification: Part / BOM / Supplier / Document / ECO / Revision"),
+                    AgentCapability(name="detect_relationships", description="Detect cross-file FK/alignment relationships using column name similarity"),
+                    AgentCapability(name="align_schemas", description="Group semantically equivalent column names across files into alignment clusters"),
                 ]
             }
         }

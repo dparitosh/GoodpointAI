@@ -833,18 +833,28 @@ def _sample_file_storage(
             if key not in seen:
                 seen.add(key)
                 unique_files.append(f)
+        # Sample from multiple files to capture the union of all schemas.
+        # Spread `limit` records across up to MAX_FILES files so the frontend
+        # union-of-keys approach surfaces columns from every file.
+        MAX_FILES = 10
+        per_file_limit = max(5, limit // MAX_FILES)
+        sampled_files = 0
         for target in unique_files:
+            if sampled_files >= MAX_FILES:
+                break
             if target.stat().st_size < 4:
                 # Skip empty or BOM-only files
                 continue
             try:
                 content = target.read_bytes()[:512 * 1024]
-                parsed_fmt, parsed_records = _parse_records(content, name_hint=target.name, limit=limit)
+                parsed_fmt, parsed_records = _parse_records(content, name_hint=target.name, limit=per_file_limit)
                 if parsed_records:
                     fmt = parsed_fmt
-                    records = parsed_records
+                    records.extend(parsed_records)
                     warnings.append(f"Sampled from: {target.name}")
-                    break
+                    sampled_files += 1
+                    if len(records) >= limit:
+                        break
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 warnings.append(f"Error reading {target.name}: {str(exc)}")
         if not records:
