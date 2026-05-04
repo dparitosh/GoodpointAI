@@ -1200,6 +1200,100 @@ async def delete_workflow(
     return Response(status_code=204)
 
 
+@router.post("/validate-sources", response_model=Dict[str, Any])
+async def validate_workflow_sources(
+    dry_run: bool = Query(False, description="When true, report orphaned workflows without deleting them."),
+    db: Session = Depends(get_db),
+):
+    """Check every workflow's source_id and target_id against registered data sources.
+
+    A workflow is considered **orphaned** when *both* its source and target are absent
+    from the data_source_configs table (i.e. neither side is registered).
+    A workflow is **partially registered** when only one side is missing.
+
+    When dry_run=false (default), orphaned workflows are permanently deleted.
+    Running workflows are skipped regardless of source registration.
+    """
+    await _ensure_store_loaded(db)
+
+    # Build the set of registered data source IDs from DB.
+    registered_ids: set[str] = {
+        row.id
+        for row in db.query(DataSourceConfigRecord.id).filter(
+            DataSourceConfigRecord.status != "deleted"
+        ).all()
+    }
+
+    valid: list[Dict[str, Any]] = []
+    partial: list[Dict[str, Any]] = []
+    orphaned: list[Dict[str, Any]] = []
+    skipped_running: list[str] = []
+
+    async with _WORKFLOWS_STORE_LOCK:
+        all_wfs = list(WORKFLOWS_STORE.values())
+
+    for wf in all_wfs:
+        wf_id = wf.get("id", "")
+        src_ok = wf.get("source_id", "") in registered_ids
+        tgt_ok = wf.get("target_id", "") in registered_ids
+        status = _normalize_status(wf.get("status"))
+
+        entry = {
+            "id": wf_id,
+            "name": wf.get("name", ""),
+            "source_id": wf.get("source_id"),
+            "target_id": wf.get("target_id"),
+            "source_registered": src_ok,
+            "target_registered": tgt_ok,
+            "status": status.value if status else wf.get("status"),
+        }
+
+        if status == WorkflowStatus.RUNNING:
+            skipped_running.append(wf_id)
+            valid.append(entry)
+            continue
+
+        if src_ok and tgt_ok:
+            valid.append(entry)
+        elif src_ok or tgt_ok:
+            partial.append(entry)
+        else:
+            orphaned.append(entry)
+
+    deleted_ids: list[str] = []
+    if not dry_run and orphaned:
+        ids_to_delete = [e["id"] for e in orphaned]
+        async with _WORKFLOWS_STORE_LOCK:
+            for wf_id in ids_to_delete:
+                WORKFLOWS_STORE.pop(wf_id, None)
+        db.query(WorkflowInstance).filter(
+            WorkflowInstance.id.in_(ids_to_delete)
+        ).delete(synchronize_session="fetch")
+        db.commit()
+        deleted_ids = ids_to_delete
+        logger.info(
+            "AUDIT action=validate_sources deleted_count=%d deleted_ids=%s",
+            len(deleted_ids), deleted_ids,
+        )
+
+    return {
+        "dry_run": dry_run,
+        "registered_source_ids": sorted(registered_ids),
+        "summary": {
+            "total": len(all_wfs),
+            "valid": len(valid),
+            "partial": len(partial),
+            "orphaned": len(orphaned),
+            "skipped_running": len(skipped_running),
+            "deleted": len(deleted_ids),
+        },
+        "valid_workflows": valid,
+        "partial_workflows": partial,
+        "orphaned_workflows": orphaned,
+        "deleted_ids": deleted_ids,
+    }
+
+
 @router.post("/{workflow_id}/execute", response_model=WorkflowActionResponse)
 async def execute_workflow(
     workflow_id: str,

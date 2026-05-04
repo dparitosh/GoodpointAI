@@ -1358,7 +1358,7 @@
   color: #80cbc4;
   border-radius: 4px;
   font-size: 0.8125rem;
-  font-family: 'Fira Code', 'Monaco', monospace;
+  font-family: var(--font-family-mono, 'Monaco', monospace);
   overflow-x: auto;
 }
 
@@ -1381,7 +1381,7 @@
 }
 
 .code-input {
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-family: var(--font-family-mono, 'Consolas', monospace);
   font-size: 0.8125rem;
   background: #263238;
   color: #aed581;
@@ -1864,7 +1864,7 @@
 }
 
 .quarantine-review .detail-item .monospace {
-  font-family: monospace;
+  font-family: var(--font-family-mono, monospace);
   font-size: 0.8125rem;
   word-break: break-all;
 }
@@ -1899,7 +1899,7 @@
   background: var(--panel-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  font-family: monospace;
+  font-family: var(--font-family-mono, monospace);
   font-size: 0.8125rem;
   line-height: 1.5;
   overflow-x: auto;

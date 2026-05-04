@@ -204,31 +204,29 @@
 }
 
 /* Dark theme support */
-@media (prefers-color-scheme: dark) {
-    .cytoscape-tooltip {
-        background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-primary) 100%);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-primary);
-    }
-    
-    .tooltip-body {
-        background: var(--dark-bg-secondary);
-        color: var(--dark-text-primary);
-    }
-    
-    .tooltip-label {
-        color: var(--dark-text-secondary);
-    }
-    
-    .tooltip-value {
-        background: var(--dark-bg-primary);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-primary);
-    }
-    
-    .tooltip-section {
-        border-color: var(--dark-border-color);
-    }
+[data-theme='dark'] .cytoscape-tooltip {
+    background: linear-gradient(135deg, var(--panel-bg) 0%, var(--background-color) 100%);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .tooltip-body {
+    background: var(--panel-bg);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .tooltip-label {
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .tooltip-value {
+    background: var(--background-color);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .tooltip-section {
+    border-color: var(--border-color);
 }
 
 /* Responsive adjustments */

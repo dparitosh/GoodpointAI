@@ -58,7 +58,14 @@ export const ResumeMigration = () => {
   }
 
   const handleResume = () => {
-    navigate(`/migration?step=${migrationProgress.step}`);
+    if (migrationProgress.savedWorkflowId) {
+      // Restore full wizard state from backend using the saved workflow ID.
+      // The wizard's init effect will fetch the workflow and jump to step 2.
+      navigate(`/migration?resumeWorkflowId=${encodeURIComponent(migrationProgress.savedWorkflowId)}`);
+    } else {
+      // No backend record yet (user never completed step 1) — go to step 1 to re-enter details.
+      navigate(`/migration?step=1`);
+    }
   };
 
   const handleDismiss = () => {

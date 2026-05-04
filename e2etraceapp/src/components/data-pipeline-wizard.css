@@ -22,8 +22,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, var(--dark-bg-primary, #0f172a) 0%, var(--dark-bg-secondary, #1e293b) 100%);
-  color: var(--dark-text-primary, #f1f5f9);
+  background: linear-gradient(135deg, var(--background-color) 0%, var(--background-color-offset, var(--panel-bg)) 100%);
+  color: var(--text-color);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
@@ -34,7 +34,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: var(--dark-text-heading, #ffffff);
+  color: var(--text-color-headings, var(--text-color));
 }
 
 .wizard-header .close-btn {

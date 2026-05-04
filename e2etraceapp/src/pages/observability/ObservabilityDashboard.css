@@ -345,26 +345,26 @@
 /* Dark Mode */
 
 .dark .observability-dashboard {
-  background: var(--dark-bg-primary, #0f172a);
+  background: var(--background-color);
 }
 
 .dark .metric-card,
 .dark .alerts-panel,
 .dark .quality-issues-panel,
 .dark .agents-panel {
-  background: var(--dark-bg-card, #1e293b);
-  border-color: var(--dark-border-color, #475569);
+  background: var(--panel-bg);
+  border-color: var(--border-color);
 }
 
 .dark .agent-card {
-  background: var(--dark-bg-secondary, #1e293b);
-  border-color: var(--dark-border-color, #475569);
+  background: var(--background-color-offset, var(--panel-bg));
+  border-color: var(--border-color);
 }
 
 .dark .observability-header h1,
 .dark .metric-header h3,
 .dark .alerts-panel h2 {
-  color: var(--dark-text-primary, #f1f5f9);
+  color: var(--text-color);
 }
 
 /* Responsive */

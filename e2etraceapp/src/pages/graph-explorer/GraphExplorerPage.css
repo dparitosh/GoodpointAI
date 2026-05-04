@@ -30,6 +30,11 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
+/* Empty SVG renders as white box in dark mode — hide it */
+[data-theme='dark'] .page-logo {
+  display: none;
+}
+
 .header-title h1 {
   margin: 0;
   font-size: 2rem;

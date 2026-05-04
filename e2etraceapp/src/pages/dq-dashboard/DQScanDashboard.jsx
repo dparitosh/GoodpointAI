@@ -11,82 +11,8 @@ import ReactECharts from 'echarts-for-react';
 import { useReportHub } from '../../hooks/useReportHub.js';
 import { apiClient } from '../../utils/apiClient.js';
 import { API_CONFIG } from '../../config/api-config.js';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './DQScanDashboard.css';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DUMMY DATA (mirrors what the real API returns post-scan)
-// ─────────────────────────────────────────────────────────────────────────────
-const DUMMY_REPORTS = [
-  {
-    scan_id: 'scan-001', table_name: 'plm_parts', data_source: 'PostgreSQL',
-    overall_score: 94.2, issues_count: 3, rows_scanned: 19, scan_date: '2026-03-05T08:12:00Z',
-    status: 'completed',
-    profile: { completeness: 97.4, uniqueness: 100, validity: 91.2, freshness: 88.0 },
-    issues: [
-      { rule: 'NULL check', column: 'description', severity: 'warning', count: 1 },
-      { rule: 'Format check', column: 'part_number', severity: 'info', count: 1 },
-      { rule: 'Freshness', column: 'modified_date', severity: 'warning', count: 1 },
-    ],
-  },
-  {
-    scan_id: 'scan-002', table_name: 'plm_bom_items', data_source: 'PostgreSQL',
-    overall_score: 98.6, issues_count: 0, rows_scanned: 18, scan_date: '2026-03-05T08:13:00Z',
-    status: 'completed',
-    profile: { completeness: 100, uniqueness: 100, validity: 98.6, freshness: 95.0 },
-    issues: [],
-  },
-  {
-    scan_id: 'scan-003', table_name: 'sample_parts', data_source: 'PostgreSQL',
-    overall_score: 87.5, issues_count: 7, rows_scanned: 119, scan_date: '2026-03-05T08:14:00Z',
-    status: 'completed',
-    profile: { completeness: 91.2, uniqueness: 98.3, validity: 85.0, freshness: 76.0 },
-    issues: [
-      { rule: 'NULL check', column: 'supplier_id', severity: 'critical', count: 4 },
-      { rule: 'Range check', column: 'cost', severity: 'warning', count: 2 },
-      { rule: 'Format check', column: 'material', severity: 'info', count: 1 },
-    ],
-  },
-  {
-    scan_id: 'scan-004', table_name: 'sample_bill_of_materials', data_source: 'PostgreSQL',
-    overall_score: 92.1, issues_count: 2, rows_scanned: 168, scan_date: '2026-03-05T08:15:00Z',
-    status: 'completed',
-    profile: { completeness: 95.8, uniqueness: 100, validity: 90.2, freshness: 82.5 },
-    issues: [
-      { rule: 'NULL check', column: 'end_date', severity: 'info', count: 2 },
-    ],
-  },
-  {
-    scan_id: 'scan-005', table_name: 'sample_test_results', data_source: 'PostgreSQL',
-    overall_score: 79.3, issues_count: 14, rows_scanned: 798, scan_date: '2026-03-05T08:16:00Z',
-    status: 'completed',
-    profile: { completeness: 88.4, uniqueness: 99.9, validity: 76.5, freshness: 52.5 },
-    issues: [
-      { rule: 'NULL check', column: 'notes', severity: 'info', count: 8 },
-      { rule: 'Range check', column: 'measurement_value', severity: 'critical', count: 4 },
-      { rule: 'Enum check', column: 'pass_fail', severity: 'warning', count: 2 },
-    ],
-  },
-  {
-    scan_id: 'scan-006', table_name: 'workflows', data_source: 'PostgreSQL',
-    overall_score: 83.0, issues_count: 5, rows_scanned: 54, scan_date: '2026-03-04T14:22:00Z',
-    status: 'completed',
-    profile: { completeness: 86.0, uniqueness: 100, validity: 82.0, freshness: 64.0 },
-    issues: [
-      { rule: 'NULL check', column: 'description', severity: 'warning', count: 3 },
-      { rule: 'Freshness', column: 'updated_at', severity: 'critical', count: 2 },
-    ],
-  },
-];
-
-const DUMMY_SCAN_HISTORY = [
-  { date: '2026-02-27', avgScore: 71.2, scans: 4 },
-  { date: '2026-02-28', avgScore: 74.5, scans: 4 },
-  { date: '2026-03-01', avgScore: 76.8, scans: 5 },
-  { date: '2026-03-02', avgScore: 78.1, scans: 5 },
-  { date: '2026-03-03', avgScore: 80.4, scans: 6 },
-  { date: '2026-03-04', avgScore: 83.0, scans: 6 },
-  { date: '2026-03-05', avgScore: 89.1, scans: 6 },
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -302,8 +228,8 @@ function SectionHeader({ title, badge }) {
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DQScanDashboard() {
-  const [reports, setReports] = useState(DUMMY_REPORTS);
-  const [history] = useState(DUMMY_SCAN_HISTORY);
+  const [reports, setReports] = useState([]);
+  const [history] = useState([]);
   const [selected, setSelected] = useState(null);
   const [liveMode, setLiveMode] = useState(false);
   const [scanningTable, setScanningTable] = useState(null);
@@ -446,6 +372,9 @@ export default function DQScanDashboard() {
 
   return (
     <div className="dq-dashboard">
+      {/* ── AGENT PIPELINE CONTEXT ──────────────────────────────── */}
+      <AgentPipelineStrip activeStageName="quality" />
+
       {/* ── HEADER ──────────────────────────────────────────────── */}
       <div className="dq-header">
         <div className="dq-header-left">
@@ -486,6 +415,11 @@ export default function DQScanDashboard() {
           <Link to="/reporting-hub" className="dq-btn dq-btn-secondary" title="Reporting Hub">
             <i className="fas fa-clipboard-list" /> Reports
           </Link>
+          {reports.length > 0 && (
+            <Link to="/lineage" className="dq-btn dq-btn-secondary" title="View data lineage" style={{ textDecoration: 'none' }}>
+              <i className="fas fa-stream" /> View Lineage →
+            </Link>
+          )}
           <button className="dq-btn dq-btn-primary" onClick={openPicker}>
             <i className="fas fa-play" /> Run Scan
           </button>
@@ -573,9 +507,19 @@ export default function DQScanDashboard() {
                     <td className="dq-date-cell">{fmtDate(r.scan_date)}</td>
                     <td><span className="dq-status-badge dq-status-completed">{r.status}</span></td>
                     <td>
-                      <button className="dq-detail-btn" onClick={() => setSelected(selected?.scan_id === r.scan_id ? null : r)}>
-                        {selected?.scan_id === r.scan_id ? 'Close' : 'Details'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button className="dq-detail-btn" onClick={() => setSelected(selected?.scan_id === r.scan_id ? null : r)}>
+                          {selected?.scan_id === r.scan_id ? 'Close' : 'Details'}
+                        </button>
+                        <Link
+                          to={`/lineage?table=${encodeURIComponent(r.table_name)}`}
+                          className="dq-detail-btn"
+                          style={{ textDecoration: 'none', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                          title="View data lineage for this table"
+                        >
+                          <i className="fas fa-stream" style={{ fontSize: 10 }} /> Lineage
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

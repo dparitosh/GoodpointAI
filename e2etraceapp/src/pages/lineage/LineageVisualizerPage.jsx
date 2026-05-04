@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -538,6 +539,8 @@ const LineageVisualizerPage = () => {
 
   return (
     <div className="lineage-visualizer-page">
+      <AgentPipelineStrip activeStageName="etl" />
+
       <header className="page-header">
         <div className="header-content">
           <h1>Data Lineage Explorer</h1>

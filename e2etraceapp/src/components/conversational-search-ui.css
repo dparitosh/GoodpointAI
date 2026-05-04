@@ -127,13 +127,13 @@
 }
 
 .mode-btn:hover:not(:disabled) {
-  border-color: var(--mode-color, var(--dark-bg-primary, #0f172a));
-  color: var(--mode-color, var(--dark-bg-primary, #0f172a));
+  border-color: var(--mode-color, var(--background-color));
+  color: var(--mode-color, var(--background-color));
 }
 
 .mode-btn.active {
-  border-color: var(--mode-color, var(--dark-bg-primary, #0f172a));
-  background: var(--mode-color, var(--dark-bg-primary, #0f172a));
+  border-color: var(--mode-color, var(--background-color));
+  background: var(--mode-color, var(--background-color));
   color: var(--text-on-primary);
 }
 
@@ -173,7 +173,7 @@
 
 .search-input-wrapper input:focus {
   outline: none;
-  border-color: var(--dark-bg-primary, #0f172a);
+  border-color: var(--background-color);
   box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
 }
 
@@ -201,8 +201,8 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0 1.5rem;
-  background: var(--dark-bg-primary, #0f172a);
-  color: var(--dark-text-primary, #f1f5f9);
+  background: var(--background-color);
+  color: var(--text-color);
   border: none;
   border-radius: 8px;
   font-size: 0.95rem;
@@ -213,11 +213,11 @@
 }
 
 .search-btn:hover:not(:disabled) {
-  background: var(--dark-bg-secondary, #1e293b);
+  background: var(--background-color-offset, var(--panel-bg));
 }
 
 .search-btn:disabled {
-  background: var(--dark-bg-tertiary, #334155);
+  background: var(--bg-tertiary);
   cursor: not-allowed;
 }
 

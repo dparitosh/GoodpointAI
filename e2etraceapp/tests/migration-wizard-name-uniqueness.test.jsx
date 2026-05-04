@@ -239,7 +239,18 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
     // First POST succeeds — saves workflow id 'wf-existing'
     vi.mocked(fetch)
       .mockImplementationOnce(() => mockFetchResponse(200, { id: 'wf-existing', name: 'Original Name' }))
-      // Advance to step 2 (step 2 has no fetch on enter, so this is the only extra call)
+      // SmartGuidancePanel mounts on step 2 and calls POST /api/agentic/smart-guidance
+      .mockImplementationOnce(() => mockFetchResponse(200, {
+        recommendation: 'discovery',
+        headline: 'Start with Discovery',
+        reason: 'No data has been scanned yet.',
+        expected_outcome: 'A summary of your files.',
+        next_steps: [],
+        complexity: 'low',
+        estimated_time: '2-5 minutes',
+        tips: [],
+        llm_powered: false,
+      }))
       // Go back to step 1, then PATCH → 409
       .mockImplementationOnce(() =>
         mockFetchResponse(409, { detail: 'A workflow named "Taken Name" already exists.' })

@@ -29,6 +29,7 @@ class SampleRecordsResponse(BaseModel):
     format: str
     records: List[Dict[str, Any]]
     warnings: List[str] = []
+    source_files: List[Dict[str, Any]] = []
 
 
 def _workspace_root() -> Path:
@@ -345,6 +346,71 @@ _API_TYPES = {"rest_api", "odata", "graphql", "api"}
 _PLM_TYPES = {"teamcenter", "3dexperience", "windchill", "aras", "codebeamer", "enovia"}
 _FILE_STORAGE_TYPES = {"s3", "aws_s3", "azure_blob", "azure", "local_folder", "onedrive", "google_drive", "file"}
 
+_EMPTY_VALS = {"", "null", "none", "n/a", "na", "undefined", "nan"}
+
+
+def _infer_type(values: list) -> str:
+    """Infer the dominant field type from a sample of non-null string values."""
+    import re
+    if not values:
+        return "unknown"
+    date_re = re.compile(
+        r"^\d{4}[-/]\d{2}[-/]\d{2}|^\d{2}[-/]\d{2}[-/]\d{4}"
+    )
+    bool_vals = {"true", "false", "yes", "no", "1", "0", "t", "f"}
+    int_count = float_count = date_count = bool_count = 0
+    for v in values:
+        sv = str(v).strip()
+        try:
+            int(sv); int_count += 1; continue
+        except ValueError:
+            pass
+        try:
+            float(sv.replace(",", "")); float_count += 1; continue
+        except ValueError:
+            pass
+        if date_re.match(sv):
+            date_count += 1; continue
+        if sv.lower() in bool_vals:
+            bool_count += 1
+    n = len(values)
+    if date_count / n > 0.6:
+        return "date"
+    if bool_count / n > 0.8:
+        return "boolean"
+    if int_count / n > 0.8:
+        return "integer"
+    if (int_count + float_count) / n > 0.8:
+        return "float"
+    return "string"
+
+
+def _compute_field_stats(keys: list, recs: list) -> list:
+    """Return per-field DQ statistics for a list of records."""
+    stats = []
+    total = len(recs)
+    for field in keys:
+        raw_vals = [r.get(field) for r in recs]
+        non_null = [
+            v for v in raw_vals
+            if v is not None and str(v).strip().lower() not in _EMPTY_VALS
+        ]
+        null_count = total - len(non_null)
+        str_vals = [str(v).strip() for v in non_null]
+        unique_vals = set(str_vals)
+        unique_count = len(unique_vals)
+        completeness = round(len(non_null) / total, 4) if total else 1.0
+        inferred_type = _infer_type(str_vals[:200])
+        stats.append({
+            "field": field,
+            "type": inferred_type,
+            "total": total,
+            "null_count": null_count,
+            "unique_count": unique_count,
+            "completeness": completeness,
+        })
+    return stats
+
 
 async def _sample_system_connection(
     source_id: str,
@@ -397,6 +463,76 @@ async def _sample_system_connection(
         logger.warning("Sampling failed for %s (%s): %s", source_id, conn_type, exc, exc_info=True)
         warnings.append(f"Sampling failed: {str(exc)}")
 
+    # Derive per-file metadata for file-storage sources.
+    # _sample_file_storage appends "Sampled from: <filename>" to warnings for
+    # every file it successfully reads. Group the flat records list by key-set
+    # fingerprint so each file's record count and field set can be surfaced to
+    # the frontend without changing _sample_file_storage's return signature.
+    source_files: List[Dict[str, Any]] = []
+    if conn_type in _FILE_STORAGE_TYPES:
+        sampled_names = [
+            w[len("Sampled from: "):]
+            for w in warnings
+            if w.startswith("Sampled from: ")
+        ]
+        if sampled_names:
+            # Group records by their column-key fingerprint; files with
+            # different schemas land in different buckets.
+            key_groups: Dict[tuple, List[Dict[str, Any]]] = {}
+            for r in records:
+                if isinstance(r, dict):
+                    sig = tuple(sorted(r.keys()))
+                    key_groups.setdefault(sig, []).append(r)
+            groups_list = list(key_groups.items())
+            for i, fname in enumerate(sampled_names):
+                if i < len(groups_list):
+                    keys, recs = groups_list[i]
+                    # Compute cell-level completeness as a quality proxy
+                    total_cells = len(recs) * len(keys)
+                    if total_cells > 0:
+                        _empty = {"", "null", "none", "n/a", "na", "undefined"}
+                        null_cells = sum(
+                            1 for r in recs for v in r.values()
+                            if v is None or (
+                                isinstance(v, str) and v.strip().lower() in _empty
+                            )
+                        )
+                        quality_score = round((total_cells - null_cells) / total_cells, 3)
+                        issues = null_cells
+                    else:
+                        quality_score = None
+                        issues = 0
+                    # Per-field statistics for DQ report
+                    field_stats = _compute_field_stats(list(keys), recs)
+                    # Duplicate row count: rows with identical key-value fingerprint
+                    row_sigs = [tuple(str(r.get(k, "")) for k in keys) for r in recs]
+                    from collections import Counter as _Counter
+                    sig_counts = _Counter(row_sigs)
+                    duplicate_rows = sum(c - 1 for c in sig_counts.values() if c > 1)
+                    source_files.append({
+                        "name": fname,
+                        "type": fname.rsplit(".", 1)[-1].lower() if "." in fname else "file",
+                        "record_count": len(recs),
+                        "field_count": len(keys),
+                        "field_names": list(keys),
+                        "quality_score": quality_score,
+                        "issues": issues,
+                        "duplicate_rows": duplicate_rows,
+                        "field_stats": field_stats,
+                    })
+                else:
+                    source_files.append({
+                        "name": fname,
+                        "type": fname.rsplit(".", 1)[-1].lower() if "." in fname else "file",
+                        "record_count": 0,
+                        "field_count": 0,
+                        "field_names": [],
+                        "quality_score": None,
+                        "issues": 0,
+                        "duplicate_rows": 0,
+                        "field_stats": [],
+                    })
+
     return SampleRecordsResponse(
         source_id=source_id,
         source_type=conn_type,
@@ -404,6 +540,7 @@ async def _sample_system_connection(
         format=fmt,
         records=records,
         warnings=warnings,
+        source_files=source_files,
     )
 
 

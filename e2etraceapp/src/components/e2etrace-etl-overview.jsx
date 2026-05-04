@@ -116,21 +116,15 @@ const ETLOverview = ({
              (data.label && data.label.toLowerCase().includes('destination'));
     });
 
-    // Mock performance metrics (in real app, these would come from monitoring data)
-    const successRate = 95.2 + Math.random() * 4.8;
-    const throughput = Math.floor(1000 + Math.random() * 5000);
-    const latency = Math.floor(50 + Math.random() * 200);
-    const errorRate = 100 - successRate;
-
     return {
       sources: sources.length,
       transformations: transformations.length,
       destinations: destinations.length,
       pipelines: pipelineMetrics.totalPipelines,
-      successRate: successRate.toFixed(1),
-      throughput,
-      latency,
-      errorRate: errorRate.toFixed(1),
+      successRate: null,
+      throughput: null,
+      latency: null,
+      errorRate: null,
       pipelineMetrics
     };
   }, [graphData]);
@@ -167,9 +161,9 @@ const ETLOverview = ({
     if (!cytoscapeRef?.current) return;
 
     highlightPerformanceIssues(cytoscapeRef.current, {
-      maxLatency: etlMetrics.latency * 1.5,
-      minThroughput: etlMetrics.throughput * 0.5,
-      maxErrorRate: parseFloat(etlMetrics.errorRate) + 2
+      maxLatency: etlMetrics.latency != null ? etlMetrics.latency * 1.5 : null,
+      minThroughput: etlMetrics.throughput != null ? etlMetrics.throughput * 0.5 : null,
+      maxErrorRate: etlMetrics.errorRate != null ? parseFloat(etlMetrics.errorRate) + 2 : null
     });
   };
 
@@ -332,31 +326,27 @@ const ETLOverview = ({
           <div className="metrics-grid">
             <MetricCard
               title="Success Rate"
-              value={`${etlMetrics.successRate}%`}
-              color={parseFloat(etlMetrics.successRate) > 95 ? '#28a745' : '#ffc107'}
+              value={etlMetrics.successRate != null ? `${etlMetrics.successRate}%` : '—'}
+              color={etlMetrics.successRate != null && parseFloat(etlMetrics.successRate) > 95 ? '#28a745' : '#ffc107'}
               subtitle="Last 24 Hours"
-              trend={2.1}
             />
             <MetricCard
               title="Throughput"
-              value={`${etlMetrics.throughput.toLocaleString()}`}
+              value={etlMetrics.throughput != null ? etlMetrics.throughput.toLocaleString() : '—'}
               color="#007bff"
               subtitle="Records/Hour"
-              trend={5.3}
             />
             <MetricCard
               title="Avg Latency"
-              value={`${etlMetrics.latency}ms`}
-              color={etlMetrics.latency < 100 ? '#28a745' : '#ffc107'}
+              value={etlMetrics.latency != null ? `${etlMetrics.latency}ms` : '—'}
+              color={etlMetrics.latency != null && etlMetrics.latency < 100 ? '#28a745' : '#ffc107'}
               subtitle="Processing Time"
-              trend={-1.2}
             />
             <MetricCard
               title="Error Rate"
-              value={`${etlMetrics.errorRate}%`}
-              color={parseFloat(etlMetrics.errorRate) < 5 ? '#28a745' : '#dc3545'}
+              value={etlMetrics.errorRate != null ? `${etlMetrics.errorRate}%` : '—'}
+              color={etlMetrics.errorRate != null && parseFloat(etlMetrics.errorRate) < 5 ? '#28a745' : '#dc3545'}
               subtitle="Failed Records"
-              trend={-0.8}
             />
             <MetricCard
               title="Selected"

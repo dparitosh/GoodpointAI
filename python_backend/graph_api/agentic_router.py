@@ -7,6 +7,8 @@ Following AGENTIC_REFACTORING_GUIDE.md principles
 
 import logging
 import uuid
+import re
+import json as _json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -59,6 +61,7 @@ class TaskType(str, Enum):
     SCHEMA_CORRELATION = "schema_correlation"
     PLM_MIGRATION_ORCHESTRATION = "plm_migration_orchestration"
     REPORT_GENERATION = "report_generation"
+    SMART_GUIDANCE = "smart_guidance"
 
 # ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
 
@@ -100,6 +103,31 @@ class ChatRequest(BaseModel):
     context: Dict[str, Any] = {}
     session_id: Optional[str] = None
     intent: Optional[str] = None
+    ui_context: Dict[str, Any] = {}
+
+
+class SmartGuidanceRequest(BaseModel):
+    """Dataset context used to generate a business-friendly first-step recommendation."""
+    source_name: Optional[str] = None
+    source_id: Optional[str] = None
+    file_count: Optional[int] = None
+    file_types: Optional[List[str]] = None
+    previous_runs: bool = False
+    user_role: str = "business"  # "business" | "technical"
+    llm_provider: Optional[str] = None
+
+
+class SmartGuidanceResponse(BaseModel):
+    """Business-friendly recommendation for what to do first with the data."""
+    recommendation: str          # "discovery" | "profiling" | "quality"
+    headline: str
+    reason: str
+    expected_outcome: str
+    next_steps: List[str] = []
+    complexity: str = "low"      # "low" | "medium" | "high"
+    estimated_time: str = ""
+    tips: List[str] = []
+    llm_powered: bool = True
 
 class ChatResponse(BaseModel):
     message: str
@@ -337,6 +365,153 @@ async def process_chat_message(
     except Exception as e:
         logger.error("Chat processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
+
+
+@router.post("/smart-guidance", response_model=SmartGuidanceResponse)
+async def get_smart_guidance(req: SmartGuidanceRequest):
+    """
+    Return a business-friendly first-step recommendation based on the user's dataset context.
+
+    Routes through ChatCoordinator (MCP) when available; falls back to direct LLM call
+    so the endpoint is useful even if the agent cluster isn't running.
+    """
+    session_id = f"guidance_{int(datetime.now().timestamp())}"
+
+    guidance_payload: Dict[str, Any] = {
+        "message": "What should I do first with my data?",
+        "source_name":   req.source_name or req.source_id or "Not specified",
+        "source_id":     req.source_id,
+        "file_count":    req.file_count,
+        "file_types":    ", ".join(req.file_types) if req.file_types else "Unknown",
+        "previous_runs": req.previous_runs,
+        "user_role":     req.user_role,
+        **({"llm_provider": req.llm_provider} if req.llm_provider else {}),
+    }
+
+    # ── Try ChatCoordinator via MCP ────────────────────────────────────────
+    try:
+        chat_task = AgenticTask(
+            type=TaskType.SMART_GUIDANCE,
+            required_capabilities=["process_natural_language"],
+            payload=guidance_payload,
+        )
+        result_dict = await mcp_client.submit_task(chat_task.model_dump(mode="json"))
+        result = AgenticTaskResult(**result_dict)
+        if result.success and result.result.get("smart_guidance"):
+            g = result.result["smart_guidance"]
+            return SmartGuidanceResponse(
+                recommendation=g.get("recommendation", "discovery"),
+                headline=g.get("headline", "Start with Discovery"),
+                reason=g.get("reason", ""),
+                expected_outcome=g.get("expected_outcome", ""),
+                next_steps=g.get("next_steps", []),
+                complexity=g.get("complexity", "low"),
+                estimated_time=g.get("estimated_time", ""),
+                tips=g.get("tips", []),
+                llm_powered=True,
+            )
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout):
+        pass  # fall through to direct LLM
+    except Exception as e:
+        logger.warning("Smart guidance via MCP failed: %s", e)
+
+    # ── Direct LLM fallback (no MCP required) ─────────────────────────────
+    _GUIDANCE_PROMPT = (
+        "You are a friendly data assistant. "
+        "Given a user's dataset context, recommend the single best first step "
+        "from: discovery (scan files), profiling (understand columns), quality (fix issues). "
+        "Use plain business language. Output strict JSON only:\n"
+        '{"recommendation":"discovery|profiling|quality","headline":"...","reason":"...","expected_outcome":"...",'
+        '"next_steps":[],"complexity":"low|medium|high","estimated_time":"...","tips":[]}'
+    )
+    user_msg = (
+        f"Source: {req.source_name or 'not specified'}. "
+        f"File count: {req.file_count or 'unknown'}. "
+        f"File types: {', '.join(req.file_types) if req.file_types else 'unknown'}. "
+        f"Previous runs: {'yes' if req.previous_runs else 'no'}."
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            provider = req.llm_provider or "openai"
+            resp = await client.post(
+                "http://127.0.0.1:8011/api/llm/chat",
+                params={"provider": provider},
+                json={
+                    "messages": [
+                        {"role": "system", "content": _GUIDANCE_PROMPT},
+                        {"role": "user",   "content": user_msg},
+                    ],
+                    "temperature": 0.2,
+                    "max_tokens": 512,
+                },
+            )
+            if resp.is_success:
+                raw = resp.json().get("response", "")
+                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                m = re.search(r"\{.*\}", raw, re.DOTALL)
+                if m:
+                    g = _json.loads(m.group(0))
+                    return SmartGuidanceResponse(
+                        recommendation=g.get("recommendation", "discovery"),
+                        headline=g.get("headline", "Start with Discovery"),
+                        reason=g.get("reason", ""),
+                        expected_outcome=g.get("expected_outcome", ""),
+                        next_steps=g.get("next_steps", []),
+                        complexity=g.get("complexity", "low"),
+                        estimated_time=g.get("estimated_time", ""),
+                        tips=g.get("tips", []),
+                        llm_powered=True,
+                    )
+    except Exception as e:
+        logger.warning("Smart guidance LLM fallback failed: %s", e)
+
+    # ── Rule-based last-resort fallback ───────────────────────────────────
+    if not req.previous_runs:
+        return SmartGuidanceResponse(
+            recommendation="discovery",
+            headline="Start with Discovery",
+            reason=(
+                "Your data hasn't been scanned yet. Discovery gives you a quick, "
+                "safe look at what files you have and flags any obvious issues."
+            ),
+            expected_outcome=(
+                "A clear summary of your files, record counts, and initial data issues."
+            ),
+            next_steps=[
+                "Click 'Run Discovery' to scan your data",
+                "Review the insights that appear",
+                "Accept discovery and move to Profiling",
+            ],
+            complexity="low",
+            estimated_time="2-5 minutes",
+            tips=[
+                "Discovery is read-only — it won't change your data",
+                "You can re-run it any time to refresh the results",
+            ],
+            llm_powered=False,
+        )
+    return SmartGuidanceResponse(
+        recommendation="profiling",
+        headline="Run Data Profiling",
+        reason=(
+            "Discovery is done. Profiling goes deeper — it reads each column "
+            "and checks for patterns, blanks, and unexpected values."
+        ),
+        expected_outcome=(
+            "A column-by-column quality report and automatic classification of your data."
+        ),
+        next_steps=[
+            "Click 'Run Semantic Analysis'",
+            "Review the column quality report",
+            "Proceed to Field Mapping",
+        ],
+        complexity="low",
+        estimated_time="3-8 minutes",
+        tips=["Profiling uses your existing discovery results — no extra setup needed"],
+        llm_powered=False,
+    )
+
 
 @router.get("/status", response_model=SystemStatus)
 async def get_system_status():
@@ -624,6 +799,156 @@ async def list_discovery_reports(
 
 # ── Semantic Profile via DataProfilerAgent (MCP) ───────────────────────────
 
+# ---------------------------------------------------------------------------
+# Heuristic column-name rules used as a fallback when the MCP agent cluster
+# (DataProfilerAgent port 8031) is not reachable.
+# ---------------------------------------------------------------------------
+_ROLE_PATTERNS: list[tuple[str, str]] = [
+    # Identifiers
+    (r"(^|_)(id|key|pk|code|num|number|ref|sku|serial|uuid|guid)($|_)", "identifier"),
+    # Timestamps / dates
+    (r"(^|_)(date|datetime|timestamp|time|at|on|created|updated|modified|deleted)($|_)", "timestamp"),
+    # Measures / quantities
+    (r"(^|_)(qty|quantity|count|cnt|amount|total|sum|weight|size|length|width|height|volume|price|cost|value)($|_)", "measure"),
+    # Categorical / status
+    (r"(^|_)(type|kind|category|class|status|state|flag|level|grade|tier|priority)($|_)", "category"),
+    # Textual labels
+    (r"(^|_)(name|title|label|description|desc|text|notes|remarks|comment|summary)($|_)", "label"),
+    # Relationships / foreign keys  (must come after identifier)
+    (r"(^|_)(parent|child|owner|source|target|from|to|relation|link|ref_id|fk)($|_)", "relationship"),
+    # File / path / URL
+    (r"(^|_)(path|url|uri|file|filename|dir|folder|location|endpoint)($|_)", "path"),
+    # Boolean flags
+    (r"(^|_)(is_|has_|can_|allow|enable|active|deleted|archived)", "flag"),
+    # Currency
+    (r"(^|_)(price|cost|revenue|budget|charge|fee|rate|discount|tax|profit|loss)($|_)", "currency"),
+]
+
+_ENTITY_PATTERNS: list[tuple[str, str]] = [
+    (r"(^|_)(part|component|item|article|product|assembly|assy)($|_)", "Part"),
+    (r"(^|_)(bom|bill|structure|breakdown)($|_)", "BOM"),
+    (r"(^|_)(supplier|vendor|manufacturer|mfr|mfg|sourcing)($|_)", "Supplier"),
+    (r"(^|_)(doc|document|drawing|spec|specification|attachment|file)($|_)", "Document"),
+    (r"(^|_)(eco|ecn|change|cr|deviation|waiver|rfc)($|_)", "ECO"),
+    (r"(^|_)(rev|revision|version|ver|release|lifecycle|phase)($|_)", "Revision"),
+    (r"(^|_)(test|result|measurement|inspection|defect|failure|pass|fail)($|_)", "TestResult"),
+    (r"(^|_)(workflow|task|process|step|stage|activity|job|work)($|_)", "Workflow"),
+]
+
+# Well-known canonical names (source column → PLM canonical)
+_CANONICAL: dict[str, str] = {
+    "part_number": "part_id", "partnum": "part_id", "pn": "part_id",
+    "component_id": "part_id", "item_id": "part_id", "item_number": "part_id",
+    "bom_id": "bom_id", "bill_of_materials_id": "bom_id",
+    "parent_part": "parent_part_id", "parent_id": "parent_part_id",
+    "child_part": "child_part_id", "child_id": "child_part_id",
+    "supplier_id": "supplier_id", "vendor_id": "supplier_id",
+    "rev": "revision", "revision_code": "revision",
+    "created": "created_at", "created_date": "created_at",
+    "updated": "updated_at", "modified": "updated_at", "modified_date": "updated_at",
+    "qty": "quantity", "quant": "quantity",
+    "desc": "description",
+}
+
+
+def _classify_column(col: str) -> tuple[str, str | None, float]:
+    """Return (semantic_role, entity_hint, confidence) for a column name."""
+    lower = col.lower()
+    role = "unknown"
+    role_conf = 0.45
+    for pattern, candidate_role in _ROLE_PATTERNS:
+        if re.search(pattern, lower):
+            role = candidate_role
+            role_conf = 0.78
+            break
+
+    entity_hint: str | None = None
+    for pattern, entity in _ENTITY_PATTERNS:
+        if re.search(pattern, lower):
+            entity_hint = entity
+            break
+
+    canonical = _CANONICAL.get(lower)
+    # Slightly boost confidence when we have a known canonical mapping
+    if canonical:
+        role_conf = min(role_conf + 0.10, 0.92)
+
+    return role, entity_hint, role_conf
+
+
+def _heuristic_semantic_profile(req: "SemanticProfileRequest") -> dict:
+    """
+    Local heuristic fallback for semantic-profile.
+    Derives column semantics purely from column-name pattern rules so the
+    wizard gets meaningful results even when the MCP agent cluster is offline.
+    """
+    column_semantics: list[dict] = []
+    seen: set[str] = set()
+
+    # Collect columns from file_profiles
+    for fp in req.file_profiles:
+        for col_info in fp.get("columns", []):
+            col = col_info.get("name") or col_info.get("column") or ""
+            if not col or col in seen:
+                continue
+            seen.add(col)
+            role, entity_hint, conf = _classify_column(col)
+            entry: dict = {
+                "column": col,
+                "semantic_role": role,
+                "confidence": round(conf, 2),
+                "source": "heuristic",
+            }
+            canonical = _CANONICAL.get(col.lower())
+            if canonical:
+                entry["canonical_name"] = canonical
+            if entity_hint:
+                entry["entity_hint"] = entity_hint
+            column_semantics.append(entry)
+
+    # Also collect columns from column_corpus if no file_profiles
+    if not column_semantics:
+        for cc in req.column_corpus:
+            col = cc.get("name") or cc.get("column") or ""
+            if not col or col in seen:
+                continue
+            seen.add(col)
+            role, entity_hint, conf = _classify_column(col)
+            entry = {"column": col, "semantic_role": role, "confidence": round(conf, 2), "source": "heuristic"}
+            canonical = _CANONICAL.get(col.lower())
+            if canonical:
+                entry["canonical_name"] = canonical
+            if entity_hint:
+                entry["entity_hint"] = entity_hint
+            column_semantics.append(entry)
+
+    # Derive top entity class from the most frequent entity_hint
+    entity_counts: dict[str, int] = {}
+    for cs in column_semantics:
+        if cs.get("entity_hint"):
+            entity_counts[cs["entity_hint"]] = entity_counts.get(cs["entity_hint"], 0) + 1
+    top_entity = max(entity_counts, key=entity_counts.get) if entity_counts else None
+
+    high_conf = sum(1 for cs in column_semantics if cs["confidence"] >= 0.75)
+
+    semantic_insights = {
+        "column_semantics": column_semantics,
+        "entity_classifications": [
+            {"entity_class": k, "column_count": v, "confidence": round(0.6 + 0.1 * min(v, 4), 2)}
+            for k, v in sorted(entity_counts.items(), key=lambda x: -x[1])
+        ],
+        "cross_file_relationships": [],
+        "summary": {
+            "total_columns_analysed": len(column_semantics),
+            "high_confidence_semantics": high_conf,
+            "top_entity_class": top_entity,
+            "relationship_count": 0,
+            "source": "heuristic",
+        },
+    }
+    return {"result": {"semantic_insights": semantic_insights}, "source": "heuristic"}
+
+
 class SemanticProfileRequest(BaseModel):
     """
     Request body for POST /api/agentic/semantic-profile.
@@ -695,14 +1020,10 @@ async def semantic_profile(
     try:
         result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
     except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout, Exception) as mcp_err:
-        logger.error("Semantic profile task failed: %s", mcp_err)
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "MCP agent cluster is not running. Start the MCP server (and DataProfilerAgent "
-                f"on port 8031) to run semantic profiling. Details: {mcp_err}"
-            ),
-        ) from mcp_err
+        logger.warning(
+            "MCP agent unavailable for semantic-profile, using heuristic fallback: %s", mcp_err
+        )
+        result_dict = _heuristic_semantic_profile(req)
 
     # Persist to unified reports hub if requested
     if req.save_report:
@@ -871,6 +1192,250 @@ def _evaluate_dq_rules_on_profile(result_dict: dict, db: Session) -> list[dict]:
             })
 
     return violations
+
+
+# ── Agent Director: recommended actions from discovery state ──────────────
+
+def _compute_recommended_actions(
+    *,
+    staged_from: str,
+    soda: dict,
+    dq_violations: list,
+    field_count: int,
+    issues_count: int,  # reserved for future threshold logic
+) -> list[dict]:
+    """
+    Derive prioritised, actionable recommendations from the discovery result.
+
+    Rules are evaluated purely in-process (no MCP required) so the wizard
+    always gets a concrete action plan regardless of agent-cluster availability.
+
+    Returns a list sorted by ascending priority (1 = highest urgency):
+      { priority, action, label, reason, detail, severity }
+    """
+    actions: list[dict] = []
+
+    # ── Source-registration / reachability issues ──────────────────────────
+    if staged_from == "not_registered":
+        actions.append({
+            "priority": 1,
+            "action": "register_source",
+            "label": "Register data source",
+            "reason": "Source is not registered — no sample data was collected.",
+            "detail": (
+                "Go to Admin → Data Sources and add this source, then re-run discovery "
+                "to collect a live sample."
+            ),
+            "severity": "warning",
+        })
+    elif staged_from == "unreachable":
+        actions.append({
+            "priority": 1,
+            "action": "fix_connection",
+            "label": "Fix source connection",
+            "reason": "Source could not be reached during sampling.",
+            "detail": "Check Admin → Data Sources → connection settings and re-run.",
+            "severity": "warning",
+        })
+
+    # ── No schema / no fields ─────────────────────────────────────────────
+    if field_count == 0:
+        actions.append({
+            "priority": 2,
+            "action": "check_source_schema",
+            "label": "No fields discovered",
+            "reason": "Schema could not be inferred — no records were sampled.",
+            "detail": "Ensure the source has data and is accessible, then re-run discovery.",
+            "severity": "warning",
+        })
+
+    # ── DQ rule violations ────────────────────────────────────────────────
+    critical = [v for v in dq_violations if v.get("severity") in ("critical", "error")]
+    warnings_ = [v for v in dq_violations if v.get("severity") not in ("critical", "error")]
+    if critical:
+        names = ", ".join(v["rule_name"] for v in critical[:3])
+        actions.append({
+            "priority": 2,
+            "action": "resolve_dq_violations",
+            "label": f"Fix {len(critical)} critical DQ violation(s)",
+            "reason": f"Failed rules: {names}.",
+            "detail": "Resolve data quality violations before mapping to avoid migration failures.",
+            "severity": "error",
+        })
+    if warnings_:
+        actions.append({
+            "priority": 3,
+            "action": "review_dq_warnings",
+            "label": f"Review {len(warnings_)} DQ warning(s)",
+            "reason": "Some quality rules are at warning level.",
+            "detail": "Address warnings for a cleaner migration.",
+            "severity": "warning",
+        })
+
+    # ── SODA completeness below threshold ────────────────────────────────
+    overall_score = float(soda.get("overall_score") or 0)
+    soda_status = str(soda.get("status") or "")
+    if soda_status == "warn" or (soda_status and overall_score < 0.7):
+        actions.append({
+            "priority": 3,
+            "action": "improve_completeness",
+            "label": "Improve data completeness",
+            "reason": f"Quality score {round(overall_score * 100)}% is below the 70% threshold.",
+            "detail": "Fill missing required fields in the source before executing migration.",
+            "severity": "warning",
+        })
+
+    # ── Happy-path: proceed to mapping ────────────────────────────────────
+    if staged_from == "source" and field_count > 0 and not critical:
+        actions.append({
+            "priority": 4,
+            "action": "proceed_to_mapping",
+            "label": "Proceed to Field Mapping",
+            "reason": (
+                f"{field_count} field(s) discovered with pre-populated AI mapping suggestions."
+            ),
+            "detail": "Accept discovery and fine-tune field mappings in the next step.",
+            "severity": "success",
+        })
+
+    actions.sort(key=lambda a: a["priority"])
+    return actions
+
+
+# ── Discovery Ingest: agent-director endpoint (works without MCP) ─────────
+
+class DiscoveryIngestRequest(BaseModel):
+    """Payload from the Migration Wizard after its local discovery pass."""
+    run_id: str
+    source_id: Optional[str] = None
+    source_system_name: Optional[str] = None
+    staged_from: str = "none"   # source | not_registered | unreachable | none
+    inferred_source_fields: List[str] = Field(default_factory=list)
+    soda_result: Optional[Dict[str, Any]] = None
+    issues_count: int = 0
+    issues_preview: List[Dict[str, Any]] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+
+
+@router.post(
+    "/discovery/ingest",
+    summary="Persist wizard discovery results and return agent-directed actions + insights",
+)
+async def ingest_discovery_results(
+    req: DiscoveryIngestRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    The 'Agent Director' endpoint for the Migration Wizard.
+
+    Works entirely without MCP (heuristic profiling + local DQ rule evaluation).
+    Called at the end of runDiscovery so the wizard gets:
+      - report_id — referenced later by acceptDiscovery → infer-mappings
+      - semantic_insights — column roles, entity classifications (heuristic)
+      - mapping_suggestions — canonical field mappings enriched by profiler
+      - dq_violations — DB-backed DQ rules evaluated against the profile
+      - recommended_actions — prioritised, actionable next steps
+    """
+    # ── 1. Heuristic semantic profile from field list ─────────────────────
+    file_profiles: list[dict] = []
+    if req.inferred_source_fields:
+        file_profiles = [{
+            "file": req.source_system_name or "source",
+            "columns": [{"name": f} for f in req.inferred_source_fields],
+        }]
+
+    profile_req = SemanticProfileRequest(
+        source_name=req.source_system_name or req.source_id or "wizard-discovery",
+        file_profiles=file_profiles,
+        save_report=False,
+    )
+    profile_result = _heuristic_semantic_profile(profile_req)
+    semantic_insights: dict = (
+        profile_result.get("result", {}).get("semantic_insights", {})
+    )
+    column_semantics: list[dict] = semantic_insights.get("column_semantics", [])
+
+    # ── 2. Mapping suggestions enriched with canonical names ──────────────
+    canon_map = {
+        cs["column"]: cs["canonical_name"]
+        for cs in column_semantics
+        if cs.get("canonical_name")
+    }
+    mapping_suggestions: list[dict] = []
+    for sf in req.inferred_source_fields:
+        suggestion = _infer_mapping_for_field(sf)
+        # Boost target field with profiler's canonical name when PLM synonym didn't match
+        if sf in canon_map and suggestion.get("confidence") != "High":
+            suggestion["targetField"] = canon_map[sf]
+            suggestion["confidence"] = "Medium"
+            suggestion["_source"] = "heuristic_canonical"
+        mapping_suggestions.append(suggestion)
+
+    # ── 3. DQ rule evaluation against a synthetic profile ─────────────────
+    soda = req.soda_result or {}
+    col_stats: dict[str, dict] = {
+        cs["column"]: {"null_rate": 0.05, "semantic_role": cs.get("semantic_role")}
+        for cs in column_semantics
+    }
+    synthetic_result: dict = {
+        "result": {
+            "files": [{
+                "file": req.source_system_name or "source",
+                "row_count": int(soda.get("total") or 0),
+                "profile": col_stats,
+            }]
+        }
+    }
+    dq_violations = _evaluate_dq_rules_on_profile(synthetic_result, db)
+
+    # ── 4. Agent director: compute recommended actions ─────────────────────
+    recommended_actions = _compute_recommended_actions(
+        staged_from=req.staged_from,
+        soda=soda,
+        dq_violations=dq_violations,
+        field_count=len(req.inferred_source_fields),
+        issues_count=req.issues_count,
+    )
+
+    # ── 5. Persist DiscoveryReport so infer-mappings can use it ───────────
+    label = req.source_system_name or req.source_id or f"wizard-{req.run_id}"
+    report_id: Optional[str] = None
+    try:
+        report = DiscoveryReport(
+            report_id=str(uuid.uuid4()),
+            label=label,
+            source_id=req.source_id,
+            folder_path=None,
+            total_files=1 if req.inferred_source_fields else 0,
+            total_size_bytes=0,
+            result={
+                "run_id": req.run_id,
+                "staged_from": req.staged_from,
+                "result": {
+                    "inferred_schema": {f: "string" for f in req.inferred_source_fields},
+                    "files": synthetic_result["result"]["files"],
+                },
+                "soda_result": soda,
+            },
+        )
+        db.add(report)
+        db.commit()
+        db.refresh(report)
+        report_id = report.report_id
+        logger.info("Discovery ingest report saved: %s (run=%s)", report_id, req.run_id)
+    except Exception as persist_err:
+        logger.warning("Failed to persist discovery ingest report: %s", persist_err)
+        db.rollback()
+
+    return {
+        "report_id": report_id,
+        "run_id": req.run_id,
+        "semantic_insights": semantic_insights,
+        "mapping_suggestions": mapping_suggestions,
+        "dq_violations": dq_violations,
+        "dq_violations_count": len(dq_violations),
+        "recommended_actions": recommended_actions,
+    }
 
 
 @router.get(

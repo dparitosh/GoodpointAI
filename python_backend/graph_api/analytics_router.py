@@ -705,159 +705,73 @@ Provide a concise, helpful response:"""
         return None, query_type
 
 
-def _get_fallback_query(query_lower: str, datasource: str) -> tuple[str, list[dict]]:
-    """Generate fallback query and mock results based on datasource and query pattern."""
-    
+def _get_fallback_query(query_lower: str, datasource: str) -> str:
+    """Generate a template query based on datasource and query pattern (pattern-match fallback when LLM is unavailable)."""
+
     if datasource == "postgres":
         if "workflow" in query_lower:
             if "count" in query_lower or "how many" in query_lower:
-                return "SELECT COUNT(*) as total_workflows FROM workflows", [{"total_workflows": 47}]
+                return "SELECT COUNT(*) as total_workflows FROM workflows"
             elif "status" in query_lower or "group" in query_lower:
-                return "SELECT status, COUNT(*) as count FROM workflows GROUP BY status ORDER BY count DESC", [
-                    {"status": "completed", "count": 32},
-                    {"status": "running", "count": 8},
-                    {"status": "pending", "count": 5},
-                    {"status": "failed", "count": 2}
-                ]
+                return "SELECT status, COUNT(*) as count FROM workflows GROUP BY status ORDER BY count DESC"
             else:
-                return "SELECT id, name, status, created_at FROM workflows ORDER BY created_at DESC LIMIT 10", [
-                    {"id": "wf_001", "name": "ETL Pipeline A", "status": "completed", "created_at": "2026-01-09T10:00:00"},
-                    {"id": "wf_002", "name": "Data Validation", "status": "running", "created_at": "2026-01-09T09:30:00"}
-                ]
+                return "SELECT id, name, status, created_at FROM workflows ORDER BY created_at DESC LIMIT 10"
         elif "migration" in query_lower or "quality" in query_lower:
-            return "SELECT AVG(quality_score) as avg_quality, SUM(rows_migrated) as total_rows FROM migration_quality", [
-                {"avg_quality": 0.94, "total_rows": 125000, "job_count": 15}
-            ]
+            return "SELECT AVG(quality_score) as avg_quality, SUM(rows_migrated) as total_rows FROM migration_quality"
         elif "upload" in query_lower or "file" in query_lower:
-            return "SELECT COUNT(*) as total_uploads, ROUND(AVG(file_size_mb)::numeric, 2) as avg_size_mb FROM upload_metrics", [
-                {"total_uploads": 156, "avg_size_mb": 24.7}
-            ]
+            return "SELECT COUNT(*) as total_uploads, ROUND(AVG(file_size_mb)::numeric, 2) as avg_size_mb FROM upload_metrics"
         elif "health" in query_lower or "service" in query_lower:
-            return "SELECT service_name, status, ROUND(AVG(response_time_ms)::numeric, 2) as avg_response_ms FROM service_health GROUP BY service_name, status", [
-                {"service_name": "api_gateway", "status": "healthy", "avg_response_ms": 42.5},
-                {"service_name": "neo4j", "status": "healthy", "avg_response_ms": 15.2},
-                {"service_name": "postgres", "status": "healthy", "avg_response_ms": 8.1}
-            ]
+            return "SELECT service_name, status, ROUND(AVG(response_time_ms)::numeric, 2) as avg_response_ms FROM service_health GROUP BY service_name, status"
         elif "processing" in query_lower or "time" in query_lower:
-            return "SELECT job_type, status, COUNT(*) as count FROM processing_jobs GROUP BY job_type, status", [
-                {"job_type": "etl", "status": "completed", "count": 45},
-                {"job_type": "validation", "status": "completed", "count": 38}
-            ]
+            return "SELECT job_type, status, COUNT(*) as count FROM processing_jobs GROUP BY job_type, status"
         elif "table" in query_lower and "size" in query_lower:
-            return "SELECT relname as table_name, pg_size_pretty(pg_total_relation_size(relid)) as total_size FROM pg_stat_user_tables", [
-                {"table_name": "workflows", "total_size": "12 MB", "row_count": 1250},
-                {"table_name": "upload_metrics", "total_size": "8 MB", "row_count": 3400}
-            ]
-    
+            return "SELECT relname as table_name, pg_size_pretty(pg_total_relation_size(relid)) as total_size FROM pg_stat_user_tables"
+
     elif datasource == "neo4j":
         if "lineage" in query_lower or "node" in query_lower:
-            return "MATCH (n:LineageNode) RETURN n.name as name, n.type as type, count(*) as count LIMIT 20", [
-                {"name": "Source_DB", "type": "database", "count": 15},
-                {"name": "Transform_ETL", "type": "transformation", "count": 8}
-            ]
+            return "MATCH (n:LineageNode) RETURN n.name as name, n.type as type, count(*) as count LIMIT 20"
         elif "part" in query_lower:
-            return "MATCH (p:Part) RETURN p.part_number as part_number, p.name as name, p.revision as revision LIMIT 20", [
-                {"part_number": "000678", "name": "SKF Bearing", "revision": "A"},
-                {"part_number": "000679", "name": "Motor Assembly", "revision": "B"}
-            ]
+            return "MATCH (p:Part) RETURN p.part_number as part_number, p.name as name, p.revision as revision LIMIT 20"
         elif "relationship" in query_lower or "connection" in query_lower:
-            return "MATCH (a)-[r]->(b) RETURN type(r) as relationship, count(*) as count ORDER BY count DESC LIMIT 10", [
-                {"relationship": "DEPENDS_ON", "count": 45},
-                {"relationship": "CONTAINS", "count": 32}
-            ]
+            return "MATCH (a)-[r]->(b) RETURN type(r) as relationship, count(*) as count ORDER BY count DESC LIMIT 10"
         else:
-            return "MATCH (n) RETURN labels(n)[0] as label, count(*) as count ORDER BY count DESC LIMIT 10", [
-                {"label": "LineageNode", "count": 150},
-                {"label": "Part", "count": 36}
-            ]
-    
+            return "MATCH (n) RETURN labels(n)[0] as label, count(*) as count ORDER BY count DESC LIMIT 10"
+
     elif datasource == "opensearch":
         if "part" in query_lower or "plm" in query_lower:
-            return '{"query": {"match_all": {}}, "size": 20, "_source": ["part_number", "name", "description"]}', [
-                {"part_number": "000678", "name": "SKF Bearing", "description": "Deep groove ball bearing"},
-                {"part_number": "000679", "name": "Motor Mount", "description": "Aluminum motor mounting bracket"}
-            ]
+            return '{"query": {"match_all": {}}, "size": 20, "_source": ["part_number", "name", "description"]}'
         elif "document" in query_lower or "search" in query_lower:
-            return '{"query": {"match": {"content": "' + query_lower.split()[-1] + '"}}, "size": 10}', [
-                {"title": "Document 1", "content": "Sample content...", "score": 0.95},
-                {"title": "Document 2", "content": "Related content...", "score": 0.87}
-            ]
+            return '{"query": {"match": {"content": "' + query_lower.split()[-1] + '"}}, "size": 10}'
         else:
-            return '{"query": {"match_all": {}}, "size": 10, "aggs": {"by_index": {"terms": {"field": "_index"}}}}', [
-                {"index": "plm_parts", "doc_count": 22},
-                {"index": "plm_assemblies", "doc_count": 3}
-            ]
-    
+            return '{"query": {"match_all": {}}, "size": 10, "aggs": {"by_index": {"terms": {"field": "_index"}}}}'
+
     elif datasource == "soda":
         if "quality" in query_lower or "check" in query_lower:
-            return """checks for workflows:
-  - row_count > 0
-  - missing_count(status) = 0
-  - invalid_percent(status) < 5%""", [
-                {"check": "row_count > 0", "table": "workflows", "status": "passed", "value": 47},
-                {"check": "missing_count(status) = 0", "table": "workflows", "status": "passed", "value": 0}
-            ]
+            return "checks for workflows:\n  - row_count > 0\n  - missing_count(status) = 0\n  - invalid_percent(status) < 5%"
         elif "freshness" in query_lower:
-            return """checks for workflows:
-  - freshness(created_at) < 1d""", [
-                {"check": "freshness(created_at) < 1d", "table": "workflows", "status": "passed", "value": "2h"}
-            ]
+            return "checks for workflows:\n  - freshness(created_at) < 1d"
         else:
-            return """checks for upload_metrics:
-  - row_count > 0
-  - duplicate_count(file_name) < 10""", [
-                {"check": "row_count > 0", "table": "upload_metrics", "status": "passed", "value": 156}
-            ]
-    
+            return "checks for upload_metrics:\n  - row_count > 0\n  - duplicate_count(file_name) < 10"
+
     elif datasource == "graphql":
         if "workflow" in query_lower:
-            return """query {
-  workflows(limit: 10) {
-    id
-    name
-    status
-    createdAt
-  }
-}""", [
-                {"id": "wf_001", "name": "ETL Pipeline", "status": "COMPLETED", "createdAt": "2026-01-09"},
-                {"id": "wf_002", "name": "Validation", "status": "RUNNING", "createdAt": "2026-01-09"}
-            ]
+            return "query {\n  workflows(limit: 10) {\n    id\n    name\n    status\n    createdAt\n  }\n}"
         elif "source" in query_lower or "connection" in query_lower:
-            return """query {
-  dataSources {
-    id
-    name
-    type
-  }
-}""", [
-                {"id": "ds_001", "name": "PostgreSQL Main", "type": "POSTGRESQL"},
-                {"id": "ds_002", "name": "Neo4j Graph", "type": "NEO4J"}
-            ]
+            return "query {\n  dataSources {\n    id\n    name\n    type\n  }\n}"
         else:
-            return """query {
-  migrationJobs(status: COMPLETED) {
-    id
-    sourceTable
-    targetTable
-    rowsMigrated
-  }
-}""", [
-                {"id": "mj_001", "sourceTable": "legacy_users", "targetTable": "users", "rowsMigrated": 5000}
-            ]
-    
+            return "query {\n  migrationJobs(status: COMPLETED) {\n    id\n    sourceTable\n    targetTable\n    rowsMigrated\n  }\n}"
+
     else:  # ollama
-        return f"Analysis of: {query_lower}", [
-            {"response": "Based on your query, I recommend checking the workflows table for status distribution and the service_health table for system performance metrics."}
-        ]
-    
-    return f"-- Unable to generate query for: {query_lower}", []
+        return f"-- Natural language query: {query_lower}"
+
+    return f"-- Unable to generate query for: {query_lower}"
 
 
 @router.post("/nlq")
 async def natural_language_query(request: NLQRequest):
     """
     Process natural language queries for analytics using Ollama LLM.
-    
+
     Supports multiple data sources:
     - postgres: SQL queries for PostgreSQL
     - neo4j: Cypher queries for Neo4j graph database
@@ -865,7 +779,7 @@ async def natural_language_query(request: NLQRequest):
     - soda: SODA data quality checks (YAML)
     - graphql: GraphQL queries
     - ollama: Direct LLM responses
-    
+
     **Request Body:**
     - query: The natural language question
     - datasource: Target datasource (postgres, neo4j, opensearch, soda, graphql, ollama)
@@ -886,30 +800,25 @@ async def natural_language_query(request: NLQRequest):
         
         # Try to generate query using Ollama LLM
         generated_query, query_type = await _generate_query_with_ollama(request.query, datasource)
-        
-        results: list[dict] = []
-        
+
         # Fallback to pattern matching if LLM fails
         if not generated_query:
             logger.info("Falling back to pattern matching for %s: %s", datasource, request.query)
-            generated_query, results = _get_fallback_query(query_lower, datasource)
-        else:
-            # Generate mock results for the LLM-generated query
-            _, results = _get_fallback_query(query_lower, datasource)
-        
+            generated_query = _get_fallback_query(query_lower, datasource)
+
         execution_time = int((time.time() - start_time) * 1000)
-        
+
         return {
             "success": True,
             "original_query": request.query,
             "generated_query": generated_query,
             "query_type": query_type,
             "datasource": datasource,
-            "results": results,
+            "results": [],
             "llm_powered": generated_query is not None and not generated_query.startswith("--"),
             "metadata": {
                 "execution_time_ms": execution_time,
-                "rows_returned": len(results),
+                "rows_returned": 0,
                 "model": _ollama_model(),
                 "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }

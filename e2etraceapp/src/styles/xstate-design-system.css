@@ -19,12 +19,12 @@
   --xstate-bg-primary: var(--background-color, #f0f4f8);
   --xstate-bg-secondary: var(--background-alt, #e8eef4);
   --xstate-bg-tertiary: var(--background-color-offset, #dce4ed);
-  --xstate-bg-dark: var(--dark-bg-primary, #020617);
+  --xstate-bg-dark: var(--background-color, #020617);
   
   /* Colors - Border */
   --xstate-border-light: var(--border-color, #c8d4e0);
   --xstate-border-medium: var(--border-color-strong, #b0c0d0);
-  --xstate-border-dark: var(--dark-border-color, #3e3e42);
+  --xstate-border-dark: var(--border-color, #3e3e42);
   
   /* Colors - Status */
   --xstate-success: var(--success-color, #28a745);
@@ -256,7 +256,7 @@
   --xstate-text-muted: var(--text-muted, #64748b);
   --xstate-border-light: var(--border-color, #3e3e42);
   --xstate-border-medium: var(--border-color-strong, #4a5568);
-  --xstate-border-dark: var(--dark-border-color, #2d3748);
+  --xstate-border-dark: var(--border-color, #2d3748);
 }
 
 /* Utility Classes */

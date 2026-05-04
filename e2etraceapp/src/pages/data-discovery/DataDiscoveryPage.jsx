@@ -11,8 +11,9 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './DataDiscoveryPage.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
@@ -193,6 +194,15 @@ const DEMO_PAST_RUNS = [
 
 function typeColor(ft) {
   return FILE_TYPE_COLORS[String(ft).toLowerCase()] || FILE_TYPE_COLORS.other;
+}
+
+function fmtAge(iso) {
+  if (!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60)    return 'Just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 function fmtSize(bytes) {
@@ -600,6 +610,14 @@ export default function DataDiscoveryPage() {
   const [folderPath, setFolderPath]       = useState('');
   const [recursive, setRecursive]         = useState(true);
 
+  // ── Source input mode: 'source' | 'path' | 'upload'
+  const [sourceMode, setSourceMode]       = useState('source');
+
+  // ── File upload mode state
+  const [uploadFiles, setUploadFiles]     = useState([]);   // File[] from <input type=file>
+  const [uploading, setUploading]         = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // {done, total}
+
   // ── Live vs demo mode (false = showing demo seed data)
   const [liveMode, setLiveMode]           = useState(false);
 
@@ -675,8 +693,24 @@ export default function DataDiscoveryPage() {
     setError(null);
   }, []);
 
+  // Re-use: pre-fill source inputs from a past run then restore its result
+  const reuseRun = useCallback((saved) => {
+    if (saved.source_id && sources.find((s) => s.id === saved.source_id)) {
+      setSelected(saved.source_id);
+      setFolderPath('');
+    } else if (saved.folder_path) {
+      setFolderPath(saved.folder_path);
+      setSelected('');
+    }
+    restoreReport(saved);
+    setLiveMode(true);
+  }, [sources, restoreReport]);
+
   const runDiscovery = useCallback(async () => {
-    if (!selectedSourceId && !folderPath.trim()) return;
+    // Validate based on mode
+    if (sourceMode === 'upload' && uploadFiles.length === 0) return;
+    if (sourceMode !== 'upload' && !selectedSourceId && !folderPath.trim()) return;
+
     setStatus('running');
     setResult(null);
     setError(null);
@@ -685,14 +719,48 @@ export default function DataDiscoveryPage() {
     setActiveReportId(null);
     setSelectedProfileFile(null);
 
+    // ── Upload mode: push files to server first, then discover upload dir
+    let resolvedDiscoveryPath;
+    if (sourceMode === 'upload') {
+      setUploading(true);
+      setUploadProgress({ done: 0, total: uploadFiles.length });
+      try {
+        for (let i = 0; i < uploadFiles.length; i++) {
+          const fd = new FormData();
+          fd.append('file', uploadFiles[i]);
+          const res = await fetch(`${API_BASE}/api/filesystem/upload`, { method: 'POST', body: fd });
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            throw new Error(d.detail || `Upload failed for ${uploadFiles[i].name}`);
+          }
+          const data = await res.json();
+          // Use the server-reported path for the first file's parent dir
+          if (i === 0 && data.file_path) {
+            resolvedDiscoveryPath = data.file_path.replace(/[\\/][^\\/]+$/, ''); // strip filename
+          }
+          setUploadProgress({ done: i + 1, total: uploadFiles.length });
+        }
+      } catch (e) {
+        setError(e.message || 'File upload failed');
+        setStatus('error');
+        setUploading(false);
+        setUploadProgress(null);
+        return;
+      } finally {
+        setUploading(false);
+        setUploadProgress(null);
+      }
+    }
+
     const selectedSource = sources.find((s) => s.id === selectedSourceId);
-    const resolvedPath = selectedSource
-      ? (selectedSource.connection?.folder_path || selectedSource.connection?.file_path || selectedSource.connection?.connection_string || '')
-      : folderPath.trim();
+    const resolvedPath = resolvedDiscoveryPath ||
+      (selectedSource
+        ? (selectedSource.connection?.folder_path || selectedSource.connection?.file_path || selectedSource.connection?.connection_string || '')
+        : folderPath.trim());
     const body = {
-      source_id: selectedSourceId || undefined,
+      source_id: sourceMode === 'source' ? (selectedSourceId || undefined) : undefined,
       folder_path: resolvedPath || undefined,
-      recursive,
+      recursive: sourceMode === 'upload' ? false : recursive,
       include_profiling: true,
       save_report: true,
     };
@@ -714,7 +782,7 @@ export default function DataDiscoveryPage() {
       setError(e.message || 'Discovery failed');
       setStatus('error');
     }
-  }, [selectedSourceId, folderPath, recursive, loadSavedReports, sources]);
+  }, [selectedSourceId, folderPath, recursive, sourceMode, uploadFiles, loadSavedReports, sources]);
 
   // Auto-restore most recent past run for the pre-selected source from wizard
   useEffect(() => {
@@ -942,6 +1010,9 @@ export default function DataDiscoveryPage() {
   return (
     <div className="dd-page">
 
+      {/* ── AGENT PIPELINE CONTEXT ──────────────────────────────── */}
+      <AgentPipelineStrip activeStageName="discovery" />
+
       {/* ── HEADER ─────────────────────────────────────────────── */}
       <div className="dd-header">
         <div className="dd-header-left">
@@ -975,6 +1046,14 @@ export default function DataDiscoveryPage() {
               >
                 <i className="fas fa-file-csv" /> Export CSV
               </button>
+              <Link
+                to="/dq-dashboard"
+                className="dd-btn dd-btn-primary"
+                style={{ textDecoration: 'none' }}
+                title="Check data quality for discovered files"
+              >
+                <i className="fas fa-shield-alt" /> Check Data Quality →
+              </Link>
             </>
           )}
           {status === 'done' && (
@@ -991,9 +1070,14 @@ export default function DataDiscoveryPage() {
           <button
             className="dd-btn dd-btn-primary"
             onClick={runDiscovery}
-            disabled={status === 'running' || (!selectedSourceId && !folderPath.trim())}
+            disabled={
+              status === 'running' || uploading ||
+              (sourceMode === 'upload' ? uploadFiles.length === 0 : (!selectedSourceId && !folderPath.trim()))
+            }
           >
-            {status === 'running'
+            {uploading
+              ? <><i className="fas fa-spinner fa-spin" /> Uploading {uploadProgress?.done}/{uploadProgress?.total}…</>
+              : status === 'running'
               ? <><i className="fas fa-spinner fa-spin" /> Discovering…</>
               : <><i className="fas fa-play" /> Discover</>}
           </button>
@@ -1003,60 +1087,171 @@ export default function DataDiscoveryPage() {
       {/* ── SOURCE SELECTOR ─────────────────────────────────────── */}
       <div className="dd-card dd-source-card">
 
-      {/* ── WORKFLOW GUIDANCE BANNER ─────────────────────────────── */}
-      {fromWizard && (
-        <div className="dd-guidance-banner">
-          <div className="dd-guidance-icon"><i className="fas fa-info-circle" /></div>
-          <div className="dd-guidance-body">
-            <strong>Next steps in your migration workflow:</strong>
-            <ol className="dd-guidance-steps">
-              <li>Your source is pre-selected below. Click <strong>Discover</strong> to profile its files.</li>
-              <li>Review the file list and click <strong>Profile</strong> on any file to inspect column stats, DQ rules, and null values.</li>
-              <li>Click <strong>Quality Scan</strong> to run a full DQ scan across all files.</li>
-              <li>Return to the Migration Wizard to proceed to <strong>Map Fields</strong> (Step 3).</li>
-            </ol>
+        {/* ── WORKFLOW GUIDANCE BANNER ─────────────────────────────── */}
+        {fromWizard && (
+          <div className="dd-guidance-banner">
+            <div className="dd-guidance-icon"><i className="fas fa-info-circle" /></div>
+            <div className="dd-guidance-body">
+              <strong>Next steps in your migration workflow:</strong>
+              <ol className="dd-guidance-steps">
+                <li>Your source is pre-selected below. Click <strong>Discover</strong> to profile its files.</li>
+                <li>Review the file list and click <strong>Profile</strong> on any file to inspect column stats, DQ rules, and null values.</li>
+                <li>Click <strong>Quality Scan</strong> to run a full DQ scan across all files.</li>
+                <li>Return to the Migration Wizard to proceed to <strong>Map Fields</strong> (Step 3).</li>
+              </ol>
+            </div>
+            <button className="dd-guidance-close" onClick={() => setFromWizard(false)}><i className="fas fa-times" /></button>
           </div>
-          <button className="dd-guidance-close" onClick={() => setFromWizard(false)}><i className="fas fa-times" /></button>
+        )}
+
+        {/* ── Mode tabs ────────────────────────────────────────────── */}
+        <div className="dd-mode-tabs">
+          <button
+            className={`dd-mode-tab${sourceMode === 'source' ? ' dd-mode-tab--active' : ''}`}
+            onClick={() => setSourceMode('source')}
+          >
+            <i className="fas fa-database" /> Registered Source
+          </button>
+          <button
+            className={`dd-mode-tab${sourceMode === 'path' ? ' dd-mode-tab--active' : ''}`}
+            onClick={() => setSourceMode('path')}
+          >
+            <i className="fas fa-folder-open" /> Folder Path
+          </button>
+          <button
+            className={`dd-mode-tab${sourceMode === 'upload' ? ' dd-mode-tab--active' : ''}`}
+            onClick={() => setSourceMode('upload')}
+          >
+            <i className="fas fa-upload" /> Upload Files
+          </button>
+        </div>
+
+        {/* ── Registered Source ────────────────────────────────────── */}
+        {sourceMode === 'source' && (
+          <div className="dd-source-row">
+            <div className="dd-source-group dd-source-group-flex">
+              <label className="dd-label">Registered Folder Source</label>
+              <select
+                className="dd-select"
+                value={selectedSourceId}
+                onChange={(e) => { setSelected(e.target.value); setFolderPath(''); }}
+              >
+                <option value="">— select a registered source —</option>
+                {sources.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.connection?.folder_path || s.connection?.file_path || s.connection?.connection_string || s.folder_path || s.id})</option>
+                ))}
+              </select>
+              {sources.length === 0 && (
+                <span className="dd-source-hint">No registered sources — add one in <a href="#/admin" className="dd-link">Admin</a> or use Folder Path / Upload Files mode.</span>
+              )}
+            </div>
+            <label className="dd-checkbox-label">
+              <input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />
+              Recursive
+            </label>
+          </div>
+        )}
+
+        {/* ── Folder Path ──────────────────────────────────────────── */}
+        {sourceMode === 'path' && (
+          <div className="dd-source-row">
+            <div className="dd-source-group dd-source-group-flex">
+              <label className="dd-label">Folder Path (server-accessible)</label>
+              <input
+                className="dd-input"
+                type="text"
+                placeholder="e.g. /data/uploads or C:\data\csv"
+                value={folderPath}
+                onChange={(e) => { setFolderPath(e.target.value); setSelected(''); }}
+              />
+            </div>
+            <label className="dd-checkbox-label">
+              <input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />
+              Recursive
+            </label>
+          </div>
+        )}
+
+        {/* ── Upload Files ─────────────────────────────────────────── */}
+        {sourceMode === 'upload' && (
+          <div className="dd-upload-area">
+            <label className="dd-upload-label">
+              <input
+                type="file"
+                multiple
+                accept=".csv,.json,.xml,.xlsx,.parquet,.txt,.tsv"
+                className="dd-upload-input"
+                onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
+              />
+              <div className="dd-upload-drop">
+                <i className="fas fa-cloud-upload-alt dd-upload-icon" />
+                <div className="dd-upload-prompt">
+                  {uploadFiles.length === 0
+                    ? <><strong>Click to select files</strong> or drag &amp; drop<br /><span className="dd-upload-hint">CSV, JSON, XML, XLSX, Parquet, TSV</span></>
+                    : <><strong>{uploadFiles.length} file{uploadFiles.length !== 1 ? 's' : ''} selected</strong> — click to change</>}
+                </div>
+              </div>
+            </label>
+
+            {uploadFiles.length > 0 && (
+              <div className="dd-upload-file-list">
+                {uploadFiles.map((f, i) => {
+                  const ext = f.name.split('.').pop().toLowerCase();
+                  return (
+                    <div key={i} className="dd-upload-file-row">
+                      <span className="dd-type-badge" style={{ background: `${typeColor(ext)}22`, color: typeColor(ext) }}>{ext}</span>
+                      <span className="dd-upload-file-name" title={f.name}>{f.name}</span>
+                      <span className="dd-upload-file-size">{fmtSize(f.size)}</span>
+                      <button
+                        className="dd-upload-file-remove"
+                        title="Remove"
+                        onClick={() => setUploadFiles((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        <i className="fas fa-times" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {uploading && uploadProgress && (
+              <div className="dd-upload-progress">
+                <div className="dd-upload-progress-bar" style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }} />
+                <span>Uploading {uploadProgress.done} / {uploadProgress.total}…</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── RECENT SCANS (quick-resume) ──────────────────────────── */}
+      {savedReports.length > 0 && status !== 'running' && (
+        <div className="dd-recent-scans">
+          <span className="dd-recent-scans-label"><i className="fas fa-history" /> Recent:</span>
+          {savedReports.slice(0, 3).map((r) => (
+            <div key={r.report_id} className={`dd-recent-tile${activeReportId === r.report_id ? ' dd-recent-tile--active' : ''}`}>
+              <i className="fas fa-folder" aria-hidden="true" />
+              <div className="dd-recent-tile-info">
+                <span className="dd-recent-tile-name" title={r.folder_path || r.label}>
+                  {r.folder_path ? r.folder_path.split(/[/\\]/).filter(Boolean).pop() : (r.label || 'Unknown')}
+                </span>
+                <span className="dd-recent-tile-meta">
+                  {r.total_files ?? '?'} files
+                  {r.created_at && <> &bull; {fmtAge(r.created_at)}</>}
+                </span>
+              </div>
+              <button
+                className="dd-recent-reuse-btn"
+                onClick={() => reuseRun(r)}
+                title={`Re-use: ${r.folder_path || r.label}`}
+              >
+                Re-use
+              </button>
+            </div>
+          ))}
         </div>
       )}
-
-        <div className="dd-source-row">
-          <div className="dd-source-group">
-            <label className="dd-label">Registered Folder Source</label>
-            <select
-              className="dd-select"
-              value={selectedSourceId}
-              onChange={(e) => { setSelected(e.target.value); setFolderPath(''); }}
-            >
-              <option value="">— select a registered source —</option>
-              {sources.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.connection?.folder_path || s.connection?.file_path || s.connection?.connection_string || s.folder_path || s.id})</option>
-              ))}
-            </select>
-          </div>
-          <div className="dd-source-divider">or</div>
-          <div className="dd-source-group dd-source-group-flex">
-            <label className="dd-label">Folder Path</label>
-            <input
-              className="dd-input"
-              type="text"
-              placeholder="e.g. /data/uploads or C:\data\csv"
-              value={selectedSourceId
-                ? (sources.find((s) => s.id === selectedSourceId)?.connection?.folder_path
-                  || sources.find((s) => s.id === selectedSourceId)?.connection?.file_path
-                  || sources.find((s) => s.id === selectedSourceId)?.connection?.connection_string
-                  || '')
-                : folderPath}
-              onChange={(e) => { setFolderPath(e.target.value); setSelected(''); }}
-              disabled={!!selectedSourceId}
-            />
-          </div>
-          <label className="dd-checkbox-label">
-            <input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />
-            Recursive
-          </label>
-        </div>
-      </div>
 
       {/* ── ERROR ───────────────────────────────────────────────── */}
       {status === 'error' && error && (

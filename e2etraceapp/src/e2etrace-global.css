@@ -7,27 +7,6 @@
 
 /* === THEME DEFINITIONS === */
 [data-theme='light'] {
-  /* Spacing */
-  --space-1: 0.25rem; /* 4px */
-  --space-2: 0.5rem;  /* 8px */
-  --space-3: 0.75rem; /* 12px */
-  --space-4: 1rem;    /* 16px */
-  --space-5: 1.25rem; /* 20px */
-  --space-6: 1.5rem;  /* 24px */
-
-  /* Font Sizes */
-  --font-size-sm: 0.875rem; /* 14px */
-  --font-size-md: 1rem;    /* 16px */
-  --font-size-h6: 1.125rem; /* 18px */
-
-  /* Font Weights */
-  --font-weight-medium: 500;
-  --font-weight-bold: 700;
-
-  /* Border Radii */
-  --border-radius-sm: 4px;
-  --border-radius-lg: 8px;
-
   /* Base Colors */
   --background-color: #F8F8F8; /* A very light, almost off-white for a clean feel */
   --panel-bg: #FFFFFF;
@@ -89,6 +68,23 @@
   --sidebar-hover-text-color: #212121;
   --sidebar-active-background-color: #E0E0E0;
   --sidebar-active-text-color: var(--accent-color);
+
+  /* Surface & state tokens */
+  --surface-bg:    #f8fafc;
+  --surface:       #ffffff;
+  --hover-bg:      #f1f5f9;
+  --accent-subtle: rgba(0, 51, 160, 0.07);
+  --accent-muted:  rgba(0, 51, 160, 0.22);
+  --error-subtle:  rgba(218, 30, 40, 0.07);
+  --error-border:  rgba(218, 30, 40, 0.25);
+  --warning-subtle: rgba(255, 131, 43, 0.08);
+  --success-subtle: rgba(36, 161, 72, 0.08);
+  --on-accent: #ffffff;
+
+  /* Semantic aliases used by component CSS */
+  --bg-secondary:  #f1f5f9;
+  --bg-tertiary:   #e2e8f0;
+  --text-primary:  #1e293b;
 }
 
 [data-theme='dark'] {
@@ -154,9 +150,26 @@
   --sidebar-hover-text-color: #f5f6f6;
   --sidebar-active-background-color: #3c3f44;
   --sidebar-active-text-color: #8fe3e8;
+
+  /* Surface & state tokens */
+  --surface-bg:    var(--dark-bg-secondary, #1e293b);
+  --surface:       var(--dark-bg-card, #1e293b);
+  --hover-bg:      var(--dark-bg-elevated, #283548);
+
+  /* Semantic aliases used by component CSS */
+  --bg-secondary:  var(--dark-bg-card, #1e293b);
+  --bg-tertiary:   var(--dark-bg-primary, #0f172a);
+  --text-primary:  var(--dark-text-primary, #f1f5f9);
+  --accent-subtle: rgba(77, 163, 255, 0.1);
+  --accent-muted:  rgba(77, 163, 255, 0.25);
+  --error-subtle:  rgba(218, 30, 40, 0.12);
+  --error-border:  rgba(218, 30, 40, 0.35);
+  --warning-subtle: rgba(255, 160, 0, 0.1);
+  --success-subtle: rgba(40, 167, 69, 0.1);
+  --on-accent: #ffffff;
 }
 
 /* === GLOBAL RESETS & BASE STYLES === */
-root {
+:root {
   width: 100%;
 }

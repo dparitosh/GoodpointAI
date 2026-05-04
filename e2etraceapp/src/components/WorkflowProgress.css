@@ -301,7 +301,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--panel-bg);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 1rem;
@@ -310,7 +310,7 @@
 .workflow-progress-minimal .progress-bar {
   flex: 1;
   height: 6px;
-  background: #e9ecef;
+  background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -401,38 +401,36 @@
 }
 
 /* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .workflow-content {
-    background: var(--dark-bg-secondary, #1e293b);
-    color: var(--dark-text-primary, #f1f5f9);
-  }
+[data-theme='dark'] .workflow-content {
+  background: var(--background-color-offset);
+  color: var(--text-color);
+}
 
-  .stage-title {
-    color: var(--dark-text-primary, #f1f5f9);
-  }
+[data-theme='dark'] .stage-title {
+  color: var(--text-color);
+}
 
-  .stage-description {
-    color: var(--dark-text-secondary, #cbd5e1);
-  }
+[data-theme='dark'] .stage-description {
+  color: var(--text-secondary);
+}
 
-  .workflow-summary {
-    border-top-color: var(--dark-border-color, #475569);
-  }
+[data-theme='dark'] .workflow-summary {
+  border-top-color: var(--border-color);
+}
 
-  .progress-bar-full {
-    background: var(--dark-bg-tertiary, #334155);
-  }
+[data-theme='dark'] .progress-bar-full {
+  background: var(--bg-tertiary);
+}
 
-  .workflow-progress-minimal {
-    background: var(--dark-bg-secondary, #1e293b);
-    color: var(--dark-text-primary, #f1f5f9);
-  }
+[data-theme='dark'] .workflow-progress-minimal {
+  background: var(--background-color-offset);
+  color: var(--text-color);
+}
 
-  .workflow-progress-minimal .progress-bar {
-    background: var(--dark-bg-tertiary, #334155);
-  }
+[data-theme='dark'] .workflow-progress-minimal .progress-bar {
+  background: var(--bg-tertiary);
+}
 
-  .workflow-progress-minimal .progress-text {
-    color: var(--dark-text-primary, #f1f5f9);
-  }
+[data-theme='dark'] .workflow-progress-minimal .progress-text {
+  color: var(--text-color);
 }

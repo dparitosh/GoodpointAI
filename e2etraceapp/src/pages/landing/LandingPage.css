@@ -74,6 +74,17 @@
 .hero-logo-img {
   height: clamp(100px, 9vw, 190px);
   width: auto;
+  background: transparent;
+}
+
+/* Empty SVG logo: mix-blend-mode screen makes the white canvas invisible on dark backgrounds */
+[data-theme='dark'] .hero-logo-img {
+  mix-blend-mode: screen;
+}
+
+/* Collapse the logo container when the SVG appears to be empty (shows as a blank white block) */
+[data-theme='dark'] .hero-logo {
+  display: none;
 }
 
 .hero-title {
@@ -640,4 +651,428 @@
   .tools-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MISSION CONTROL — new landing page sections
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Active Workflow Banner ────────────────────────────────────────────────── */
+.lp-wf-banner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(90deg, rgba(0, 51, 160, 0.08) 0%, rgba(0, 120, 212, 0.04) 100%);
+  border-bottom: 2px solid rgba(0, 120, 212, 0.3);
+  border-left: 4px solid var(--accent-color);
+}
+
+.lp-wf-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.lp-wf-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success-color);
+  flex-shrink: 0;
+  animation: lp-pulse 2s infinite;
+}
+
+.lp-wf-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.lp-wf-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-color-headings);
+}
+
+.lp-wf-route {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-muted-color);
+}
+
+.lp-wf-route i {
+  font-size: 0.65rem;
+  color: var(--accent-color);
+}
+
+.lp-wf-sys {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* mini pipeline in banner */
+.lp-pipeline-mini {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.lp-pm-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.7rem;
+  color: var(--text-muted-color);
+  min-width: 44px;
+  text-align: center;
+}
+
+.lp-pm-stage i { font-size: 0.9rem; }
+.lp-pm-label { font-size: 0.65rem; white-space: nowrap; }
+.lp-pm-done i  { color: var(--success-color) !important; }
+.lp-pm-active i { color: var(--accent-color) !important; }
+.lp-pm-blocked i { color: var(--error-color-dark, #ef4444) !important; }
+
+/* Resume button */
+.lp-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  background: var(--accent-color);
+  color: var(--on-accent, #fff);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.lp-resume-btn:hover { background: var(--accent-hover-color); color: var(--on-accent, #fff); }
+
+/* ── Service Health Bar ────────────────────────────────────────────────────── */
+.lp-health-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.4rem 1.5rem;
+  background: var(--background-color-offset);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.82rem;
+}
+
+.lp-svc-dot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: default;
+}
+
+.lp-svc-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lp-svc-glow {
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  animation: lp-pulse 2s infinite;
+}
+
+.lp-svc-label {
+  color: var(--text-muted-color);
+  font-size: 0.8rem;
+}
+
+.lp-health-overall {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.lp-health-ok   { color: var(--success-color); }
+.lp-health-warn { color: var(--warning-color-dark); }
+
+/* ── Stats Row ─────────────────────────────────────────────────────────────── */
+.lp-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.lp-stat-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.lp-stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: 8px;
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+
+.lp-stat-link .lp-stat-tile {
+  cursor: pointer;
+}
+
+.lp-stat-link:hover .lp-stat-tile {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.lp-stat-tile > i { font-size: 1.25rem; }
+.lp-stat-val  { font-size: 1.4rem; font-weight: 800; color: var(--text-color-headings); line-height: 1; }
+.lp-stat-lbl  { font-size: 0.75rem; color: var(--text-muted-color); text-align: center; }
+
+/* ── Agent Pipeline Launcher ──────────────────────────────────────────────── */
+.lp-pipeline-section {
+  padding: 1.5rem;
+  background: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.lp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.lp-section-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-color-headings);
+  margin: 0 0 0.15rem 0;
+}
+
+.lp-section-header p {
+  font-size: 0.82rem;
+  color: var(--text-muted-color);
+  margin: 0;
+}
+
+.lp-stages-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.lp-stage-sep {
+  color: var(--border-color);
+  font-size: 0.7rem;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.lp-stage-tile {
+  flex: 1;
+  min-width: 120px;
+  max-width: 180px;
+  padding: 0.9rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  background: var(--panel-bg);
+}
+
+.lp-stage-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.lp-stage-icon-wrap {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  background: var(--background-color);
+  flex-shrink: 0;
+}
+
+.lp-stage-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.lp-stage-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-color-headings);
+  white-space: nowrap;
+}
+
+.lp-stage-agent {
+  font-size: 0.68rem;
+  color: var(--text-muted-color);
+}
+
+/* Status tile variants */
+.lp-stage-active {
+  border-color: var(--accent-color);
+  background: var(--accent-subtle);
+  box-shadow: 0 0 0 1px var(--accent-muted);
+}
+
+.lp-stage-done  { border-color: var(--success-subtle); }
+.lp-stage-blocked { border-color: var(--error-subtle); background: var(--error-subtle); }
+
+/* Badges */
+.lp-stage-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.lp-badge-done    { background: var(--success-subtle); color: var(--success-color-dark); }
+.lp-badge-active  { background: var(--accent-subtle);  color: var(--accent-color); }
+.lp-badge-idle    { background: var(--hover-bg);       color: var(--text-muted); }
+.lp-badge-blocked { background: var(--error-subtle);   color: var(--error-color-dark); }
+
+/* ── Recent Activity ──────────────────────────────────────────────────────── */
+.lp-activity-section {
+  padding: 0 1.5rem 1.5rem;
+  background: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.lp-activity-section .lp-section-header {
+  padding-top: 1.25rem;
+}
+
+.lp-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-color);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lp-view-all:hover { text-decoration: underline; }
+
+.lp-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lp-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.lp-act-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-color);
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.lp-act-body { flex: 1; min-width: 0; }
+
+.lp-act-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-color-headings);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lp-act-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted-color);
+  margin-top: 1px;
+  text-transform: capitalize;
+}
+
+.lp-act-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Pulse animation (shared) ─────────────────────────────────────────────── */
+@keyframes lp-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);  }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);   }
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .lp-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .lp-wf-banner { flex-wrap: wrap; gap: 0.75rem; }
+  .lp-pipeline-mini { display: none; }
+}
+
+@media (max-width: 768px) {
+  .lp-stages-row { gap: 0.35rem; }
+  .lp-stage-tile { min-width: 100px; padding: 0.65rem 0.5rem; }
+  .lp-stage-name { font-size: 0.75rem; }
+  .lp-stage-agent { display: none; }
+  .lp-stats-row { grid-template-columns: repeat(2, 1fr); padding: 0.75rem; }
+  .lp-health-bar { flex-wrap: wrap; gap: 0.75rem; }
+  .lp-health-overall { margin-left: 0; }
+  .lp-section-header { flex-direction: column; align-items: flex-start; }
 }

@@ -58,31 +58,6 @@
   --font-size-xxl: 1.5rem;
 }
 
-/* Map the layout palette to the global theme tokens so dark mode applies consistently. */
-[data-theme='light'] {
-  --color-bg-primary: var(--panel-bg);
-  --color-bg-secondary: var(--background-color);
-  --color-bg-tertiary: var(--background-color-offset);
-  --color-surface: var(--panel-bg);
-  --color-border: var(--border-color);
-
-  --color-text-primary: var(--text-color);
-  --color-text-secondary: var(--text-muted-color);
-  --color-text-inverse: var(--text-on-secondary-button-bg);
-}
-
-[data-theme='dark'] {
-  --color-bg-primary: var(--panel-bg);
-  --color-bg-secondary: var(--background-color);
-  --color-bg-tertiary: var(--background-color-offset);
-  --color-surface: var(--panel-bg);
-  --color-border: var(--border-color);
-
-  --color-text-primary: var(--text-color);
-  --color-text-secondary: var(--text-muted-color);
-  --color-text-inverse: var(--text-on-secondary-button-bg);
-}
-
 * {
   box-sizing: border-box;
 }
@@ -186,6 +161,11 @@
   transform: scale(1.05);
 }
 
+/* Empty SVG renders as a white box in dark mode — hide it */
+[data-theme='dark'] .goodpoint-logo-img {
+  display: none;
+}
+
 .e2etrace-branding {
   display: flex;
   flex-direction: column;
@@ -219,6 +199,24 @@
   gap: 6px;
   overflow-x: auto;
   padding-bottom: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.e2etrace-primary-tabs::-webkit-scrollbar,
+.e2etrace-secondary-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.e2etrace-primary-tabs::-webkit-scrollbar-track,
+.e2etrace-secondary-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.e2etrace-primary-tabs::-webkit-scrollbar-thumb,
+.e2etrace-secondary-tabs::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
 }
 
 .e2etrace-primary-tab,
@@ -339,6 +337,16 @@
   .e2etrace-header-top {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .e2etrace-header-actions {
+    align-self: stretch;
+    justify-content: flex-end;
+  }
+
+  .e2etrace-header-workflow-progress {
+    min-width: 0;
+    flex: 1;
   }
   
   .e2etrace-content-area {

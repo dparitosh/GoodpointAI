@@ -3219,8 +3219,8 @@
   font-size: 0.875rem;
   line-height: 1.5;
   resize: vertical;
-  background: var(--dark-bg-secondary, #1e293b);
-  color: var(--dark-text-primary, #f1f5f9);
+  background: var(--background-color-offset, var(--panel-bg));
+  color: var(--text-color);
 }
 
 .query-textarea:focus {
@@ -3230,7 +3230,7 @@
 }
 
 .query-textarea::placeholder {
-  color: var(--dark-text-muted, #94a3b8);
+  color: var(--text-muted-color);
 }
 
 /* Results Section */

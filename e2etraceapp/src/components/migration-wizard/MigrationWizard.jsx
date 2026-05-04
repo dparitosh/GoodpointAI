@@ -5,9 +5,10 @@ import { API_CONFIG } from '../../config/api-config.js';
 import { useGraphQLTransform } from '../../hooks/useGraphQL.js';
 import { useAISuggestions, useGraphRAGHealth } from '../../hooks/useGraphRAG.js';
 import { useAgenticSystemStatus } from '../../hooks/useAgenticAI.js';
-import { XStateVisualizer } from '../xstate-visualizer/XStateVisualizer';
 import { toast } from '../../hooks/useToast';
 import WizardRuleEngine from './WizardRuleEngine';
+import SmartGuidancePanel from './SmartGuidancePanel';
+import DiscoveryResults from './DiscoveryResults';
 import './MigrationWizard.css';
 
 /**
@@ -39,8 +40,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(getInitialStepFromURL);
   // Per-operation loading flags — prevents unrelated buttons from being disabled during an operation
   const [opLoading, setOpLoading] = useState({ discovery: false, suggestions: false, validation: false, execute: false });
+  // Smart Guidance: dismissed by user or after an operation starts
+  const [smartGuidanceDismissed, setSmartGuidanceDismissed] = useState(false);
   // Guard against double-firing the initial data load (React StrictMode / HMR)
   const initialLoadRef = useRef(false);
+  // Synchronous in-flight guard for runDiscovery — prevents concurrent runs when
+  // SmartGuidancePanel button and the main "Run Discovery" button both fire before
+  // React's opLoading state update propagates.
+  const discoveryInFlightRef = useRef(false);
+  // Tracks the step we last wrote to the URL so the read effect skips it
+  const urlWriteRef = useRef(false);
   const [wizardData, setWizardData] = useState({
     // Step 0: Run identity
     workflowName: '',
@@ -122,50 +131,6 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     { id: 4, name: 'Validate', icon: 'fa-check-double', description: 'Quality & transform' },
     { id: 5, name: 'Execute', icon: 'fa-play-circle', description: 'Run migration' }
   ], []);
-
-  // Toggle state for showing/hiding the state flow diagram
-  const [showStateFlow, setShowStateFlow] = useState(true);
-
-  // Generate XState graph data based on current wizard state
-  const stateFlowGraphData = useMemo(() => {
-    const stepColors = {
-      completed: '#22c55e',
-      active: '#3b82f6',
-      pending: '#6b7280'
-    };
-
-    const getStepStatus = (stepId) => {
-      if (stepStatus[stepId]?.complete) return 'completed';
-      if (stepId === currentStep) return 'active';
-      return 'pending';
-    };
-
-    const nodes = steps.map((step) => ({
-      id: `step-${step.id}`,
-      label: step.name,
-      type: 'state',
-      status: getStepStatus(step.id),
-      color: stepColors[getStepStatus(step.id)],
-      metadata: {
-        description: step.description,
-        icon: step.icon,
-        stepNumber: step.id,
-        isActive: step.id === currentStep,
-        isComplete: stepStatus[step.id]?.complete
-      }
-    }));
-
-    const edges = steps.slice(0, -1).map((step, idx) => ({
-      id: `edge-${step.id}`,
-      source: `step-${step.id}`,
-      target: `step-${steps[idx + 1].id}`,
-      label: stepStatus[step.id]?.complete ? 'NEXT' : '',
-      type: 'transition',
-      animated: step.id === currentStep
-    }));
-
-    return { nodes, edges };
-  }, [currentStep, stepStatus, steps]);
 
   // Load data from Data Workbench (via localStorage)
   const loadWorkbenchData = useCallback(() => {
@@ -323,7 +288,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         return;
       }
 
-      // Resume an existing workflow: pre-populate wizard fields and jump to step 2
+      // Resume an existing workflow: pre-populate wizard fields and restore saved step
       const resumeId = searchParams.get('resumeWorkflowId');
       if (resumeId) {
         try {
@@ -346,7 +311,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                 : null),
             }));
             setStepStatus(prev => ({ ...prev, 1: { complete: true, valid: true } }));
-            setCurrentStep(2);
+            // Restore the step the user was on when they navigated away (from localStorage),
+            // falling back to step 2 (first step after a configured source/target).
+            const savedProgress = (() => {
+              try { return JSON.parse(localStorage.getItem('migration_in_progress') || 'null'); }
+              catch { return null; }
+            })();
+            const targetStep = (savedProgress?.savedWorkflowId === resumeId && savedProgress?.step > 1)
+              ? savedProgress.step
+              : 2;
+            setCurrentStep(targetStep);
           }
         } catch (e) {
           console.error('Failed to resume workflow:', e);
@@ -359,34 +333,38 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable method refs via hooks
   }, []);
 
-  // URL-based step navigation - Read step from URL on mount
+  // URL-based step navigation - Read step from URL on mount / external nav link clicks.
+  // Use the PRIMITIVE step string as dependency (not the searchParams object) so this only
+  // fires when the step value actually changes, not when searchParams object identity changes.
+  const urlStepParam = searchParams.get('step');
   useEffect(() => {
-    const stepParam = searchParams.get('step');
-    if (stepParam && !isNaN(stepParam)) {
-      const step = parseInt(stepParam, 10);
+    // Skip if the URL change was caused by our own write effect below
+    if (urlWriteRef.current) {
+      urlWriteRef.current = false;
+      return;
+    }
+    if (urlStepParam && !isNaN(urlStepParam)) {
+      const step = parseInt(urlStepParam, 10);
       if (step >= 1 && step <= 5 && step !== currentStep) {
         setCurrentStep(step);
       }
     }
-  // Only run on mount or when URL changes
+  // urlStepParam is a primitive — avoids re-running on every searchParams object recreation
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [urlStepParam]);
 
-  // URL-based step navigation - Update URL when step changes (PREVENT CIRCULAR DEPENDENCY)
+  // URL-based step navigation - Keep URL in sync when step changes via buttons / code.
   useEffect(() => {
     if (!embedded && currentStep) {
-      const currentStepParam = searchParams.get('step');
       const stepString = currentStep.toString();
-      
-      // Only update if step parameter is different to avoid unnecessary navigation
-      if (currentStepParam !== stepString) {
-        // Preserve all existing query parameters (e.g., source=workbench)
+      // Read the current param directly from searchParams at effect time
+      if (urlStepParam !== stepString) {
+        urlWriteRef.current = true; // tell read effect to ignore the resulting searchParams change
         const newParams = new URLSearchParams(searchParams);
         newParams.set('step', stepString);
         setSearchParams(newParams, { replace: true });
       }
     }
-  // Remove searchParams from deps to prevent circular updates with line 294 useEffect
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, embedded, setSearchParams]);
 
@@ -399,12 +377,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         workflowName: wizardData.workflowName,
         sourceSystem: wizardData.sourceSystem?.name || null,
         targetSystem: wizardData.targetSystem?.name || null,
+        savedWorkflowId: wizardData.savedWorkflowId || null,
         stepStatus,
         timestamp: new Date().toISOString(),
       };
       localStorage.setItem('migration_in_progress', JSON.stringify(migrationProgress));
     }
-  }, [currentStep, wizardData.workflowName, wizardData.sourceSystem, wizardData.targetSystem, stepStatus]);
+  }, [currentStep, wizardData.workflowName, wizardData.sourceSystem, wizardData.targetSystem, wizardData.savedWorkflowId, stepStatus]);
 
   // Step navigation
   const canProceed = useCallback((step) => {
@@ -528,6 +507,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Step 2: Discovery Agent
   const runDiscovery = useCallback(async () => {
     if (!wizardData.sourceSystem || !wizardData.targetSystem) return;
+    if (discoveryInFlightRef.current) return;   // already running — ignore concurrent call
+    discoveryInFlightRef.current = true;
 
     setOpLoading(prev => ({ ...prev, discovery: true }));
     setWizardData(prev => ({
@@ -562,7 +543,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       // Stage a sample for discovery.
       // Prefer real sampling from the configured source (S3/Blob/local file) when supported.
       let stagedRecords = null;
-      let stagedFrom = 'synthetic';
+      let stagedFrom = 'none';
       let samplePayload = null;
 
       const _findKey = (keys, candidates) => {
@@ -589,21 +570,23 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           }
         }
       } catch (e) {
-        // Non-fatal: fall back to synthetic sample
-        console.warn('Data source sampling unavailable, falling back to synthetic sample:', e?.message || e);
+        // Non-fatal: discovery continues with whatever records were collected.
+        // Distinguish 404 (source not registered) from network/5xx (connection failed).
+        stagedFrom = e?.isClientError ? 'not_registered' : 'unreachable';
+        console.warn('Data source sampling unavailable:', e?.message || e);
       }
 
-      const _syntheticFallback = !stagedRecords;
+      // If sample was attempted (samplePayload set) but returned no records,
+      // mark as synthetic so the UI can show "Source Fields Not Detected".
+      if (stagedFrom === 'none' && samplePayload !== null) {
+        stagedFrom = 'synthetic';
+      }
+
       if (!stagedRecords) {
-        const now = Date.now();
-        stagedRecords = [
-          { part_number: `PART-${now}-A`, name: 'Sample Part A', category: 'General', revision: 'A' },
-          { part_number: `PART-${now}-B`, name: 'Sample Part B', category: 'General', revision: 'B' },
-          { part_number: `PART-${now}-C`, name: 'Sample Part C', category: 'General', revision: 'A' }
-        ];
+        stagedRecords = [];
       }
 
-      await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/stage`, {
+      if (stagedRecords.length > 0) await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/stage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -623,7 +606,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       let agentTaskSucceeded = false;
 
       try {
-        // Use the dedicated discovery endpoint which routes to DataDiscoveryAgent via MCP
+        // Use the dedicated discovery endpoint which routes to DataDiscoveryAgent via MCP.
+        // Pass retries=1 so a 503 (MCP server not running) fails fast and falls through
+        // to the legacy SODA path without burning 3 retry cycles.
         const agentResponse = await e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}/api/agentic/task`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -637,7 +622,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                source_system: wizardData.sourceSystem?.name
              }
           })
-        });
+        }, 1);
 
         const taskResult = await agentResponse.json();
         
@@ -663,7 +648,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                   sourceField: src,
                   targetField: target,
                   transformation: null,
-                  confidence: 'High (Agent)'
+                  confidence: '90%'
               }));
            }
         } else {
@@ -688,6 +673,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         );
         sodaResult = await sodaResponse.json();
 
+        // Promote failed dq/scan checks as issues (the gates endpoint only checks record count).
+        // dq/scan checks have: { name, status, score?, detail } — surface the non-passing ones.
+        const failedChecks = Array.isArray(sodaResult?.checks)
+          ? sodaResult.checks.filter(c => c?.status !== 'pass')
+          : [];
+        issues = failedChecks.map(c => ({ name: c.name, message: c.detail || c.name }));
+
         const gatesResponse = await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${discoveryRunId}/dq/gates`, {
           method: 'GET'
         });
@@ -695,7 +687,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         const gates = Array.isArray(gatesData?.gates) ? gatesData.gates : [];
         const latestGate = gates.find(g => String(g?.tool || '').toLowerCase() === 'soda') || gates[0];
         const report = latestGate?.details?.report;
-        issues = Array.isArray(report?.issues) ? report.issues : [];
+        // Merge gates issues (no-records sentinel) with scan checks; avoid duplicates by name.
+        const gatesIssues = Array.isArray(report?.issues) ? report.issues : [];
+        const existingNames = new Set(issues.map(i => i.name));
+        for (const gi of gatesIssues) {
+          if (!existingNames.has(gi.name)) issues.push(gi);
+        }
         recommendations = Array.isArray(report?.recommendations) ? report.recommendations : [];
       } catch (sodaError) {
         // SODA or Postgres may not be configured; discovery still continues.
@@ -746,7 +743,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
       // If Agent didn't provide schema, infer from union of all staged record keys
       // (not just the first record — different files may have different columns)
-      if (inferredSourceFields.length === 0 && !_syntheticFallback) {
+      if (inferredSourceFields.length === 0) {
           const keySet = new Set();
           if (Array.isArray(stagedRecords)) {
             for (const rec of stagedRecords) {
@@ -758,29 +755,34 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           inferredSourceFields = Array.from(keySet);
       }
 
-      // Seed mapping suggestions: prefer Agent output, then identity-map real source
-      // fields, and only fall back to PLM defaults when no real schema is available.
-      const defaultMappingSuggestions = aiSuggestedMappings.length > 0
+      // Normalize MCP quality_scan shape — the agent may return a non-standard envelope.
+      // Ensure .overall_score / .status / .issues_count are always defined so the
+      // SODA insight card never shows `undefined`.
+      if (sodaResult && typeof sodaResult === 'object') {
+        sodaResult = {
+          overall_score: sodaResult.overall_score ?? sodaResult.score ?? null,
+          status: sodaResult.status ?? (sodaResult.pass === true ? 'pass' : sodaResult.pass === false ? 'warn' : null),
+          issues_count: sodaResult.issues_count ?? sodaResult.issues?.length ?? issues.length,
+          checks: sodaResult.checks ?? [],
+          ...sodaResult,
+        };
+      }
+
+      // Seed mapping suggestions: prefer Agent output, then identity-map inferred source fields.
+      let defaultMappingSuggestions = aiSuggestedMappings.length > 0
         ? aiSuggestedMappings
-        : inferredSourceFields.length > 0
-          ? inferredSourceFields.map(f => ({ sourceField: f, targetField: f, transformation: null, confidence: '70%' }))
-          : [
-              { sourceField: 'part_number', targetField: 'part_number', transformation: null, confidence: '90%' },
-              { sourceField: 'name', targetField: 'name', transformation: 'TRIM', confidence: '90%' },
-              { sourceField: 'category', targetField: 'classification', transformation: null, confidence: '85%' },
-              { sourceField: 'revision', targetField: 'description', transformation: null, confidence: '70%' }
-            ];
+        : inferredSourceFields.map(f => ({ sourceField: f, targetField: f, transformation: null, confidence: '70%' }));
 
       // Use actual source fields as the canonical target schema when no Agent output is available.
-      const canonicalTargetFields = inferredSourceFields.length > 0
-        ? inferredSourceFields
-        : ['part_number', 'name', 'classification', 'description'];
+      const canonicalTargetFields = inferredSourceFields;
       
       const finalSourceSchema = inferredSourceSchema || (inferredSourceFields.length > 0
         ? { fields: inferredSourceFields.map((name) => ({ name })) }
         : null);
       
-      const finalTargetSchema = { fields: canonicalTargetFields.map((name) => ({ name })) };
+      const finalTargetSchema = canonicalTargetFields.length > 0
+        ? { fields: canonicalTargetFields.map((name) => ({ name })) }
+        : null;
 
       const introspectPayload = {
         run_id: discoveryRunId,
@@ -793,9 +795,105 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         recommendations: recommendations.slice(0, 10)
       };
 
-      // ── Fire DataProfilerAgent (non-blocking) ───────────────────────────────
-      // Runs concurrently after discovery. Result updates semanticProfile when ready.
-      // Builds file_profiles from the inferred column list (or staged record keys as fallback).
+      // ── Agent Director: POST discovery/ingest ────────────────────────────────
+      // Works without MCP: persists the discovery result, runs heuristic semantic
+      // profiling, evaluates DB-backed DQ rules, and returns recommended actions.
+      // Returns report_id so acceptDiscovery can call infer-mappings later.
+      let agentDirectorReportId = null;
+      let agentDirectorActions = [];
+      try {
+        const ingestRes = await e2etraceFetchWithRetry(
+          `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_DISCOVERY_INGEST}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              run_id: discoveryRunId,
+              source_id: wizardData.sourceSystem?.id || null,
+              source_system_name: wizardData.sourceSystem?.name || null,
+              staged_from: stagedFrom,
+              inferred_source_fields: inferredSourceFields,
+              soda_result: sodaResult || null,
+              issues_count: issues.length,
+              issues_preview: issues.slice(0, 5),
+              recommendations: recommendations.slice(0, 10),
+            }),
+          },
+          2
+        );
+        const ingestData = await ingestRes.json();
+        agentDirectorReportId = ingestData.report_id || null;
+        agentDirectorActions = Array.isArray(ingestData.recommended_actions) ? ingestData.recommended_actions : [];
+
+        // Enrich mapping suggestions from agent director's canonical-name output.
+        // Only replace non-Agent suggestions (i.e. when we're on the legacy/fallback path).
+        if (!agentTaskSucceeded && Array.isArray(ingestData.mapping_suggestions) && ingestData.mapping_suggestions.length > 0) {
+          defaultMappingSuggestions = ingestData.mapping_suggestions.map(s => ({
+            sourceField: s.sourceField,
+            targetField: s.targetField,
+            transformation: s.transformation || null,
+            confidence: s.confidence === 'High' ? '95%' : s.confidence === 'Medium' ? '75%' : '60%',
+          }));
+        }
+
+        // Inject agent-director DQ violation insights.
+        const violations = Array.isArray(ingestData.dq_violations) ? ingestData.dq_violations : [];
+        const critViolations = violations.filter(v => v.severity === 'critical' || v.severity === 'error');
+        const warnViolations = violations.filter(v => v.severity !== 'critical' && v.severity !== 'error');
+        if (critViolations.length > 0) {
+          insights.push({
+            id: `dq-rule-crit-${Date.now()}`,
+            title: `${critViolations.length} DQ rule violation(s)`,
+            severity: 'warning',
+            detail: critViolations.slice(0, 3).map(v => `${v.rule_name}: ${v.detail}`).join(' • '),
+          });
+        }
+        if (warnViolations.length > 0) {
+          insights.push({
+            id: `dq-rule-warn-${Date.now()}`,
+            title: `${warnViolations.length} DQ rule warning(s)`,
+            severity: 'info',
+            detail: warnViolations.slice(0, 3).map(v => v.rule_name).join(', '),
+          });
+        }
+
+        // Inject top-priority agent action as an insight when it's not already covered.
+        const topAction = agentDirectorActions[0];
+        if (topAction && topAction.action !== 'proceed_to_mapping') {
+          const alreadyCovered = insights.some(i =>
+            i.detail?.includes(topAction.action) || i.title?.includes(topAction.label)
+          );
+          if (!alreadyCovered) {
+            insights.push({
+              id: `agent-action-${Date.now()}`,
+              title: topAction.label,
+              severity: topAction.severity === 'error' ? 'warning' : topAction.severity,
+              detail: topAction.detail,
+            });
+          }
+        }
+
+        // Persist semantic insights into wizardData (ingest includes heuristic profile).
+        const si = ingestData.semantic_insights;
+        if (si && (si.column_semantics || si.entity_classifications)) {
+          setWizardData(prev => ({
+            ...prev,
+            semanticProfile: si,
+            semanticProfileStatus: 'completed',
+          }));
+        }
+
+        console.info('Agent Director ingested discovery:', {
+          report_id: agentDirectorReportId,
+          actions: agentDirectorActions.length,
+          dq_violations: violations.length,
+        });
+      } catch (ingestErr) {
+        console.warn('Agent Director ingest unavailable:', ingestErr?.message || ingestErr);
+      }
+
+      // ── Fire DataProfilerAgent (non-blocking, via MCP) ────────────────────────
+      // Only run if MCP is potentially available (skip when ingest already returned semantics).
       const _semCols = inferredSourceFields.length > 0
         ? inferredSourceFields
         : stagedRecords.length > 0
@@ -816,8 +914,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           }],
           min_relationship_similarity: 0.85,
         };
-        // setWizardData with running status before the fetch so the spinner shows immediately
-        setWizardData(prev => ({ ...prev, semanticProfileStatus: 'running' }));
+        // setWizardData with running status before the fetch so the spinner shows immediately.
+        // Only set 'running' if ingest didn't already deliver semantics (which would be 'completed').
+        setWizardData(prev => ({
+          ...prev,
+          semanticProfileStatus: prev.semanticProfileStatus === 'completed' ? 'completed' : 'running',
+        }));
         e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_SEMANTIC_PROFILE}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -829,26 +931,64 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             sample_rows:      500,
             save_report:      true,
           })
-        })
+        }, 1)
           .then(r => r.json())
           .then(profileResult => {
             const si = profileResult?.result?.semantic_insights
                     || profileResult?.semantic_insights
                     || profileResult?.result;
             if (si && (si.column_semantics || si.entity_classifications)) {
+              // Feed profiler confidence into mapping suggestions for any column
+              // where the profiler derived a higher-confidence canonical name.
+              const confMap = Object.fromEntries(
+                (si.column_semantics || []).map(cs => [cs.column, cs.confidence ?? 0])
+              );
               setWizardData(prev => ({
                 ...prev,
                 semanticProfile: si,
-                semanticProfileStatus: 'completed'
+                semanticProfileStatus: 'completed',
+                // Upgrade confidence label on any mapping where profiler is high-confidence
+                aiSuggestedMappings: prev.aiSuggestedMappings.map(m => {
+                  const profilerConf = confMap[m.sourceField];
+                  if (profilerConf != null && profilerConf >= 0.75 && m.confidence === '70%') {
+                    return { ...m, confidence: `${Math.round(profilerConf * 100)}% (profiler)` };
+                  }
+                  return m;
+                }),
               }));
             } else {
-              setWizardData(prev => ({ ...prev, semanticProfileStatus: 'idle' }));
+              setWizardData(prev => ({
+                ...prev,
+                semanticProfileStatus: prev.semanticProfileStatus === 'completed' ? 'completed' : 'idle',
+              }));
             }
           })
           .catch(profileError => {
-            console.warn('Semantic profiling unavailable:', profileError?.message || profileError);
-            setWizardData(prev => ({ ...prev, semanticProfileStatus: 'failed' }));
+            console.warn('Semantic profiling (MCP) unavailable:', profileError?.message || profileError);
+            setWizardData(prev => ({
+              ...prev,
+              semanticProfileStatus: prev.semanticProfileStatus === 'completed' ? 'completed' : 'failed',
+            }));
           });
+      }
+
+      // Inject a source-registration insight when source is not in DB.
+      if (stagedFrom === 'not_registered') {
+        const sourceId = wizardData.sourceSystem?.id;
+        const sourceName = wizardData.sourceSystem?.name || sourceId;
+        insights.unshift({
+          id: `src-unreg-${Date.now()}`,
+          title: `Source "${sourceName}" is not registered`,
+          severity: 'warning',
+          detail: `No data source with ID "${sourceId}" exists. Register it via Admin → Data Sources, then re-run discovery.`,
+        });
+      } else if (stagedFrom === 'unreachable') {
+        insights.unshift({
+          id: `src-reach-${Date.now()}`,
+          title: 'Source could not be reached',
+          severity: 'warning',
+          detail: 'The configured source returned an error during sampling. Check connection settings in Admin → Data Sources.',
+        });
       }
 
       setWizardData(prev => ({
@@ -858,7 +998,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         discoverySodaResult: sodaResult,
         discoveryInsights: insights,
         discoverySample: samplePayload ? { ...samplePayload, stagedFrom } : { stagedFrom },
-        discoveryIntrospect: introspectPayload,
+        discoveryIntrospect: {
+          ...introspectPayload,
+          // report_id from agent director lets acceptDiscovery call infer-mappings
+          report_id: agentDirectorReportId || null,
+          // Attach recommended actions so DiscoveryResults can render them
+          recommended_actions: agentDirectorActions,
+        },
         sourceSchema: finalSourceSchema,
         targetSchema: finalTargetSchema,
         aiSuggestedMappings: defaultMappingSuggestions
@@ -878,6 +1024,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         }]
       }));
     } finally {
+      discoveryInFlightRef.current = false;
       setOpLoading(prev => ({ ...prev, discovery: false }));
     }
   }, [wizardData.sourceSystem, wizardData.targetSystem]);
@@ -1666,6 +1813,27 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         </div>
       )}
 
+      {/* ── Smart Guidance panel: shown while discovery is idle ── */}
+      {wizardData.discoveryStatus === 'idle'
+        && wizardData.sourceSystem
+        && !smartGuidanceDismissed && (
+        <SmartGuidancePanel
+          sourceSystem={wizardData.sourceSystem}
+          fileCount={wizardData.discoverySample?.total_files ?? null}
+          fileTypes={wizardData.discoverySample?.file_types ?? null}
+          previousRuns={Boolean(wizardData.semanticProfile || wizardData.discoveryRunId)}
+          userRole="business"
+          onAction={(action) => {
+            setSmartGuidanceDismissed(true);
+            if (action === 'discovery' || action === 'profiling') {
+              runDiscovery();
+            }
+            // 'quality' is handled in step 4 — just dismiss the panel here
+          }}
+          onDismiss={() => setSmartGuidanceDismissed(true)}
+        />
+      )}
+
       <div className="discovery-actions">
         <div className="action-group">
           <span className="step-number">1</span>
@@ -1709,203 +1877,46 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         )}
       </div>
 
-      {wizardData.discoveryRunId && (
-        <div className="discovery-meta">
-          Discovery run: <strong>{wizardData.discoveryRunId}</strong>
-        </div>
+      {/* ── Error state ─────────────────────────────────────────────── */}
+      {wizardData.discoveryStatus === 'failed' && wizardData.discoveryError && (
+        <div className="discovery-error" style={{ marginTop: 12 }}>{wizardData.discoveryError}</div>
       )}
 
-      <div className="discovery-results">
-        {wizardData.discoveryInsights.length > 0 ? (
-          <div className="discovery-insights">
-            {wizardData.discoveryInsights.map((insight) => (
-              <div key={insight.id} className={`discovery-insight ${insight.severity || 'info'}`}>
-                <div className="discovery-insight-title">{insight.title}</div>
-                <div className="discovery-insight-detail">{insight.detail}</div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="placeholder">
-            Run Discovery to generate insights. You must accept discovery before continuing.
-          </p>
-        )}
+      {/* ── Idle placeholder ─────────────────────────────────────────── */}
+      {wizardData.discoveryStatus === 'idle' && wizardData.discoveryInsights.length === 0 && (
+        <p className="placeholder" style={{ marginTop: 12 }}>
+          Run Discovery to generate insights. You must accept discovery before continuing.
+        </p>
+      )}
 
-        {wizardData.discoveryStatus === 'failed' && wizardData.discoveryError && (
-          <div className="discovery-error">{wizardData.discoveryError}</div>
-        )}
-      </div>
+      {/* ── Discovery Intelligence Dashboard (DiscoveryResults widget) ─── */}
+      {(wizardData.discoveryStatus === 'completed' || wizardData.discoveryInsights.length > 0
+        || wizardData.semanticProfileStatus === 'running') && (
+        <DiscoveryResults
+          runId={wizardData.discoveryRunId}
+          insights={wizardData.discoveryInsights}
+          introspect={wizardData.discoveryIntrospect}
+          sample={wizardData.discoverySample}
+          mappings={wizardData.aiSuggestedMappings || []}
+          semanticProfile={wizardData.semanticProfile}
+          sodaResult={wizardData.discoverySodaResult}
+          sourceSystem={wizardData.sourceSystem}
+        />
+      )}
 
-      {/* ── Inferred source fields ─────────────────────────── */}
-      {wizardData.discoveryIntrospect?.inferred_source_fields?.length > 0 ? (
-        <div className="discovery-data-panel">
-          <div className="ddp-header">
-            <i className="fas fa-columns" /> Inferred Source Fields
-            <span className="ddp-badge">{wizardData.discoveryIntrospect.inferred_source_fields.length} fields</span>
-          </div>
-          <div className="ddp-chips">
-            {wizardData.discoveryIntrospect.inferred_source_fields.map((f) => (
-              <span key={f} className="ddp-chip">{f}</span>
-            ))}
-          </div>
-        </div>
-      ) : wizardData.discoverySample?.stagedFrom === 'synthetic' && wizardData.discoveryStatus === 'completed' ? (
-        <div className="discovery-data-panel">
+      {/* ── Synthetic / no-fields notice (still show when live fields not available) ─── */}
+      {wizardData.discoveryStatus === 'completed'
+        && !wizardData.discoveryIntrospect?.inferred_source_fields?.length
+        && !wizardData.aiSuggestedMappings?.length
+        && wizardData.discoverySample?.stagedFrom === 'synthetic' && (
+        <div className="discovery-data-panel" style={{ marginTop: 16 }}>
           <div className="ddp-header">
             <i className="fas fa-exclamation-triangle" /> Source Fields Not Detected
           </div>
-          <p style={{ padding: '8px 12px', margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary, #888)' }}>
-            Could not connect to the source system for live sampling. Configure a reachable data source (file, database, or API) to detect real fields. You can manually define field mappings in the next step.
+          <p style={{ padding: '8px 12px', margin: 0, fontSize: '0.85rem', color: 'var(--text-muted-color)' }}>
+            Could not connect to the source system for live sampling. Configure a reachable data source
+            (file, database, or API) to detect real fields. You can manually define field mappings in Step 3.
           </p>
-        </div>
-      ) : null}
-
-      {/* ── Sample records ─────────────────────────────────── */}
-      {(() => {
-        const sampleRows = Array.isArray(wizardData.discoverySample?.records)
-          ? wizardData.discoverySample.records.slice(0, 5)
-          : null;
-        if (!sampleRows || sampleRows.length === 0) return null;
-        const cols = Object.keys(sampleRows[0]);
-        return (
-          <div className="discovery-data-panel">
-            <div className="ddp-header">
-              <i className="fas fa-table" /> Sample Records
-              <span className="ddp-badge">{sampleRows.length} of {wizardData.discoverySample.records.length}</span>
-              <span className="ddp-source-tag">
-                {wizardData.discoverySample.stagedFrom === 'source' ? 'live source' : 'synthetic'}
-              </span>
-            </div>
-            <div className="ddp-table-wrap">
-              <table className="ddp-table">
-                <thead>
-                  <tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {sampleRows.map((row, i) => (
-                    <tr key={i}>
-                      {cols.map((c) => (
-                        <td key={c} title={String(row[c] ?? '')}>
-                          {String(row[c] ?? '—').substring(0, 40)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Mapping hints ──────────────────────────────────── */}
-      {wizardData.discoveryStatus === 'completed' && wizardData.aiSuggestedMappings?.length > 0 && (
-        <div className="discovery-data-panel">
-          <div className="ddp-header">
-            <i className="fas fa-random" /> Mapping Hints
-            <span className="ddp-badge">{wizardData.aiSuggestedMappings.length} suggestions</span>
-            <span className="ddp-note">Carry over to Step 3</span>
-          </div>
-          <div className="ddp-mappings">
-            {wizardData.aiSuggestedMappings.map((m, i) => (
-              <div key={i} className="ddp-mapping-row">
-                <span className="ddp-src-field">{m.sourceField}</span>
-                <span className="ddp-arrow"><i className="fas fa-arrow-right" /></span>
-                <span className="ddp-tgt-field">{m.targetField}</span>
-                {m.transformation && <span className="ddp-transform">{m.transformation}</span>}
-                {m.confidence && <span className="ddp-confidence">{m.confidence}</span>}
-              </div>
-            ))}
-          </div>
-          <div className="ddp-footer-link">
-            <a
-              href={`#/data-discovery${wizardData.sourceSystem?.id ? `?source=${encodeURIComponent(wizardData.sourceSystem.id)}` : ''}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <i className="fas fa-external-link-alt" /> View full discovery catalogue
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* ── Semantic Analysis (DataProfilerAgent) ─────────────────────────────
-           Shows entity classifications and column semantic roles inferred by
-           DataProfilerAgent from the staged column list. Fires concurrently
-           with discovery and renders when the result arrives.
-      ── */}
-      {(wizardData.semanticProfileStatus === 'running' || wizardData.semanticProfile) && (
-        <div className="discovery-data-panel">
-          <div className="ddp-header">
-            <i className={`fas ${wizardData.semanticProfileStatus === 'running' ? 'fa-spinner fa-spin' : 'fa-brain'}`} />
-            Semantic Analysis
-            {wizardData.semanticProfileStatus === 'running' && (
-              <span className="ddp-badge">analysing columns…</span>
-            )}
-            {wizardData.semanticProfile?.summary?.total_columns_analysed > 0 && (
-              <span className="ddp-badge">
-                {wizardData.semanticProfile.summary.total_columns_analysed} columns
-              </span>
-            )}
-            {wizardData.semanticProfile?.summary?.top_entity_class && (
-              <span className="ddp-source-tag">
-                dominant: {wizardData.semanticProfile.summary.top_entity_class}
-              </span>
-            )}
-          </div>
-
-          {/* Entity classification chips */}
-          {wizardData.semanticProfile?.entity_classifications?.length > 0 && (
-            <div className="ddp-entity-row">
-              {wizardData.semanticProfile.entity_classifications.map((ec, i) => (
-                <span
-                  key={i}
-                  className={`ddp-entity-chip entity-${(ec.entity_class || 'unknown').toLowerCase()}`}
-                  title={`Confidence: ${Math.round((ec.confidence || 0) * 100)}%${ec.reasoning ? `\n${ec.reasoning}` : ''}`}
-                >
-                  {ec.entity_class}
-                  <span className="entity-conf">{Math.round((ec.confidence || 0) * 100)}%</span>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Column semantics table */}
-          {wizardData.semanticProfile?.column_semantics?.length > 0 && (
-            <div className="ddp-col-semantics">
-              {wizardData.semanticProfile.column_semantics.slice(0, 12).map((cs, i) => (
-                <div key={i} className="ddp-col-sem-row">
-                  <span className="ddp-col-name">{cs.column}</span>
-                  {cs.canonical_name && cs.canonical_name !== cs.column && (
-                    <span className="ddp-col-canon" title="Canonical name">→ {cs.canonical_name}</span>
-                  )}
-                  <span className={`ddp-col-role role-${cs.semantic_role || 'unknown'}`}>
-                    {cs.semantic_role || '—'}
-                  </span>
-                  {cs.entity_hint && (
-                    <span className="ddp-col-entity">{cs.entity_hint}</span>
-                  )}
-                  <span className="ddp-col-conf">{Math.round((cs.confidence || 0) * 100)}%</span>
-                </div>
-              ))}
-              {wizardData.semanticProfile.column_semantics.length > 12 && (
-                <div className="ddp-col-more">
-                  +{wizardData.semanticProfile.column_semantics.length - 12} more columns
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Cross-file relationship summary */}
-          {wizardData.semanticProfile?.summary?.relationship_count > 0 && (
-            <div className="ddp-sem-footer">
-              <i className="fas fa-link" />
-              {wizardData.semanticProfile.summary.relationship_count} cross-column relationship
-              {wizardData.semanticProfile.summary.relationship_count !== 1 ? 's' : ''} detected
-              &nbsp;·&nbsp;
-              {wizardData.semanticProfile.summary.high_confidence_semantics || 0} high-confidence columns
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -2574,32 +2585,6 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   return (
     <div className={`migration-wizard ${embedded ? 'embedded' : ''}`}>
-      {/* Interactive State Flow Visualization */}
-      <div className="state-flow-section">
-        <div className="state-flow-header">
-          <h4>
-            <i className="fas fa-project-diagram" /> Migration State Flow
-          </h4>
-          <button 
-            className="btn btn-sm btn-ghost"
-            onClick={() => setShowStateFlow(!showStateFlow)}
-          >
-            <i className={`fas fa-chevron-${showStateFlow ? 'up' : 'down'}`} />
-            {showStateFlow ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        {showStateFlow && (
-          <div className="state-flow-visualizer">
-            <XStateVisualizer
-              graphData={stateFlowGraphData}
-              embedded
-              enabledViewModes={['graph']}
-              uiVariant="graph-only"
-            />
-          </div>
-        )}
-      </div>
-
       {/* Progress Steps */}
       <div className="wizard-steps">
         {steps.map((step, index) => (

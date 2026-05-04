@@ -119,6 +119,8 @@ export default function MyWorkflowsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [executing, setExecuting] = useState(null);
+  const [validating, setValidating] = useState(false);
+  const [validateResult, setValidateResult] = useState(null); // null | { summary, orphaned, partial, deleted_ids, dry_run }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,6 +148,27 @@ export default function MyWorkflowsPage() {
       setExecuting(null);
     }
   }, [navigate]);
+
+  const handleValidate = useCallback(async (dryRun = true) => {
+    setValidating(true);
+    if (!dryRun) setValidateResult(null);
+    try {
+      const data = await apiClient.post(
+        `${API_CONFIG.ENDPOINTS.WORKFLOW_VALIDATE_SOURCES}?dry_run=${dryRun}`
+      );
+      setValidateResult(data);
+      if (!dryRun && data.summary?.deleted > 0) {
+        // Reload list — orphaned entries have been deleted
+        await load();
+      }
+    } catch (err) {
+      setValidateResult({ _error: err.message || 'Validation failed' });
+    } finally {
+      setValidating(false);
+    }
+  }, [load]);
+
+  const handleDismissValidate = useCallback(() => setValidateResult(null), []);
 
   const handleOpen = useCallback((wf) => {
     const resumable = ['configured', 'paused'].includes((wf.status || '').toLowerCase());
@@ -185,11 +208,107 @@ export default function MyWorkflowsPage() {
           <button className="btn-icon" title="Refresh" onClick={load} disabled={loading}>
             <i className={`fas fa-sync-alt ${loading ? 'fa-spin' : ''}`} />
           </button>
+          <button
+            className="btn-icon"
+            title="Validate data sources — check which workflows have unregistered source/target and remove orphaned ones"
+            onClick={() => handleValidate(true)}
+            disabled={validating || loading}
+          >
+            <i className={`fas fa-check-double ${validating ? 'fa-spin' : ''}`} />
+          </button>
           <button className="btn-primary" onClick={() => navigate('/migration')}>
             <i className="fas fa-plus" /> New Migration
           </button>
         </div>
       </div>
+
+      {/* ── Validation result panel ── */}
+      {validateResult && (
+        <div className={`mwp-validate-panel ${
+          validateResult._error ? 'mwp-validate-error'
+          : validateResult.summary?.orphaned > 0 ? 'mwp-validate-warn'
+          : 'mwp-validate-ok'
+        }`}>
+          <div className="mwp-validate-header">
+            <span className="mwp-validate-title">
+              <i className={`fas ${
+                validateResult._error ? 'fa-times-circle'
+                : validateResult.summary?.orphaned > 0 ? 'fa-exclamation-triangle'
+                : 'fa-check-circle'
+              }`} />
+              {validateResult._error
+                ? ` Validation error: ${validateResult._error}`
+                : validateResult.dry_run
+                  ? ' Validation preview'
+                  : ` Validation complete — ${validateResult.summary?.deleted ?? 0} workflow(s) deleted`
+              }
+            </span>
+            <button className="mwp-validate-dismiss" onClick={handleDismissValidate}>
+              <i className="fas fa-times" />
+            </button>
+          </div>
+
+          {!validateResult._error && (
+            <>
+              <div className="mwp-validate-summary">
+                <span className="mwp-vs-chip mwp-vs-ok"><i className="fas fa-check" /> {validateResult.summary?.valid ?? 0} valid</span>
+                <span className="mwp-vs-chip mwp-vs-warn"><i className="fas fa-exclamation" /> {validateResult.summary?.partial ?? 0} partial</span>
+                <span className="mwp-vs-chip mwp-vs-bad"><i className="fas fa-unlink" /> {validateResult.summary?.orphaned ?? 0} orphaned</span>
+                {validateResult.summary?.skipped_running > 0 && (
+                  <span className="mwp-vs-chip mwp-vs-skip"><i className="fas fa-running" /> {validateResult.summary.skipped_running} skipped (running)</span>
+                )}
+              </div>
+
+              {validateResult.summary?.orphaned > 0 && validateResult.dry_run && (
+                <>
+                  <div className="mwp-validate-orphan-list">
+                    <strong>Orphaned workflows (both source and target unregistered):</strong>
+                    <ul>
+                      {(validateResult.orphaned_workflows || []).map(wf => (
+                        <li key={wf.id}>
+                          <span className="mwp-vo-name">{wf.name || wf.id}</span>
+                          <span className="mwp-vo-ids">
+                            source: <code>{wf.source_id}</code> · target: <code>{wf.target_id}</code>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="mwp-validate-actions">
+                    <button
+                      className="btn-danger"
+                      onClick={() => handleValidate(false)}
+                      disabled={validating}
+                    >
+                      <i className={`fas ${validating ? 'fa-spinner fa-spin' : 'fa-trash'}`} />
+                      Delete {validateResult.summary.orphaned} orphaned workflow(s)
+                    </button>
+                    <button className="btn-link" onClick={handleDismissValidate}>Cancel</button>
+                  </div>
+                </>
+              )}
+
+              {validateResult.summary?.partial > 0 && (
+                <div className="mwp-validate-partial-list">
+                  <strong>Partially registered (one side missing — not deleted):</strong>
+                  <ul>
+                    {(validateResult.partial_workflows || []).map(wf => (
+                      <li key={wf.id}>
+                        <span className="mwp-vo-name">{wf.name || wf.id}</span>
+                        <span className="mwp-vo-ids">
+                          source: <code className={wf.source_registered ? '' : 'mwp-vo-missing'}>{wf.source_id}</code>
+                          {' · '}
+                          target: <code className={wf.target_registered ? '' : 'mwp-vo-missing'}>{wf.target_id}</code>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── Toolbar ── */}
       <div className="mwp-toolbar">

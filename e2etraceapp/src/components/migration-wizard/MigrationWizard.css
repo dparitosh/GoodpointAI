@@ -17,7 +17,7 @@
 /* ============= INTERACTIVE STATE FLOW ============= */
 .state-flow-section {
   background: linear-gradient(135deg, var(--bg-tertiary, #0f172a) 0%, rgba(59, 130, 246, 0.1) 100%);
-  border-bottom: 1px solid var(--dark-border-color);
+  border-bottom: 1px solid var(--border-color);
   padding: 12px 24px;
 }
 
@@ -44,8 +44,8 @@
 
 .state-flow-header .btn-ghost {
   background: transparent;
-  border: 1px solid var(--dark-border-color);
-  color: var(--dark-text-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   padding: 4px 12px;
   font-size: 12px;
   border-radius: 4px;
@@ -63,7 +63,7 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--dark-border-color);
+  border: 1px solid var(--border-color);
 }
 
 .state-flow-visualizer .xstate-visualizer {
@@ -237,12 +237,12 @@
   font-size: 36px;
   color: var(--accent-color, #4361ee);
   margin-bottom: 14px;
-  filter: drop-shadow(0 0 8px rgba(67, 97, 238, 0.6));
+  filter: drop-shadow(0 0 8px var(--accent-subtle, rgba(67, 97, 238, 0.6)));
 }
 
 .loading-overlay span {
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(67, 97, 238, 0.35);
+  background: var(--panel-bg, rgba(15, 23, 42, 0.92));
+  border: 1px solid var(--accent-muted, rgba(67, 97, 238, 0.35));
   border-radius: 10px;
   padding: 14px 32px;
   font-size: 14px;
@@ -278,7 +278,7 @@
   background: var(--bg-tertiary, #0f172a);
   border-radius: 12px;
   padding: 20px 24px;
-  border: 1px solid var(--dark-border-color);
+  border: 1px solid var(--border-color);
   margin-bottom: 20px;
 }
 
@@ -329,7 +329,7 @@
   background: var(--bg-tertiary, #0f172a);
   border-radius: 12px;
   padding: 24px;
-  border: 1px solid var(--dark-border-color);
+  border: 1px solid var(--border-color);
 }
 
 .source-panel h4 {
@@ -481,7 +481,7 @@
   flex: 1;
   padding: 10px 14px;
   background: var(--bg-secondary, #1e293b);
-  border: 1.5px solid var(--dark-border-color, rgba(255,255,255,0.1));
+  border: 1.5px solid var(--border-color));
   border-radius: 8px;
   color: var(--text-primary, #fff);
   font-size: 14px;
@@ -1870,7 +1870,7 @@
 /* ============= DISCOVERY SUMMARY CARD (Step 3 - UX Enhancement) ============= */
 .discovery-summary-card {
   background: var(--bg-tertiary, #0f172a);
-  border: 1px solid var(--dark-border-color, #334155);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 20px;
 }
@@ -1881,7 +1881,7 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--dark-border-color);
+  border-bottom: 1px solid var(--border-color);
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary, #fff);
@@ -2226,7 +2226,7 @@
 .discovery-summary-card .summary-actions {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--dark-border-color);
+  border-top: 1px solid var(--border-color);
 }
 
 .discovery-summary-card .view-details-link {
@@ -2315,7 +2315,7 @@
 /* ============= MAPPING WORKFLOW GUIDE (Step 3 - UX Enhancement) ============= */
 .mapping-workflow-guide {
   background: var(--bg-tertiary, #0f172a);
-  border: 1px solid var(--dark-border-color, #334155);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 24px;
@@ -2438,7 +2438,7 @@
   width: 100%;
   padding: 8px 12px;
   background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--dark-border-color, #334155);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   color: var(--text-primary, #fff);
   font-size: 13px;

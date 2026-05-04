@@ -168,10 +168,12 @@ async function advanceToStep2(fetchImpl) {
  *
  * @param {object} opts
  *  - sampleRecords: array of records returned by /api/data-sources/.../sample
+ *  - sampleSourceFiles: optional source_files array in the sample response (per-file metadata)
  *  - sodaResult: object returned by dq/scan  (null → endpoint throws)
  *  - agentResult: falsy = agent fails (503), object = agent succeeds
+ *  - ingestResult: optional override for the Agent Director /discovery/ingest response
  */
-function buildDiscoveryFetch({ sampleRecords = null, sodaResult = null, agentResult = null } = {}) {
+function buildDiscoveryFetch({ sampleRecords = null, sampleSourceFiles = null, sodaResult = null, agentResult = null, ingestResult = null } = {}) {
   return (url, opts) => {
     const u = String(url);
     const method = (opts?.method || 'GET').toUpperCase();
@@ -182,7 +184,11 @@ function buildDiscoveryFetch({ sampleRecords = null, sodaResult = null, agentRes
     }
     // Sample endpoint
     if (u.includes('/sample')) {
-      if (sampleRecords) return ok({ records: sampleRecords, warnings: ['Sampled from: file.csv'] });
+      if (sampleRecords) {
+        const base = { records: sampleRecords, warnings: ['Sampled from: file.csv'] };
+        if (sampleSourceFiles) base.source_files = sampleSourceFiles;
+        return ok(base);
+      }
       return ok({ records: [], warnings: ['No parseable files found'] });
     }
     // ETL run creation
@@ -197,6 +203,18 @@ function buildDiscoveryFetch({ sampleRecords = null, sodaResult = null, agentRes
     if (u.includes('/api/agentic/task')) {
       if (agentResult) return ok({ success: true, result: agentResult });
       return fail(503, { detail: 'MCP not running' });
+    }
+    // Agent Director ingest
+    if (u.includes('/api/agentic/discovery/ingest') && method === 'POST') {
+      return ok(ingestResult ?? {
+        report_id: 'rpt_test_001',
+        run_id: DISCOVERY_RUN_ID,
+        recommended_actions: [],
+        semantic_insights: {},
+        mapping_suggestions: [],
+        dq_violations: [],
+        dq_violations_count: 0,
+      });
     }
     // DQ scan (SODA legacy)
     if (u.includes('/dq/scan') && method === 'POST') {
@@ -248,9 +266,9 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
     // Should NOT show "Source Fields Not Detected"
     expect(screen.queryByText(/source fields not detected/i)).not.toBeInTheDocument();
 
-    // Should show "Inferred Source Fields" panel with all 3 keys
-    // (fields appear in both chips and sample table headers → use getAllByText)
-    expect(screen.getByText(/inferred source fields/i)).toBeInTheDocument();
+    // Should show the "Field Intelligence" section with all 3 keys
+    // (fields appear in both field rows and sample table headers → use getAllByText)
+    expect(screen.getByText('Field Intelligence')).toBeInTheDocument();
     expect(screen.getAllByText('labels(n)').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('n.name').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('n._name').length).toBeGreaterThanOrEqual(1);
@@ -317,11 +335,9 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
-    // The insight card title
-    expect(screen.getByText(/data quality gate \(soda\)/i)).toBeInTheDocument();
-    // Score detail: 100% + PASS
-    const scoreDetail = screen.getByText(/score: 100%.*pass/i);
-    expect(scoreDetail).toBeInTheDocument();
+    // KPI strip shows "Data Quality" label and "SODA gate: PASS" sub-text
+    expect(screen.getByText('Data Quality')).toBeInTheDocument();
+    expect(screen.getByText('SODA gate: PASS')).toBeInTheDocument();
   });
 
   // ── 5. SODA unavailable ───────────────────────────────────────────────────
@@ -339,8 +355,9 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
-    expect(screen.getByText(/data quality gate \(soda\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/soda scan not available in this environment/i)).toBeInTheDocument();
+    // KPI strip shows "Data Quality" label and "Not yet scanned" sub-text when SODA unavailable
+    expect(screen.getByText('Data Quality')).toBeInTheDocument();
+    expect(screen.getByText('Not yet scanned')).toBeInTheDocument();
   });
 
   // ── 6. Agentic path succeeds ──────────────────────────────────────────────
@@ -365,10 +382,10 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
     expect(screen.getAllByText('assembly_name').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('bom_level').length).toBeGreaterThanOrEqual(1);
 
-    // Agent-provided target mappings should appear in mapping hints
-    expect(screen.getByText('node_id')).toBeInTheDocument();
-    expect(screen.getByText('label')).toBeInTheDocument();
-    expect(screen.getByText('depth')).toBeInTheDocument();
+    // Agent-provided target mappings appear in mapping hints (inline field row + mapping section)
+    expect(screen.getAllByText('node_id').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('label').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('depth').length).toBeGreaterThanOrEqual(1);
   });
 
   // ── 7. ETL run creation fails → discovery shows error ────────────────────
@@ -426,6 +443,92 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
 
     // After completion, button is re-enabled
     expect(screen.getByRole('button', { name: /run discovery/i })).not.toBeDisabled();
+  });
+
+  // ── 9. Agent Director actions rendered in DiscoveryResults ───────────────
+  it('shows Agent-recommended actions panel when ingest returns recommended_actions', async () => {
+    const ingestResult = {
+      report_id: 'rpt_test_002',
+      run_id: DISCOVERY_RUN_ID,
+      recommended_actions: [
+        {
+          priority: 2,
+          action: 'resolve_dq_violations',
+          label: 'Fix critical DQ violations',
+          reason: '2 critical rule(s) violated',
+          detail: 'null_check: null_rate 0.30 > threshold 0.10',
+          severity: 'error',
+        },
+        {
+          priority: 4,
+          action: 'proceed_to_mapping',
+          label: 'Proceed to Field Mapping',
+          reason: 'Source registered and fields detected',
+          detail: null,
+          severity: 'success',
+        },
+      ],
+      semantic_insights: {},
+      mapping_suggestions: [],
+      dq_violations: [],
+      dq_violations_count: 0,
+    };
+
+    await advanceToStep2(buildDiscoveryFetch({
+      sampleRecords: [{ id: '1', name: 'Part A' }],
+      sodaResult: { overall_score: 0.9, status: 'pass', issues_count: 0 },
+      ingestResult,
+    }));
+
+    const runBtn = screen.getByRole('button', { name: /run discovery/i });
+    await act(async () => { fireEvent.click(runBtn); });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+    }, { timeout: 5000 });
+
+    // The "Agent-recommended actions" panel heading
+    expect(screen.getByText(/agent-recommended actions/i)).toBeInTheDocument();
+
+    // Both action labels appear (first label also injected as an insight → getAllByText)
+    expect(screen.getAllByText(/fix critical dq violations/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/proceed to field mapping/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── 10. Source File Inventory rendered for local_folder source ────────────
+  it('shows Source File Inventory with per-file rows when sample returns source_files', async () => {
+    const sampleRecords = [
+      { part_number: 'PN-001', manufacturer: 'Acme', description: 'Bearing' },
+      { supplier_id: 'SUP-1', name: 'Acme Corp', country: 'US' },
+    ];
+    const sampleSourceFiles = [
+      { name: 'parts.csv',     type: 'csv', record_count: 48, field_count: 3, field_names: ['part_number', 'manufacturer', 'description'] },
+      { name: 'suppliers.csv', type: 'csv', record_count: 22, field_count: 3, field_names: ['supplier_id', 'name', 'country'] },
+    ];
+
+    await advanceToStep2(buildDiscoveryFetch({
+      sampleRecords,
+      sampleSourceFiles,
+      sodaResult: { overall_score: 1, status: 'pass', issues_count: 0 },
+    }));
+
+    const runBtn = screen.getByRole('button', { name: /run discovery/i });
+    await act(async () => { fireEvent.click(runBtn); });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+    }, { timeout: 5000 });
+
+    // Section heading should be "Source File Inventory" not "Entity Type Inventory"
+    expect(screen.getByText('Source File Inventory')).toBeInTheDocument();
+    expect(screen.queryByText('Entity Type Inventory')).not.toBeInTheDocument();
+
+    // KPI strip should show "Files Scanned" not "Entity Types"
+    expect(screen.getByText('Files Scanned')).toBeInTheDocument();
+
+    // Each file name should appear in the scoreboard
+    expect(screen.getByText('parts.csv')).toBeInTheDocument();
+    expect(screen.getByText('suppliers.csv')).toBeInTheDocument();
   });
 
 });

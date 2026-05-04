@@ -13,9 +13,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 24px 32px;
-  background: linear-gradient(135deg, var(--dark-bg-secondary, #1e293b) 0%, var(--dark-bg-primary, #0f172a) 100%);
+  background: linear-gradient(135deg, var(--background-color-offset, var(--panel-bg)) 0%, var(--panel-bg) 100%);
   border-radius: 16px;
-  border: 1px solid var(--dark-border-subtle, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--border-color);
 }
 
 .header-content {
@@ -44,12 +44,12 @@
   margin: 0 0 4px 0;
   font-size: 28px;
   font-weight: 700;
-  color: var(--dark-text-heading, #ffffff);
+  color: var(--text-color-headings, var(--text-color));
 }
 
 .header-text p {
   margin: 0;
-  color: var(--dark-text-muted, #94a3b8);
+  color: var(--text-muted-color);
   font-size: 16px;
 }
 

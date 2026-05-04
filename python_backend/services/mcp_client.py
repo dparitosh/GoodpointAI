@@ -37,7 +37,7 @@ class MCPClient:
                 raise
 
     @retry(
-        stop=stop_after_attempt(2),
+        stop=stop_after_attempt(1),
         wait=wait_exponential(multiplier=1, min=1, max=3),
         retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout)),
         reraise=True

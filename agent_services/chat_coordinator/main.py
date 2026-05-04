@@ -1,6 +1,8 @@
 import sys
 import os
 import uuid
+import json
+import re
 import httpx
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +23,161 @@ from agent_services.base.models import AgentCapability, AgentTaskRequest, AgentT
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+# ── PLM Migration Assistant — LLM system prompt template ──────────────────
+# Filled at runtime with UI context; sent to backend LLM before keyword fallback.
+
+_MIGRATION_ASSISTANT_PROMPT = """\
+You are an intelligent PLM Data Migration Assistant.
+
+The user is interacting via a UI (not technical). Your job is to:
+- Understand intent
+- Ask for missing inputs if required
+- Convert the request into an agentic execution plan
+
+Context:
+- The system uses multiple agents (Discovery, Profiling, Quality, ETL, Reporting)
+- Execution happens as a DAG (parallel + sequential tasks)
+- Data may be large, inconsistent, and dynamic
+
+User Input:
+{user_message}
+
+UI Context (if available):
+- selected_data_source: {source_name}
+- file_count: {file_count}
+- file_types: {file_types}
+- previous_runs: {previous_runs}
+- user_role: {user_role}
+
+Your Tasks:
+
+1. Classify intent — MUST be one of:
+   - data_discovery
+   - data_profiling
+   - data_quality
+   - migration
+   - analysis
+
+2. Enrich missing context:
+   - If source not defined → ask user
+   - If large dataset → enable batch processing
+   - If multiple file types → enable adaptive parsing
+
+3. Generate execution plan:
+   - Define DAG stages
+   - Identify parallel tasks
+   - Assign required agent capabilities
+
+4. Output STRICT JSON (no markdown, no explanation — raw JSON only):
+
+{{
+  "intent": "...",
+  "confidence": 0.0,
+  "requires_user_input": false,
+  "questions": [],
+  "execution_plan": {{
+    "mode": "parallel | sequential | hybrid",
+    "stages": [
+      {{
+        "stage": 1,
+        "name": "Data Discovery",
+        "parallel": true,
+        "tasks": []
+      }}
+    ]
+  }},
+  "ui_response": {{
+    "summary": "...",
+    "next_steps": [],
+    "estimated_time": "...",
+    "complexity": "low | medium | high"
+  }}
+}}
+"""
+
+# ── Smart Guidance — LLM system prompt template ───────────────────────────
+# Returns a business-friendly, one-step recommendation when the user is unsure
+# what to do with their data. Output is strict JSON — no markdown.
+
+_SMART_GUIDANCE_PROMPT = """\
+You are a friendly data assistant helping a business user who is unsure what to do next with their data.
+
+Their context:
+- Data source: {source_name}
+- Number of files / records: {file_count}
+- File types detected: {file_types}
+- Has run any profiling or discovery before: {previous_runs}
+- User role: {user_role}
+
+Based on this context, recommend the SINGLE best first step from:
+  - "discovery"   — scan and map what files/data exist (best when user has never scanned before)
+  - "profiling"   — understand columns, data patterns, and quality (best after discovery)
+  - "quality"     — run data-quality checks and fix issues (best before migrating)
+
+Rules:
+- If no profiling or discovery has been done yet → recommend "discovery"
+- If discovery was done but no profiling → recommend "profiling"
+- If both done but data quality unknown → recommend "quality"
+- Use plain, jargon-free language that a business analyst would understand
+- Be positive and encouraging; keep "reason" under 2 sentences
+- "expected_outcome" must say concretely what the user will see or get
+
+Output STRICT JSON only (no markdown, no explanation):
+
+{{
+  "recommendation": "discovery | profiling | quality",
+  "headline": "Short action title, e.g. Start with Discovery",
+  "reason": "One or two plain sentences explaining why this step first.",
+  "expected_outcome": "What the user will see or achieve after this step.",
+  "next_steps": ["Step 1 plain action", "Step 2 plain action", "Step 3 plain action"],
+  "complexity": "low | medium | high",
+  "estimated_time": "e.g. 2-5 minutes",
+  "tips": ["Optional short tip 1", "Optional short tip 2"]
+}}
+"""
+
+# Maps LLM intent labels → internal (intent, task_type, required_capabilities)
+_LLM_INTENT_MAP: dict[str, tuple[str, str, list[str]]] = {
+    "data_discovery": (
+        "data_discovery",
+        "data_discovery",
+        ["discover_files", "profile_files"],
+    ),
+    "data_profiling": (
+        "semantic_profile",
+        "semantic_profile",
+        ["semantic_profile", "infer_column_semantics", "classify_entities"],
+    ),
+    "data_quality": (
+        "quality_check",
+        "data_quality_scan",
+        ["monitor_data_quality", "scan_datasource_quality"],
+    ),
+    "migration": (
+        "migration",
+        "task_decomposition",
+        ["decompose_goal"],
+    ),
+    # LLM may classify PLM-specific requests as migration; map to PLM Director path
+    "plm_migration": (
+        "plm_migration",
+        "plm_migration_orchestration",
+        ["orchestrate_plm_migration"],
+    ),
+    "analysis": (
+        "data_analysis",
+        "data_analysis",
+        ["data_analysis"],
+    ),
+    # User is unsure what to do → return a business-friendly recommendation
+    "smart_guidance": (
+        "smart_guidance",
+        "smart_guidance",
+        [],
+    ),
+}
 
 
 # ── Intent → task type/capability mapping ─────────────────────────────────
@@ -110,6 +267,18 @@ _INTENT_MAP = [
         ["sql_query"],
         "Executing SQL query via the Data Analyst agent...",
     ),
+    # Smart Guidance — user is unsure what to do; return a business-friendly recommendation
+    (
+        [
+            "not sure", "unsure", "where to start", "what should i do", "help me decide",
+            "guide me", "what's next", "what to do", "how to begin", "smart guidance",
+            "suggest", "recommend", "best approach", "where do i start",
+        ],
+        "smart_guidance",
+        "smart_guidance",
+        [],
+        "Let me help you figure out the best next step for your data...",
+    ),
 ]
 
 
@@ -154,6 +323,71 @@ class ChatCoordinatorAgent(AgentService):
         ]
 
     # ── Intent classification ──────────────────────────────────────────────
+
+    async def _classify_intent_with_llm(self, message: str, payload: dict) -> dict | None:
+        """
+        Call the backend LLM integration endpoint with the PLM Migration Assistant
+        system prompt to classify intent and generate a structured execution plan.
+
+        Returns parsed JSON plan dict on success, or None when LLM is unavailable /
+        not configured (caller falls back to keyword _classify_intent).
+        """
+        source_name   = payload.get("source_name") or payload.get("source_id") or "Not selected"
+        file_count    = payload.get("file_count", "Unknown")
+        file_types    = payload.get("file_types", "Unknown")
+        previous_runs = payload.get("previous_runs", "None")
+        user_role     = payload.get("user_role", "business")
+        llm_provider  = payload.get("llm_provider", "openai")
+
+        filled = _MIGRATION_ASSISTANT_PROMPT.format(
+            user_message=message,
+            source_name=source_name,
+            file_count=file_count,
+            file_types=file_types,
+            previous_runs=previous_runs,
+            user_role=user_role,
+        )
+
+        try:
+            backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                resp = await client.post(
+                    f"{backend_url}/api/llm/chat",
+                    params={"provider": llm_provider},
+                    json={
+                        "messages": [
+                            {"role": "system", "content": filled},
+                            {"role": "user",   "content": message},
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 1024,
+                    },
+                )
+                if not resp.is_success:
+                    logger.debug("LLM classifier returned %d — falling back to keywords", resp.status_code)
+                    return None
+
+                raw = resp.json().get("response", "")
+                # Strip markdown code fences if present
+                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                # Extract first {...} JSON block
+                m = re.search(r"\{.*\}", raw, re.DOTALL)
+                if not m:
+                    return None
+                plan: dict = json.loads(m.group(0))
+                # Validate required keys
+                if "intent" not in plan:
+                    return None
+                logger.info(
+                    "LLM classifier: intent=%s confidence=%.2f requires_input=%s",
+                    plan.get("intent"),
+                    plan.get("confidence", 0),
+                    plan.get("requires_user_input", False),
+                )
+                return plan
+        except Exception as exc:
+            logger.debug("LLM classifier unavailable: %s", exc)
+            return None
 
     def _classify_intent(self, message: str):
         """Return (intent, task_type, required_capabilities, response_text, needs_agents).
@@ -334,6 +568,109 @@ class ChatCoordinatorAgent(AgentService):
             logger.warning("DataProfiler dispatch failed: %s", exc)
             return {"error": str(exc)}
 
+    async def _generate_smart_guidance(self, payload: dict) -> dict:
+        """
+        Call the backend LLM with _SMART_GUIDANCE_PROMPT to produce a business-friendly,
+        one-step recommendation tailored to the user's dataset context.
+
+        Returns a dict with keys: recommendation, headline, reason, expected_outcome,
+        next_steps, complexity, estimated_time, tips.
+        Falls back to a rule-based recommendation when LLM is unavailable.
+        """
+        source_name   = payload.get("source_name") or payload.get("source_id") or "Not specified"
+        file_count    = payload.get("file_count", "Unknown")
+        file_types    = payload.get("file_types", "Unknown")
+        previous_runs = payload.get("previous_runs", False)
+        user_role     = payload.get("user_role", "business")
+        llm_provider  = payload.get("llm_provider", "openai")
+
+        filled = _SMART_GUIDANCE_PROMPT.format(
+            source_name=source_name,
+            file_count=file_count,
+            file_types=file_types,
+            previous_runs="Yes" if previous_runs else "No",
+            user_role=user_role,
+        )
+
+        try:
+            backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    f"{backend_url}/api/llm/chat",
+                    params={"provider": llm_provider},
+                    json={
+                        "messages": [
+                            {"role": "system", "content": filled},
+                            {"role": "user", "content": "What should I do first with my data?"},
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 512,
+                    },
+                )
+                if resp.is_success:
+                    raw = resp.json().get("response", "")
+                    raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                    m = re.search(r"\{.*\}", raw, re.DOTALL)
+                    if m:
+                        guidance = json.loads(m.group(0))
+                        if "recommendation" in guidance and "headline" in guidance:
+                            return guidance
+        except Exception as exc:
+            logger.debug("Smart guidance LLM call failed: %s", exc)
+
+        # ── Rule-based fallback ────────────────────────────────────────────
+        had_runs = bool(previous_runs) if isinstance(previous_runs, bool) else (
+            str(previous_runs).lower() not in ("false", "no", "none", "0", "")
+        )
+        if not had_runs:
+            return {
+                "recommendation": "discovery",
+                "headline": "Start with Discovery",
+                "reason": (
+                    "Your data hasn't been scanned yet. Discovery gives you a quick, "
+                    "safe look at what files you have and flags any obvious problems."
+                ),
+                "expected_outcome": (
+                    "A clear summary of your files, record counts, and an initial list "
+                    "of data issues to be aware of."
+                ),
+                "next_steps": [
+                    "Click 'Run Discovery' to scan your data",
+                    "Review the insights that appear",
+                    "Accept discovery and move to Profiling",
+                ],
+                "complexity": "low",
+                "estimated_time": "2-5 minutes",
+                "tips": [
+                    "Discovery is read-only — it won't change your data",
+                    "You can re-run it any time to refresh the results",
+                ],
+            }
+        return {
+            "recommendation": "profiling",
+            "headline": "Run Data Profiling",
+            "reason": (
+                "Discovery has already mapped your files. "
+                "Profiling goes deeper — it understands each column and checks for "
+                "patterns, blanks, and unexpected values."
+            ),
+            "expected_outcome": (
+                "A column-by-column quality report and an automatic classification "
+                "of your data (e.g. Parts, BOMs, Suppliers)."
+            ),
+            "next_steps": [
+                "Click 'Run Semantic Analysis' to start profiling",
+                "Review the column quality report",
+                "Proceed to Field Mapping",
+            ],
+            "complexity": "low",
+            "estimated_time": "3-8 minutes",
+            "tips": [
+                "Profiling uses your existing discovery results — no extra setup needed",
+                "High-confidence columns are automatically matched for you",
+            ],
+        }
+
     async def process_task(self, task: AgentTaskRequest):
         message = task.payload.get("message", task.payload.get("goal", ""))
         if not message:
@@ -344,7 +681,50 @@ class ChatCoordinatorAgent(AgentService):
                 "timestamp": datetime.now().isoformat(),
             }
 
-        intent, task_type, caps, response_text, needs_agents = self._classify_intent(message)
+        # ── Try LLM-based intent classification first ──────────────────────
+        llm_plan = await self._classify_intent_with_llm(message, task.payload)
+
+        # ── Handle: LLM says more user input is needed ─────────────────────
+        if llm_plan and llm_plan.get("requires_user_input"):
+            ui = llm_plan.get("ui_response", {})
+            return {
+                "status": "awaiting_input",
+                "task_id": task.task_id,
+                "primaryResponse": ui.get("summary", "I need a bit more information before I can proceed."),
+                "intent": llm_plan.get("intent", "general_chat"),
+                "collaborationNeeded": False,
+                "requires_user_input": True,
+                "questions": llm_plan.get("questions", []),
+                "complexity": ui.get("complexity", "medium"),
+                "execution_plan": llm_plan.get("execution_plan"),
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        # ── Map LLM intent → internal dispatch params ──────────────────────
+        if llm_plan and llm_plan.get("intent") in _LLM_INTENT_MAP:
+            llm_intent_key = llm_plan["intent"]
+            intent, task_type, caps = _LLM_INTENT_MAP[llm_intent_key]
+            ui = llm_plan.get("ui_response", {})
+            # Prefer LLM-generated summary as the user-facing response text;
+            # fall back to keyword map text.
+            response_text = ui.get("summary") or self._classify_intent(message)[3]
+            needs_agents = True
+            llm_next_steps   = ui.get("next_steps", [])
+            llm_complexity    = ui.get("complexity", "medium")
+            llm_est_time      = ui.get("estimated_time", "")
+            llm_execution_plan = llm_plan.get("execution_plan")
+            logger.info("LLM intent=%s → internal intent=%s task_type=%s", llm_intent_key, intent, task_type)
+        else:
+            # ── Keyword fallback ───────────────────────────────────────────
+            if llm_plan is None:
+                logger.debug("LLM classifier unavailable — using keyword fallback")
+            else:
+                logger.debug("LLM returned unknown intent '%s' — using keyword fallback", llm_plan.get("intent"))
+            intent, task_type, caps, response_text, needs_agents = self._classify_intent(message)
+            llm_next_steps    = []
+            llm_complexity    = "medium"
+            llm_est_time      = ""
+            llm_execution_plan = None
 
         # ── Simple chat — no agent dispatch ───────────────────────────────
         if not needs_agents:
@@ -354,7 +734,7 @@ class ChatCoordinatorAgent(AgentService):
                 "primaryResponse": response_text,
                 "intent": intent,
                 "collaborationNeeded": False,
-                "followupQuestions": ["Would you like to analyze your data?", "Would you like to run a quality scan?"],
+                "followupQuestions": llm_next_steps or ["Would you like to analyze your data?", "Would you like to run a quality scan?"],
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -385,6 +765,10 @@ class ChatCoordinatorAgent(AgentService):
                     "_adaptation_log":  report.get("_adaptation_log"),
                 },
                 "full_report": report,
+                "next_steps":       llm_next_steps,
+                "complexity":       llm_complexity,
+                "estimated_time":   llm_est_time,
+                "llm_execution_plan": llm_execution_plan,
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -414,6 +798,23 @@ class ChatCoordinatorAgent(AgentService):
                     "schema_alignment_groups":   insights.get("schema_alignment_groups", []),
                 },
                 "full_insights": insights,
+                "next_steps":       llm_next_steps,
+                "complexity":       llm_complexity,
+                "estimated_time":   llm_est_time,
+                "llm_execution_plan": llm_execution_plan,
+                "timestamp": datetime.now().isoformat(),
+            }
+
+        # ── Smart Guidance — business-friendly "what should I do?" ─────────
+        if intent == "smart_guidance":
+            guidance = await self._generate_smart_guidance(task.payload)
+            return {
+                "status": "completed",
+                "task_id": task.task_id,
+                "primaryResponse": guidance.get("headline", response_text),
+                "intent": intent,
+                "collaborationNeeded": False,
+                "smart_guidance": guidance,
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -443,6 +844,10 @@ class ChatCoordinatorAgent(AgentService):
                         ],
                     },
                     "execution_result": dag_result,
+                    "next_steps":       llm_next_steps,
+                    "complexity":       llm_complexity,
+                    "estimated_time":   llm_est_time,
+                    "llm_execution_plan": llm_execution_plan,
                     "timestamp": datetime.now().isoformat(),
                 }
             # Decomposition returned nothing — fall through to single dispatch
@@ -459,6 +864,10 @@ class ChatCoordinatorAgent(AgentService):
             "agent_type": task_type,
             "capabilities_used": caps,
             "agent_result": agent_result,
+            "next_steps":       llm_next_steps,
+            "complexity":       llm_complexity,
+            "estimated_time":   llm_est_time,
+            "llm_execution_plan": llm_execution_plan,
             "timestamp": datetime.now().isoformat(),
         }
 

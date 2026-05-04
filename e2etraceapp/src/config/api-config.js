@@ -35,6 +35,8 @@ const DEFAULT_CONFIG = {
     AGENTIC_DISCOVERY: '/api/agentic/discovery',
     AGENTIC_QUALITY_SCAN: '/api/agentic/quality-scan',
     AGENTIC_SEMANTIC_PROFILE: '/api/agentic/semantic-profile',
+    AGENTIC_DISCOVERY_INGEST: '/api/agentic/discovery/ingest',
+    AGENTIC_SMART_GUIDANCE: '/api/agentic/smart-guidance',
     AGENTIC_WORKFLOW_FROM_GOAL: '/api/agentic/workflows/from-goal',
 
     // File patterns
@@ -179,6 +181,7 @@ const DEFAULT_CONFIG = {
     WORKFLOW_DETAILS: (workflowId) => `/api/workflows/${workflowId}`,
     WORKFLOW_ARCHIVE: (workflowId) => `/api/workflows/${workflowId}/archive`,
     WORKFLOW_GRAPH: (workflowId) => `/api/workflows/${workflowId}/graph`,
+    WORKFLOW_VALIDATE_SOURCES: '/api/workflows/validate-sources',
     
     // PLM Integration
     PLM_WORKFLOW: '/api/plm/workflow',

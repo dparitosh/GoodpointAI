@@ -251,16 +251,11 @@ async def list_transformations():
 async def get_gateway_metrics(
     time_range: str = Query("1h", description="Time range for metrics")
 ):
-    """Get gateway metrics (mock implementation)"""
-    # In production, this would integrate with actual metrics system
+    """Get gateway metrics based on registered routes, rate limits, and transformations."""
     return {
         "status": "success",
         "time_range": time_range,
         "metrics": {
-            "total_requests": len(_gateway_routes) * 100,  # Mock data
-            "successful_requests": len(_gateway_routes) * 95,
-            "failed_requests": len(_gateway_routes) * 5,
-            "average_latency_ms": 45.2,
             "routes_count": len(_gateway_routes),
             "rate_limits_active": len(_rate_limits),
             "transformations_active": len(_transformations)

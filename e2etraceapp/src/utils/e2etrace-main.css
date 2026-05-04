@@ -5,7 +5,7 @@
 
 .app-container {
   display: flex;
-  font-family: var(--font-family-base, sans-serif);
+  font-family: var(--font-family, sans-serif);
   color: var(--text-color);
   background-color: var(--background-color);
   min-height: 100vh;

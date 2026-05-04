@@ -34,7 +34,9 @@ export async function e2etraceFetchWithRetry(url, options, retries = API_CONFIG.
                 throw error;
             }
             if (attempt >= retries) {
-                console.error(`All ${retries} fetch attempts failed for ${fullUrl}.`);
+                // Use warn (not error) for server errors that exhaust retries — callers
+                // decide how fatal they are.
+                console.warn(`All ${retries} fetch attempts failed for ${fullUrl}.`);
                 throw error; // Re-throw the last error after all retries fail.
             }
             // Exponential backoff using config delay: 1s, 2s, 4s...

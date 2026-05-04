@@ -353,76 +353,79 @@
 }
 
 /* Dark theme support */
-@media (prefers-color-scheme: dark) {
-    .graph-toolbar {
-        background: linear-gradient(135deg, var(--dark-bg-secondary) 0%, var(--dark-bg-primary) 100%);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-primary);
-    }
-    
-    .toolbar-expanded {
-        background: var(--dark-bg-primary);
-        border-color: var(--dark-border-color);
-    }
-    
-    .toolbar-label {
-        color: var(--dark-text-secondary);
-    }
-    
-    .search-input, .layout-select, .scheme-select {
-        background: var(--dark-bg-secondary);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-primary);
-    }
-    
-    .search-input:focus, .layout-select:focus, .scheme-select:focus {
-        border-color: #63b3ed;
-        box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.1);
-    }
-    
-    .zoom-controls {
-        background: var(--dark-bg-secondary);
-        border-color: var(--dark-border-color);
-    }
-    
-    .zoom-controls button {
-        color: var(--dark-text-secondary);
-    }
-    
-    .zoom-controls button:hover {
-        background: var(--dark-border-color);
-        color: var(--dark-text-link);
-    }
-    
-    .expand-toggle {
-        background: var(--dark-border-color);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-secondary);
-    }
-    
-    .expand-toggle:hover {
-        background: var(--dark-border-color);
-    }
-    
-    .graph-stats, .filter-section {
-        background: var(--dark-bg-secondary);
-        border-color: var(--dark-border-color);
-    }
-    
-    .stat-value {
-        background: var(--dark-bg-primary);
-        color: var(--dark-text-primary);
-    }
-    
-    .filter-checkbox {
-        background: var(--dark-border-color);
-        border-color: var(--dark-border-color);
-        color: var(--dark-text-secondary);
-    }
-    
-    .filter-checkbox:hover {
-        background: var(--dark-border-color);
-    }
+[data-theme='dark'] .graph-toolbar {
+    background: linear-gradient(135deg, var(--panel-bg) 0%, var(--background-color) 100%);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .toolbar-expanded {
+    background: var(--background-color);
+    border-color: var(--border-color);
+}
+
+[data-theme='dark'] .toolbar-label {
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .search-input,
+[data-theme='dark'] .layout-select,
+[data-theme='dark'] .scheme-select {
+    background: var(--panel-bg);
+    border-color: var(--border-color);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .search-input:focus,
+[data-theme='dark'] .layout-select:focus,
+[data-theme='dark'] .scheme-select:focus {
+    border-color: #63b3ed;
+    box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.1);
+}
+
+[data-theme='dark'] .zoom-controls {
+    background: var(--panel-bg);
+    border-color: var(--border-color);
+}
+
+[data-theme='dark'] .zoom-controls button {
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .zoom-controls button:hover {
+    background: var(--border-color);
+    color: var(--accent-color);
+}
+
+[data-theme='dark'] .expand-toggle {
+    background: var(--border-color);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .expand-toggle:hover {
+    background: var(--border-color);
+}
+
+[data-theme='dark'] .graph-stats,
+[data-theme='dark'] .filter-section {
+    background: var(--panel-bg);
+    border-color: var(--border-color);
+}
+
+[data-theme='dark'] .stat-value {
+    background: var(--background-color);
+    color: var(--text-color);
+}
+
+[data-theme='dark'] .filter-checkbox {
+    background: var(--border-color);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-theme='dark'] .filter-checkbox:hover {
+    background: var(--border-color);
 }
 
 /* Animation for toolbar expansion */

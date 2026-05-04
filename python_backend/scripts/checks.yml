@@ -1,0 +1,236 @@
+# checks.yml — SodaCL Quality Checks for GraphTrace PLM Migration Pipeline
+# ─────────────────────────────────────────────────────────────────────────────
+# Generated for: python_backend/scripts/plm_migration_pipeline.py
+#
+# How to run:
+#   soda scan -d graphtrace_pg -c soda_config.yml scripts/checks.yml
+#
+# Required soda_config.yml (NOT committed — contains credentials):
+#   data_source graphtrace_pg:
+#     type: postgres
+#     host:     ${POSTGRES_HOST}       # e.g. localhost
+#     port:     ${POSTGRES_PORT}       # e.g. 5433
+#     username: ${POSTGRES_USER}
+#     password: ${POSTGRES_PASSWORD}
+#     database: ${POSTGRES_DB}         # e.g. graphtrace
+#     schema:   public
+#
+# UI Config mapping:
+#   Wizard Step 4 "Validate"   ← threshold sliders / rule toggles
+#   Admin → Data Quality Rules ← dq_rules table (DataQualityRule model)
+#   WorkflowDetailPage.jsx     ← displays overall_score + gate outcome
+#
+# SodaCL documentation: https://docs.soda.io/soda-cl/soda-cl-overview.html
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE: plm_parts
+# Canonical PLM Part entities loaded by load() → _write_parts()
+# DB model: models/plm_models.PLMPart
+# ═══════════════════════════════════════════════════════════════════════════════
+checks for plm_parts:
+
+  # ── DQ-03: part_number is the business key — must never be NULL
+  # UI rule: DataQualityRule {op: "not_null", field: "part_number"} severity=critical
+  # Wizard Step 4 "Validate" checkbox: "Part Number Required"
+  - missing_count(part_number) = 0:
+      name: "part_number must not be null"
+      fail:
+        when not between 0 and 0
+
+  # ── DQ-07: no duplicate part numbers within the same run
+  # UI rule: DataQualityRule {op: "unique", field: "part_number"} severity=critical
+  - duplicate_count(part_number) = 0:
+      name: "part_number must be unique per ingestion run"
+      fail:
+        when not between 0 and 0
+      # Note: uniqueness is enforced at DB level by idx_plm_parts_run_part (UNIQUE),
+      # but this check catches any bypass paths or staging discrepancies.
+
+  # ── DQ-06: name completeness — at least 80 % of parts must have a name
+  # UI rule: DataQualityRule {op: "completeness_pct", field: "name", threshold: 80} severity=high
+  # Wizard Step 4 toggle: "Name Completeness"
+  - missing_percent(name) < 20:
+      name: "name completeness must be >= 80%"
+      warn:
+        when between 10 and 19.99
+      fail:
+        when >= 20
+
+  # ── DQ-08: classification completeness — at least 60 % populated
+  # UI rule: DataQualityRule {op: "completeness_pct", field: "classification", threshold: 60}
+  - missing_percent(classification) < 40:
+      name: "classification completeness must be >= 60%"
+      warn:
+        when between 20 and 39.99
+      fail:
+        when >= 40
+
+  # ── DQ-10: part_number format — must not contain leading/trailing whitespace
+  # UI rule: DataQualityRule {op: "regex", field: "part_number", pattern: "^\\S.*\\S$|^\\S$"}
+  - invalid_count(part_number):
+      valid regex: "^\\S.*\\S$|^\\S$"
+      name: "part_number must not have leading or trailing whitespace"
+      fail:
+        when > 0
+
+  # ── DQ-11: minimum row count guard — migration must produce at least 1 part
+  # UI rule: Wizard Step 4 "Row Count Validation"
+  - row_count > 0:
+      name: "plm_parts must have at least one row after migration"
+      fail:
+        when < 1
+
+  # ── DQ-12: overall freshness — parts must have been created in the last 24 hours
+  # Ensures stale/orphaned data is not being validated from a prior run
+  - freshness(created_at) < 24h:
+      name: "plm_parts rows must have been created in the last 24 hours"
+      warn:
+        when > 6h
+      fail:
+        when > 24h
+
+  # ── DQ-13: description length sanity — if present, description should be < 8000 chars
+  # (PostgreSQL Text limit is 1 GB, but extremely long values suggest encoding issues)
+  - max_length(description) < 8000:
+      name: "description must be shorter than 8000 characters"
+      warn:
+        when between 4000 and 7999
+      fail:
+        when >= 8000
+
+  # ── Schema checks (structural integrity)
+  # Validates actual column types match the ORM model expectations
+  - schema:
+      name: "plm_parts schema must match expected column types"
+      fail:
+        when required column missing:
+          - id
+          - run_id
+          - part_number
+          - created_at
+        when wrong column type:
+          id:          integer
+          run_id:      character varying
+          part_number: character varying
+          created_at:  timestamp with time zone
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE: plm_bom_items
+# Bill-of-Materials edges loaded by load() → _write_bom_items()
+# DB model: models/plm_models.PLMBOMItem
+# ═══════════════════════════════════════════════════════════════════════════════
+checks for plm_bom_items:
+
+  # ── DQ-04: BOM edge uniqueness (parent, child) per run
+  # Duplicate BOM edges corrupt quantity roll-ups (comment from PLMBOMItem model)
+  # idx_plm_bom_run_parent_child is UNIQUE at DB level — this is the Soda gate.
+  - duplicate_count(parent_part_number, child_part_number) = 0:
+      name: "BOM parent-child pair must be unique per run"
+      fail:
+        when > 0
+
+  # ── DQ-14: parent_part_number not null
+  - missing_count(parent_part_number) = 0:
+      name: "BOM parent_part_number must not be null"
+      fail:
+        when > 0
+
+  # ── DQ-15: child_part_number not null
+  - missing_count(child_part_number) = 0:
+      name: "BOM child_part_number must not be null"
+      fail:
+        when > 0
+
+  # ── DQ-16: quantity validity — when present, must be positive
+  - invalid_count(quantity):
+      valid min: 0.000001
+      name: "BOM quantity must be positive (when present)"
+      warn:
+        when > 0
+
+  # ── DQ-17: no self-referencing BOM edges (part is its own child)
+  - failed rows:
+      name: "BOM must not contain self-referencing edges"
+      fail query: |
+        SELECT *
+        FROM plm_bom_items
+        WHERE parent_part_number = child_part_number
+
+  # ── DQ-18: referential integrity — every BOM parent must exist in plm_parts
+  # This is a cross-table check; Soda evaluates it as a custom SQL query.
+  - failed rows:
+      name: "BOM parent_part_number must reference an existing plm_parts record"
+      warn query: |
+        SELECT b.*
+        FROM plm_bom_items b
+        LEFT JOIN plm_parts p ON p.part_number = b.parent_part_number
+        WHERE p.part_number IS NULL
+
+  # ── Schema checks
+  - schema:
+      name: "plm_bom_items schema must match expected column types"
+      fail:
+        when required column missing:
+          - id
+          - run_id
+          - parent_part_number
+          - child_part_number
+          - created_at
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE: plm_staged_records
+# Raw staging table — cross-run deduplication (DQ-01/DQ-02)
+# DB model: models/plm_models.PLMStagedRecord
+# ═══════════════════════════════════════════════════════════════════════════════
+checks for plm_staged_records:
+
+  # ── DQ-01: no duplicate content_hash within the same run
+  - duplicate_count(run_id, content_hash) = 0:
+      name: "Staged records must have unique content hashes per run (DQ-01)"
+      fail:
+        when > 0
+
+  # ── DQ-02: content_hash must not be null (means dedup was applied)
+  - missing_count(content_hash) = 0:
+      name: "content_hash must be populated for all staged records (DQ-02)"
+      fail:
+        when > 0
+
+  # ── DQ-19: payload field must not be empty
+  - missing_count(payload) = 0:
+      name: "Staged record payload must not be null"
+      fail:
+        when > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TABLE: plm_ingestion_runs
+# Run lifecycle tracking
+# DB model: models/plm_models.PLMIngestionRun
+# ═══════════════════════════════════════════════════════════════════════════════
+checks for plm_ingestion_runs:
+
+  # ── DQ-20: every run must have a source_system
+  - missing_count(source_system) = 0:
+      name: "Ingestion run must have a source_system"
+      fail:
+        when > 0
+
+  # ── DQ-21: every run must have a target_system
+  - missing_count(target_system) = 0:
+      name: "Ingestion run must have a target_system"
+      fail:
+        when > 0
+
+  # ── DQ-22: no runs stuck in 'running' state for more than 4 hours
+  # Indicates hung pipeline processes
+  - failed rows:
+      name: "No runs should be stuck in 'running' state for > 4 hours"
+      warn query: |
+        SELECT *
+        FROM plm_ingestion_runs
+        WHERE status = 'running'
+          AND created_at < NOW() - INTERVAL '4 hours'
