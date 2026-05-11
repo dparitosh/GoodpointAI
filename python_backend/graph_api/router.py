@@ -280,7 +280,7 @@ async def execute_custom_query_endpoint(
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}") from e
 
 
-from pydantic import BaseModel as PydanticBaseModel
+from pydantic import BaseModel as PydanticBaseModel  # noqa: E402
 
 
 class ValidateConnectionRequest(PydanticBaseModel):

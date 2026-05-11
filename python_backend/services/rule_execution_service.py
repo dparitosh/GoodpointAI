@@ -15,8 +15,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from models.rule_engine_models import (
-    RuleSet, Rule, RuleSetExecution, RuleExecution, 
-    ExecutionStatus, RuleLevel, RuleActionOnFail, QuarantineRecord
+    RuleSet, Rule, RuleSetExecution, ExecutionStatus, QuarantineRecord
 )
 from services.rule_expression_executor import RuleExpressionExecutor
 

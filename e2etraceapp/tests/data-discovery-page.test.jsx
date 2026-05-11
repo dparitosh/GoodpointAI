@@ -31,7 +31,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 // ── Mocks (hoisted before imports) ──────────────────────────────────────────
@@ -50,7 +50,7 @@ vi.mock('../src/components/agent-pipeline-strip/AgentPipelineStrip.jsx', () => (
 
 import DataDiscoveryPage from '../src/pages/data-discovery/DataDiscoveryPage.jsx';
 import { e2etraceFetchWithRetry } from '../src/api/e2etrace-api.js';
-import writeXlsxFile from 'write-excel-file';
+
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -154,8 +154,8 @@ describe('DataDiscoveryPage', () => {
     // Silence act() warnings for async effects
     vi.spyOn(console, 'error').mockImplementation(() => {});
     // jsdom doesn't implement createObjectURL / revokeObjectURL
-    global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-    global.URL.revokeObjectURL = vi.fn();
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    globalThis.URL.revokeObjectURL = vi.fn();
   });
 
   afterEach(() => {

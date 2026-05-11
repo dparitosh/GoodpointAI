@@ -362,15 +362,20 @@ def _infer_type(values: list) -> str:
     for v in values:
         sv = str(v).strip()
         try:
-            int(sv); int_count += 1; continue
+            int(sv)
+            int_count += 1
+            continue
         except ValueError:
             pass
         try:
-            float(sv.replace(",", "")); float_count += 1; continue
+            float(sv.replace(",", ""))
+            float_count += 1
+            continue
         except ValueError:
             pass
         if date_re.match(sv):
-            date_count += 1; continue
+            date_count += 1
+            continue
         if sv.lower() in bool_vals:
             bool_count += 1
     n = len(values)

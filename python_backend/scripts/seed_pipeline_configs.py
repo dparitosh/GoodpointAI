@@ -6,8 +6,6 @@ the PostgreSQL database with file patterns, pipeline templates, search
 configurations, and index configurations.
 """
 
-import json
-import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Any

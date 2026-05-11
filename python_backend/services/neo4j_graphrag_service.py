@@ -8,7 +8,7 @@ environment variables and config store for backward compatibility.
 
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 import os
 import httpx
 

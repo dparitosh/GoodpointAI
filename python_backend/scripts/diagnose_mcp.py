@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import io
-import json
 import os
 import socket
 import sys
@@ -229,12 +228,6 @@ async def check_backend() -> Result:
 
     deps = data.get("dependencies", {})
     postgres_ok = deps.get("postgres", {}).get("ok", True) if isinstance(deps, dict) else True
-    mcp_only_degraded = (
-        data.get("status") == "degraded"
-        and not postgres_ok is False
-        and isinstance(deps, dict)
-        and not deps.get("postgres", {}).get("ok") is False
-    )
 
     if not postgres_ok:
         return Result(

@@ -10,7 +10,7 @@
  *   POST /api/agentic/quality-scan → run DQ scan on a discovered source
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';

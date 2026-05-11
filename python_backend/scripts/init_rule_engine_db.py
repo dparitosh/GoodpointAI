@@ -10,8 +10,7 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine, text
-from core.database import Base
+from sqlalchemy import create_engine
 from models.rule_engine_models import (
     RuleSet, Rule, RuleTemplate, 
     RuleSetExecution, RuleExecution, QuarantineRecord

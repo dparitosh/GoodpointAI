@@ -8,7 +8,6 @@ Run this script after database migration to populate initial configurations.
 import os
 import sys
 import logging
-from datetime import datetime, timezone
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

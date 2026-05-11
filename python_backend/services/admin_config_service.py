@@ -18,7 +18,6 @@ import os
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone, timedelta
-from functools import lru_cache
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -202,7 +201,7 @@ class AdminConfigService:
                 db_config = self.db.query(LLMProviderConfig).filter(
                     and_(
                         LLMProviderConfig.status == ConfigStatus.ACTIVE,
-                        LLMProviderConfig.is_default == True
+                        LLMProviderConfig.is_default
                     )
                 ).first()
                 
@@ -301,7 +300,7 @@ class AdminConfigService:
                 if provider:
                     query = query.filter(EmbeddingModelConfig.provider == provider)
                 else:
-                    query = query.filter(EmbeddingModelConfig.is_default == True)
+                    query = query.filter(EmbeddingModelConfig.is_default)
                 
                 db_config = query.first()
                 
@@ -488,7 +487,7 @@ class AdminConfigService:
                     and_(
                         SystemConfiguration.category == category,
                         SystemConfiguration.key == key,
-                        SystemConfiguration.enabled == True
+                        SystemConfiguration.enabled
                     )
                 ).first()
                 
@@ -521,7 +520,7 @@ class AdminConfigService:
                 db_configs = self.db.query(SystemConfiguration).filter(
                     and_(
                         SystemConfiguration.category == category,
-                        SystemConfiguration.enabled == True
+                        SystemConfiguration.enabled
                     )
                 ).all()
                 

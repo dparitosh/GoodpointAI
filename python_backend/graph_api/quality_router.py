@@ -38,8 +38,8 @@ _MAX_RGLOB_DEPTH = 10
 # P-07: simple TTL cache for _profile_table results (keyed by qualified table name).
 # Avoids re-firing 150+ SQL queries when the same table is scanned repeatedly within
 # the TTL window (e.g. polling from the UI).
-import threading as _threading
-import time as _time
+import threading as _threading  # noqa: E402
+import time as _time  # noqa: E402
 
 @dataclasses.dataclass
 class _ProfileCacheEntry:
@@ -387,8 +387,8 @@ def _generate_auto_sodacl(
 
         # Completeness
         lines.append(f"  - missing_count({name}) = 0:")
-        lines.append(f"      warn: when > 0")
-        lines.append(f"      fail: when > 10%")
+        lines.append("      warn: when > 0")
+        lines.append("      fail: when > 10%")
         lines.append(f"  - missing_percent({name}) < 5")
 
         # Numeric stats — metric-only (no threshold; value is captured in scan results)
@@ -402,27 +402,27 @@ def _generate_auto_sodacl(
         # Freshness
         if dt in _SODA_TIMESTAMP_DT:
             lines.append(f"  - freshness({name}) < 7d:")
-            lines.append(f"      warn: when > 1d")
-            lines.append(f"      fail: when > 7d")
+            lines.append("      warn: when > 1d")
+            lines.append("      fail: when > 7d")
 
         # Format validity for text columns with recognisable naming patterns
         if dt in _SODA_TEXT_DT:
             if name_lower in _SODA_EMAIL_NAMES or name_lower.endswith("_email"):
                 lines.append(f"  - invalid_count({name}):")
-                lines.append(f"      valid format: email")
-                lines.append(f"      fail: when > 0")
+                lines.append("      valid format: email")
+                lines.append("      fail: when > 0")
             elif name_lower in _SODA_PHONE_NAMES or name_lower.endswith("_phone"):
                 lines.append(f"  - invalid_count({name}):")
-                lines.append(f"      valid format: phone number")
-                lines.append(f"      warn: when > 0")
+                lines.append("      valid format: phone number")
+                lines.append("      warn: when > 0")
             elif name_lower in _SODA_URL_NAMES or name_lower.endswith("_url"):
                 lines.append(f"  - invalid_count({name}):")
-                lines.append(f"      valid format: url")
-                lines.append(f"      warn: when > 0")
+                lines.append("      valid format: url")
+                lines.append("      warn: when > 0")
             elif name_lower in _SODA_UUID_NAMES or name_lower.endswith(("_uuid", "_guid")):
                 lines.append(f"  - invalid_count({name}):")
-                lines.append(f"      valid format: uuid")
-                lines.append(f"      fail: when > 0")
+                lines.append("      valid format: uuid")
+                lines.append("      fail: when > 0")
 
     return "\n".join(lines) + "\n"
 
@@ -2437,9 +2437,9 @@ async def soda_scan_table_quality(table_name: str, scan_request: SodaScanRequest
         warnings = scan_results.get("warnings") or []
         # Soda Core 3.x often emits errors/warnings via `logs` rather than top-level keys.
         if not errors:
-            errors = [l for l in logs if str((l or {}).get("level") or "").upper() == "ERROR"]
+            errors = [log_entry for log_entry in logs if str((log_entry or {}).get("level") or "").upper() == "ERROR"]
         if not warnings:
-            warnings = [l for l in logs if str((l or {}).get("level") or "").upper() == "WARNING"]
+            warnings = [log_entry for log_entry in logs if str((log_entry or {}).get("level") or "").upper() == "WARNING"]
 
         report_payload: Dict[str, Any] = {
             "table_name": table,

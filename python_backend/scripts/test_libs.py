@@ -1,6 +1,5 @@
 import io
 import sys
-import os
 
 # PowerShell 5 / cp1252 compatibility
 if hasattr(sys.stdout, "buffer"):
@@ -45,8 +44,12 @@ except Exception as e:
 
 # Test python-docx
 try:
-    import docx
-    results["python-docx"] = "OK"
+    import importlib.util as _iutil
+    if _iutil.find_spec("docx") is not None:
+        import docx as _docx  # noqa: F401
+        results["python-docx"] = "OK"
+    else:
+        results["python-docx"] = "FAIL: not installed"
 except ImportError as e:
     results["python-docx"] = f"FAIL: {e}"
 except Exception as e:
@@ -68,7 +71,7 @@ try:
     # This might fail on windows if not in PATH, but import should work
     try:
         pytesseract.get_tesseract_version()
-        results["pytesseract"] = f"OK (Binary found)"
+        results["pytesseract"] = "OK (Binary found)"
     except pytesseract.TesseractNotFoundError:
         results["pytesseract"] = "PARTIAL (Import OK, but tesseract.exe not in PATH)"
     except Exception as e:

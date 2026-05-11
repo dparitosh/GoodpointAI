@@ -232,7 +232,7 @@ const LandingPage = () => {
 
         <div className="lp-stages-row" role="list">
           {stages.map((stage, i) => {
-            const { icon, color } = stageVisual(stage.status);
+            const { color } = stageVisual(stage.status);
             const dest = hasActiveWorkflow
               ? (stage.route || stage.standalonePage || '/migration')
               : (stage.standalonePage || '/migration');

@@ -385,7 +385,6 @@ class MultiModalService:
     async def _extract_dxf(self, file_content: bytes) -> Dict[str, Any]:
         """Extract layers, entities, and text from DXF files using ezdxf."""
         try:
-            import ezdxf
             from ezdxf import recover
 
             # ezdxf recover.readbytes is a sync call — offload to thread pool.
@@ -627,7 +626,8 @@ class MultiModalService:
         extract_metadata: bool,
         extract_text: bool,
         extract_images: bool,
-        ocr_language: str
+        ocr_language: str,
+        ollama_host: Optional[str] = None
     ) -> FileAnalysisResponse:
         """Analyze file with specified extraction method"""
         start_time = datetime.now(timezone.utc)
@@ -953,7 +953,7 @@ async def discover_directory(request: DirectoryDiscoverRequest):
     Returns a manifest you can pass directly to `/analyze-batch`.
     """
     from pathlib import Path as _Path
-    from services.file_batch_processor import discover_files, ALL_SUPPORTED
+    from services.file_batch_processor import discover_files
 
     root = _Path(request.directory).expanduser().resolve()
     if not root.is_dir():
@@ -993,7 +993,7 @@ async def analyze_batch(
     inline.  For larger lists the job runs in a background task.
     """
     from pathlib import Path as _Path
-    from services.file_batch_processor import FileBatchProcessor, FileRecord, _classify_ext
+    from services.file_batch_processor import FileRecord, _classify_ext
     import uuid
 
     # Resolve file paths → FileRecord list, rejecting path-traversal attempts

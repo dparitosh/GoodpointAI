@@ -11,8 +11,7 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 # Add parent dir to path to import core/models
 sys.path.append(str(Path(__file__).parent.parent))
 
-from core.database import Base
-from models.admin_config_models import LLMProviderConfig
+from models.admin_config_models import LLMProviderConfig  # noqa: E402
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -29,7 +28,7 @@ for p in providers:
     print(f"ID: {p.id} | Provider: {p.provider} | Status: {p.status} | Model: {p.default_chat_model} | Endpoint: {p.api_endpoint}")
 
 print("\nDefault Provider:")
-default = db.query(LLMProviderConfig).filter(LLMProviderConfig.is_default == True).first()
+default = db.query(LLMProviderConfig).filter(LLMProviderConfig.is_default).first()
 if default:
     print(f"ID: {default.id} | Provider: {default.provider}")
 else:

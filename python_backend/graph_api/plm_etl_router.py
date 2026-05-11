@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, text as sa_text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from core.db_session import DATABASE_URL, get_db
@@ -562,7 +562,7 @@ async def soda_scan_for_run(
     needing to know the underlying quality router path.
     """
     _require_postgres()
-    run = _get_run_or_404(run_id, db)
+    _get_run_or_404(run_id, db)
 
     parts = (
         db.query(PLMPart).filter(PLMPart.run_id == run_id).limit(_MAX_SCAN_ROWS).all()

@@ -31,7 +31,6 @@ import os
 import sys
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -45,8 +44,8 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from models.plm_models import PLMBOMItem, PLMIngestionRun, PLMPart, PLMStagedRecord
-from models.quality_models import DataQualityGateResult, DataQualityResult
+from models.plm_models import PLMIngestionRun, PLMStagedRecord  # noqa: E402
+from models.quality_models import DataQualityGateResult  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

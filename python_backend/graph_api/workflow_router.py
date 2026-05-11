@@ -17,13 +17,11 @@ from sqlalchemy.orm import Session
 from core.db_session import get_db
 from models.workflow_models import (
     WorkflowDefinition, WorkflowExecution, WorkflowStep, WorkflowStepExecution,
-    WorkflowDefinitionCreate, WorkflowStepDefinition,
-    MigrationStage
+    WorkflowDefinitionCreate, MigrationStage
 )
 from services.mcp_workflow_adapter import (
     MCPWorkflowAdapter, MCPIntegrationHelper
 )
-from services.workflow_executor_service import WorkflowExecutor
 
 logger = logging.getLogger(__name__)
 

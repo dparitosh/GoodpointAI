@@ -9,12 +9,12 @@ Orchestrates data quality scanning and reporting.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text as sql_text
+from sqlalchemy import text as sql_text
 
-from models.quality_models import DataQualityScanReport, DataQualityIssue, FieldQualityMetric
+from models.quality_models import DataQualityScanReport, FieldQualityMetric
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ class QualityScanService:
             total_rows = self.db.execute(sql_text(count_query)).scalar() or 0
 
             # Get column names
-            info_query = f"SELECT column_name FROM information_schema.columns WHERE table_name = :table"
+            info_query = "SELECT column_name FROM information_schema.columns WHERE table_name = :table"
             columns = [
                 row[0] for row in self.db.execute(
                     sql_text(info_query), {"table": table_name}

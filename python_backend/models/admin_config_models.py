@@ -13,7 +13,7 @@ from enum import Enum
 
 from sqlalchemy import (
     String, Integer, DateTime, JSON, Text, Float, Boolean,
-    Index, UniqueConstraint, Enum as SQLEnum
+    Index, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import text

@@ -25,7 +25,6 @@ def inspect_neo4j():
         print(f"Connected: {health['neo4j_connected']}")
         
         if not health['neo4j_connected']:
-            status = health.get('status', '')
             error  = str(health.get('error', '') or health.get('message', '')).lower()
 
             print()
@@ -54,7 +53,6 @@ def inspect_neo4j():
             print("         features are affected. Set NEO4J_URI= (empty) to suppress this warning.")
             return 1
 
-        from neo4j import GraphDatabase
 
         # Using the driver directly to run a cypher query
         with service.driver.session() as session:

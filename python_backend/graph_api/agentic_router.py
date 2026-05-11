@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from .dependencies import get_driver
 from core.db_session import get_db
-from models.quality_models import DiscoveryReport, DataQualityRule, DataQualityResult
+from models.quality_models import DiscoveryReport, DataQualityRule
 from models.report_hub_models import UnifiedReport
 from models.workflow_models import WorkflowExecution, MigrationStage
 from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
@@ -375,8 +375,6 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
     Routes through ChatCoordinator (MCP) when available; falls back to direct LLM call
     so the endpoint is useful even if the agent cluster isn't running.
     """
-    session_id = f"guidance_{int(datetime.now().timestamp())}"
-
     guidance_payload: Dict[str, Any] = {
         "message": "What should I do first with my data?",
         "source_name":   req.source_name or req.source_id or "Not specified",

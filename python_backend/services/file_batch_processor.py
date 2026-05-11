@@ -18,7 +18,6 @@ analysis to `MultiModalService` (already in `multimodal_router.py`).
 
 import asyncio
 import logging
-import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

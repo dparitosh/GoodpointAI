@@ -10,10 +10,9 @@ Rule execution follows a DAG (Directed Acyclic Graph) structure with parent-chil
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
 from sqlalchemy import (
     Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey,
-    Index, Enum as SQLEnum, UniqueConstraint
+    Index
 )
 from sqlalchemy.orm import relationship
 from enum import Enum

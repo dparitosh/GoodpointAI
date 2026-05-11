@@ -11,7 +11,6 @@ Provides REST endpoints for:
 
 import logging
 import uuid
-import json
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
@@ -21,7 +20,7 @@ from pydantic import BaseModel, Field
 from core.db_session import get_db
 from models.rule_engine_models import (
     RuleSet, Rule, RuleTemplate, RuleSetExecution, RuleExecution, QuarantineRecord,
-    RuleLevel, RuleSeverity, RuleActionOnFail, RuleStatus, ExecutionStatus
+    RuleStatus, ExecutionStatus
 )
 from services.rule_engine import RuleEngine, get_system_templates
 

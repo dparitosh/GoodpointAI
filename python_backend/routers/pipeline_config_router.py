@@ -53,7 +53,7 @@ async def list_file_patterns(
     if category:
         query = query.filter(FilePatternConfig.category == category)
     if enabled_only:
-        query = query.filter(FilePatternConfig.enabled == True)
+        query = query.filter(FilePatternConfig.enabled)
     
     return query.order_by(FilePatternConfig.category, FilePatternConfig.pattern).all()
 
@@ -66,7 +66,7 @@ async def get_file_patterns_by_category(
     """Get file patterns grouped by category."""
     query = db.query(FilePatternConfig)
     if enabled_only:
-        query = query.filter(FilePatternConfig.enabled == True)
+        query = query.filter(FilePatternConfig.enabled)
     
     patterns = query.order_by(FilePatternConfig.category, FilePatternConfig.pattern).all()
     
@@ -202,7 +202,7 @@ async def list_pipeline_templates(
     if pipeline_type:
         query = query.filter(PipelineTemplate.pipeline_type == pipeline_type)
     if enabled_only:
-        query = query.filter(PipelineTemplate.enabled == True)
+        query = query.filter(PipelineTemplate.enabled)
     
     return query.order_by(PipelineTemplate.data_type, PipelineTemplate.name).all()
 
@@ -294,7 +294,7 @@ async def list_search_configs(
     if search_mode:
         query = query.filter(SearchConfiguration.search_mode == search_mode)
     if enabled_only:
-        query = query.filter(SearchConfiguration.enabled == True)
+        query = query.filter(SearchConfiguration.enabled)
     
     return query.order_by(SearchConfiguration.search_mode, SearchConfiguration.name).all()
 
@@ -322,7 +322,7 @@ async def create_search_config(
     if config.is_default:
         db.query(SearchConfiguration).filter(
             SearchConfiguration.search_mode == config.search_mode,
-            SearchConfiguration.is_default == True
+            SearchConfiguration.is_default
         ).update({SearchConfiguration.is_default: False})
     
     db_config = SearchConfiguration(**config.model_dump())
@@ -350,7 +350,7 @@ async def update_search_config(
         search_mode = update_data.get('search_mode', db_config.search_mode)
         db.query(SearchConfiguration).filter(
             SearchConfiguration.search_mode == search_mode,
-            SearchConfiguration.is_default == True,
+            SearchConfiguration.is_default,
             SearchConfiguration.id != config_id
         ).update({SearchConfiguration.is_default: False})
     
@@ -387,9 +387,9 @@ async def list_index_configs(
     query = db.query(IndexConfiguration)
     
     if knn_only:
-        query = query.filter(IndexConfiguration.knn_enabled == True)
+        query = query.filter(IndexConfiguration.knn_enabled)
     if enabled_only:
-        query = query.filter(IndexConfiguration.enabled == True)
+        query = query.filter(IndexConfiguration.enabled)
     
     return query.order_by(IndexConfiguration.name).all()
 
@@ -478,10 +478,10 @@ async def get_all_configurations(
     index_query = db.query(IndexConfiguration)
     
     if enabled_only:
-        file_patterns_query = file_patterns_query.filter(FilePatternConfig.enabled == True)
-        templates_query = templates_query.filter(PipelineTemplate.enabled == True)
-        search_query = search_query.filter(SearchConfiguration.enabled == True)
-        index_query = index_query.filter(IndexConfiguration.enabled == True)
+        file_patterns_query = file_patterns_query.filter(FilePatternConfig.enabled)
+        templates_query = templates_query.filter(PipelineTemplate.enabled)
+        search_query = search_query.filter(SearchConfiguration.enabled)
+        index_query = index_query.filter(IndexConfiguration.enabled)
     
     return AllConfigurationsResponse(
         file_patterns=[FilePatternResponse.model_validate(p) for p in file_patterns_query.all()],

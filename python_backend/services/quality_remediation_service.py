@@ -8,7 +8,6 @@ Handles remediation of data quality issues.
 """
 
 import logging
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
@@ -202,18 +201,6 @@ class QualityRemediationService:
         """
         try:
             # In production, would create a task in workflow system
-            remediation_request = {
-                "issue_id": issue_id,
-                "table_name": table_name,
-                "field_name": field_name,
-                "issue_type": issue_type,
-                "requested_by": requested_by,
-                "notes": notes or "",
-                "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "priority": "high" if issue_type == "critical" else "medium"
-            }
-
             logger.info("Created remediation request: %s", issue_id)
             return {
                 "success": True,
@@ -234,7 +221,7 @@ class QualityRemediationService:
         try:
             from sqlalchemy import text as sql_text
             result = self.db.execute(sql_text(
-                f"SELECT column_name FROM information_schema.columns WHERE table_name = :table"
+                "SELECT column_name FROM information_schema.columns WHERE table_name = :table"
             ), {"table": table_name})
             return [row[0] for row in result.fetchall()]
         except Exception:

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.db_session import get_db
-from models.rule_engine_models import RuleSet, Rule, RuleSetExecution, ExecutionStatus
+from models.rule_engine_models import RuleSet, Rule, RuleSetExecution
 from models.quality_models import DataQualityRule
 from services.rule_execution_service import RuleExecutionService
 
@@ -366,7 +366,7 @@ async def save_wizard_rules(
         existing = None
         if request.workflow_id:
             existing = db.query(RuleSet).filter(
-                RuleSet.context == context, RuleSet.is_active == True
+                RuleSet.context == context, RuleSet.is_active
             ).first()
 
         if existing:

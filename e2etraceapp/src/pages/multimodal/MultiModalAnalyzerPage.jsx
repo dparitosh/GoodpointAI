@@ -12,7 +12,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import './MultiModalAnalyzerPage.css';
-import { apiClient } from '../../utils/apiClient.js';
+
 import API_CONFIG from '../../config/api-config.js';
 import { useFileFormats } from '../../hooks/useFileFormats.js';
 

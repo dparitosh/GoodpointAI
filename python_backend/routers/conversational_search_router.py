@@ -151,7 +151,7 @@ def _get_search_config(db: Session) -> Dict[str, Any]:
         from models.pipeline_config_models import SearchConfiguration
         
         configs = db.query(SearchConfiguration).filter(
-            SearchConfiguration.enabled == True
+            SearchConfiguration.enabled
         ).all()
         
         if configs:
@@ -729,7 +729,6 @@ def _generate_assistant_message(
         "hybrid": "hybrid (semantic + vector + graph)"
     }
     
-    sources_summary = ", ".join([f"{count} from {st}" for st, count in source_types.items()])
     category_summary = ", ".join([f"{count} {cat}" for cat, count in categories.items()])
     
     # Build informative message

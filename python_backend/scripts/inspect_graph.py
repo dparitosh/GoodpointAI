@@ -1,6 +1,5 @@
 import requests
 import json
-import os
 
 def main():
     try:

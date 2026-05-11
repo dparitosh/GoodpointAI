@@ -6,9 +6,8 @@ Supports XML and JSON schema introspection, query execution, and data transforma
 import json
 import xml.etree.ElementTree as ET
 import hashlib
-import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 
 
 def _utcnow_iso() -> str:

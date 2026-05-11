@@ -10,7 +10,7 @@ Provides streaming export functionality for large datasets.
 import logging
 import io
 import csv
-from typing import Optional, List
+from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel

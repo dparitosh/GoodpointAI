@@ -4,7 +4,7 @@ Provides CRUD operations for query registry with unique name constraints.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timezone
+from datetime import datetime, timezone
 import importlib
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError

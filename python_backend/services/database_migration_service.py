@@ -12,9 +12,8 @@ Architecture:
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -391,7 +390,6 @@ class DatabaseMigrationService:
         }
         
         for table_name in source_count_queries.keys():
-            source_query = source_count_queries[table_name]
             target_query = target_count_queries.get(table_name)
             
             if not target_query:

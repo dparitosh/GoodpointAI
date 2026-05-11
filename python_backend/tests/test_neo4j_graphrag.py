@@ -115,4 +115,4 @@ class TestEmbedding:
         text = "consistent text"
         embedding1 = graphrag_service._get_embedding(text)
         embedding2 = graphrag_service._get_embedding(text)
-        assert embedding1 == embedding2 == None
+        assert embedding1 is None and embedding2 is None

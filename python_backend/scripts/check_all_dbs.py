@@ -1,5 +1,4 @@
 import os
-import sys
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
 from pathlib import Path
@@ -24,7 +23,8 @@ try:
     print(f"Found databases: {dbs}")
     
     for db in dbs:
-        if db == "system": continue
+        if db == "system":
+            continue
         try:
             with driver.session(database=db) as session:
                 count = session.run("MATCH (n) RETURN count(n) as c").single()["c"]

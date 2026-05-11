@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
 
 from core.db_session import get_db
 from models.admin_config_models import (
@@ -19,15 +18,10 @@ from models.admin_config_models import (
     SystemConfiguration,
     LLMProviderConfig,
     EmbeddingModelConfig,
-    APIKeyConfig,
     ConnectionConfig,
     FeatureFlag,
     AuditLog,
     # Enums
-    ConfigCategory,
-    LLMProvider,
-    EmbeddingProvider,
-    # Pydantic Models
     SystemConfigCreate,
     SystemConfigUpdate,
     SystemConfigResponse,
@@ -176,7 +170,7 @@ async def list_system_configs(
     if category:
         query = query.filter(SystemConfiguration.category == category)
     if enabled_only:
-        query = query.filter(SystemConfiguration.enabled == True)
+        query = query.filter(SystemConfiguration.enabled)
     
     configs = query.order_by(SystemConfiguration.category, SystemConfiguration.key).all()
     
@@ -394,7 +388,7 @@ async def list_llm_providers(
 async def get_default_llm_provider(db: Session = Depends(get_db)):
     """Get the default LLM provider."""
     provider = db.query(LLMProviderConfig).filter(
-        LLMProviderConfig.is_default == True,
+        LLMProviderConfig.is_default,
         LLMProviderConfig.status == "active"
     ).first()
     
@@ -491,7 +485,7 @@ async def create_llm_provider(
     if provider.is_default:
         db.query(LLMProviderConfig).filter(
             LLMProviderConfig.provider == provider.provider,
-            LLMProviderConfig.is_default == True
+            LLMProviderConfig.is_default
         ).update({"is_default": False})
     
     db_provider = LLMProviderConfig(**provider.model_dump())
@@ -565,7 +559,7 @@ async def update_llm_provider(
         db.query(LLMProviderConfig).filter(
             LLMProviderConfig.provider == db_provider.provider,
             LLMProviderConfig.id != provider_id,
-            LLMProviderConfig.is_default == True
+            LLMProviderConfig.is_default
         ).update({"is_default": False})
     
     for field, value in update_data.items():
@@ -668,7 +662,7 @@ async def list_embedding_models(
 async def get_default_embedding_model(db: Session = Depends(get_db)):
     """Get the default embedding model."""
     model = db.query(EmbeddingModelConfig).filter(
-        EmbeddingModelConfig.is_default == True,
+        EmbeddingModelConfig.is_default,
         EmbeddingModelConfig.status == "active"
     ).first()
     
@@ -706,7 +700,7 @@ async def create_embedding_model(
     
     # If setting as default, unset other defaults
     if model.is_default:
-        db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.is_default == True).update({"is_default": False})
+        db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.is_default).update({"is_default": False})
     
     db_model = EmbeddingModelConfig(**model.model_dump())
     db.add(db_model)
@@ -742,7 +736,7 @@ async def update_embedding_model(
     if update_data.get("is_default"):
         db.query(EmbeddingModelConfig).filter(
             EmbeddingModelConfig.id != model_id,
-            EmbeddingModelConfig.is_default == True
+            EmbeddingModelConfig.is_default
         ).update({"is_default": False})
     
     for field, value in update_data.items():
@@ -889,7 +883,7 @@ async def create_connection(
     if connection.is_default:
         db.query(ConnectionConfig).filter(
             ConnectionConfig.connection_type == connection.connection_type,
-            ConnectionConfig.is_default == True
+            ConnectionConfig.is_default
         ).update({"is_default": False})
     
     db_conn = ConnectionConfig(**connection.model_dump())
@@ -958,7 +952,7 @@ async def update_connection(
         db.query(ConnectionConfig).filter(
             ConnectionConfig.connection_type == db_conn.connection_type,
             ConnectionConfig.id != conn_id,
-            ConnectionConfig.is_default == True
+            ConnectionConfig.is_default
         ).update({"is_default": False})
     
     for field, value in update_data.items():
@@ -1046,7 +1040,7 @@ async def list_feature_flags(
     """List all feature flags."""
     query = db.query(FeatureFlag)
     if enabled_only:
-        query = query.filter(FeatureFlag.enabled == True)
+        query = query.filter(FeatureFlag.enabled)
     return query.order_by(FeatureFlag.name).all()
 
 
@@ -1184,7 +1178,7 @@ async def list_audit_logs(
 @router.get("/all", response_model=AllAdminConfigsResponse)
 async def get_all_configs(db: Session = Depends(get_db)):
     """Get all admin configurations in a single request."""
-    system_configs = db.query(SystemConfiguration).filter(SystemConfiguration.enabled == True).all()
+    system_configs = db.query(SystemConfiguration).filter(SystemConfiguration.enabled).all()
     llm_providers = db.query(LLMProviderConfig).filter(LLMProviderConfig.status == "active").all()
     embedding_models = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.status == "active").all()
     connections = db.query(ConnectionConfig).filter(ConnectionConfig.status == "active").all()
@@ -1636,11 +1630,11 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
     try:
         if model.provider == "sentence_transformers":
             # Local model - just check if we can import
-            try:
-                from sentence_transformers import SentenceTransformer
+            import importlib.util
+            if importlib.util.find_spec("sentence_transformers") is not None:
                 result["success"] = True
                 result["message"] = f"SentenceTransformers available (model: {model.model_name})"
-            except ImportError:
+            else:
                 result["error"] = "sentence-transformers not installed"
                 
         elif model.provider == "openai":
@@ -1738,7 +1732,7 @@ async def refresh_oauth_token(connection_id: str, force: bool = False, db: Sessi
     Acquires a new OAuth token using client credentials flow.
     Useful for testing OAuth configuration or forcing token refresh.
     """
-    from core.oauth_service import get_connection_oauth_token, get_oauth_token_manager
+    from core.oauth_service import get_connection_oauth_token
     from models.admin_config_models import ConnectionConfig
     
     # Get connection

@@ -39,7 +39,7 @@ def _get_neo4j_config_from_admin_center() -> dict:
             # Query admin config for neo4j connection
             neo4j_config = db.query(ConnectionConfig).filter(
                 ConnectionConfig.connection_type == "neo4j",
-                ConnectionConfig.is_default == True
+                ConnectionConfig.is_default
             ).first()
             
             if neo4j_config and neo4j_config.host:

@@ -121,7 +121,7 @@ async def execute_sql_query(request: SQLQueryRequest):
                 logger.warning("SQL query rejected - forbidden marker '%s'", marker)
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Forbidden SQL marker not allowed in query"
+                    detail="Forbidden SQL marker not allowed in query"
                 )
         
         # Reference list of allowed tables (can be used for validation)

@@ -16,7 +16,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
-import { e2etraceFetchWithRetry } from '../../api/e2etrace-api.js';
+
 import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './ReportingHubPage.css';
 
