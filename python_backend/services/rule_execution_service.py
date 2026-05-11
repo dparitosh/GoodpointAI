@@ -9,6 +9,7 @@ Orchestrates rule validation and enforcement.
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
@@ -105,20 +106,27 @@ class RuleExecutionService:
         Returns:
             RuleExecutionResult with pass/fail status and violations
         """
-        import time
         start_time = time.time()
 
         try:
             # Load rule set
             rule_set = self.db.query(RuleSet).filter(RuleSet.id == rule_set_id).first()
             if not rule_set:
-                logger.warning("Rule set not found: %s", rule_set_id)
+                # Unknown rule_set_id → treat as a config error, not a pass.
+                # Returning passed=True here would silently allow bad data through.
+                logger.error("Rule set not found: %s — returning empty-violation result", rule_set_id)
                 return RuleExecutionResult(
                     rule_set_id=rule_set_id,
                     entity_id=entity_id or "unknown",
-                    passed=True,  # Default to pass if rule set doesn't exist
-                    violations=[],
-                    duration_ms=0.0
+                    passed=False,
+                    violations=[RuleViolation(
+                        rule_id="system",
+                        rule_name="RuleSet Lookup",
+                        severity="error",
+                        message=f"Rule set '{rule_set_id}' not found",
+                        action="log",
+                    )],
+                    duration_ms=0.0,
                 )
 
             # Validate rule set is active
@@ -212,9 +220,11 @@ class RuleExecutionService:
 
             # Evaluate based on rule level and expression language
             if rule.expression_language == "python":
+                # Inject `record` so expression templates like
+                # `is_empty(record.get('field'))` resolve correctly.
                 rule_passed = self.executor.evaluate_python_expression(
                     rule.expression,
-                    {**entity_data, **(rule.parameters or {})}
+                    {"record": entity_data, **entity_data, **(rule.parameters or {})}
                 )
             elif rule.expression_language == "sql":
                 if not table_name or not entity_id:
@@ -272,7 +282,10 @@ class RuleExecutionService:
                 rule_set_exec.status = ExecutionStatus.COMPLETED.value
                 rule_set_exec.completed_at = datetime.now(timezone.utc)
                 rule_set_exec.duration_ms = result.duration_ms
-                rule_set_exec.passed_count = 0
+                # passed_count = rules executed minus violations (not always identical
+                # to total rules because stop_on_critical may short-circuit early).
+                total_rules = len(result.violations) + (1 if result.passed else 0)
+                rule_set_exec.passed_count = 0 if not result.passed else max(0, total_rules - len(result.violations))
                 rule_set_exec.failed_count = len(result.violations)
                 rule_set_exec.result = {
                     "passed": result.passed,

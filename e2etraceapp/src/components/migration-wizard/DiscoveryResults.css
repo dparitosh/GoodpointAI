@@ -1060,6 +1060,9 @@
   white-space: nowrap;
 }
 .dr-dq-export-btn:hover { background: var(--accent-subtle, rgba(99,102,241,.08)); }
+.dr-dq-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dr-dq-export-btn--xlsx { border-color: #217346; color: #217346; }
+.dr-dq-export-btn--xlsx:hover { background: rgba(33,115,70,.08); }
 
 .dr-dq-toggle-btn {
   display: inline-flex; align-items: center; gap: 5px;

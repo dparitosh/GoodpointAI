@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { XStateVisualizer } from './xstate-visualizer/XStateVisualizer';
 import { usePlmWorkflowGraph } from '../hooks/usePlmWorkflowGraph';
 import { getSampleInteractiveStateFlow } from '../data/sampleInteractiveStateFlow';
+import { API_CONFIG } from '../config/api-config';
 
 export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
   const isSample = mode === 'sample';
-  const { graphData, loading, loadError } = usePlmWorkflowGraph();
+  const { graphData, loading } = usePlmWorkflowGraph();
 
   const [workflows, setWorkflows] = useState([]);
   const [workflowsLoading, setWorkflowsLoading] = useState(true);
@@ -26,7 +27,7 @@ export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
       setWorkflowsError(null);
 
       try {
-        const res = await fetch('/api/workflows/');
+        const res = await fetch(API_CONFIG.ENDPOINTS.WORKFLOWS);
         const json = res.ok ? await res.json() : [];
         const normalized = Array.isArray(json)
           ? json
@@ -57,7 +58,7 @@ export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
     return () => {
       cancelled = true;
     };
-  }, [isSample, selectedWorkflowId]);
+  }, [isSample]);
 
   useEffect(() => {
     if (isSample) return;
@@ -74,7 +75,7 @@ export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
       setWorkflowGraphError(null);
 
       try {
-        const res = await fetch(`/api/workflows/${encodeURIComponent(selectedWorkflowId)}`);
+        const res = await fetch(API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS(selectedWorkflowId));
         if (!res.ok) {
           if (cancelled) return;
           setWorkflowGraphData({ nodes: [], edges: [] });
@@ -125,7 +126,6 @@ export const InteractiveStateFlowEmbed = ({ mode = 'live' }) => {
       : graphData;
 
   const effectiveLoading = isSample ? false : (loading || (Boolean(selectedWorkflowId) && workflowGraphLoading));
-  const _effectiveLoadError = isSample ? null : loadError;
 
   if (effectiveLoading) {
     return (

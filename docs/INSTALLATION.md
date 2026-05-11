@@ -445,8 +445,11 @@ python -m scripts.init_db_schema
 | Script | Purpose | How to Run |
 | :--- | :--- | :--- |
 | `graphtrace.ps1` | **Single entry point** — diagnostics + full stack launcher | `.\graphtrace.ps1 -Check` or `.\graphtrace.ps1 -Start` |
+| `graphtrace.ps1 -Reset` | **Destructive** — drop all tables, recreate, re-seed defaults | `.\graphtrace.ps1 -Reset` (prompts) or `.\graphtrace.ps1 -Reset -Force` |
+| `stop-all.ps1` | Stop all running GraphTrace services (by port) | `.\stop-all.ps1` |
 | `scripts/diagnostics.py` | Preflight checks (Python, Node, .env, Postgres connectivity) | Called automatically by `graphtrace.ps1` |
 | `scripts/start.py` | Multiplexer — launches all 11 services in parallel | Called automatically by `graphtrace.ps1 -Start` |
+| `scripts/check_postgres.py` | Standalone Postgres connectivity and schema health check | `python scripts/check_postgres.py [--detailed] [--init-schema]` |
 | `python_backend/scripts/init_db_schema.py` | Creates all PostgreSQL tables + seeds default config | Called automatically by `scripts/start.py` |
 | `python_backend/scripts/reset_postgres_schema.py` | **Destructive** — drops and recreates all tables | `python -m scripts.reset_postgres_schema --yes --confirm-db graphtrace` |
 | `python_backend/smoke-backend.ps1` | Quick backend smoke test (dev helper) | `.\python_backend\smoke-backend.ps1` |

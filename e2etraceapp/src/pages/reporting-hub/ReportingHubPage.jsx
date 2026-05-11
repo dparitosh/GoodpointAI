@@ -17,6 +17,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api.js';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './ReportingHubPage.css';
 
 // ─── Type meta ───────────────────────────────────────────────────────────────
@@ -200,47 +201,97 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 150);
 }
 
-function exportReportAsJSON(report) {
+// Fetch the full report (with `result` payload) on demand. The list endpoint
+// only returns `summary`, so without this hydration any export is incomplete.
+async function hydrateReport(report) {
+  if (report && report.result !== undefined && report.result !== null) {
+    return report;
+  }
+  if (!report?.report_id) return report;
+  try {
+    const url = `${API_CONFIG.API_BASE_URL}${API_CONFIG.ENDPOINTS.REPORT_HUB}/${encodeURIComponent(report.report_id)}`;
+    const r = await fetch(url);
+    if (!r.ok) return report;
+    const full = await r.json();
+    return { ...report, ...full };
+  } catch {
+    return report;
+  }
+}
+
+async function exportReportAsJSON(report) {
+  const full = await hydrateReport(report);
   const payload = {
-    report_id: report.report_id,
-    report_type: report.report_type,
-    title: report.title,
-    status: report.status,
-    workflow_id: report.workflow_id,
-    run_id: report.run_id,
-    source_page: report.source_page,
-    tags: report.tags,
-    created_at: report.created_at,
-    summary: report.summary,
-    result: report.result ?? null,
+    report_id: full.report_id,
+    report_type: full.report_type,
+    title: full.title,
+    status: full.status,
+    workflow_id: full.workflow_id,
+    run_id: full.run_id,
+    source_page: full.source_page,
+    tags: full.tags,
+    created_at: full.created_at,
+    summary: full.summary,
+    result: full.result ?? null,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const safe = (report.title || report.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+  const safe = (full.title || full.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
   downloadBlob(blob, `report-${safe}-${Date.now()}.json`);
 }
 
-function exportReportAsCSV(report) {
-  // Flatten summary fields into CSV rows
+// Recursively flatten nested objects/arrays into dotted-key rows.
+function flattenForCsv(value, prefix, out) {
+  if (value === null || value === undefined) {
+    out.push([prefix, '']);
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      out.push([prefix, '[]']);
+      return;
+    }
+    const allPrimitive = value.every((v) => v === null || ['string', 'number', 'boolean'].includes(typeof v));
+    if (allPrimitive) {
+      out.push([prefix, value.join('; ')]);
+      return;
+    }
+    value.forEach((v, i) => flattenForCsv(v, `${prefix}[${i}]`, out));
+    return;
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 0) {
+      out.push([prefix, '{}']);
+      return;
+    }
+    keys.forEach((k) => flattenForCsv(value[k], prefix ? `${prefix}.${k}` : k, out));
+    return;
+  }
+  out.push([prefix, String(value)]);
+}
+
+async function exportReportAsCSV(report) {
+  const full = await hydrateReport(report);
   const rows = [['Field', 'Value']];
-  rows.push(['report_id', report.report_id ?? '']);
-  rows.push(['report_type', report.report_type ?? '']);
-  rows.push(['title', report.title ?? '']);
-  rows.push(['status', report.status ?? '']);
-  rows.push(['workflow_id', report.workflow_id ?? '']);
-  rows.push(['run_id', report.run_id ?? '']);
-  rows.push(['created_at', report.created_at ?? '']);
-  if (report.summary && typeof report.summary === 'object') {
-    Object.entries(report.summary).forEach(([k, v]) => {
-      rows.push([k, Array.isArray(v) ? v.join('; ') : String(v ?? '')]);
-    });
+  rows.push(['report_id', full.report_id ?? '']);
+  rows.push(['report_type', full.report_type ?? '']);
+  rows.push(['title', full.title ?? '']);
+  rows.push(['status', full.status ?? '']);
+  rows.push(['workflow_id', full.workflow_id ?? '']);
+  rows.push(['run_id', full.run_id ?? '']);
+  rows.push(['created_at', full.created_at ?? '']);
+  if (full.summary && typeof full.summary === 'object') {
+    flattenForCsv(full.summary, 'summary', rows);
+  }
+  if (full.result && typeof full.result === 'object') {
+    flattenForCsv(full.result, 'result', rows);
   }
   const csv = rows.map((r) => r.map((c) => {
     const s = String(c);
-    return /[
-\r,"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    return /[\n\r,"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const safe = (report.title || report.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+  const safe = (full.title || full.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
   downloadBlob(blob, `report-${safe}-${Date.now()}.csv`);
 }
 
@@ -372,6 +423,12 @@ export default function ReportingHubPage() {
   // detail modal
   const [detailReport, setDetailReport] = useState(null);
 
+  const openDetail = useCallback(async (r) => {
+    setDetailReport(r);
+    const full = await hydrateReport(r);
+    setDetailReport((cur) => (cur && cur.report_id === full.report_id ? full : cur));
+  }, []);
+
   const loadReports = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -416,6 +473,7 @@ export default function ReportingHubPage() {
 
   return (
     <div className="rh-page">
+      <AgentPipelineStrip activeStageName="reporting" />
 
       {/* ── HEADER ─────────────────────────────────────────────── */}
       <div className="rh-header">
@@ -512,7 +570,7 @@ export default function ReportingHubPage() {
           filtered.map((r) => {
             const m = typeMeta(r.report_type);
             return (
-              <div key={r.report_id} className="rh-report-row" onClick={() => setDetailReport(r)}>
+              <div key={r.report_id} className="rh-report-row" onClick={() => openDetail(r)}>
                 <div className="rh-row-type-bar" style={{ background: m.color }} />
                 <div className="rh-row-icon" style={{ color: m.color }}><i className={m.icon} /></div>
                 <div className="rh-row-body">
@@ -587,7 +645,7 @@ export default function ReportingHubPage() {
                   {rs.map((r) => {
                     const m = typeMeta(r.report_type);
                     return (
-                      <button key={r.report_id} className="rh-xref-item" style={{ borderColor: m.color, color: m.color }} onClick={() => setDetailReport(r)}>
+                      <button key={r.report_id} className="rh-xref-item" style={{ borderColor: m.color, color: m.color }} onClick={() => openDetail(r)}>
                         <i className={m.icon} /> {m.label}
                         <span className="rh-xref-status">{statusBadge(r.status)}</span>
                       </button>

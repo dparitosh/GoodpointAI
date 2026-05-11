@@ -10,7 +10,7 @@
  *   POST /api/agentic/quality-scan → run DQ scan on a discovered source
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
@@ -641,6 +641,9 @@ export default function DataDiscoveryPage() {
   // ── Selected file for profile review panel
   const [selectedProfileFile, setSelectedProfileFile] = useState(null);
 
+  // ── DB connection test status
+  const [dbConnStatus, setDbConnStatus]   = useState(null); // null | 'testing' | 'ok' | 'error'
+
   // ── Quality scan state
   const [scanning, setScanning]           = useState(false);
   const [scanResult, setScanResult]       = useState(null);
@@ -1216,7 +1219,30 @@ export default function DataDiscoveryPage() {
               <select
                 className="dd-select"
                 value={selectedSourceId}
-                onChange={(e) => { setSelected(e.target.value); setFolderPath(''); }}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelected(id);
+                  setFolderPath('');
+                  if (id) {
+                    const src = sources.find((s) => s.id === id);
+                    const type = (src?.type || src?.source_type || '').toLowerCase();
+                    const DB_TYPES = new Set(['postgresql', 'postgres', 'mysql', 'mssql', 'sqlserver', 'oracle', 'mongodb', 'redis', 'elasticsearch', 'database']);
+                    if (DB_TYPES.has(type)) {
+                      setDbConnStatus('testing');
+                      e2etraceFetchWithRetry(`${API_BASE}/api/data-sources/${encodeURIComponent(id)}/test`, { method: 'POST' })
+                        .then(async (r) => {
+                          if (!r.ok) { setDbConnStatus('error'); return; }
+                          const body = await r.json().catch(() => null);
+                          setDbConnStatus(body && body.success === false ? 'error' : 'ok');
+                        })
+                        .catch(() => setDbConnStatus('error'));
+                    } else {
+                      setDbConnStatus(null);
+                    }
+                  } else {
+                    setDbConnStatus(null);
+                  }
+                }}
               >
                 <option value="">— select a registered source —</option>
                 {sources.map((s) => (
@@ -1226,6 +1252,9 @@ export default function DataDiscoveryPage() {
               {sources.length === 0 && (
                 <span className="dd-source-hint">No registered sources — add one in <a href="#/admin" className="dd-link">Admin</a> or use Folder Path / Upload Files mode.</span>
               )}
+              {dbConnStatus === 'testing' && <span className="dd-conn-status testing"><i className="fas fa-circle-notch fa-spin" /> Testing connection…</span>}
+              {dbConnStatus === 'ok'      && <span className="dd-conn-status ok"><i className="fas fa-check-circle" /> Connected</span>}
+              {dbConnStatus === 'error'   && <span className="dd-conn-status error"><i className="fas fa-exclamation-circle" /> Connection failed</span>}
             </div>
             <label className="dd-checkbox-label">
               <input type="checkbox" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />

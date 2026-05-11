@@ -1854,8 +1854,14 @@ async def _test_connection(source: Dict) -> TestConnectionResponse:
             return await _test_neo4j_connection(connection)
         elif source_type == 'database':
             return await _test_database_connection(connection)
-        elif source_type == 'postgres':
+        elif source_type in {'postgres', 'postgresql'}:
             return await _test_postgres_connection(connection)
+        elif source_type in {'mysql', 'mariadb'}:
+            return await _test_mysql_connection(connection)
+        elif source_type in {'sqlserver', 'mssql'}:
+            return await _test_sqlserver_connection(connection)
+        elif source_type == 'oracle':
+            return await _test_oracle_connection(connection)
         elif source_type == 'api':
             return await _test_api_connection(connection)
         elif source_type == 'file':
@@ -1935,23 +1941,27 @@ async def _test_database_connection(connection: Dict) -> TestConnectionResponse:
         )
 
 async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
-    """Test PostgreSQL/MySQL connection using psycopg (v3) or pymysql"""
+    """Test PostgreSQL connection using psycopg v3 (off-loop to avoid blocking)."""
     try:
         import psycopg
-        
+        import asyncio
+
         host = connection.get('host', 'localhost')
         port = connection.get('port', '5432')
         database = connection.get('database', 'postgres')
         username = connection.get('username', 'postgres')
         password = connection.get('password', '')
-        
+
         conninfo = f"host={host} port={port} dbname={database} user={username} password={password} connect_timeout=5"
-        
-        with psycopg.connect(conninfo) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                version = cur.fetchone()[0]
-        
+
+        def _query() -> str:
+            with psycopg.connect(conninfo) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT version()")
+                    return cur.fetchone()[0]
+
+        version = await asyncio.to_thread(_query)
+
         return TestConnectionResponse(
             success=True,
             message="PostgreSQL connection successful",
@@ -1966,6 +1976,51 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
         return TestConnectionResponse(
             success=False,
             message=f"PostgreSQL connection failed: {str(e)}"
+        )
+
+
+async def _test_mysql_connection(connection: Dict) -> TestConnectionResponse:
+    """Test MySQL/MariaDB connection using pymysql (off-loop)."""
+    try:
+        import pymysql  # type: ignore
+    except ImportError:
+        return TestConnectionResponse(
+            success=False,
+            message="pymysql driver not installed. Install with: pip install pymysql"
+        )
+
+    try:
+        import asyncio
+
+        host = connection.get('host', 'localhost')
+        port = int(connection.get('port', 3306) or 3306)
+        database = connection.get('database', '')
+        username = connection.get('username', 'root')
+        password = connection.get('password', '')
+
+        def _query() -> str:
+            conn = pymysql.connect(
+                host=host, port=port, user=username, password=password,
+                database=database or None, connect_timeout=5,
+            )
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT VERSION()")
+                    return cur.fetchone()[0]
+            finally:
+                conn.close()
+
+        version = await asyncio.to_thread(_query)
+
+        return TestConnectionResponse(
+            success=True,
+            message="MySQL connection successful",
+            details={"host": host, "port": port, "database": database, "version": str(version)[:80]}
+        )
+    except Exception as e:
+        return TestConnectionResponse(
+            success=False,
+            message=f"MySQL connection failed: {str(e)}"
         )
 
 
@@ -1989,12 +2044,17 @@ async def _test_sqlserver_connection(connection: Dict) -> TestConnectionResponse
             f"PWD={password};"
             f"Connection Timeout=5;"
         )
-        
-        with pyodbc.connect(conn_str) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT @@VERSION")
-                version = cur.fetchone()[0]
-        
+
+        import asyncio
+
+        def _query() -> str:
+            with pyodbc.connect(conn_str) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT @@VERSION")
+                    return cur.fetchone()[0]
+
+        version = await asyncio.to_thread(_query)
+
         return TestConnectionResponse(
             success=True,
             message="SQL Server connection successful",
@@ -2033,12 +2093,17 @@ async def _test_oracle_connection(connection: Dict) -> TestConnectionResponse:
         password = connection.get('password', '')
         
         dsn = f"{host}:{port}/{service_name}"
-        
-        with oracledb.connect(user=username, password=password, dsn=dsn) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM v$version WHERE ROWNUM = 1")
-                version = cur.fetchone()[0]
-        
+
+        import asyncio
+
+        def _query() -> str:
+            with oracledb.connect(user=username, password=password, dsn=dsn) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT * FROM v$version WHERE ROWNUM = 1")
+                    return cur.fetchone()[0]
+
+        version = await asyncio.to_thread(_query)
+
         return TestConnectionResponse(
             success=True,
             message="Oracle connection successful",

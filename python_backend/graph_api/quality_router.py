@@ -1378,10 +1378,10 @@ async def get_quality_report(scan_id: str, db: Session = Depends(get_db)):
 @router.get("/reports/{scan_id}/export")
 async def export_quality_report(
     scan_id: str,
-    format: str = Query(default="json", pattern="^(json|csv)$"),
+    format: str = Query(default="json", pattern="^(json|csv|xlsx)$"),
     db: Session = Depends(get_db),
 ):
-    """Download a quality scan report as JSON or CSV."""
+    """Download a quality scan report as JSON, CSV, or XLSX (grouped, human-readable)."""
     _require_postgres()
     row = db.query(DataQualityScanReport).filter(DataQualityScanReport.scan_id == scan_id).first()
     if not row:
@@ -1405,6 +1405,9 @@ async def export_quality_report(
             media_type="application/json",
             headers={"Content-Disposition": f'attachment; filename="{filename_base}.json"'},
         )
+
+    if format == "xlsx":
+        return _export_xlsx(report, filename_base)
 
     # CSV
     output = io.StringIO()
@@ -1445,6 +1448,272 @@ async def export_quality_report(
         content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename_base}.csv"'},
+    )
+
+
+def _export_xlsx(report: dict, filename_base: str) -> Response:
+    """Build a multi-sheet XLSX report grouped for easy human consumption."""
+    try:
+        from openpyxl import Workbook  # noqa: PLC0415
+        from openpyxl.styles import (  # noqa: PLC0415
+            PatternFill, Font, Alignment, Border, Side
+        )
+        from openpyxl.utils import get_column_letter  # noqa: PLC0415
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=501,
+            detail="openpyxl is required for XLSX export. Install with: pip install openpyxl",
+        ) from exc
+
+    wb = Workbook()
+
+    # ── Style helpers ──────────────────────────────────────────────────────────
+    TITLE_FONT  = Font(bold=True, size=13, color="FFFFFF")
+    HEADER_FONT = Font(bold=True, size=10, color="FFFFFF")
+    BODY_FONT   = Font(size=10)
+    LABEL_FONT  = Font(bold=True, size=10)
+
+    _fills: dict = {}
+
+    def _fill(hex_color: str) -> PatternFill:
+        if hex_color not in _fills:
+            _fills[hex_color] = PatternFill("solid", fgColor=hex_color)
+        return _fills[hex_color]
+
+    def _border() -> Border:
+        thin = Side(style="thin", color="D0D0D0")
+        return Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def _header_row(ws, row_idx: int, values: list, bg: str = "1F3864") -> None:
+        for col_idx, value in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            cell.font = HEADER_FONT
+            cell.fill = _fill(bg)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = _border()
+
+    def _score_fill(score_0_to_1: float) -> PatternFill:
+        if score_0_to_1 >= 0.9:
+            return _fill("C6EFCE")   # green
+        if score_0_to_1 >= 0.7:
+            return _fill("FFEB9C")   # amber
+        return _fill("FFC7CE")       # red
+
+    def _severity_fill(severity: str) -> PatternFill:
+        mapping = {
+            "critical": "FFC7CE",
+            "high":     "FFCCCC",
+            "medium":   "FFEB9C",
+            "low":      "EBF1DE",
+        }
+        return _fill(mapping.get((severity or "").lower(), "F2F2F2"))
+
+    def _auto_width(ws) -> None:
+        for col in ws.columns:
+            max_len = max((len(str(cell.value or "")) for cell in col), default=8)
+            ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 60)
+
+    # ── Sheet 1: Executive Summary ─────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Summary"
+
+    # Title banner
+    ws1.merge_cells("A1:D1")
+    title_cell = ws1["A1"]
+    title_cell.value = f"Data Quality Report — {report.get('table_name', 'Unknown Table')}"
+    title_cell.font = TITLE_FONT
+    title_cell.fill = _fill("1F3864")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 30
+
+    # Metadata block
+    meta_rows = [
+        ("Scan ID",        report.get("scan_id", "")),
+        ("Table / Source", report.get("table_name", "")),
+        ("Scan Date",      str(report.get("scan_date", ""))),
+        ("Row Count",      report.get("row_count", 0)),
+        ("Column Count",   report.get("column_count", 0)),
+    ]
+    for r_offset, (label, value) in enumerate(meta_rows, 3):
+        label_cell = ws1.cell(row=r_offset, column=1, value=label)
+        label_cell.font = LABEL_FONT
+        label_cell.fill = _fill("D9E1F2")
+        value_cell = ws1.cell(row=r_offset, column=2, value=value)
+        value_cell.font = BODY_FONT
+
+    # Score dashboard
+    score_start = 10
+    _header_row(ws1, score_start, ["Dimension", "Score (%)", "Grade"], bg="2E75B6")
+    score_dims = [
+        ("Overall",      report.get("overall_score")),
+        ("Completeness", report.get("completeness_score")),
+        ("Accuracy",     report.get("accuracy_score")),
+        ("Consistency",  report.get("consistency_score")),
+        ("Validity",     report.get("validity_score")),
+    ]
+    for r_offset, (dim, score) in enumerate(score_dims, 1):
+        pct = round((score or 0) * 100, 1)
+        grade = "A" if pct >= 90 else "B" if pct >= 80 else "C" if pct >= 70 else "D" if pct >= 60 else "F"
+        row_idx = score_start + r_offset
+        ws1.cell(row=row_idx, column=1, value=dim).font = BODY_FONT
+        score_cell = ws1.cell(row=row_idx, column=2, value=pct)
+        score_cell.font = BODY_FONT
+        score_cell.fill = _score_fill(score or 0)
+        ws1.cell(row=row_idx, column=3, value=grade).font = BODY_FONT
+
+    # DQ metrics block
+    metrics_start = score_start + len(score_dims) + 3
+    _header_row(ws1, metrics_start, ["Metric", "Count"], bg="2E75B6")
+    metrics = [
+        ("Missing Values",  report.get("missing_values", 0)),
+        ("Invalid Values",  report.get("invalid_values", 0)),
+        ("Duplicate Count", report.get("duplicate_count", 0)),
+        ("SLA Violations",  report.get("sla_violations", 0)),
+        ("Delayed Arrivals", report.get("delayed_arrivals", 0)),
+    ]
+    for r_offset, (metric, count) in enumerate(metrics, 1):
+        row_idx = metrics_start + r_offset
+        ws1.cell(row=row_idx, column=1, value=metric).font = BODY_FONT
+        count_cell = ws1.cell(row=row_idx, column=2, value=count)
+        count_cell.font = BODY_FONT
+        if isinstance(count, int) and count > 0:
+            count_cell.fill = _fill("FFC7CE")
+
+    # Recommendations
+    recs = report.get("recommendations") or []
+    if recs:
+        rec_start = metrics_start + len(metrics) + 3
+        ws1.cell(row=rec_start, column=1, value="Recommendations").font = Font(bold=True, size=11)
+        for r_offset, rec in enumerate(recs, 1):
+            ws1.cell(row=rec_start + r_offset, column=1, value=f"• {rec}").font = BODY_FONT
+
+    _auto_width(ws1)
+
+    # ── Sheet 2: Issues (grouped by severity) ─────────────────────────────────
+    ws2 = wb.create_sheet("Issues")
+    ws2.merge_cells("A1:F1")
+    banner = ws2["A1"]
+    banner.value = "Data Quality Issues — Grouped by Severity"
+    banner.font = TITLE_FONT
+    banner.fill = _fill("C00000")
+    banner.alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 28
+
+    issues = report.get("issues") or []
+    severity_order = ["critical", "high", "medium", "low"]
+    grouped: dict = {s: [] for s in severity_order}
+    for issue in issues:
+        sev = (issue.get("severity") or "low").lower()
+        grouped.setdefault(sev, []).append(issue)
+
+    current_row = 3
+    for severity in severity_order:
+        group_issues = grouped.get(severity, [])
+        if not group_issues:
+            continue
+
+        # Group header
+        ws2.merge_cells(f"A{current_row}:F{current_row}")
+        grp_cell = ws2[f"A{current_row}"]
+        grp_cell.value = f"{severity.upper()} ({len(group_issues)} issue{'s' if len(group_issues) != 1 else ''})"
+        grp_cell.font = Font(bold=True, size=11, color="FFFFFF")
+        grp_cell.fill = _severity_fill(severity)
+        current_row += 1
+
+        _header_row(ws2, current_row, ["Issue ID", "Rule ID", "Severity", "Description", "Affected Rows", "Affected Columns"])
+        current_row += 1
+
+        for issue in group_issues:
+            ws2.cell(row=current_row, column=1, value=issue.get("issue_id", "")).font = BODY_FONT
+            ws2.cell(row=current_row, column=2, value=issue.get("rule_id", "")).font = BODY_FONT
+            sev_cell = ws2.cell(row=current_row, column=3, value=severity.capitalize())
+            sev_cell.font = BODY_FONT
+            sev_cell.fill = _severity_fill(severity)
+            ws2.cell(row=current_row, column=4, value=issue.get("description", "")).font = BODY_FONT
+            ws2.cell(row=current_row, column=5, value=issue.get("affected_rows", 0)).font = BODY_FONT
+            cols_val = ", ".join(issue.get("affected_columns") or [])
+            ws2.cell(row=current_row, column=6, value=cols_val).font = BODY_FONT
+            current_row += 1
+
+        current_row += 1  # blank separator
+
+    if not issues:
+        ws2.cell(row=3, column=1, value="No issues detected — data quality checks passed.").font = Font(italic=True)
+
+    _auto_width(ws2)
+
+    # ── Sheet 3: Column Profiling / Data Discovery ─────────────────────────────
+    ws3 = wb.create_sheet("Column Profiling")
+    ws3.merge_cells("A1:G1")
+    banner3 = ws3["A1"]
+    banner3.value = "Column Profiling — Data Discovery Report"
+    banner3.font = TITLE_FONT
+    banner3.fill = _fill("1F3864")
+    banner3.alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[1].height = 28
+
+    _header_row(ws3, 3, ["Column", "Data Type", "Null %", "Cardinality", "Distribution Shape", "Frequent Values", "Fix Suggestion"])
+
+    profiling = report.get("profiling") or []
+    if profiling:
+        for r_offset, col in enumerate(profiling, 1):
+            row_idx = 3 + r_offset
+            null_pct = col.get("null_percentage")
+            ws3.cell(row=row_idx, column=1, value=col.get("column", "")).font = Font(bold=True, size=10)
+            ws3.cell(row=row_idx, column=2, value=col.get("data_type", "")).font = BODY_FONT
+            null_cell = ws3.cell(row=row_idx, column=3, value=null_pct)
+            null_cell.font = BODY_FONT
+            if isinstance(null_pct, (int, float)) and null_pct > 10:
+                null_cell.fill = _fill("FFC7CE")
+            ws3.cell(row=row_idx, column=4, value=col.get("cardinality")).font = BODY_FONT
+            ws3.cell(row=row_idx, column=5, value=col.get("distribution_shape", "")).font = BODY_FONT
+            freq = col.get("frequent_values") or []
+            freq_str = "; ".join(f"{v.get('value','NULL')} ({v.get('count',0)})" for v in freq[:5])
+            ws3.cell(row=row_idx, column=6, value=freq_str).font = BODY_FONT
+            # Auto-suggest a fix for high-null columns
+            suggestion = ""
+            if isinstance(null_pct, (int, float)) and null_pct > 20:
+                suggestion = f"High null rate ({null_pct}%) — add NOT NULL constraint or default value"
+            ws3.cell(row=row_idx, column=7, value=suggestion).font = Font(italic=True, size=9, color="C00000")
+    else:
+        ws3.cell(row=4, column=1, value="No column profiling data available for this report.").font = Font(italic=True)
+
+    _auto_width(ws3)
+
+    # ── Sheet 4: Distribution Metrics ─────────────────────────────────────────
+    dist_metrics = report.get("distribution_metrics") or []
+    if dist_metrics:
+        ws4 = wb.create_sheet("Distribution Metrics")
+        ws4.merge_cells("A1:F1")
+        banner4 = ws4["A1"]
+        banner4.value = "Numeric Column Distribution Metrics"
+        banner4.font = TITLE_FONT
+        banner4.fill = _fill("375623")
+        banner4.alignment = Alignment(horizontal="center", vertical="center")
+        ws4.row_dimensions[1].height = 28
+
+        _header_row(ws4, 3, ["Column", "Min", "Max", "Average", "Std Dev", "Note"])
+        for r_offset, m in enumerate(dist_metrics, 1):
+            row_idx = 3 + r_offset
+            ws4.cell(row=row_idx, column=1, value=m.get("column", "")).font = Font(bold=True, size=10)
+            ws4.cell(row=row_idx, column=2, value=m.get("min")).font = BODY_FONT
+            ws4.cell(row=row_idx, column=3, value=m.get("max")).font = BODY_FONT
+            avg = m.get("avg")
+            ws4.cell(row=row_idx, column=4, value=round(avg, 4) if isinstance(avg, float) else avg).font = BODY_FONT
+            std = m.get("stddev")
+            ws4.cell(row=row_idx, column=5, value=round(std, 4) if isinstance(std, float) else std).font = BODY_FONT
+            note = "High variance" if (isinstance(std, float) and isinstance(avg, float) and avg != 0 and abs(std / avg) > 1) else ""
+            ws4.cell(row=row_idx, column=6, value=note).font = Font(italic=True, size=9)
+        _auto_width(ws4)
+
+    # ── Serialize ──────────────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename_base}.xlsx"'},
     )
 
 

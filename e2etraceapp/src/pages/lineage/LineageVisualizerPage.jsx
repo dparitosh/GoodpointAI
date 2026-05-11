@@ -20,6 +20,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import { API_CONFIG } from '../../config/api-config';
+import neo4jDataService from '../../services/neo4j-data-service.js';
 import './LineageVisualizerPage.css';
 import { useReportHub } from '../../hooks/useReportHub.js';
 
@@ -81,12 +83,20 @@ const LineageVisualizerPage = () => {
   const [activeTab, setActiveTab] = useState('lineage');
   
   const [dbStatus, setDbStatus] = useState({ postgres: false, neo4j: false });
+  const [neo4jLineageAnalytics, setNeo4jLineageAnalytics] = useState(null);
   const { saveReport, saving: rhSaving, saved: rhSaved } = useReportHub();
+
+  // Fetch Neo4j lineage analytics via service on mount
+  useEffect(() => {
+    neo4jDataService.getRelationshipAnalytics()
+      .then((data) => setNeo4jLineageAnalytics(data))
+      .catch(() => {}); // non-critical
+  }, []);
 
   useEffect(() => {
     const checkConnectivity = async () => {
       try {
-        const response = await fetch('/health');
+        const response = await fetch(API_CONFIG.ENDPOINTS.HEALTH);
         // Check if response is JSON before parsing
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
@@ -147,8 +157,9 @@ const LineageVisualizerPage = () => {
     fetchWorkflowDetails();
   }, [selectedWorkflowId]);
 
-  const loadLineageGraph = useCallback(async () => {
-    if (!selectedWorkflowId) {
+  const loadLineageGraph = useCallback(async (workflowIdOverride) => {
+    const idToLoad = workflowIdOverride || selectedWorkflowId;
+    if (!idToLoad) {
       setError('Please select a workflow');
       return;
     }
@@ -161,7 +172,7 @@ const LineageVisualizerPage = () => {
       }
       const qs = params.toString();
       const response = await e2etraceFetchWithRetry(
-        `/api/lineage/workflows/${selectedWorkflowId}/lineage-graph${qs ? `?${qs}` : ''}`
+        `/api/lineage/workflows/${idToLoad}/lineage-graph${qs ? `?${qs}` : ''}`
       );
       if (!response.ok) throw new Error(`Failed to load lineage: ${response.statusText}`);
       const data = await response.json();
@@ -314,7 +325,9 @@ const LineageVisualizerPage = () => {
       };
     });
 
-    const flowEdges = (data.relationships || []).map((rel, index) => ({
+    const flowEdges = (data.relationships || [])
+      .filter(rel => rel && rel.start && rel.end)
+      .map((rel, index) => ({
       id: `edge-${rel.start}-${rel.end}-${index}`,
       source: rel.start,
       target: rel.end,
@@ -467,7 +480,7 @@ const LineageVisualizerPage = () => {
       <div className="gs-quick-actions">
         <h3>Common Actions</h3>
         <div className="quick-actions-grid">
-          <button className="quick-action-card" onClick={() => { if (workflows[0]) { setSelectedWorkflowId(workflows[0].id); loadLineageGraph(); } }} disabled={workflows.length === 0}>
+          <button className="quick-action-card" onClick={() => { if (workflows[0]) { const id = workflows[0].id; setSelectedWorkflowId(id); loadLineageGraph(id); } }} disabled={workflows.length === 0}>
             <div className="qa-icon">LOAD</div>
             <div className="qa-text">
               <strong>Quick Load</strong>
@@ -553,6 +566,11 @@ const LineageVisualizerPage = () => {
           <span className={`status-badge ${dbStatus.neo4j ? 'connected' : 'disconnected'}`}>
             Neo4j: {dbStatus.neo4j ? 'Connected' : 'Offline'}
           </span>
+          {neo4jLineageAnalytics != null && (
+            <span className="status-badge connected" title="Total relationships in Neo4j">
+              <i className="fas fa-project-diagram" aria-hidden="true" /> {Array.isArray(neo4jLineageAnalytics) ? neo4jLineageAnalytics.length : (neo4jLineageAnalytics.total_relationships ?? 0)} rels
+            </span>
+          )}
           {nodes.length > 0 && (
             <button
               className="btn btn-secondary btn-sm"
@@ -755,7 +773,6 @@ const LineageVisualizerPage = () => {
                     </div>
                   ))}
                 </div>
-                <button className="btn btn-primary export-btn">Export Audit Report</button>
               </div>
             )}
 

@@ -17,10 +17,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import { API_CONFIG } from '../../config/api-config';
 import { getExcelSheetNames, readExcelArrayBufferToAoa } from '../../utils/spreadsheet-utils.js';
 import {
   useSchemaIntrospection,
-  useGraphQLQuery,
   useGraphQLCatalogue
 } from '../../hooks/useGraphQL';
 import './EnterpriseAnalyticsHub.css';
@@ -133,7 +133,6 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
 
   // GraphQL specific
   const { schema } = useSchemaIntrospection();
-  useGraphQLQuery();
   const { queries: savedQueries, loadQueries, saveQuery, deleteQuery: deletePersistedQuery } = useGraphQLCatalogue();
 
   // Natural Language Query state
@@ -226,12 +225,11 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   useEffect(() => {
     const checkConnectivity = async () => {
       try {
-        const response = await fetch('/health');
+        const response = await fetch(API_CONFIG.ENDPOINTS.HEALTH);
         // Check if response is JSON before parsing
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
           // Backend not running - got HTML fallback from Vite
-          console.warn('Backend not available (received non-JSON response)');
           setDbStatus({ postgres: false, neo4j: false, opensearch: false });
           return;
         }
@@ -257,12 +255,11 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
 
   const fetchQualityReports = async () => {
     try {
-      const response = await e2etraceFetchWithRetry('/api/analytics/quality/reports');
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_QUALITY_REPORTS);
       if (response.ok) {
         const data = await response.json();
         setQualityReports(Array.isArray(data) ? data : []);
       } else {
-        console.warn('Quality reports returned HTTP', response.status);
         setQualityReports([]);
       }
     } catch (err) {
@@ -278,10 +275,12 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     }
     setQualityReportDetailLoading(true);
     try {
-      const response = await e2etraceFetchWithRetry(`/api/analytics/quality/reports/${encodeURIComponent(scanId)}`);
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_QUALITY_REPORT_DETAIL(scanId));
       if (response.ok) {
         const data = await response.json();
         setSelectedQualityReport(data || null);
+      } else {
+        setSelectedQualityReport(null);
       }
     } catch (err) {
       console.error('Failed to load quality report detail:', err);
@@ -305,7 +304,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     setScanModalError(null);
     try {
       const res = await e2etraceFetchWithRetry(
-        `/api/analytics/quality/scan/${encodeURIComponent(table)}`,
+        API_CONFIG.ENDPOINTS.DATA_QUALITY_SCAN(table),
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
       );
       const data = await res.json();
@@ -327,7 +326,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     if (!scanId) { setQualityInsight(null); return; }
     setQualityInsightLoading(true);
     try {
-      const response = await e2etraceFetchWithRetry(`/api/analytics/quality/reports/${encodeURIComponent(scanId)}/insights`);
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_QUALITY_REPORT_INSIGHTS(scanId));
       if (response.ok) {
         setQualityInsight(await response.json());
       } else {
@@ -348,15 +347,16 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
 
     switch (dataSource) {
       case 'postgres': {
-        // Build SQL query
+        // Build SQL query — escape string values to prevent injection
+        const _sqlEsc = (v) => String(v).replace(/'/g, "''");
         let whereClause = '';
         if (queryRules.length > 0) {
           const conditions = queryRules.map(rule => {
-            const val = typeof rule.value === 'string' ? `'${rule.value}'` : rule.value;
+            const val = typeof rule.value === 'string' ? `'${_sqlEsc(rule.value)}'` : rule.value;
             if (rule.operator === 'IS NULL') return `${rule.field} IS NULL`;
             if (rule.operator === 'IS NOT NULL') return `${rule.field} IS NOT NULL`;
-            if (rule.operator === 'IN') return `${rule.field} IN (${rule.value})`;
-            if (rule.operator === 'LIKE') return `${rule.field} LIKE '%${rule.value}%'`;
+            if (rule.operator === 'IN') return `${rule.field} IN (${_sqlEsc(rule.value)})`;
+            if (rule.operator === 'LIKE') return `${rule.field} LIKE '%${_sqlEsc(rule.value)}%'`;
             return `${rule.field} ${rule.operator} ${val}`;
           });
           whereClause = `WHERE ${conditions.join(` ${queryCondition} `)}`;
@@ -510,6 +510,10 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: JSON.parse(queryToExecute) })
           });
+          if (!response.ok) {
+            const errBody = await response.json().catch(() => ({}));
+            throw new Error(errBody?.error || `OpenSearch request failed (HTTP ${response.status})`);
+          }
           results = await response.json();
           if (results.error) throw new Error(results.error);
           setQueryResults(results.hits?.hits?.map(h => h._source) || results);
@@ -540,7 +544,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
     setNlQueryMetadata(null);
     setNlSuggestions([]);
     try {
-      const response = await e2etraceFetchWithRetry('/api/analytics/nlq', {
+      const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.ANALYTICS_NLQ, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -583,7 +587,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
   const handleConfirmSave = useCallback(async () => {
     if (!saveModalName.trim()) return;
     try {
-      await saveQuery(saveModalName.trim(), queryText, saveModalDesc || `Saved from Analytics Hub - ${dataSource}`, 'graphql');
+      await saveQuery(saveModalName.trim(), queryText, saveModalDesc || `Saved from Analytics Hub - ${dataSource}`, dataSource);
       setSaveModalOpen(false);
       setSaveModalName('');
       setSaveModalDesc('');
@@ -1164,7 +1168,7 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
         </thead>
         <tbody>
           {data.map((row, i) => (
-            <tr key={i} style={{ background: i % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+            <tr key={JSON.stringify(row).slice(0, 40) + i} style={{ background: i % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
               <td style={{ color: '#1a2a3a', padding: '0.45rem 0.75rem' }}>{i + 1}</td>
               {columns.map(col => {
                 const type = getColumnType(col, row[col]);
@@ -1751,11 +1755,12 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {qualityReports.map((report, i) => (
+                      {qualityReports.map((report) => (
                         <tr
-                          key={i}
-                          className={`${selectedReportIndex === i ? 'selected' : ''}`}
+                          key={report.scan_id || report.table_name}
+                          className={`${selectedReportIndex === qualityReports.indexOf(report) ? 'selected' : ''}`}
                           onClick={() => {
+                            const i = qualityReports.indexOf(report);
                             setSelectedReportIndex(i);
                             fetchQualityReportDetail(report.scan_id);
                             fetchQualityInsight(report.scan_id);
@@ -1803,14 +1808,16 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                             <button className="btn-action" onClick={(e) => { e.stopPropagation(); setQueryText(`SELECT * FROM ${report.table_name} LIMIT 100`); setDataSource('postgres'); setActiveTab('query-builder'); }} title="Query Table">
                               <i className="fas fa-search"></i>
                             </button>
-                            <button className="btn-action" onClick={(e) => {
+                          <button className="btn-action" onClick={(e) => {
                               e.stopPropagation();
                               const sid = report.scan_id;
                               if (!sid) return;
                               const link = document.createElement('a');
                               link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=csv`;
                               link.download = `quality_report_${report.table_name}_${sid.slice(0,8)}.csv`;
+                              document.body.appendChild(link);
                               link.click();
+                              document.body.removeChild(link);
                             }} title="Export CSV">
                               <i className="fas fa-download"></i>
                             </button>                          </td>
@@ -1931,7 +1938,9 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                                   const link = document.createElement('a');
                                   link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=json`;
                                   link.download = `quality_report_${selectedQualityReport?.table_name}_${sid.slice(0,8)}.json`;
+                                  document.body.appendChild(link);
                                   link.click();
+                                  document.body.removeChild(link);
                                 }}>
                                   <i className="fas fa-file-code"></i>&nbsp;Export JSON
                                 </button>
@@ -1941,9 +1950,23 @@ const EnterpriseAnalyticsHub = ({ initialTab = 'query-builder' }) => {
                                   const link = document.createElement('a');
                                   link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=csv`;
                                   link.download = `quality_report_${selectedQualityReport?.table_name}_${sid.slice(0,8)}.csv`;
+                                  document.body.appendChild(link);
                                   link.click();
+                                  document.body.removeChild(link);
                                 }}>
                                   <i className="fas fa-file-csv"></i>&nbsp;Export CSV
+                                </button>
+                                <button className="btn btn-sm" onClick={() => {
+                                  const sid = selectedQualityReport?.scan_id;
+                                  if (!sid) return;
+                                  const link = document.createElement('a');
+                                  link.href = `/api/analytics/quality/reports/${encodeURIComponent(sid)}/export?format=xlsx`;
+                                  link.download = `quality_report_${selectedQualityReport?.table_name}_${sid.slice(0,8)}.xlsx`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                }} title="Export multi-sheet XLSX — grouped by severity, with profiling and distribution sheets">
+                                  <i className="fas fa-file-excel"></i>&nbsp;Export XLSX
                                 </button>
                               </div>
                             </>

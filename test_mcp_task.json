@@ -1,8 +1,0 @@
-{
-  "agent_type": "data_discovery_agent",
-  "task_type": "discover_files",
-  "params": {
-    "folder_path": "D:\\Download\\GoodpointAI\\data\\csv",
-    "recursive": true
-  }
-}

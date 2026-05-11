@@ -6,9 +6,11 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import API_CONFIG from '../config/api-config';
+import { API_CONFIG } from '../config/api-config';
 
-const API_BASE = API_CONFIG.IS_DEVELOPMENT ? '/api/admin/config' : `${API_CONFIG.API_BASE_URL}/api/admin/config`;
+const API_BASE = import.meta.env.DEV
+  ? '/api/admin/config'
+  : `${API_CONFIG.API_BASE_URL || ''}/api/admin/config`;
 
 // Tab Navigation Component
 function TabNavigation({ tabs, activeTab, onTabChange }) {

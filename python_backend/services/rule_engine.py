@@ -150,10 +150,11 @@ class SafeExpressionEvaluator:
     
     @staticmethod
     def has_circular_dependency(nodes: List[Dict], id_field: str = "id", ref_field: str = "parent_id") -> bool:
-        """Detect circular dependencies in hierarchical data."""
-        visited = set()
-        rec_stack = set()
-        
+        """Detect circular dependencies in hierarchical data.
+
+        Uses an iterative DFS (explicit stack) to avoid hitting Python's
+        recursion limit on deep BOM/PLM hierarchies.
+        """
         # Build adjacency list
         graph = defaultdict(list)
         for node in nodes or []:
@@ -164,25 +165,27 @@ class SafeExpressionEvaluator:
                 ref_id = str(ref_id_raw)
                 if node_id and ref_id:
                     graph[ref_id].append(node_id)
-        
-        def has_cycle(node: str) -> bool:
-            visited.add(node)
-            rec_stack.add(node)
-            
-            for neighbor in graph[node]:
-                if neighbor not in visited:
-                    if has_cycle(neighbor):
+
+        all_ids = {str(n.get(id_field)) for n in nodes or [] if n.get(id_field) is not None}
+        visited: set = set()
+
+        for start in all_ids:
+            if start in visited:
+                continue
+            # Each stack frame: (node, iterator_over_children, ancestor_set)
+            stack: list = [(start, iter(graph[start]), {start})]
+            while stack:
+                node, children, ancestors = stack[-1]
+                try:
+                    child: str = next(children)
+                    if child in ancestors:
                         return True
-                elif neighbor in rec_stack:
-                    return True
-            
-            rec_stack.discard(node)
-            return False
-        
-        for node_id in {str(n.get(id_field)) for n in nodes or [] if n.get(id_field) is not None}:
-            if node_id and node_id not in visited:
-                if has_cycle(node_id):
-                    return True
+                    if child not in visited:
+                        stack.append((child, iter(graph[child]), ancestors | {child}))
+                except StopIteration:
+                    visited.add(node)
+                    stack.pop()
+
         return False
     
     def __init__(self):

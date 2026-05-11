@@ -24,6 +24,7 @@ import { toast } from '../../hooks/useToast';
 import { LoadingSpinner, SPINNER_VARIANTS } from '../../components/LoadingSpinner.jsx';
 import './SelfHealingMonitorPage.css';
 import { useReportHub } from '../../hooks/useReportHub.js';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 
 const normalizeArrayPayload = (data, candidates = []) => {
   if (Array.isArray(data)) return data;
@@ -244,7 +245,7 @@ const SelfHealingMonitorPage = () => {
       }
 
       setTaskResults(prev => [result, ...prev].slice(0, 10));
-      
+
       // Reload circuit breakers and DLQ
       await loadCircuitBreakers();
       await loadDLQ();
@@ -304,6 +305,8 @@ const SelfHealingMonitorPage = () => {
 
   return (
     <div className="self-healing-monitor-page">
+      <AgentPipelineStrip activeStageName="etl" />
+
       {/* Loading overlay */}
       {loading && (
         <LoadingSpinner 

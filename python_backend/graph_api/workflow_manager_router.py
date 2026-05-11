@@ -968,6 +968,7 @@ async def list_workflows(
     return page_items
 
 
+@router.post("", response_model=WorkflowInstanceResponse, status_code=201, include_in_schema=False)
 @router.post("/", response_model=WorkflowInstanceResponse, status_code=201)
 async def create_workflow(
     workflow: WorkflowInstanceCreate,

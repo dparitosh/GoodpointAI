@@ -50,6 +50,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const discoveryInFlightRef = useRef(false);
   // Tracks the step we last wrote to the URL so the read effect skips it
   const urlWriteRef = useRef(false);
+  // AbortController for the fire-and-forget semantic profiling fetch (prevents stale responses on unmount)
+  const semProfileAbortRef = useRef(null);
   const [wizardData, setWizardData] = useState({
     // Step 0: Run identity
     workflowName: '',
@@ -137,11 +139,25 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     try {
       const stored = localStorage.getItem('workbench_migration_data');
       if (!stored) return;
-      
-      const workbenchData = JSON.parse(stored);
+
+      // Guard against oversized payloads (10 MB max) before parsing.
+      if (stored.length > 10 * 1024 * 1024) {
+        localStorage.removeItem('workbench_migration_data');
+        return;
+      }
+
+      let workbenchData;
+      try {
+        workbenchData = JSON.parse(stored);
+      } catch {
+        localStorage.removeItem('workbench_migration_data');
+        return;
+      }
+
       if (!workbenchData || typeof workbenchData !== 'object') return;
       const { schema, timestamp } = workbenchData;
-      if (!schema || !timestamp) return;
+      // Validate expected shape before using
+      if (!schema || typeof schema !== 'object' || !timestamp || typeof timestamp !== 'string') return;
       
       // Check if data is not too old (1 hour max)
       const age = Date.now() - new Date(timestamp).getTime();
@@ -171,8 +187,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       
       // Clean up localStorage
       localStorage.removeItem('workbench_migration_data');
-      
-      console.log('Loaded workbench data:', schema);
+
+      if (import.meta.env.DEV) console.log('Loaded workbench data:', schema);
     } catch (error) {
       console.error('Error loading workbench data:', error);
     }
@@ -182,6 +198,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const loadDataSources = useCallback(async () => {
     try {
       const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_SOURCES);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const sources = await response.json();
       // Show all sources that are configured in Admin Settings (even if not currently connected).
       // This keeps the wizard usable for end-users who must select from the configured catalog.
@@ -189,7 +206,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setAvailableSources(list);
       return list;
     } catch (error) {
-      console.error('Error loading data sources:', error);
+      if (import.meta.env.DEV) console.error('Error loading data sources:', error);
       setAvailableSources([]);
       return [];
     }
@@ -199,6 +216,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const loadMappingTemplates = useCallback(async () => {
     try {
       const response = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.DATA_MAPPING_TEMPLATES);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const templates = await response.json();
       const fetchedTemplates = Array.isArray(templates) ? templates : [];
       
@@ -293,24 +311,38 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       if (resumeId) {
         try {
           const apiBase = import.meta.env.VITE_API_BASE_URL || '';
-          const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS(resumeId)}`);
+          const res = await e2etraceFetchWithRetry(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOW_DETAILS(resumeId)}`);
           if (res.ok) {
             const wf = await res.json();
             const srcMatch = sources.find(s => s.id === wf.source_id) || null;
             const tgtMatch = sources.find(s => s.id === wf.target_id) || null;
+
+            // If the saved workflow references a source/target that no longer
+            // exists in the data-sources registry, do NOT fabricate a synthetic
+            // entry — downstream sampling/test calls will 404 and confuse the
+            // user. Surface a clear warning and force the user to re-select.
+            const orphanSrc = !srcMatch && wf.source_id;
+            const orphanTgt = !tgtMatch && wf.target_id;
+            if (orphanSrc || orphanTgt) {
+              const missing = [
+                orphanSrc ? `source "${wf.source_name || wf.source_id}"` : null,
+                orphanTgt ? `target "${wf.target_name || wf.target_id}"` : null,
+              ].filter(Boolean).join(' and ');
+              console.warn(`Resumed workflow references missing ${missing}. Please re-select in Step 1.`);
+            }
+
             setWizardData(prev => ({
               ...prev,
               workflowName: wf.name || '',
               savedWorkflowId: wf.id,
               savedWorkflowName: wf.name || '',
-              sourceSystem: srcMatch || (wf.source_id
-                ? { id: wf.source_id, name: wf.source_name, type: wf.source_type }
-                : null),
-              targetSystem: tgtMatch || (wf.target_id
-                ? { id: wf.target_id, name: wf.target_name, type: wf.target_type }
-                : null),
+              sourceSystem: srcMatch,
+              targetSystem: tgtMatch,
             }));
-            setStepStatus(prev => ({ ...prev, 1: { complete: true, valid: true } }));
+            setStepStatus(prev => ({
+              ...prev,
+              1: { complete: !!(srcMatch && tgtMatch), valid: !!(srcMatch && tgtMatch) },
+            }));
             // Restore the step the user was on when they navigated away (from localStorage),
             // falling back to step 2 (first step after a configured source/target).
             const savedProgress = (() => {
@@ -369,6 +401,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   }, [currentStep, embedded, setSearchParams]);
 
   // Persist migration progress to localStorage for "Resume Migration" feature
+  // Cleanup: abort any in-flight semantic profiling fetch when the component unmounts
+  useEffect(() => {
+    return () => { if (semProfileAbortRef.current) semProfileAbortRef.current.abort(); };
+  }, []);
+
   useEffect(() => {
     // Only persist if there's meaningful progress (beyond step 1)
     if (currentStep > 1 || wizardData.sourceSystem || wizardData.targetSystem) {
@@ -417,7 +454,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               workflow_config: { nodes: [], edges: [] }
             };
             // Use plain fetch so we can inspect res.status (e2etraceFetchWithRetry throws on 4xx)
-            const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOWS}/`, {
+            const res = await fetch(`${apiBase}${API_CONFIG.ENDPOINTS.WORKFLOWS}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)
@@ -546,18 +583,15 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       let stagedFrom = 'none';
       let samplePayload = null;
 
-      const _findKey = (keys, candidates) => {
-        const lowerKeys = keys.map(k => String(k));
-        for (const c of candidates) {
-          const match = lowerKeys.find(k => k.toLowerCase().includes(c));
-          if (match) return match;
-        }
-        return null;
-      };
-
       try {
         const sourceId = wizardData.sourceSystem?.id;
-        if (sourceId) {
+        // Skip sampling if the selected source isn't in the live catalog -
+        // a stale id would just trigger a noisy 404 with no useful outcome.
+        const sourceKnown = sourceId && availableSources.some(s => s.id === sourceId);
+        if (sourceId && !sourceKnown) {
+          stagedFrom = 'not_registered';
+        }
+        if (sourceKnown) {
           const sampleUrl = `${API_CONFIG?.API_BASE_URL || ''}/api/data-sources/${encodeURIComponent(sourceId)}/sample?limit=200`;
           const sampleResponse = await e2etraceFetchWithRetry(sampleUrl, { method: 'GET' });
           if (sampleResponse.ok) {
@@ -624,7 +658,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           })
         }, 1);
 
-        const taskResult = await agentResponse.json();
+        const taskResult = agentResponse.status === 204
+          ? {}
+          : await agentResponse.json().catch(() => ({}));
         
         if (taskResult.success && taskResult.result) {
            const res = taskResult.result;
@@ -651,12 +687,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
                   confidence: '90%'
               }));
            }
-        } else {
-             console.warn("Agent task completed but returned no result or failed:", taskResult);
         }
 
       } catch (agentError) {
-         console.warn("Agentic discovery failed, falling back to legacy happy path...", agentError);
+         if (import.meta.env.DEV) console.warn("Agentic discovery failed, falling back:", agentError);
          // Fallback logic could go here, but for now we warn and proceed partial
       }
 
@@ -671,7 +705,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             body: JSON.stringify({ stage: 'staged' })
           }
         );
-        sodaResult = await sodaResponse.json();
+        sodaResult = await sodaResponse.json().catch(() => null);
 
         // Promote failed dq/scan checks as issues (the gates endpoint only checks record count).
         // dq/scan checks have: { name, status, score?, detail } — surface the non-passing ones.
@@ -883,13 +917,14 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           }));
         }
 
-        console.info('Agent Director ingested discovery:', {
+        if (import.meta.env.DEV) console.info('Agent Director ingested discovery:', {
           report_id: agentDirectorReportId,
           actions: agentDirectorActions.length,
           dq_violations: violations.length,
         });
+      // eslint-disable-next-line no-restricted-syntax
       } catch (ingestErr) {
-        console.warn('Agent Director ingest unavailable:', ingestErr?.message || ingestErr);
+        if (import.meta.env.DEV) console.warn('Agent Director ingest unavailable:', ingestErr?.message || ingestErr);
       }
 
       // ── Fire DataProfilerAgent (non-blocking, via MCP) ────────────────────────
@@ -901,6 +936,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           : [];
 
       if (_semCols.length > 0) {
+        // Abort any previous in-flight semantic profiling request
+        if (semProfileAbortRef.current) semProfileAbortRef.current.abort();
+        const semAbortCtrl = new AbortController();
+        semProfileAbortRef.current = semAbortCtrl;
+
         const _semPayload = {
           source_name: wizardData.sourceSystem?.name || 'source',
           file_profiles: [{
@@ -923,6 +963,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         e2etraceFetchWithRetry(`${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_SEMANTIC_PROFILE}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: semAbortCtrl.signal,
           body: JSON.stringify({
             source_name:      _semPayload.source_name,
             folder_path:      wizardData.sourceSystem?.folder_path || null,
@@ -1044,7 +1085,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
     if (reportId) {
       try {
-        const res = await fetch(API_CONFIG.ENDPOINTS.DISCOVERY_INFER_MAPPINGS(reportId));
+        const _apiBase = import.meta.env.VITE_API_BASE_URL || '';
+        const res = await e2etraceFetchWithRetry(`${_apiBase}${API_CONFIG.ENDPOINTS.DISCOVERY_INFER_MAPPINGS(reportId)}`);
         if (res.ok) {
           const inferData = await res.json();
           const backendMappings = (inferData.mappings || []).map(m => ({
@@ -1089,13 +1131,13 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
 
     // Show success confirmation toast
-    const fieldsDetected = wizardData.discoveryIntrospect?.inferred_fields?.length ||
+    const fieldsDetected = wizardData.discoveryIntrospect?.inferred_source_fields?.length ||
                           extractSchemaFields(wizardData.sourceSchema).length || 0;
-    const qualityScore = wizardData.discoveryIntrospect?.soda_result?.score_pct ||
+    const qualityScore = wizardData.discoveryIntrospect?.soda?.overall_score ||
                         wizardData.discoveryIntrospect?.quality_score || null;
-    const suggestionCount = wizardData.discoveryIntrospect?.suggested_mappings?.length || 0;
+    const suggestionCount = wizardData.aiSuggestedMappings?.length || 0;
 
-    let message = '✅ Discovery Accepted!';
+    let message = 'Discovery Accepted!';
     const details = [];
     if (fieldsDetected > 0) details.push(`${fieldsDetected} fields discovered`);
     if (qualityScore !== null) details.push(`Quality: ${qualityScore}%`);
@@ -1262,7 +1304,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       const enabledRules = (wizardData.rules || []).filter(r => r.enabled && r.condition);
       if (enabledRules.length > 0) {
         try {
-          const saveRes = await fetch(API_CONFIG.ENDPOINTS.RULES_FROM_WIZARD, {
+          const saveRes = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.RULES_FROM_WIZARD, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1292,7 +1334,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             if (m.sourceField) sampleRecord[m.sourceField] = sampleRecord[m.sourceField] ?? '';
           });
 
-          const execRes = await fetch(API_CONFIG.ENDPOINTS.RULES_EXECUTE, {
+          const execRes = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.RULES_EXECUTE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1515,8 +1557,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       // Build part_mapping from user-defined fieldMappings (Step 3)
       // Strict policy: NO hardcoded fallback mappings
       const partMapping = wizardData.fieldMappings.reduce((acc, m) => {
-        const src = (m?.source_field || '').trim();
-        const dest = (m?.target_field || '').trim();
+        // Accept both snake_case (manual UI rows) and camelCase (AI/backend suggestions)
+        const src = (m?.source_field || m?.sourceField || '').trim();
+        const dest = (m?.target_field || m?.targetField || '').trim();
         if (src && dest) acc[src] = dest;
         return acc;
       }, {});
@@ -1591,8 +1634,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         ...prev,
         migrationStatus: 'completed',
         migrationStep: 'Complete!',
-        processedRecords: syncResult?.parts_synced || records.length,
-        totalRecords: syncResult?.parts_synced || records.length,
+        processedRecords: syncResult?.parts_synced ?? records.length,
+        totalRecords: syncResult?.parts_synced ?? records.length,
         nodesCreated: syncResult?.nodes_created || 0
       }));
       
@@ -1788,10 +1831,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       {/* AI Status */}
       <div className="ai-status-bar">
         <span className={`status-indicator ${graphRAGHealth.health?.neo4j_connected ? 'active' : ''}`}>
-          <i className="fas fa-brain" /> AI Assistant: {graphRAGHealth.health?.status || 'Checking...'}
+          <i className="fas fa-brain" /> AI Assistant: {graphRAGHealth.isLoading ? 'Checking...' : (graphRAGHealth.health?.status || 'unavailable')}
         </span>
         <span className={`status-indicator ${agenticSystem.status?.status === 'healthy' ? 'active' : ''}`}>
-          <i className="fas fa-robot" /> Agentic: {agenticSystem.status?.status || 'Checking...'}
+          <i className="fas fa-robot" /> Agentic: {agenticSystem.isLoading ? 'Checking...' : (agenticSystem.status?.status || 'unavailable')}
         </span>
       </div>
     </div>

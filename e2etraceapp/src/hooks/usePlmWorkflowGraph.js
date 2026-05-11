@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { API_CONFIG } from '../config/api-config';
 
 export const usePlmWorkflowGraph = () => {
   const [graphData, setGraphData] = useState(null);
@@ -9,7 +10,7 @@ export const usePlmWorkflowGraph = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const availabilityRes = await fetch('/api/plm/workflow/availability');
+        const availabilityRes = await fetch(API_CONFIG.ENDPOINTS.PLM_AVAILABILITY);
         if (!availabilityRes.ok) {
           setAvailability({ available: false, reason: `HTTP ${availabilityRes.status}` });
           setGraphData({ nodes: [], edges: [] });
@@ -28,7 +29,7 @@ export const usePlmWorkflowGraph = () => {
           return;
         }
 
-        const workflowRes = await fetch('/api/plm/workflow');
+        const workflowRes = await fetch(API_CONFIG.ENDPOINTS.PLM_WORKFLOW);
         if (!workflowRes.ok) {
           setGraphData({ nodes: [], edges: [] });
           setLoadError(workflowRes.statusText || `HTTP ${workflowRes.status}`);

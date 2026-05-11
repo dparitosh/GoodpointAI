@@ -110,13 +110,17 @@ class GraphIntegrationService {
   }
 
   async checkGraphRAGHealth() {
-    const response = await fetch(`${API_BASE}/api/neo4j-graphrag/health`);
-    
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.statusText}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`${API_BASE}/api/neo4j-graphrag/health`, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`Health check failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
     }
-    
-    return await response.json();
   }
 
   async listGraphRAGTools() {

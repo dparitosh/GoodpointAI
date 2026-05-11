@@ -150,7 +150,14 @@ export const useAgenticSystemStatus = () => {
     setError(null);
 
     try {
-      const response = await e2etraceFetchWithRetry(`${AGENTIC_SYSTEM_API}/status`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      let response;
+      try {
+        response = await e2etraceFetchWithRetry(`${AGENTIC_SYSTEM_API}/status`, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       const data = await response.json();
       
       setStatus(data);
@@ -158,7 +165,7 @@ export const useAgenticSystemStatus = () => {
       
       return data;
     } catch (err) {
-      const errorMsg = err.message || 'Status check failed';
+      const errorMsg = err.name === 'AbortError' ? 'unavailable' : (err.message || 'Status check failed');
       setError(errorMsg);
       setStatus({ status: 'unavailable' });
       // Don't throw - this is a health check

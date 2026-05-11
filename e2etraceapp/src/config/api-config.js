@@ -67,11 +67,15 @@ const DEFAULT_CONFIG = {
     ANALYTICS_RELATIONSHIPS: '/api/analytics/relationships',
     DATA_QUALITY: '/api/analytics/quality/dashboard',
     DATA_QUALITY_REPORTS: '/api/analytics/quality/reports',
+    DATA_QUALITY_REPORT_DETAIL: (scanId) => `/api/analytics/quality/reports/${encodeURIComponent(scanId)}`,
+    DATA_QUALITY_REPORT_INSIGHTS: (scanId) => `/api/analytics/quality/reports/${encodeURIComponent(scanId)}/insights`,
+    DATA_QUALITY_REPORT_EXPORT: (scanId, format) => `/api/analytics/quality/reports/${encodeURIComponent(scanId)}/export?format=${format}`,
     DATA_QUALITY_TABLES: '/api/analytics/quality/tables',
     DATA_QUALITY_SCAN: (table) => `/api/analytics/quality/scan/${encodeURIComponent(table)}`,
     DATA_QUALITY_RULES: '/api/data-quality/rules',
     DATA_QUALITY_SCRUB: '/api/data-quality/scrub',
     DATA_QUALITY_DUPLICATES: '/api/data-quality/duplicates',
+    ANALYTICS_NLQ: '/api/analytics/nlq',
     
     // Data Configuration
     DATA_SOURCES: '/api/data-sources',

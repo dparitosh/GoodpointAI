@@ -14,6 +14,8 @@ import { e2etraceTransformDataForCytoscape } from '../../utils/e2etrace-graph';
 import { getRuntimeConfig } from '../../config/runtime-config';
 import { API_CONFIG } from '../../config/api-config';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
+import neo4jDataService from '../../services/neo4j-data-service.js';
 import { 
   getNodeColor, 
   getNodeShape,
@@ -134,6 +136,14 @@ const GraphExplorerPage = () => {
     loading: false,
     lastUpdated: null
   });
+  const [neo4jAnalytics, setNeo4jAnalytics] = useState(null);
+
+  // Fetch Neo4j node statistics via Neo4jDataService on mount
+  useEffect(() => {
+    neo4jDataService.getNodeStatistics()
+      .then((data) => setNeo4jAnalytics(data))
+      .catch(() => {}); // non-critical — graph still works without it
+  }, []);
   
   const [filters, setFilters] = useState({
     limit: 100,
@@ -1049,6 +1059,8 @@ const GraphExplorerPage = () => {
 
   return (
     <div className="graph-explorer-page">
+      <AgentPipelineStrip activeStageName="discovery" />
+
       {/* Header with branding */}
       <div className="page-header">
         <div className="header-content">
@@ -1326,6 +1338,9 @@ const GraphExplorerPage = () => {
           <div className="graph-stats">
             <span><i className="fas fa-circle" aria-hidden="true"></i> Nodes: {graphData.nodes.length}</span>
             <span><i className="fas fa-arrow-right" aria-hidden="true"></i> Edges: {graphData.edges.length}</span>
+            {neo4jAnalytics != null && (
+              <span><i className="fas fa-database" aria-hidden="true"></i> DB Nodes: {Array.isArray(neo4jAnalytics) ? neo4jAnalytics.length : (neo4jAnalytics.total_nodes ?? 0)}</span>
+            )}
             {graphData.lastUpdated && (
               <span><i className="fas fa-clock" aria-hidden="true"></i> Last Updated: {new Date(graphData.lastUpdated).toLocaleTimeString()}</span>
             )}

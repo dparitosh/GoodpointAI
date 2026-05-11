@@ -27,6 +27,8 @@ from sqlalchemy.orm import Session
 
 from core.db_session import DATABASE_URL, get_db
 from models.plm_models import PLMIngestionRun, PLMPart, PLMStagedRecord
+from models.rule_engine_models import Rule, RuleSet
+from services.rule_expression_executor import RuleRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -308,11 +310,27 @@ class TransformRequest(BaseModel):
         default_factory=lambda: {"part_number": "part_number", "name": "name"},
         description="Source field → target field mapping, e.g. {'category': 'classification'}",
     )
+    # Optional: ID of a persisted RuleSet to evaluate against each record during
+    # transform.  Pre-compiled once before the loop (RuleRegistry pattern).
+    rule_set_id: Optional[str] = Field(
+        default=None,
+        description="Rule set ID whose rules are applied per-record during transform",
+    )
 
 
 @router.post("/runs/{run_id}/transform")
 async def transform_records(run_id: str, payload: TransformRequest, db: Session = Depends(get_db)):
     """Apply field mappings to staged records and persist as PLMPart rows.
+
+    Implements the **Accumulator / Process-and-Report** pattern:
+
+    * Per-record try-except — one bad record never halts the batch.
+    * **Schema failures** (part_number unresolvable): record is *skipped* and
+      appended to ``error_log`` with ``exception_type="SchemaError"``.
+    * **Quality failures** (a rule in the RuleSet returns False): record is
+      *kept* but its ``raw`` payload is annotated with a ``_warnings`` list so
+      downstream steps and the UI can surface the issues.
+    * Returns a dual payload: transformed records summary + structured error log.
 
     Idempotent: existing PLMPart rows for this run are deleted before re-inserting.
     """
@@ -327,46 +345,166 @@ async def transform_records(run_id: str, payload: TransformRequest, db: Session 
     if not staged_rows:
         raise HTTPException(status_code=422, detail="No staged records — call /stage first")
 
-    mapping = payload.part_mapping or {}
-    # Guarantees for required targets (must always be mapped)
-    if "part_number" not in mapping.values():
-        mapping.setdefault("part_number", "part_number")
-    if "name" not in mapping.values():
-        mapping.setdefault("name", "name")
+    mapping = dict(payload.part_mapping or {})
 
-    # Remove existing transformed parts so this endpoint is idempotent
+    # ── Alias resolution for required targets ──────────────────────────────
+    _first_rec: Dict[str, Any] = (
+        staged_rows[0].payload if isinstance(staged_rows[0].payload, dict) else {}
+    )
+    _src_keys = list(_first_rec.keys())
+
+    _PN_SYNONYMS = [
+        "part_number", "partno", "part_no", "pn", "number", "item_number",
+        "item_no", "id", "part_id", "partnumber", "num",
+    ]
+    _NAME_SYNONYMS = ["name", "title", "description", "label", "part_name"]
+
+    def _best_src(synonyms: list) -> Optional[str]:
+        lower_src = {k.lower(): k for k in _src_keys}
+        for syn in synonyms:
+            if syn in lower_src:
+                return lower_src[syn]
+        return None
+
+    if "part_number" not in mapping.values():
+        fallback = _best_src(_PN_SYNONYMS) or (_src_keys[0] if _src_keys else "part_number")
+        mapping[fallback] = "part_number"
+    if "name" not in mapping.values():
+        fallback = _best_src(_NAME_SYNONYMS) or (_src_keys[0] if _src_keys else "name")
+        mapping.setdefault(fallback, "name")
+
+    # ── Pre-compile rules once before the batch loop ───────────────────────
+    # RuleRegistry compiles every expression string to a code object so the
+    # loop reuses __code__ objects instead of re-parsing on every iteration.
+    registry: Optional[RuleRegistry] = None
+    registry_compile_errors: List[Dict[str, Any]] = []
+
+    if payload.rule_set_id:
+        rule_set = db.query(RuleSet).filter(
+            RuleSet.id == payload.rule_set_id,
+            RuleSet.is_active == True,  # noqa: E712
+        ).first()
+        if rule_set:
+            rules = db.query(Rule).filter(
+                Rule.rule_set_id == payload.rule_set_id,
+                Rule.enabled == True,  # noqa: E712
+            ).all()
+            registry = RuleRegistry(rules)
+            registry_compile_errors = registry.compile_errors
+            if registry_compile_errors:
+                logger.warning(
+                    "RuleRegistry: %d rule(s) failed to compile for rule_set %s",
+                    len(registry_compile_errors), payload.rule_set_id,
+                )
+        else:
+            logger.warning("rule_set_id %s not found or inactive — skipping rule checks", payload.rule_set_id)
+
+    # ── Idempotent: clear previous transform output ────────────────────────
     db.query(PLMPart).filter(PLMPart.run_id == run_id).delete(synchronize_session=False)
 
+    # ── Accumulator state ─────────────────────────────────────────────────
     inserted = 0
+    error_log: List[Dict[str, Any]] = []
+    warning_count = 0
+
     for row in staged_rows:
-        rec: Dict[str, Any] = row.payload if isinstance(row.payload, dict) else {}
-
-        # Apply mapping: for each source→target pair, pick value from source field
-        mapped: Dict[str, Any] = {}
-        for src, dest in mapping.items():
-            if src in rec:
-                mapped[dest] = rec[src]
-
-        part_number = str(mapped.get("part_number") or rec.get("part_number") or "")
-        if not part_number:
-            continue  # skip records with no part_number
-
-        part = PLMPart(
-            run_id=run_id,
-            part_number=part_number,
-            name=str(mapped.get("name") or rec.get("name") or ""),
-            description=str(mapped.get("description") or rec.get("description") or ""),
-            classification=str(mapped.get("classification") or rec.get("classification") or ""),
-            raw=rec,
+        # Identify the source record — used in error log
+        raw_rec: Dict[str, Any] = row.payload if isinstance(row.payload, dict) else {}
+        # Pick the most meaningful identifier available in the source record
+        source_id = (
+            str(raw_rec.get("part_number") or raw_rec.get("Number") or
+                raw_rec.get("id") or raw_rec.get("ID") or row.id or "unknown")
         )
-        db.merge(part)  # upsert via unique index on (run_id, part_number)
-        inserted += 1
+
+        try:
+            # ── 1. Apply field mapping ─────────────────────────────────────
+            mapped: Dict[str, Any] = {}
+            for src, dest in mapping.items():
+                if src in raw_rec:
+                    mapped[dest] = raw_rec[src]
+
+            part_number = str(mapped.get("part_number") or raw_rec.get("part_number") or "").strip()
+
+            # ── 2. Schema gate — missing part_number is unrecoverable ──────
+            if not part_number:
+                error_log.append({
+                    "source_id":      source_id,
+                    "rule_id":        "SCHEMA:part_number",
+                    "exception_type": "SchemaError",
+                    "detail":         "part_number could not be resolved from source record",
+                })
+                continue
+
+            # ── 3. Quality gate — rules from RuleRegistry (warnings only) ─
+            record_warnings: List[Dict[str, Any]] = []
+            if registry is not None:
+                eval_record = {"part_number": part_number, **raw_rec, **mapped}
+                violations = registry.evaluate(eval_record)
+                for v in violations:
+                    if v.get("severity") == "critical":
+                        # Critical rule in the quality phase = treat as schema error,
+                        # skip the record and log it.
+                        error_log.append({
+                            "source_id":      source_id,
+                            "rule_id":        v["rule_id"],
+                            "exception_type": "CriticalRuleViolation",
+                            "detail":         f"Rule '{v['rule_name']}' failed (critical)",
+                        })
+                        part_number = ""  # flag to skip insert below
+                        break
+                    else:
+                        # Non-critical (warning / error) — keep the record, annotate it
+                        record_warnings.append({
+                            "rule_id":        v["rule_id"],
+                            "rule_name":      v["rule_name"],
+                            "severity":       v.get("severity", "warning"),
+                            "exception_type": v.get("exception_type"),
+                        })
+
+            if not part_number:
+                continue  # skipped by critical rule above
+
+            if record_warnings:
+                warning_count += len(record_warnings)
+                raw_rec = {**raw_rec, "_warnings": record_warnings}
+
+            # ── 4. Persist as PLMPart ──────────────────────────────────────
+            part = PLMPart(
+                run_id=run_id,
+                part_number=part_number,
+                name=str(mapped.get("name") or raw_rec.get("name") or ""),
+                description=str(mapped.get("description") or raw_rec.get("description") or ""),
+                classification=str(mapped.get("classification") or raw_rec.get("classification") or ""),
+                raw=raw_rec,
+            )
+            db.merge(part)
+            inserted += 1
+
+        except Exception as exc:  # noqa: BLE001
+            # Unexpected per-record error — log and continue (never halt the batch)
+            logger.error("Transform error for source_id=%s: %s", source_id, exc)
+            error_log.append({
+                "source_id":      source_id,
+                "rule_id":        None,
+                "exception_type": type(exc).__name__,
+                "detail":         str(exc),
+            })
 
     run.status = "transformed"
     run.updated_at = datetime.now(timezone.utc)
     db.commit()
 
-    return {"run_id": run_id, "transformed_count": inserted, "status": run.status}
+    return {
+        "run_id":            run_id,
+        "transformed_count": inserted,
+        "skipped_count":     len(error_log),
+        "warning_count":     warning_count,
+        "error_log":         error_log,
+        # Surface compile-time rule errors separately so UI can show them
+        # as configuration issues rather than data issues.
+        "rule_compile_errors": registry_compile_errors,
+        "status":            run.status,
+    }
 
 
 # ---------------------------------------------------------------------------

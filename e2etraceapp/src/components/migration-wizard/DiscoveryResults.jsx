@@ -9,6 +9,7 @@
  *  • Miller's Law — max 5 KPIs visible simultaneously; rest behind group tabs
  */
 import React, { useState, useMemo, useCallback } from 'react';
+import writeXlsxFile from 'write-excel-file';
 import './DiscoveryResults.css';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ const ConfBar = ({ pct, confTier }) => {
   const t = confTier || tier(pct);
   return (
     <div className={`dr-conf-bar-wrap dr-conf-wrap-${t}`} title={CONF_MEANING[t]}>
-      <div className="dr-conf-track">
+      <div className="dr-conf-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`Confidence: ${pct}%`}>
         <div className={`dr-conf-fill dr-conf-fill-${t}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="dr-conf-pct">{pct}%</span>
@@ -322,17 +323,119 @@ export default function DiscoveryResults({
     return rows;
   }, [sample]);
 
+  // ── DQ issue records: derive per-row issues from the staged sample ──────────
+  // For each sampled record we compute which fields are null/empty so the export
+  // can cross-reference actual rows that drove the aggregate stats above.
+  const dqIssueRecords = useMemo(() => {
+    if (!Array.isArray(allRecords) || allRecords.length === 0) return [];
+    // Build a {jsonString: [rowIdx,...]} map to detect duplicates (full-row equality)
+    const seen = new Map();
+    const issues = [];
+    allRecords.forEach((row, idx) => {
+      if (!row || typeof row !== 'object') return;
+      const rowId = row.id ?? row.ID ?? row._id ?? row.uuid ?? row.key ?? `row-${idx + 1}`;
+      const nullFields = [];
+      Object.entries(row).forEach(([k, v]) => {
+        if (v === null || v === undefined || v === '' || (typeof v === 'string' && v.trim() === '')) {
+          nullFields.push(k);
+        }
+      });
+      // Duplicate detection
+      const sig = JSON.stringify(row);
+      const dupOf = seen.get(sig);
+      if (dupOf === undefined) {
+        seen.set(sig, idx + 1);
+      }
+      if (nullFields.length > 0 || dupOf !== undefined) {
+        issues.push({
+          rowNumber: idx + 1,
+          recordId: String(rowId),
+          nullFields,
+          duplicateOfRow: dupOf,
+          // Snapshot up to 5 non-null values so the CSV/XLSX shows context
+          snapshot: Object.entries(row)
+            .filter(([, v]) => v !== null && v !== undefined && v !== '')
+            .slice(0, 5)
+            .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
+            .join('; '),
+        });
+      }
+    });
+    return issues;
+  }, [allRecords]);
+
   const exportDqCsv = useCallback(() => {
-    const header = 'File,Field,Type,Total Records,Null Count,Unique Values,Completeness (%),Duplicate Rows';
-    const lines  = dqReport.map(r =>
-      [r.file, r.field, r.type, r.totalRecords,
-       r.nullCount ?? '', r.uniqueCount ?? '',
-       r.completeness ?? '', r.duplicateRows]
-      .map(v => `"${String(v).replace(/"/g, '""')}"`)
-      .join(',')
-    );
-    const csv  = [header, ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const csvEscape = (v) => {
+      const s = String(v ?? '');
+      return /[\n\r,"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    // ── Sheet 1: Summary ────────────────────────────────────────────────────
+    const totalNulls = dqReport.reduce((s, r) => s + (r.nullCount || 0), 0);
+    const compRows   = dqReport.filter(r => r.completeness != null);
+    const avgComp    = compRows.length
+      ? Math.round(compRows.reduce((s, r) => s + r.completeness, 0) / compRows.length)
+      : null;
+    const issueFields = dqReport.filter(r =>
+      (r.nullCount || 0) > 0 ||
+      (r.duplicateRows || 0) > 0 ||
+      (r.completeness != null && r.completeness < 70)).length;
+
+    const summaryLines = [
+      '# Data Quality Summary',
+      `Run ID,${csvEscape(runId || 'discovery')}`,
+      `Total Fields Profiled,${dqReport.length}`,
+      `Fields With Issues,${issueFields}`,
+      `Total Null Values,${totalNulls}`,
+      `Average Completeness (%),${avgComp ?? 'N/A'}`,
+      `Sample Records Inspected,${allRecords.length}`,
+      `Sample Records With Issues,${dqIssueRecords.length}`,
+      '',
+    ];
+
+    // ── Sheet 2: Per-field detail ───────────────────────────────────────────
+    const detailHeader = 'File,Field,Type,Total Records,Null Count,Unique Values,Completeness (%),Duplicate Rows,Issue Flag';
+    const detailLines  = dqReport.map(r => {
+      const flags = [];
+      if ((r.nullCount || 0) > 0) flags.push('Has Nulls');
+      if ((r.duplicateRows || 0) > 0) flags.push('Duplicates');
+      if (r.completeness != null && r.completeness < 70) flags.push('Low Completeness');
+      return [
+        r.file, r.field, r.type, r.totalRecords,
+        r.nullCount ?? '', r.uniqueCount ?? '',
+        r.completeness ?? '', r.duplicateRows,
+        flags.join('; ') || 'OK',
+      ].map(csvEscape).join(',');
+    });
+
+    // ── Sheet 3: Issue records (row-level cross-reference) ──────────────────
+    const issueHeader = 'Row #,Record ID,Issue Type,Affected Fields,Duplicate Of Row,Sample Values';
+    const issueLines  = dqIssueRecords.map(r => {
+      const types = [];
+      if (r.nullFields.length > 0) types.push('Null/Empty');
+      if (r.duplicateOfRow !== undefined) types.push('Duplicate');
+      return [
+        r.rowNumber,
+        r.recordId,
+        types.join('; '),
+        r.nullFields.join('; '),
+        r.duplicateOfRow ?? '',
+        r.snapshot,
+      ].map(csvEscape).join(',');
+    });
+
+    const csv = [
+      ...summaryLines,
+      '# Per-Field Detail',
+      detailHeader,
+      ...detailLines,
+      '',
+      '# Records With Issues (from staged sample)',
+      issueHeader,
+      ...(issueLines.length > 0 ? issueLines : ['(no row-level issues detected in sampled records)']),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
@@ -340,8 +443,118 @@ export default function DiscoveryResults({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [dqReport, runId]);
+    setTimeout(() => URL.revokeObjectURL(url), 150);
+  }, [dqReport, dqIssueRecords, allRecords, runId]);
+
+  const exportDqXlsx = useCallback(async () => {
+    if (!dqReport.length) return;
+
+    // Group rows by severity-like completeness tier for the DQ sheet
+    const HEADER_STYLE = { fontWeight: 'bold', backgroundColor: '#1F3864', color: '#FFFFFF', align: 'center' };
+    const HIGH_STYLE   = { backgroundColor: '#C6EFCE' };
+    const MED_STYLE    = { backgroundColor: '#FFEB9C' };
+    const LOW_STYLE    = { backgroundColor: '#FFC7CE' };
+
+    const compStyle = (pct) => {
+      if (pct == null) return {};
+      if (pct >= 90) return HIGH_STYLE;
+      if (pct >= 70) return MED_STYLE;
+      return LOW_STYLE;
+    };
+
+    const headerRow = [
+      { value: 'File',              ...HEADER_STYLE },
+      { value: 'Field',             ...HEADER_STYLE },
+      { value: 'Type',              ...HEADER_STYLE },
+      { value: 'Total Records',     ...HEADER_STYLE },
+      { value: 'Null Count',        ...HEADER_STYLE },
+      { value: 'Unique Values',     ...HEADER_STYLE },
+      { value: 'Completeness (%)',  ...HEADER_STYLE },
+      { value: 'Duplicate Rows',    ...HEADER_STYLE },
+      { value: 'Issue Flag',        ...HEADER_STYLE },
+    ];
+
+    const dataRows = dqReport.map(r => {
+      const cStyle = compStyle(r.completeness);
+      const issueFlag = [];
+      if ((r.nullCount || 0) > 0) issueFlag.push('Has Nulls');
+      if ((r.duplicateRows || 0) > 0) issueFlag.push('Duplicates');
+      if (r.completeness != null && r.completeness < 70) issueFlag.push('Low Completeness');
+      return [
+        { value: r.file || '' },
+        { value: r.field || '', fontWeight: 'bold' },
+        { value: r.type || '' },
+        { value: r.totalRecords ?? 0, type: Number },
+        { value: r.nullCount  ?? 0,  type: Number, backgroundColor: (r.nullCount || 0) > 0 ? '#FFC7CE' : undefined },
+        { value: r.uniqueCount ?? 0, type: Number },
+        { value: r.completeness ?? 0, type: Number, ...cStyle },
+        { value: r.duplicateRows ?? 0, type: Number, backgroundColor: (r.duplicateRows || 0) > 0 ? '#FFEB9C' : undefined },
+        { value: issueFlag.join('; ') || 'OK', color: issueFlag.length ? '#C00000' : '#375623' },
+      ];
+    });
+
+    // Summary sheet data
+    const totalNulls   = dqReport.reduce((s, r) => s + (r.nullCount || 0), 0);
+    const totalDups    = [...new Set(dqReport.map(r => r.file))].reduce((s, fname) => {
+      const row = dqReport.find(r => r.file === fname);
+      return s + (row?.duplicateRows || 0);
+    }, 0);
+    const compRows     = dqReport.filter(r => r.completeness != null);
+    const avgComp      = compRows.length ? Math.round(compRows.reduce((s, r) => s + r.completeness, 0) / compRows.length) : null;
+    const issueFields  = dqReport.filter(r => (r.nullCount || 0) > 0 || (r.duplicateRows || 0) > 0 || (r.completeness != null && r.completeness < 70)).length;
+
+    const summaryData = [
+      [{ value: 'Data Quality Summary', fontWeight: 'bold', span: 2, backgroundColor: '#1F3864', color: '#FFFFFF' }],
+      [{ value: 'Run ID' }, { value: runId || '—' }],
+      [{ value: 'Total Fields Profiled' }, { value: dqReport.length, type: Number }],
+      [{ value: 'Fields with Issues' }, { value: issueFields, type: Number, backgroundColor: issueFields > 0 ? '#FFC7CE' : '#C6EFCE' }],
+      [{ value: 'Total Null Values' }, { value: totalNulls, type: Number, backgroundColor: totalNulls > 0 ? '#FFC7CE' : undefined }],
+      [{ value: 'Total Duplicate Rows' }, { value: totalDups, type: Number, backgroundColor: totalDups > 0 ? '#FFEB9C' : undefined }],
+      [{ value: 'Average Completeness (%)' }, { value: avgComp ?? 'N/A', type: avgComp != null ? Number : String, backgroundColor: avgComp != null ? (avgComp >= 90 ? '#C6EFCE' : avgComp >= 70 ? '#FFEB9C' : '#FFC7CE') : undefined }],
+      [{ value: 'Sample Records Inspected' }, { value: allRecords.length, type: Number }],
+      [{ value: 'Sample Records With Issues' }, { value: dqIssueRecords.length, type: Number, backgroundColor: dqIssueRecords.length > 0 ? '#FFC7CE' : '#C6EFCE' }],
+    ];
+
+    // ── Sheet 3: row-level issue cross-reference ───────────────────────────
+    const issueHeaderRow = [
+      { value: 'Row #',             ...HEADER_STYLE },
+      { value: 'Record ID',         ...HEADER_STYLE },
+      { value: 'Issue Type',        ...HEADER_STYLE },
+      { value: 'Affected Fields',   ...HEADER_STYLE },
+      { value: 'Duplicate Of Row',  ...HEADER_STYLE },
+      { value: 'Sample Values',     ...HEADER_STYLE },
+    ];
+    const issueDataRows = dqIssueRecords.map(r => {
+      const types = [];
+      if (r.nullFields.length > 0) types.push('Null/Empty');
+      if (r.duplicateOfRow !== undefined) types.push('Duplicate');
+      const isDup = r.duplicateOfRow !== undefined;
+      return [
+        { value: r.rowNumber, type: Number },
+        { value: r.recordId, fontWeight: 'bold' },
+        { value: types.join('; '), color: '#C00000', backgroundColor: isDup ? '#FFEB9C' : '#FFC7CE' },
+        { value: r.nullFields.join('; ') },
+        { value: r.duplicateOfRow ?? '', type: r.duplicateOfRow != null ? Number : String },
+        { value: r.snapshot },
+      ];
+    });
+    const issueSheet = issueDataRows.length > 0
+      ? [issueHeaderRow, ...issueDataRows]
+      : [issueHeaderRow, [{ value: '(no row-level issues detected in sampled records)', span: 6, color: '#375623' }]];
+
+    await writeXlsxFile(
+      [summaryData, [headerRow, ...dataRows], issueSheet],
+      {
+        sheets: ['Summary', 'Field Detail', 'Issue Records'],
+        fileName: `dq-report-${runId || 'discovery'}.xlsx`,
+        columns: [
+          [{ width: 32 }, { width: 24 }], // Summary sheet (2 cols)
+          [{ width: 28 }, { width: 20 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 22 }],
+          [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 32 }, { width: 16 }, { width: 60 }],
+        ],
+      }
+    );
+  }, [dqReport, dqIssueRecords, allRecords, runId]);
 
   // Don't render if there's genuinely nothing to show
   if (!introspect && !mappings.length && !allRecords.length && !insights.length) {
@@ -519,7 +732,7 @@ export default function DiscoveryResults({
             <span className="dr-sb-col-status">Status</span>
           </div>
 
-          {sourceGroups.map((grp, i) => {
+          {sourceGroups.map((grp) => {
             const qPct  = grp.quality;
             const qTier = qPct != null ? tier(qPct) : 'none';
             const isActive = selectedFile === grp.name;
@@ -531,7 +744,7 @@ export default function DiscoveryResults({
 
             return (
               <div
-                key={i}
+                key={grp.name}
                 className={`dr-sb-row dr-sb-tier-${qTier}${isActive ? ' dr-sb-row--active' : ''}${grp.isFile || !grp.isEntityGroup ? ' dr-sb-row--clickable' : ''}`}
                 onClick={() => { setSelectedFile(isActive ? null : grp.name); setSamplePage(1); }}
                 title={isActive ? 'Click to clear filter' : 'Click to focus Field Intelligence + Sample Explorer on this file'}
@@ -599,8 +812,11 @@ export default function DiscoveryResults({
             </div>
             <div className="dr-dq-header-actions">
               <span className="dr-section-count">{dqReport.length} fields</span>
-              <button className="dr-dq-export-btn" onClick={exportDqCsv} title="Export as CSV">
-                <i className="fas fa-download" /> Export CSV
+              <button className="dr-dq-export-btn" onClick={exportDqCsv} disabled={dqReport.length === 0} title="Export as CSV">
+                <i className="fas fa-file-csv" /> CSV
+              </button>
+              <button className="dr-dq-export-btn dr-dq-export-btn--xlsx" onClick={exportDqXlsx} disabled={dqReport.length === 0} title="Export as XLSX (multi-sheet, grouped by severity)">
+                <i className="fas fa-file-excel" /> XLSX
               </button>
               <button
                 className="dr-dq-toggle-btn"
@@ -635,7 +851,7 @@ export default function DiscoveryResults({
                       : r.completeness >= 70 ? 'dr-dq-comp-med'
                       : 'dr-dq-comp-low';
                     return (
-                      <tr key={i} className={i % 2 === 0 ? 'dr-dq-row-even' : ''}>
+                      <tr key={`${r.file}-${r.field}`} className={i % 2 === 0 ? 'dr-dq-row-even' : ''}>
                         <td className="dr-dq-file" title={r.file}>{r.file.length > 30 ? `${r.file.substring(0, 30)}…` : r.file}</td>
                         <td className="dr-dq-field"><code>{r.field}</code></td>
                         <td><span className={`dr-dq-type dr-dq-type-${r.type}`}>{r.type}</span></td>

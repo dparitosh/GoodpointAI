@@ -291,15 +291,50 @@ _WIZARD_ACTION_TO_BACKEND: Dict[str, str] = {
 
 def _wizard_rule_to_expression(rule: WizardRuleItem) -> str:
     """Compile a WizardRule condition into a Python expression string."""
-    template = _CONDITION_EXPR_MAP.get(rule.condition, "True")
     val = rule.condition_value or ""
+    field = rule.field or "*"
+
+    # CUSTOM rules with an empty expression body are a no-op — use True so
+    # eval() doesn't raise SyntaxError on an empty string.
+    if rule.condition == "CUSTOM" and not val.strip():
+        return "True"
+
+    # Wildcard field (*) means "any field": generate a collection-level expression.
+    if field == "*":
+        if rule.condition in ("IS_NULL", "IS_EMPTY"):
+            return "any(is_empty(v) for v in record.values())"
+        if rule.condition in ("IS_NOT_NULL",):
+            return "all(is_not_null(v) for v in record.values())"
+        # Other conditions on * are not meaningful per-record; treat as passing.
+        return "True"
+
+    template = _CONDITION_EXPR_MAP.get(rule.condition, "True")
+
     # Handle OUT_OF_RANGE: value should be "min-max" e.g. "0-100"
     if rule.condition == "OUT_OF_RANGE" and "-" in val:
         parts = val.split("-", 1)
         min_v = parts[0].strip() or "0"
         max_v = parts[1].strip() or "9999999"
-        return template.replace("{field}", rule.field).replace("{min}", min_v).replace("{max}", max_v)
-    return template.replace("{field}", rule.field).replace("{value}", val)
+        return template.replace("{field}", field).replace("{min}", min_v).replace("{max}", max_v)
+
+    # For regex conditions, escape the user-supplied value so arbitrary regex
+    # metacharacters (including ReDoS patterns like `(a+)+`) cannot be injected.
+    effective_val = val
+    if rule.condition in ("MATCHES_REGEX", "FAILS_REGEX"):
+        import re as _re
+        effective_val = _re.escape(val)
+
+    expr = template.replace("{field}", field).replace("{value}", effective_val)
+    # Safety net: if any placeholder is still unreplaced (e.g. {min}, {max} for
+    # OUT_OF_RANGE without a dash, or {value} for length checks with empty value)
+    # the expression would cause a SyntaxError in eval(). Fall back to no-op.
+    if "{" in expr:
+        logger.warning(
+            "Rule '%s' has unreplaced placeholder in expression — defaulting to True: %s",
+            rule.condition, expr,
+        )
+        return "True"
+    return expr
 
 
 @router.post("/from-wizard", summary="Save wizard rules to backend rule engine")
@@ -368,7 +403,9 @@ async def save_wizard_rules(
                 target_field=wr.field if wr.field != "*" else None,
                 expression=expression,
                 expression_language="python",
-                severity="critical" if wr.phase == "quality" else "warning",
+                # quality rules flag/quarantine individual records (warning);
+                # pre/post rules gate entry/exit of the pipeline (critical).
+                severity="warning" if wr.phase == "quality" else "critical",
                 action_on_fail=_WIZARD_ACTION_TO_BACKEND.get(wr.action, _PHASE_TO_ACTION.get(wr.phase, "log")),
                 sequence_order=idx,
                 enabled=True,

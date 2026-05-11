@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { useReportHub } from '../../hooks/useReportHub.js';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './ObservabilityDashboard.css';
 
 /**
@@ -85,6 +86,8 @@ export const ObservabilityDashboard = () => {
 
   return (
     <div className="observability-dashboard">
+      <AgentPipelineStrip activeStageName="reporting" />
+
       <div className="observability-header">
         <h1>Observability & Monitoring</h1>
         <div className="observability-controls">

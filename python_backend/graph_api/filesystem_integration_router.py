@@ -150,35 +150,54 @@ async def upload_file(
     """Upload file to server"""
     try:
         from core.external_config import filesystem_config
-        
-        # Determine destination
+        import asyncio
+        import os
+
+        # Determine destination (anchor under upload_dir to prevent traversal)
+        upload_root = Path(filesystem_config.upload_dir).resolve()
         if destination_path:
-            dest_dir = Path(destination_path)
+            candidate = (upload_root / destination_path).resolve()
+            try:
+                candidate.relative_to(upload_root)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="destination_path escapes upload root")
+            dest_dir = candidate
         else:
-            dest_dir = Path(filesystem_config.upload_dir)
-        
+            dest_dir = upload_root
+
         dest_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if not file.filename:
             raise HTTPException(status_code=400, detail="Missing upload filename")
 
-        filename = file.filename
-        file_path = dest_dir / filename
-        
+        # Strip any path components from incoming filename
+        filename = os.path.basename(file.filename)
+        if not filename or filename in ('.', '..'):
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+        file_path = (dest_dir / filename).resolve()
+        try:
+            file_path.relative_to(upload_root)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Resolved path escapes upload root")
+
         # Check file size
         content = await file.read()
         file_size_mb = len(content) / (1024 * 1024)
-        
+
         if file_size_mb > filesystem_config.max_upload_size_mb:
             raise HTTPException(
                 status_code=413,
                 detail=f"File too large: {file_size_mb:.2f}MB (max: {filesystem_config.max_upload_size_mb}MB)"
             )
-        
-        # Write file
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
+
+        # Write file off the event loop
+        def _write() -> None:
+            with open(file_path, "wb") as f:
+                f.write(content)
+
+        await asyncio.to_thread(_write)
+
         logger.info("Uploaded file: %s", file_path)
         
         return {

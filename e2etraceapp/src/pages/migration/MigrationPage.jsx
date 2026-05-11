@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
 import MigrationWizard from '../../components/migration-wizard/MigrationWizard.jsx';
+import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './MigrationPage.css';
 
 /**
@@ -74,6 +75,8 @@ const MigrationPage = () => {
         </div>
       </div>
       
+      <AgentPipelineStrip activeStageName="etl" />
+
       <div className="wizard-container">
         <MigrationErrorBoundary>
           <MigrationWizard onComplete={handleMigrationComplete} />
