@@ -102,6 +102,8 @@ export default function DiscoveryResults({
   const [expandedGroups, setExpanded] = useState({});
   const [selectedFile, setSelectedFile] = useState(null); // name of selected file row, or null = all
   const [dqExpanded, setDqExpanded]   = useState(false);
+  // Per-field reviewer comments keyed by `${file}-${field}` — persisted in component state for export
+  const [dqComments, setDqComments]   = useState({});
   const PAGE_SIZE = 10;
 
   // ── KPI derivations ─────────────────────────────────────────────────────────
@@ -394,17 +396,19 @@ export default function DiscoveryResults({
     ];
 
     // ── Sheet 2: Per-field detail ───────────────────────────────────────────
-    const detailHeader = 'File,Field,Type,Total Records,Null Count,Unique Values,Completeness (%),Duplicate Rows,Issue Flag';
+    const detailHeader = 'File,Field,Type,Total Records,Null Count,Unique Values,Completeness (%),Duplicate Rows,Issue Flag,Review Comment';
     const detailLines  = dqReport.map(r => {
       const flags = [];
       if ((r.nullCount || 0) > 0) flags.push('Has Nulls');
       if ((r.duplicateRows || 0) > 0) flags.push('Duplicates');
       if (r.completeness != null && r.completeness < 70) flags.push('Low Completeness');
+      const commentKey = `${r.file}-${r.field}`;
       return [
         r.file, r.field, r.type, r.totalRecords,
         r.nullCount ?? '', r.uniqueCount ?? '',
         r.completeness ?? '', r.duplicateRows,
         flags.join('; ') || 'OK',
+        dqComments[commentKey] || '',
       ].map(csvEscape).join(',');
     });
 
@@ -444,7 +448,7 @@ export default function DiscoveryResults({
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 150);
-  }, [dqReport, dqIssueRecords, allRecords, runId]);
+  }, [dqReport, dqIssueRecords, allRecords, runId, dqComments]);
 
   const exportDqXlsx = useCallback(async () => {
     if (!dqReport.length) return;
@@ -462,6 +466,7 @@ export default function DiscoveryResults({
       return LOW_STYLE;
     };
 
+    const COMMENT_STYLE = { backgroundColor: '#FFF2CC' };
     const headerRow = [
       { value: 'File',              ...HEADER_STYLE },
       { value: 'Field',             ...HEADER_STYLE },
@@ -472,14 +477,19 @@ export default function DiscoveryResults({
       { value: 'Completeness (%)',  ...HEADER_STYLE },
       { value: 'Duplicate Rows',    ...HEADER_STYLE },
       { value: 'Issue Flag',        ...HEADER_STYLE },
+      { value: 'Review Comment',    ...HEADER_STYLE, ...COMMENT_STYLE, color: '#7F6000' },
+      { value: 'Reviewed At',       ...HEADER_STYLE, ...COMMENT_STYLE, color: '#7F6000' },
     ];
 
+    const exportTs = new Date().toISOString();
     const dataRows = dqReport.map(r => {
       const cStyle = compStyle(r.completeness);
       const issueFlag = [];
       if ((r.nullCount || 0) > 0) issueFlag.push('Has Nulls');
       if ((r.duplicateRows || 0) > 0) issueFlag.push('Duplicates');
       if (r.completeness != null && r.completeness < 70) issueFlag.push('Low Completeness');
+      const commentKey = `${r.file}-${r.field}`;
+      const comment = dqComments[commentKey] || '';
       return [
         { value: r.file || '' },
         { value: r.field || '', fontWeight: 'bold' },
@@ -490,6 +500,8 @@ export default function DiscoveryResults({
         { value: r.completeness ?? 0, type: Number, ...cStyle },
         { value: r.duplicateRows ?? 0, type: Number, backgroundColor: (r.duplicateRows || 0) > 0 ? '#FFEB9C' : undefined },
         { value: issueFlag.join('; ') || 'OK', color: issueFlag.length ? '#C00000' : '#375623' },
+        { value: comment, backgroundColor: comment ? '#FFF2CC' : undefined },
+        { value: comment ? exportTs : '', backgroundColor: comment ? '#FFF2CC' : undefined },
       ];
     });
 
@@ -542,19 +554,48 @@ export default function DiscoveryResults({
       ? [issueHeaderRow, ...issueDataRows]
       : [issueHeaderRow, [{ value: '(no row-level issues detected in sampled records)', span: 6, color: '#375623' }]];
 
+    // ── Sheet 4: Review Log — all rows with comments for audit traceability ───
+    const reviewLogHeader = [
+      { value: 'File',            ...HEADER_STYLE },
+      { value: 'Field',           ...HEADER_STYLE },
+      { value: 'Issue Flag',      ...HEADER_STYLE },
+      { value: 'Review Comment',  ...HEADER_STYLE, backgroundColor: '#FFF2CC', color: '#7F6000' },
+      { value: 'Reviewed At',     ...HEADER_STYLE, backgroundColor: '#FFF2CC', color: '#7F6000' },
+    ];
+    const commentedRows = dqReport
+      .filter(r => dqComments[`${r.file}-${r.field}`])
+      .map(r => {
+        const key = `${r.file}-${r.field}`;
+        const flags = [];
+        if ((r.nullCount || 0) > 0) flags.push('Has Nulls');
+        if ((r.duplicateRows || 0) > 0) flags.push('Duplicates');
+        if (r.completeness != null && r.completeness < 70) flags.push('Low Completeness');
+        return [
+          { value: r.file || '' },
+          { value: r.field || '', fontWeight: 'bold' },
+          { value: flags.join('; ') || 'OK' },
+          { value: dqComments[key], backgroundColor: '#FFF2CC' },
+          { value: exportTs, backgroundColor: '#FFF2CC' },
+        ];
+      });
+    const reviewLogSheet = commentedRows.length > 0
+      ? [reviewLogHeader, ...commentedRows]
+      : [reviewLogHeader, [{ value: '(no review comments recorded)', span: 5, color: '#666666' }]];
+
     await writeXlsxFile(
-      [summaryData, [headerRow, ...dataRows], issueSheet],
+      [summaryData, [headerRow, ...dataRows], issueSheet, reviewLogSheet],
       {
-        sheets: ['Summary', 'Field Detail', 'Issue Records'],
+        sheets: ['Summary', 'Field Detail', 'Issue Records', 'Review Log'],
         fileName: `dq-report-${runId || 'discovery'}.xlsx`,
         columns: [
           [{ width: 32 }, { width: 24 }], // Summary sheet (2 cols)
-          [{ width: 28 }, { width: 20 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 22 }],
+          [{ width: 28 }, { width: 20 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 22 }, { width: 40 }, { width: 22 }],
           [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 32 }, { width: 16 }, { width: 60 }],
+          [{ width: 28 }, { width: 20 }, { width: 22 }, { width: 50 }, { width: 22 }],
         ],
       }
     );
-  }, [dqReport, dqIssueRecords, allRecords, runId]);
+  }, [dqReport, dqIssueRecords, allRecords, runId, dqComments]);
 
   // Don't render if there's genuinely nothing to show
   if (!introspect && !mappings.length && !allRecords.length && !insights.length) {
@@ -812,11 +853,14 @@ export default function DiscoveryResults({
             </div>
             <div className="dr-dq-header-actions">
               <span className="dr-section-count">{dqReport.length} fields</span>
-              <button className="dr-dq-export-btn" onClick={exportDqCsv} disabled={dqReport.length === 0} title="Export as CSV">
+              <button className="dr-dq-export-btn" onClick={exportDqCsv} disabled={dqReport.length === 0} title="Export as CSV (includes review comments)">
                 <i className="fas fa-file-csv" /> CSV
               </button>
-              <button className="dr-dq-export-btn dr-dq-export-btn--xlsx" onClick={exportDqXlsx} disabled={dqReport.length === 0} title="Export as XLSX (multi-sheet, grouped by severity)">
-                <i className="fas fa-file-excel" /> XLSX
+              <button className="dr-dq-export-btn dr-dq-export-btn--xlsx" onClick={exportDqXlsx} disabled={dqReport.length === 0} title="Export as Excel log (4 sheets: Summary, Field Detail, Issue Records, Review Log)">
+                <i className="fas fa-file-excel" /> Export DQ Log
+                {Object.keys(dqComments).length > 0 && (
+                  <span className="dr-dq-comment-badge">{Object.keys(dqComments).length}</span>
+                )}
               </button>
               <button
                 className="dr-dq-toggle-btn"
@@ -842,6 +886,7 @@ export default function DiscoveryResults({
                     <th className="dr-dq-num">Unique Values</th>
                     <th className="dr-dq-num">Completeness</th>
                     <th className="dr-dq-num">Duplicate Rows</th>
+                    <th className="dr-dq-comment-col">Review Comment</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -868,6 +913,19 @@ export default function DiscoveryResults({
                           {r.duplicateRows > 0
                             ? <><i className="fas fa-copy dr-dq-dup-icon" title="Duplicate rows detected" /> {r.duplicateRows}</>
                             : '0'}
+                        </td>
+                        <td className="dr-dq-comment-cell">
+                          <textarea
+                            className="dr-dq-comment-input"
+                            rows={1}
+                            placeholder="Add review note…"
+                            value={dqComments[`${r.file}-${r.field}`] || ''}
+                            onChange={e => {
+                              const key = `${r.file}-${r.field}`;
+                              const val = e.target.value;
+                              setDqComments(prev => val ? { ...prev, [key]: val } : Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)));
+                            }}
+                          />
                         </td>
                       </tr>
                     );

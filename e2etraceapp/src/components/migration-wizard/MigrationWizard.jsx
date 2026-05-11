@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import writeXlsxFile from 'write-excel-file';
 import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
 import { API_CONFIG } from '../../config/api-config.js';
 import { useGraphQLTransform } from '../../hooks/useGraphQL.js';
@@ -40,6 +41,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(getInitialStepFromURL);
   // Per-operation loading flags — prevents unrelated buttons from being disabled during an operation
   const [opLoading, setOpLoading] = useState({ discovery: false, suggestions: false, validation: false, execute: false });
+  // Template browser panel expanded/collapsed in the Mapping step
+  const [showTemplateBrowser, setShowTemplateBrowser] = useState(false);
   // Smart Guidance: dismissed by user or after an operation starts
   const [smartGuidanceDismissed, setSmartGuidanceDismissed] = useState(false);
   // Guard against double-firing the initial data load (React StrictMode / HMR)
@@ -1487,6 +1490,76 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   }, [wizardData, graphqlTransform]);
 
+  // Generate Non-Conformance Report (NCR) as Excel — called from Validate step
+  const generateNcr = useCallback(async () => {
+    const { validationResults = [], qualityChecks = {}, workflowName, fieldMappings = [] } = wizardData;
+    const issueRows = validationResults.filter(r => r.severity !== 'success');
+    const HEADER = { fontWeight: 'bold', backgroundColor: '#1F3864', color: '#FFFFFF', align: 'center' };
+    const RED   = { backgroundColor: '#FFC7CE', color: '#9C0006' };
+    const AMBER = { backgroundColor: '#FFEB9C', color: '#7F6000' };
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    const headers = [
+      { value: 'NCR #',         ...HEADER, width: 8  },
+      { value: 'Severity',      ...HEADER, width: 12 },
+      { value: 'Description',   ...HEADER, width: 55 },
+      { value: 'Field',         ...HEADER, width: 22 },
+      { value: 'Rule / Check',  ...HEADER, width: 30 },
+      { value: 'Recommendation',...HEADER, width: 55 },
+      { value: 'Status',        ...HEADER, width: 12 },
+      { value: 'Date Raised',   ...HEADER, width: 16 },
+      { value: 'Comments',      ...HEADER, width: 40 },
+    ];
+
+    const dataRows = issueRows.length > 0
+      ? issueRows.map((r, i) => {
+          const style = r.severity === 'error' ? RED : AMBER;
+          return [
+            { value: `NCR-${String(i + 1).padStart(3, '0')}` },
+            { value: (r.severity || 'warning').toUpperCase(), ...style, fontWeight: 'bold' },
+            { value: r.insight || '' },
+            { value: r.field || '' },
+            { value: r.rule || r.check || '' },
+            { value: r.recommendation || '' },
+            { value: 'Open', color: '#C00000', fontWeight: 'bold' },
+            { value: dateStr },
+            { value: '' },
+          ];
+        })
+      : [[
+          { value: 'NCR-001' },
+          { value: 'INFO', color: '#375623', fontWeight: 'bold' },
+          { value: `${qualityChecks.warnings || 0} warning(s) noted — no hard failures` },
+          { value: '' }, { value: '' }, { value: '' },
+          { value: 'Open' }, { value: dateStr }, { value: '' },
+        ]];
+
+    // Summary sheet
+    const summarySheet = [
+      [{ value: 'Non-Conformance Report', span: 2, fontWeight: 'bold', fontSize: 14, color: '#1F3864' }],
+      [{ value: 'Workflow', ...HEADER }, { value: workflowName || '(unnamed)' }],
+      [{ value: 'Date', ...HEADER }, { value: dateStr }],
+      [{ value: 'Total Issues', ...HEADER }, { value: issueRows.length, type: Number }],
+      [{ value: 'Failed Checks', ...HEADER }, { value: qualityChecks.failed || 0, type: Number, ...RED }],
+      [{ value: 'Warnings', ...HEADER }, { value: qualityChecks.warnings || 0, type: Number, ...AMBER }],
+      [{ value: 'Passed Checks', ...HEADER }, { value: qualityChecks.passed || 0, type: Number, backgroundColor: '#C6EFCE', color: '#375623' }],
+      [{ value: 'Field Mappings', ...HEADER }, { value: fieldMappings.length, type: Number }],
+    ];
+
+    await writeXlsxFile(
+      [summarySheet, [headers, ...dataRows]],
+      {
+        sheets: ['NCR Summary', 'Issue Register'],
+        fileName: `ncr-${(workflowName || 'migration').replace(/\s+/g, '-').toLowerCase()}-${dateStr}.xlsx`,
+        columns: [
+          [{ width: 24 }, { width: 30 }],
+          headers.map(h => ({ width: h.width || 20 })),
+        ],
+      }
+    );
+    toast.success('Non-Conformance Report exported as Excel', 3000);
+  }, [wizardData]);
+
   // Step 5: Execute migration - Complete 5-step workflow
   const executeMigration = useCallback(async () => {
     setOpLoading(prev => ({ ...prev, execute: true }));
@@ -2133,31 +2206,84 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
             </div>
           </div>
           
-          <div className="workflow-method">
+          <div className="workflow-method workflow-method--template-featured">
+            <span className="method-badge template-badge">
+              <i className="fas fa-layer-group" /> Use Template
+            </span>
+            {wizardData.selectedTemplate && (
+              <span className="template-active-badge">
+                <i className="fas fa-check-circle" /> {wizardData.selectedTemplate.name} applied
+              </span>
+            )}
             <div className="method-content">
               <div className="method-header">
                 <i className="fas fa-file-alt" />
                 <h5>2. Use a Template</h5>
               </div>
               <p>Apply pre-configured mappings for common migration scenarios (e.g., Teamcenter to SAP, Excel to Database).</p>
-              <div className="template-selector-inline">
-                <select 
-                  value={wizardData.selectedTemplate?.id || ''}
-                  onChange={(e) => {
-                    const template = mappingTemplates.find(t => t.id === e.target.value);
-                    if (template) {
-                      applyTemplate(template);
-                      toast.success(`Template "${template.name}" applied successfully!`, 4000);
-                    }
-                  }}
-                  className="form-control form-control-sm"
+              <div className="template-browser-actions">
+                <button
+                  className="btn btn-template-browse"
+                  onClick={() => setShowTemplateBrowser(p => !p)}
+                  title="Browse available mapping templates"
                 >
-                  <option value="">Select a template...</option>
-                  {mappingTemplates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                  <i className={`fas fa-${showTemplateBrowser ? 'chevron-up' : 'th-large'}`} />
+                  {showTemplateBrowser ? 'Close Browser' : 'Browse Templates'}
+                  <span className="template-count-pill">{mappingTemplates.length}</span>
+                </button>
+                {wizardData.selectedTemplate && (
+                  <button
+                    className="btn btn-sm btn-outline-danger"
+                    style={{ marginLeft: 8, fontSize: 11, padding: '3px 8px' }}
+                    onClick={() => setWizardData(p => ({ ...p, selectedTemplate: null, fieldMappings: [] }))}
+                    title="Remove applied template"
+                  >
+                    <i className="fas fa-times" /> Clear
+                  </button>
+                )}
               </div>
+              {showTemplateBrowser && (
+                <div className="template-browser-panel">
+                  <div className="template-cards-grid">
+                    {mappingTemplates.map(t => {
+                      const fieldCount = t.field_mappings?.length ?? 0;
+                      const isActive = wizardData.selectedTemplate?.id === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          className={`template-card${isActive ? ' template-card--active' : ''}`}
+                          title={t.description || t.name}
+                        >
+                          <div className="template-card-header">
+                            <i className="fas fa-file-import" />
+                            <span className="template-card-name">{t.name}</span>
+                            {isActive && <i className="fas fa-check-circle template-card-check" />}
+                          </div>
+                          {t.description && (
+                            <p className="template-card-desc">{t.description}</p>
+                          )}
+                          <div className="template-card-footer">
+                            <span className="template-field-count">
+                              <i className="fas fa-columns" /> {fieldCount} field{fieldCount !== 1 ? 's' : ''}
+                            </span>
+                            <button
+                              className={`btn btn-sm ${isActive ? 'btn-success' : 'btn-template-apply'}`}
+                              disabled={isActive}
+                              onClick={() => {
+                                applyTemplate(t);
+                                setShowTemplateBrowser(false);
+                                toast.success(`Template "${t.name}" applied — ${fieldCount} field mappings loaded!`, 4000);
+                              }}
+                            >
+                              {isActive ? <><i className="fas fa-check" /> Applied</> : <><i className="fas fa-bolt" /> Apply</>}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -2373,6 +2499,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         rules={wizardData.rules}
         activePhase={wizardData.activeRulePhase}
         sourceFields={extractSchemaFields(wizardData.sourceSchema)}
+        fieldMappings={wizardData.fieldMappings}
         onPhaseChange={phase => setWizardData(prev => ({ ...prev, activeRulePhase: phase }))}
         onAddRule={addRule}
         onRemoveRule={removeRule}
@@ -2460,6 +2587,27 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Non-Conformance Report — shown after validation when issues exist */}
+      {wizardData.validationRun && (wizardData.qualityChecks.failed > 0 || wizardData.qualityChecks.warnings > 0) && (
+        <div className="ncr-export-section">
+          <div className="ncr-export-info">
+            <i className="fas fa-exclamation-triangle ncr-icon" />
+            <div>
+              <strong>Non-Conformance Report Required</strong>
+              <p>
+                {wizardData.qualityChecks.failed > 0 && <span className="ncr-fail-count">{wizardData.qualityChecks.failed} failed check{wizardData.qualityChecks.failed !== 1 ? 's' : ''}</span>}
+                {wizardData.qualityChecks.failed > 0 && wizardData.qualityChecks.warnings > 0 && ' · '}
+                {wizardData.qualityChecks.warnings > 0 && <span className="ncr-warn-count">{wizardData.qualityChecks.warnings} warning{wizardData.qualityChecks.warnings !== 1 ? 's' : ''}</span>}
+                {' '}detected during validation. Export an NCR for traceability and review.
+              </p>
+            </div>
+          </div>
+          <button className="btn btn-ncr-export" onClick={generateNcr} title="Export Non-Conformance Report as Excel">
+            <i className="fas fa-file-excel" /> Generate NCR
+          </button>
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 const CONDITIONS = {
   pre:     ['IS_NULL', 'IS_EMPTY', 'MATCHES_REGEX', 'NOT_IN_LIST', 'CUSTOM'],
@@ -33,10 +33,21 @@ const PHASE_META = Object.fromEntries(PHASES.map(p => [p.key, p]));
 const WizardRuleEngine = ({
   rules,
   sourceFields,
+  fieldMappings = [],
   onAddRule,
   onRemoveRule,
   onUpdateRule,
 }) => {
+  // Build source-field → target-field lookup for inline mapping context
+  const mappedTargetBySource = useMemo(() => {
+    const map = {};
+    for (const m of fieldMappings) {
+      const src = m.source_field || m.sourceField;
+      const tgt = m.target_field || m.targetField;
+      if (src && tgt) map[src] = tgt;
+    }
+    return map;
+  }, [fieldMappings]);
   return (
     <div className="re-panel">
       <div className="re-panel-header">
@@ -73,7 +84,7 @@ const WizardRuleEngine = ({
             <div className="re-rules-header re-rules-header--unified">
               <span>Category</span>
               <span>Rule Name</span>
-              <span>Field</span>
+              <span>Field <span className="re-mapped-hint">(→ Target)</span></span>
               <span>Condition</span>
               <span>Value</span>
               <span>Action</span>
@@ -95,14 +106,21 @@ const WizardRuleEngine = ({
                     value={rule.name}
                     onChange={e => onUpdateRule(rule.id, { name: e.target.value })}
                   />
-                  <select
-                    className="re-select re-field"
-                    value={rule.field}
-                    onChange={e => onUpdateRule(rule.id, { field: e.target.value })}
-                  >
-                    <option value="*">All fields</option>
-                    {sourceFields.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
+                  <div className="re-field-col">
+                    <select
+                      className="re-select re-field"
+                      value={rule.field}
+                      onChange={e => onUpdateRule(rule.id, { field: e.target.value })}
+                    >
+                      <option value="*">All fields</option>
+                      {sourceFields.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    {rule.field && rule.field !== '*' && mappedTargetBySource[rule.field] && (
+                      <span className="re-mapped-to" title={`Maps to: ${mappedTargetBySource[rule.field]}`}>
+                        → {mappedTargetBySource[rule.field]}
+                      </span>
+                    )}
+                  </div>
                   <select
                     className="re-select re-condition"
                     value={rule.condition}
