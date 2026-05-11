@@ -1405,7 +1405,7 @@ export default function DiscoveryResults({
             <div className="dr-pagination">
               <button
                 className="dr-page-btn"
-                onClick={() => setSamplePage(p => 1)}
+                onClick={() => setSamplePage(1)}
                 disabled={samplePage === 1}
                 title="First page"
               >

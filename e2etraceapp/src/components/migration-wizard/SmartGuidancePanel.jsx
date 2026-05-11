@@ -53,7 +53,7 @@ const SmartGuidancePanel = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [guidance, setGuidance] = useState(null);
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
 
   const fetchGuidance = useCallback(async () => {
     setLoading(true);
@@ -84,7 +84,7 @@ const SmartGuidancePanel = ({
 
       const data = await resp.json();
       setGuidance(data);
-    } catch (err) {
+    } catch (_err) {
       // Show a friendly static fallback rather than an error state.
       setGuidance(
         previousRuns
