@@ -28,13 +28,17 @@ GoodpointAI/
 ├── mcp_server/                 # MCP coordination server
 │   ├── requirements.txt
 │   └── main.py
-├── agent_services/             # MCP-powered AI agents (8 agents)
-│   ├── chat_coordinator/
-│   ├── data_analyst/
-│   ├── data_discovery/
-│   ├── etl_orchestrator/
-│   ├── quality_monitor/
-│   ├── query_planner/
+└── agent_services/             # MCP-powered AI agents (12 agents)
+    ├── chat_coordinator/
+    ├── data_analyst/
+    ├── data_discovery/
+    ├── data_profiler/
+    ├── etl_orchestrator/
+    ├── plm_director/
+    ├── quality_monitor/
+    ├── query_planner/
+    ├── reporting_agent/
+    ├── schema_correlator/
 │   ├── task_decomposer/
 │   └── visualization_agent/
 └── docs/                       # Documentation (you are here)
@@ -292,13 +296,13 @@ Diagnostics Passed! You are ready to run.
    - Frontend (Vite dev server on port 5173)
    - Backend (uvicorn on port 8011)
    - MCP Server (uvicorn on port 8012)
-   - 8 AI agent services
+   - 12 AI agent services
 
 **You should see output like:**
 ```
 [System] Bootstrapping GraphTrace Database/Schema...
 [System] Database OK! Schema and Settings seeded.
-[System] Launching Multiplexer (11 microservices)...
+[System] Launching Multiplexer (15 microservices)...
 [System] Stack Live! Press Ctrl+C to abort all services.
 
 [Frontend] VITE v5.x.x ready in xxxms
@@ -477,6 +481,7 @@ All variables are set in `python_backend/.env`. The backend reads this file when
 | `GRAPH_TRACE_AUTH_REQUIRED` | No | `false` | Enable JWT authentication |
 | `GRAPH_TRACE_JWT_SECRET` | If auth enabled | *(none)* | JWT signing secret |
 | `GRAPH_TRACE_API_KEY` | No | *(none)* | Optional API key authentication |
+| `ALLOWED_ORIGINS` | No | *(none)* | Comma-separated CORS allow-origins (overridden by DB-backed `cors` key) |
 | `GRAPH_TRACE_SKIP_DB_CHECK` | No | `false` | Skip Postgres connectivity check in diagnostics |
 | `GRAPH_TRACE_ALLOW_RESET_ENCRYPTED_CONFIG` | No | `false` | Allow re-encryption of DB-backed config if key changed |
 
@@ -543,8 +548,8 @@ REDIS_HOST=10.0.0.10
 # Bind to all interfaces so other VMs can reach the API
 BACKEND_HOST=0.0.0.0
 
-# Allow frontend VM origin
-GRAPH_TRACE_ALLOWED_ORIGINS=["http://10.0.0.30:5173","https://yourdomain.com"]
+# Allow frontend VM origin (comma-separated list)
+ALLOWED_ORIGINS=http://10.0.0.30:5173,https://yourdomain.com
 ```
 
 The MCP server reads from the same `python_backend/.env` file automatically.

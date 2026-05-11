@@ -212,8 +212,8 @@ def main():
     ])
     
     env_ok = check_env_vars()
-    
-    print("\\n====================================")
+
+    print("\n====================================")
     if sys_ok and env_ok:
         print("Diagnostics Passed! You are ready to run.")
         sys.exit(0)
