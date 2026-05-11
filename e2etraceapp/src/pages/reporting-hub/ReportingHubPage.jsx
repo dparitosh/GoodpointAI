@@ -16,18 +16,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
+import { e2etraceFetchWithRetry } from '../../api/e2etrace-api.js';
 import './ReportingHubPage.css';
 
 // ─── Type meta ───────────────────────────────────────────────────────────────
 
 const TYPE_META = {
-  migration:    { label: 'Migration',      icon: 'fas fa-exchange-alt', color: '#3b82f6', page: '/migration' },
-  lineage:      { label: 'Lineage',        icon: 'fas fa-project-diagram', color: '#8b5cf6', page: '/lineage' },
-  analytics:    { label: 'Analytics',      icon: 'fas fa-chart-line',   color: '#0ea5e9', page: '/analytics' },
-  dq_scan:      { label: 'DQ Scan',        icon: 'fas fa-shield-alt',   color: '#22c55e', page: '/dq-dashboard' },
-  discovery:    { label: 'Discovery',      icon: 'fas fa-search-location', color: '#f59e0b', page: '/data-discovery' },
-  observability:{ label: 'Observability',  icon: 'fas fa-heartbeat',    color: '#ef4444', page: '/observability' },
-  self_healing: { label: 'Self-Healing',   icon: 'fas fa-wrench',       color: '#6366f1', page: '/self-healing' },
+  migration:    { label: 'Migration',         icon: 'fas fa-exchange-alt',    color: '#3b82f6', page: '/migration' },
+  lineage:      { label: 'Lineage',           icon: 'fas fa-project-diagram', color: '#8b5cf6', page: '/lineage' },
+  analytics:    { label: 'Analytics',         icon: 'fas fa-chart-line',      color: '#0ea5e9', page: '/analytics' },
+  dq_scan:      { label: 'DQ Scan',           icon: 'fas fa-shield-alt',      color: '#22c55e', page: '/dq-dashboard' },
+  discovery:    { label: 'Discovery',         icon: 'fas fa-search-location', color: '#f59e0b', page: '/data-discovery' },
+  observability:{ label: 'Observability',     icon: 'fas fa-heartbeat',       color: '#ef4444', page: '/observability' },
+  self_healing: { label: 'Self-Healing',      icon: 'fas fa-wrench',          color: '#6366f1', page: '/self-healing' },
 };
 
 const STATUS_META = {
@@ -186,6 +187,86 @@ function statusBadge(s) {
   );
 }
 
+// ─── Export helpers ──────────────────────────────────────────────────────────
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 150);
+}
+
+function exportReportAsJSON(report) {
+  const payload = {
+    report_id: report.report_id,
+    report_type: report.report_type,
+    title: report.title,
+    status: report.status,
+    workflow_id: report.workflow_id,
+    run_id: report.run_id,
+    source_page: report.source_page,
+    tags: report.tags,
+    created_at: report.created_at,
+    summary: report.summary,
+    result: report.result ?? null,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const safe = (report.title || report.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+  downloadBlob(blob, `report-${safe}-${Date.now()}.json`);
+}
+
+function exportReportAsCSV(report) {
+  // Flatten summary fields into CSV rows
+  const rows = [['Field', 'Value']];
+  rows.push(['report_id', report.report_id ?? '']);
+  rows.push(['report_type', report.report_type ?? '']);
+  rows.push(['title', report.title ?? '']);
+  rows.push(['status', report.status ?? '']);
+  rows.push(['workflow_id', report.workflow_id ?? '']);
+  rows.push(['run_id', report.run_id ?? '']);
+  rows.push(['created_at', report.created_at ?? '']);
+  if (report.summary && typeof report.summary === 'object') {
+    Object.entries(report.summary).forEach(([k, v]) => {
+      rows.push([k, Array.isArray(v) ? v.join('; ') : String(v ?? '')]);
+    });
+  }
+  const csv = rows.map((r) => r.map((c) => {
+    const s = String(c);
+    return /[
+\r,"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const safe = (report.title || report.report_id).replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
+  downloadBlob(blob, `report-${safe}-${Date.now()}.csv`);
+}
+
+function exportReportsListAsJSON(reportsList) {
+  const blob = new Blob(
+    [JSON.stringify({ exported_at: new Date().toISOString(), count: reportsList.length, reports: reportsList }, null, 2)],
+    { type: 'application/json' }
+  );
+  downloadBlob(blob, `reports-export-${Date.now()}.json`);
+}
+
+function exportReportsListAsCSV(reportsList) {
+  const headers = ['report_id', 'report_type', 'title', 'status', 'workflow_id', 'run_id', 'source_page', 'tags', 'created_at'];
+  const rows = [headers, ...reportsList.map((r) => [
+    r.report_id ?? '', r.report_type ?? '', r.title ?? '', r.status ?? '',
+    r.workflow_id ?? '', r.run_id ?? '', r.source_page ?? '',
+    (r.tags || []).join('; '), r.created_at ?? '',
+  ])];
+  const csv = rows.map((r) => r.map((c) => {
+    const s = String(c);
+    return /[\n\r,"]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, `reports-export-${Date.now()}.csv`);
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function KpiCard({ label, value, color, icon }) {
@@ -255,13 +336,19 @@ function ReportDetailModal({ report, onClose }) {
               <pre className="rh-modal-json">{JSON.stringify(report.result, null, 2)}</pre>
             </div>
           )}
-          {m.page && (
-            <div className="rh-modal-footer">
+          <div className="rh-modal-footer">
+            <button className="rh-btn rh-btn-secondary" onClick={() => exportReportAsJSON(report)}>
+              <i className="fas fa-file-code" /> Export JSON
+            </button>
+            <button className="rh-btn rh-btn-secondary" onClick={() => exportReportAsCSV(report)}>
+              <i className="fas fa-file-csv" /> Export CSV
+            </button>
+            {m.page && (
               <Link to={m.page} className="rh-link-btn" onClick={onClose}>
                 <i className={m.icon} /> Open {m.label} page
               </Link>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -386,6 +473,24 @@ export default function ReportingHubPage() {
           </button>
         )}
         <span className="rh-result-count">{filtered.length} report{filtered.length !== 1 ? 's' : ''}</span>
+        <div className="rh-export-actions">
+          <button
+            className="rh-btn rh-btn-secondary"
+            onClick={() => exportReportsListAsJSON(filtered)}
+            disabled={filtered.length === 0}
+            title="Export all filtered reports as JSON"
+          >
+            <i className="fas fa-file-code" /> Export JSON
+          </button>
+          <button
+            className="rh-btn rh-btn-secondary"
+            onClick={() => exportReportsListAsCSV(filtered)}
+            disabled={filtered.length === 0}
+            title="Export all filtered reports as CSV"
+          >
+            <i className="fas fa-file-csv" /> Export CSV
+          </button>
+        </div>
       </div>
 
       {/* ── ERROR ──────────────────────────────────────────────── */}
@@ -432,6 +537,13 @@ export default function ReportingHubPage() {
                 <div className="rh-row-right">
                   {statusBadge(r.status)}
                   <span className="rh-row-time" title={fmtDate(r.created_at)}>{fmtRelative(r.created_at)}</span>
+                  <button
+                    className="rh-row-export"
+                    title="Export this report as JSON"
+                    onClick={(e) => { e.stopPropagation(); exportReportAsJSON(r); }}
+                  >
+                    <i className="fas fa-download" />
+                  </button>
                   {m.page && (
                     <Link to={m.page} className="rh-row-goto" title={`Open ${m.label}`} onClick={(e) => e.stopPropagation()}>
                       <i className="fas fa-external-link-alt" />

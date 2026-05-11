@@ -10,9 +10,11 @@
  *   POST /api/agentic/quality-scan → run DQ scan on a discovered source
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { API_CONFIG } from '../../config/api-config.js';
+import { e2etraceFetchWithRetry } from '../../api/e2etrace-api';
+import writeXlsxFile from 'write-excel-file';
 import { AgentPipelineStrip } from '../../components/agent-pipeline-strip/AgentPipelineStrip.jsx';
 import './DataDiscoveryPage.css';
 
@@ -651,7 +653,7 @@ export default function DataDiscoveryPage() {
   const [sortDir, setSortDir]             = useState('asc');
 
   const loadSavedReports = useCallback(() => {
-    fetch(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_DISCOVERY}/reports`)
+    e2etraceFetchWithRetry(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_DISCOVERY}/reports`)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => { if (Array.isArray(data) && data.length > 0) setSavedReports(data); })
       .catch(() => {}); // retain demo data on fetch error
@@ -662,7 +664,7 @@ export default function DataDiscoveryPage() {
     const paramSource = searchParams.get('source');
     if (paramSource) setFromWizard(true);
 
-    fetch(`${API_BASE}/api/data-sources`)
+    e2etraceFetchWithRetry(`${API_BASE}/api/data-sources`)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
         // Include all file/folder-backed source types (backend uses 'local_folder', 'file', not 'folder')
@@ -728,7 +730,7 @@ export default function DataDiscoveryPage() {
         for (let i = 0; i < uploadFiles.length; i++) {
           const fd = new FormData();
           fd.append('file', uploadFiles[i]);
-          const res = await fetch(`${API_BASE}/api/filesystem/upload`, { method: 'POST', body: fd });
+          const res = await e2etraceFetchWithRetry(`${API_BASE}/api/filesystem/upload`, { method: 'POST', body: fd });
           if (!res.ok) {
             const d = await res.json().catch(() => ({}));
             throw new Error(d.detail || `Upload failed for ${uploadFiles[i].name}`);
@@ -766,7 +768,7 @@ export default function DataDiscoveryPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_DISCOVERY}`, {
+      const res = await e2etraceFetchWithRetry(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_DISCOVERY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -824,7 +826,7 @@ export default function DataDiscoveryPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_QUALITY_SCAN}`, {
+      const res = await e2etraceFetchWithRetry(`${API_BASE}${API_CONFIG.ENDPOINTS.AGENTIC_QUALITY_SCAN}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -851,23 +853,27 @@ export default function DataDiscoveryPage() {
     runQualityScan();
   }, [runQualityScan]);
 
+  // ── Derive display data from result (shared by export callbacks and render)
+  const taskResult = useMemo(() => result?.result || result || {}, [result]);
+  const discoveredFiles = useMemo(() => (
+    Array.isArray(taskResult.files) ? taskResult.files
+    : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
+    : []
+  ), [taskResult]);
+
   // ── Export functions
   const exportToJSON = useCallback(() => {
     if (!result) return;
     setExporting(true);
     try {
-      const taskResult = result?.result || result || {};
-      const files = Array.isArray(taskResult.files) ? taskResult.files
-        : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
-        : [];
-      const totalSize = files.reduce((s, f) => s + (f.size_bytes || 0), 0);
+      const totalSize = discoveredFiles.reduce((s, f) => s + (f.size_bytes || 0), 0);
       
       const exportData = {
         exported_at: new Date().toISOString(),
         discovery_result: result,
         report_id: activeReportId,
         source: folderPath || selectedSourceId,
-        file_count: files.length,
+        file_count: discoveredFiles.length,
         total_size_bytes: totalSize,
       };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -882,15 +888,11 @@ export default function DataDiscoveryPage() {
     } finally {
       setExporting(false);
     }
-  }, [result, activeReportId, folderPath, selectedSourceId]);
+  }, [result, activeReportId, folderPath, selectedSourceId, discoveredFiles]);
 
   const exportToCSV = useCallback(() => {
     if (!result) return;
-    const taskResult = result?.result || result || {};
-    const files = Array.isArray(taskResult.files) ? taskResult.files
-      : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
-      : [];
-    if (!files.length) return;
+    if (!discoveredFiles.length) return;
     
     setExporting(true);
     try {
@@ -910,42 +912,46 @@ export default function DataDiscoveryPage() {
         'Distinct Count',
       ];
       
-      // Build CSV rows
+      // Build CSV rows — emit one row per column per file
       const rows = [];
       rows.push(headers.join(','));
-      
-      files.forEach((f) => {
+
+      discoveredFiles.forEach((f) => {
         const sizeKB = ((f.size_bytes || 0) / 1024).toFixed(2);
         const nullRate = f.null_rate != null ? f.null_rate.toFixed(2) : '';
         const completeness = f.completeness != null ? f.completeness.toFixed(2) : '';
-        
-        // Get first column's details as representative data
         const profile = f.profile || {};
-        const firstColKey = Object.keys(profile)[0];
-        const firstCol = profile[firstColKey] || {};
-        
-        const cardinalityPct = firstCol.cardinality_ratio 
-          ? (firstCol.cardinality_ratio * 100).toFixed(2) 
-          : '';
-        const topValues = firstCol.top_values 
-          ? firstCol.top_values.map(tv => `${tv.value}(${tv.percentage}%)`).join('; ')
-          : '';
-        
-        const row = [
-          csvEscape(f.name || ''),
-          csvEscape(f.file_type || ''),
-          sizeKB,
-          f.row_count || '',
-          f.column_count || '',
-          nullRate,
-          completeness,
-          cardinalityPct,
-          csvEscape(firstCol.type || ''),
-          csvEscape(firstCol.semantic_type || ''),
-          csvEscape(topValues),
-          firstCol.distinct_count || '',
-        ];
-        rows.push(row.join(','));
+        const colKeys = Object.keys(profile);
+        if (colKeys.length === 0) {
+          // No profile data: emit one file-level row
+          rows.push([
+            csvEscape(f.name || ''),
+            csvEscape(f.file_type || ''),
+            sizeKB, f.row_count || '', f.column_count || '',
+            nullRate, completeness, '', '', '', '', '',
+          ].join(','));
+          return;
+        }
+        colKeys.forEach((colKey) => {
+          const col = profile[colKey] || {};
+          const cardinalityPct = col.cardinality_ratio
+            ? (col.cardinality_ratio * 100).toFixed(2)
+            : '';
+          const topValues = col.top_values
+            ? col.top_values.map(tv => `${tv.value}(${tv.percentage}%)`).join('; ')
+            : '';
+          rows.push([
+            csvEscape(f.name || ''),
+            csvEscape(f.file_type || ''),
+            sizeKB, f.row_count || '', f.column_count || '',
+            nullRate, completeness,
+            cardinalityPct,
+            csvEscape(col.type || ''),
+            csvEscape(col.semantic_type || ''),
+            csvEscape(topValues),
+            col.distinct_count || '',
+          ].join(','));
+        });
       });
       
       const csv = rows.join('\n');
@@ -957,11 +963,12 @@ export default function DataDiscoveryPage() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Delay revoke so Firefox can complete the download fetch
+      setTimeout(() => URL.revokeObjectURL(url), 150);
     } finally {
       setExporting(false);
     }
-  }, [result]);
+  }, [result, discoveredFiles]);
 
   const csvEscape = (value) => {
     if (value === null || value === undefined) return '';
@@ -972,16 +979,83 @@ export default function DataDiscoveryPage() {
     return s;
   };
 
-  // ── Derive display data from result
-  const taskResult = result?.result || result || {};
-  const files = Array.isArray(taskResult.files) ? taskResult.files
-    : Array.isArray(taskResult.discovered_files) ? taskResult.discovered_files
-    : [];
+  const exportToXlsx = useCallback(async () => {
+    if (!discoveredFiles.length) return;
+    setExporting(true);
+    try {
+      const HEADER_STYLE = { fontWeight: 'bold', backgroundColor: '#1F3864', color: '#FFFFFF', align: 'center' };
+      const headerRow = [
+        { value: 'File Name',        ...HEADER_STYLE },
+        { value: 'File Type',        ...HEADER_STYLE },
+        { value: 'Column',           ...HEADER_STYLE },
+        { value: 'Size (KB)',        ...HEADER_STYLE },
+        { value: 'Rows',             ...HEADER_STYLE },
+        { value: 'Null Rate (%)',    ...HEADER_STYLE },
+        { value: 'Completeness (%)', ...HEADER_STYLE },
+        { value: 'Data Type',        ...HEADER_STYLE },
+        { value: 'Semantic Type',    ...HEADER_STYLE },
+        { value: 'Distinct Count',   ...HEADER_STYLE },
+        { value: 'Top Values',       ...HEADER_STYLE },
+        { value: 'Issue Flag',       ...HEADER_STYLE },
+      ];
+
+      const dataRows = [];
+      discoveredFiles.forEach((f) => {
+        const sizeKB = parseFloat(((f.size_bytes || 0) / 1024).toFixed(2));
+        const profile = f.profile || {};
+        const colKeys = Object.keys(profile);
+        if (colKeys.length === 0) {
+          dataRows.push([
+            { value: f.name || '' }, { value: f.file_type || '' }, { value: '—' },
+            { value: sizeKB, type: Number }, { value: f.row_count || 0, type: Number },
+            { value: f.null_rate || 0, type: Number }, { value: f.completeness || 0, type: Number },
+            { value: '' }, { value: '' }, { value: 0, type: Number }, { value: '' }, { value: 'No profile' },
+          ]);
+          return;
+        }
+        colKeys.forEach((colKey) => {
+          const col = profile[colKey] || {};
+          const nullRate = col.null_rate != null ? col.null_rate : f.null_rate || 0;
+          const issues = [];
+          if (nullRate > 10) issues.push(`High nulls (${nullRate}%)`);
+          const topValues = (col.top_values || []).map(tv => `${tv.value}(${tv.percentage}%)`).join('; ');
+          dataRows.push([
+            { value: f.name || '', fontWeight: 'bold' },
+            { value: f.file_type || '' },
+            { value: colKey },
+            { value: sizeKB, type: Number },
+            { value: f.row_count || 0, type: Number },
+            { value: parseFloat(nullRate.toFixed ? nullRate.toFixed(2) : nullRate) || 0, type: Number, backgroundColor: nullRate > 10 ? '#FFC7CE' : undefined },
+            { value: f.completeness != null ? parseFloat(f.completeness.toFixed(2)) : null, type: f.completeness != null ? Number : String },
+            { value: col.type || '' },
+            { value: col.semantic_type || '' },
+            { value: col.distinct_count || 0, type: Number },
+            { value: topValues },
+            { value: issues.join('; ') || 'OK', color: issues.length ? '#C00000' : '#375623' },
+          ]);
+        });
+      });
+
+      await writeXlsxFile(
+        [[headerRow, ...dataRows]],
+        {
+          sheets: ['Discovery Report'],
+          fileName: `data-discovery-${Date.now()}.xlsx`,
+          columns: [
+            [{ width: 28 }, { width: 10 }, { width: 20 }, { width: 10 }, { width: 8 },
+             { width: 12 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 30 }, { width: 20 }],
+          ],
+        }
+      );
+    } finally {
+      setExporting(false);
+    }
+  }, [discoveredFiles]);
   const byType = taskResult.by_type || taskResult.file_types || {};
   const catalog = taskResult.catalog || {};
 
-  const fileTypes = [...new Set(files.map((f) => f.file_type).filter(Boolean))];
-  const filtered = files.filter((f) => {
+  const fileTypes = [...new Set(discoveredFiles.map((f) => f.file_type).filter(Boolean))];
+  const filtered = discoveredFiles.filter((f) => {
     if (filterType && f.file_type !== filterType) return false;
     if (filterName && !String(f.name || f.path || '').toLowerCase().includes(filterName.toLowerCase())) return false;
     return true;
@@ -995,8 +1069,8 @@ export default function DataDiscoveryPage() {
     return sortDir === 'asc' ? (av < bv ? -1 : av > bv ? 1 : 0) : (av > bv ? -1 : av < bv ? 1 : 0);
   });
 
-  const totalSize = files.reduce((s, f) => s + (f.size_bytes || 0), 0);
-  const nullRateFiles = files.filter((f) => f.null_rate != null);
+  const totalSize = discoveredFiles.reduce((s, f) => s + (f.size_bytes || 0), 0);
+  const nullRateFiles = discoveredFiles.filter((f) => f.null_rate != null);
   const avgNullRate = nullRateFiles.length
     ? nullRateFiles.reduce((s, f) => s + f.null_rate, 0) / nullRateFiles.length
     : 0;
@@ -1026,7 +1100,7 @@ export default function DataDiscoveryPage() {
           {liveMode
             ? <span className="dd-live-badge"><span className="dd-live-dot" />LIVE</span>
             : <span className="dd-demo-badge"><i className="fas fa-flask" /> DEMO</span>}
-          {status === 'done' && files.length > 0 && (
+          {status === 'done' && discoveredFiles.length > 0 && (
             <>
               <button
                 className="dd-btn dd-btn-secondary"
@@ -1042,9 +1116,17 @@ export default function DataDiscoveryPage() {
                 className="dd-btn dd-btn-secondary"
                 onClick={exportToCSV}
                 disabled={exporting}
-                title="Export file summary as CSV"
+                title="Export file summary as CSV (one row per column)"
               >
                 <i className="fas fa-file-csv" /> Export CSV
+              </button>
+              <button
+                className="dd-btn dd-btn-secondary"
+                onClick={exportToXlsx}
+                disabled={exporting}
+                title="Export full discovery report as XLSX (one row per column, all files)"
+              >
+                <i className="fas fa-file-excel" /> Export XLSX
               </button>
               <Link
                 to="/dq-dashboard"
@@ -1198,7 +1280,7 @@ export default function DataDiscoveryPage() {
                 {uploadFiles.map((f, i) => {
                   const ext = f.name.split('.').pop().toLowerCase();
                   return (
-                    <div key={i} className="dd-upload-file-row">
+                    <div key={`${f.name}-${f.size}-${i}`} className="dd-upload-file-row">
                       <span className="dd-type-badge" style={{ background: `${typeColor(ext)}22`, color: typeColor(ext) }}>{ext}</span>
                       <span className="dd-upload-file-name" title={f.name}>{f.name}</span>
                       <span className="dd-upload-file-size">{fmtSize(f.size)}</span>
@@ -1289,7 +1371,7 @@ export default function DataDiscoveryPage() {
           <div className="dd-kpi-strip">
             <KpiCard
               label="Total Files"
-              value={fmtNum(files.length)}
+              value={fmtNum(discoveredFiles.length)}
               sub={`${Object.keys(byType).length} file types`}
               color="#3b82f6"
               icon={<i className="fas fa-folder-open" />}
@@ -1368,7 +1450,7 @@ export default function DataDiscoveryPage() {
           {/* File table */}
           <div className="dd-card">
             <div className="dd-section-header">
-              <span><i className="fas fa-list" /> Files ({filtered.length}{filtered.length !== files.length ? ` / ${files.length}` : ''})</span>
+              <span><i className="fas fa-list" /> Files ({filtered.length}{filtered.length !== discoveredFiles.length ? ` / ${discoveredFiles.length}` : ''})</span>
               <div className="dd-filters">
                 {fileTypes.length > 1 && (
                   <select className="dd-select-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
@@ -1421,7 +1503,7 @@ export default function DataDiscoveryPage() {
           {/* File Profile Review Panel */}
           <FileProfilePanel
             file={selectedProfileFile}
-            allFiles={files}
+            allFiles={discoveredFiles}
             onSelectFile={setSelectedProfileFile}
             onRunQualityScan={runQualityScanForFile}
           />
