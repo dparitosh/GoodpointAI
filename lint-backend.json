@@ -1,0 +1,4467 @@
+[
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 52,
+      "row": 42
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\core\\lifespan.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "ConnectionConfig.is_default",
+          "end_location": {
+            "column": 52,
+            "row": 42
+          },
+          "location": {
+            "column": 17,
+            "row": 42
+          }
+        }
+      ],
+      "message": "Replace with `ConnectionConfig.is_default`"
+    },
+    "location": {
+      "column": 17,
+      "row": 42
+    },
+    "message": "Avoid equality comparisons to `True`; use `ConnectionConfig.is_default:` for truth checks",
+    "noqa_row": 42,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 86,
+      "row": 23
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\agentic_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.quality_models import DiscoveryReport, DataQualityRule",
+          "end_location": {
+            "column": 86,
+            "row": 23
+          },
+          "location": {
+            "column": 1,
+            "row": 23
+          }
+        }
+      ],
+      "message": "Remove unused import: `models.quality_models.DataQualityResult`"
+    },
+    "location": {
+      "column": 69,
+      "row": 23
+    },
+    "message": "`models.quality_models.DataQualityResult` imported but unused",
+    "noqa_row": 23,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 15,
+      "row": 378
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\agentic_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 18,
+            "row": 378
+          },
+          "location": {
+            "column": 5,
+            "row": 378
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `session_id`"
+    },
+    "location": {
+      "column": 5,
+      "row": 378
+    },
+    "message": "Local variable `session_id` is assigned to but never used",
+    "noqa_row": 378,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 72,
+      "row": 124
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\analytics_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"Forbidden SQL marker not allowed in query\"",
+          "end_location": {
+            "column": 72,
+            "row": 124
+          },
+          "location": {
+            "column": 28,
+            "row": 124
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 28,
+      "row": 124
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 124,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 21,
+      "row": 365
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\data_sources_router.py",
+    "fix": null,
+    "location": {
+      "column": 20,
+      "row": 365
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "noqa_row": 365,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 37,
+      "row": 365
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\data_sources_router.py",
+    "fix": null,
+    "location": {
+      "column": 36,
+      "row": 365
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "noqa_row": 365,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 40,
+      "row": 369
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\data_sources_router.py",
+    "fix": null,
+    "location": {
+      "column": 39,
+      "row": 369
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "noqa_row": 369,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 58,
+      "row": 369
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\data_sources_router.py",
+    "fix": null,
+    "location": {
+      "column": 57,
+      "row": 369
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "noqa_row": 369,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 29,
+      "row": 373
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\data_sources_router.py",
+    "fix": null,
+    "location": {
+      "column": 28,
+      "row": 373
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "noqa_row": 373,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 28,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\export_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import List",
+          "end_location": {
+            "column": 34,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import: `typing.Optional`"
+    },
+    "location": {
+      "column": 20,
+      "row": 13
+    },
+    "message": "`typing.Optional` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 25,
+      "row": 388
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\multimodal_router.py",
+    "fix": null,
+    "location": {
+      "column": 20,
+      "row": 388
+    },
+    "message": "`ezdxf` imported but unused; consider using `importlib.util.find_spec` to test for availability",
+    "noqa_row": 388,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 56,
+      "row": 664
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\multimodal_router.py",
+    "fix": null,
+    "location": {
+      "column": 45,
+      "row": 664
+    },
+    "message": "Undefined name `ollama_host`",
+    "noqa_row": 664,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F821",
+    "end_location": {
+      "column": 48,
+      "row": 680
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\multimodal_router.py",
+    "fix": null,
+    "location": {
+      "column": 37,
+      "row": 680
+    },
+    "message": "Undefined name `ollama_host`",
+    "noqa_row": 680,
+    "url": "https://docs.astral.sh/ruff/rules/undefined-name"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 76,
+      "row": 956
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\multimodal_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from services.file_batch_processor import discover_files",
+          "end_location": {
+            "column": 76,
+            "row": 956
+          },
+          "location": {
+            "column": 5,
+            "row": 956
+          }
+        }
+      ],
+      "message": "Remove unused import: `services.file_batch_processor.ALL_SUPPORTED`"
+    },
+    "location": {
+      "column": 63,
+      "row": 956
+    },
+    "message": "`services.file_batch_processor.ALL_SUPPORTED` imported but unused",
+    "noqa_row": 956,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 65,
+      "row": 996
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\multimodal_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from services.file_batch_processor import FileRecord, _classify_ext",
+          "end_location": {
+            "column": 92,
+            "row": 996
+          },
+          "location": {
+            "column": 5,
+            "row": 996
+          }
+        }
+      ],
+      "message": "Remove unused import: `services.file_batch_processor.FileBatchProcessor`"
+    },
+    "location": {
+      "column": 47,
+      "row": 996
+    },
+    "message": "`services.file_batch_processor.FileBatchProcessor` imported but unused",
+    "noqa_row": 996,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 45,
+      "row": 25
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\plm_etl_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import func",
+          "end_location": {
+            "column": 45,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 25
+          }
+        }
+      ],
+      "message": "Remove unused import: `sqlalchemy.text`"
+    },
+    "location": {
+      "column": 38,
+      "row": 25
+    },
+    "message": "`sqlalchemy.text` imported but unused",
+    "noqa_row": 25,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 8,
+      "row": 565
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\plm_etl_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 11,
+            "row": 565
+          },
+          "location": {
+            "column": 5,
+            "row": 565
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `run`"
+    },
+    "location": {
+      "column": 5,
+      "row": 565
+    },
+    "message": "Local variable `run` is assigned to but never used",
+    "noqa_row": 565,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 31,
+      "row": 41
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 41
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 41,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 21,
+      "row": 42
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 42
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 42,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 45,
+      "row": 390
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      warn: when > 0\"",
+          "end_location": {
+            "column": 45,
+            "row": 390
+          },
+          "location": {
+            "column": 22,
+            "row": 390
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 22,
+      "row": 390
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 390,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 47,
+      "row": 391
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      fail: when > 10%\"",
+          "end_location": {
+            "column": 47,
+            "row": 391
+          },
+          "location": {
+            "column": 22,
+            "row": 391
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 22,
+      "row": 391
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 391,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 50,
+      "row": 405
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      warn: when > 1d\"",
+          "end_location": {
+            "column": 50,
+            "row": 405
+          },
+          "location": {
+            "column": 26,
+            "row": 405
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 26,
+      "row": 405
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 405,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 50,
+      "row": 406
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      fail: when > 7d\"",
+          "end_location": {
+            "column": 50,
+            "row": 406
+          },
+          "location": {
+            "column": 26,
+            "row": 406
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 26,
+      "row": 406
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 406,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 58,
+      "row": 412
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      valid format: email\"",
+          "end_location": {
+            "column": 58,
+            "row": 412
+          },
+          "location": {
+            "column": 30,
+            "row": 412
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 412
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 412,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 53,
+      "row": 413
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      fail: when > 0\"",
+          "end_location": {
+            "column": 53,
+            "row": 413
+          },
+          "location": {
+            "column": 30,
+            "row": 413
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 413
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 413,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 65,
+      "row": 416
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      valid format: phone number\"",
+          "end_location": {
+            "column": 65,
+            "row": 416
+          },
+          "location": {
+            "column": 30,
+            "row": 416
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 416
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 416,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 53,
+      "row": 417
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      warn: when > 0\"",
+          "end_location": {
+            "column": 53,
+            "row": 417
+          },
+          "location": {
+            "column": 30,
+            "row": 417
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 417
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 417,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 56,
+      "row": 420
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      valid format: url\"",
+          "end_location": {
+            "column": 56,
+            "row": 420
+          },
+          "location": {
+            "column": 30,
+            "row": 420
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 420
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 420,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 53,
+      "row": 421
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      warn: when > 0\"",
+          "end_location": {
+            "column": 53,
+            "row": 421
+          },
+          "location": {
+            "column": 30,
+            "row": 421
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 421
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 421,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 57,
+      "row": 424
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      valid format: uuid\"",
+          "end_location": {
+            "column": 57,
+            "row": 424
+          },
+          "location": {
+            "column": 30,
+            "row": 424
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 424
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 424,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 53,
+      "row": 425
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"      fail: when > 0\"",
+          "end_location": {
+            "column": 53,
+            "row": 425
+          },
+          "location": {
+            "column": 30,
+            "row": 425
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 30,
+      "row": 425
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 425,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 30,
+      "row": 2440
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": null,
+    "location": {
+      "column": 29,
+      "row": 2440
+    },
+    "message": "Ambiguous variable name: `l`",
+    "noqa_row": 2440,
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E741",
+    "end_location": {
+      "column": 32,
+      "row": 2442
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\quality_router.py",
+    "fix": null,
+    "location": {
+      "column": 31,
+      "row": 2442
+    },
+    "message": "Ambiguous variable name: `l`",
+    "noqa_row": 2442,
+    "url": "https://docs.astral.sh/ruff/rules/ambiguous-variable-name"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 52,
+      "row": 283
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\router.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 283
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 283,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 12,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_engine_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import: `json`"
+    },
+    "location": {
+      "column": 8,
+      "row": 14
+    },
+    "message": "`json` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 14,
+      "row": 24
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_engine_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleTemplate, RuleSetExecution, RuleExecution, QuarantineRecord,\r\n    RuleStatus, ExecutionStatus\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 22
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 24
+    },
+    "message": "`models.rule_engine_models.RuleLevel` imported but unused",
+    "noqa_row": 24,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 28,
+      "row": 24
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_engine_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleTemplate, RuleSetExecution, RuleExecution, QuarantineRecord,\r\n    RuleStatus, ExecutionStatus\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 22
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 16,
+      "row": 24
+    },
+    "message": "`models.rule_engine_models.RuleSeverity` imported but unused",
+    "noqa_row": 24,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 46,
+      "row": 24
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_engine_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleTemplate, RuleSetExecution, RuleExecution, QuarantineRecord,\r\n    RuleStatus, ExecutionStatus\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 22
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 30,
+      "row": 24
+    },
+    "message": "`models.rule_engine_models.RuleActionOnFail` imported but unused",
+    "noqa_row": 24,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 87,
+      "row": 16
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import RuleSet, Rule, RuleSetExecution",
+          "end_location": {
+            "column": 87,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 16
+          }
+        }
+      ],
+      "message": "Remove unused import: `models.rule_engine_models.ExecutionStatus`"
+    },
+    "location": {
+      "column": 72,
+      "row": 16
+    },
+    "message": "`models.rule_engine_models.ExecutionStatus` imported but unused",
+    "noqa_row": 16,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 70,
+      "row": 369
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\rule_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "RuleSet.is_active",
+          "end_location": {
+            "column": 70,
+            "row": 369
+          },
+          "location": {
+            "column": 45,
+            "row": 369
+          }
+        }
+      ],
+      "message": "Replace with `RuleSet.is_active`"
+    },
+    "location": {
+      "column": 45,
+      "row": 369
+    },
+    "message": "Avoid equality comparisons to `True`; use `RuleSet.is_active:` for truth checks",
+    "noqa_row": 369,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 42,
+      "row": 24
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\workflow_manager_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy.exc import SQLAlchemyError",
+          "end_location": {
+            "column": 59,
+            "row": 24
+          },
+          "location": {
+            "column": 1,
+            "row": 24
+          }
+        }
+      ],
+      "message": "Remove unused import: `sqlalchemy.exc.IntegrityError`"
+    },
+    "location": {
+      "column": 28,
+      "row": 24
+    },
+    "message": "`sqlalchemy.exc.IntegrityError` imported but unused",
+    "noqa_row": 24,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 53,
+      "row": 20
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\workflow_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.workflow_models import (\r\n    WorkflowDefinition, WorkflowExecution, WorkflowStep, WorkflowStepExecution,\r\n    WorkflowDefinitionCreate, MigrationStage\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 22
+          },
+          "location": {
+            "column": 1,
+            "row": 18
+          }
+        }
+      ],
+      "message": "Remove unused import: `models.workflow_models.WorkflowStepDefinition`"
+    },
+    "location": {
+      "column": 31,
+      "row": 20
+    },
+    "message": "`models.workflow_models.WorkflowStepDefinition` imported but unused",
+    "noqa_row": 20,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 64,
+      "row": 26
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\graph_api\\workflow_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 27
+          },
+          "location": {
+            "column": 1,
+            "row": 26
+          }
+        }
+      ],
+      "message": "Remove unused import: `services.workflow_executor_service.WorkflowExecutor`"
+    },
+    "location": {
+      "column": 48,
+      "row": 26
+    },
+    "message": "`services.workflow_executor_service.WorkflowExecutor` imported but unused",
+    "noqa_row": 26,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 45,
+      "row": 16
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\admin_config_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import (\r\n    String, Integer, DateTime, JSON, Text, Float, Boolean,\r\n    Index, UniqueConstraint\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import: `sqlalchemy.Enum`"
+    },
+    "location": {
+      "column": 38,
+      "row": 16
+    },
+    "message": "`sqlalchemy.Enum` imported but unused",
+    "noqa_row": 16,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 28,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 20,
+      "row": 13
+    },
+    "message": "`typing.Optional` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 34,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 30,
+      "row": 13
+    },
+    "message": "`typing.List` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 40,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 36,
+      "row": 13
+    },
+    "message": "`typing.Dict` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 45,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 42,
+      "row": 13
+    },
+    "message": "`typing.Any` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 27,
+      "row": 16
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import (\r\n    Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey,\r\n    Index\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 20,
+      "row": 16
+    },
+    "message": "`sqlalchemy.Enum` imported but unused",
+    "noqa_row": 16,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 45,
+      "row": 16
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\models\\rule_engine_models.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import (\r\n    Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey,\r\n    Index\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 29,
+      "row": 16
+    },
+    "message": "`sqlalchemy.UniqueConstraint` imported but unused",
+    "noqa_row": 16,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 27,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 24,
+      "row": 14
+    },
+    "message": "`sqlalchemy.or_` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 33,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 29,
+      "row": 14
+    },
+    "message": "`sqlalchemy.and_` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 17,
+      "row": 22
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.admin_config_models import (\r\n    # ORM Models\r\n    SystemConfiguration,\r\n    LLMProviderConfig,\r\n    EmbeddingModelConfig,\r\n    ConnectionConfig,\r\n    FeatureFlag,\r\n    AuditLog,\r\n    # Enums\r\n    SystemConfigCreate,\r\n    SystemConfigUpdate,\r\n    SystemConfigResponse,\r\n    LLMProviderCreate,\r\n    LLMProviderUpdate,\r\n    LLMProviderResponse,\r\n    EmbeddingModelCreate,\r\n    EmbeddingModelUpdate,\r\n    EmbeddingModelResponse,\r\n    ConnectionConfigCreate,\r\n    ConnectionConfigUpdate,\r\n    ConnectionConfigResponse,\r\n    FeatureFlagCreate,\r\n    FeatureFlagUpdate,\r\n    FeatureFlagResponse,\r\n    AuditLogResponse,\r\n    AllAdminConfigsResponse,\r\n    ConfigHealthResponse,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 22
+    },
+    "message": "`models.admin_config_models.APIKeyConfig` imported but unused",
+    "noqa_row": 22,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 19,
+      "row": 27
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.admin_config_models import (\r\n    # ORM Models\r\n    SystemConfiguration,\r\n    LLMProviderConfig,\r\n    EmbeddingModelConfig,\r\n    ConnectionConfig,\r\n    FeatureFlag,\r\n    AuditLog,\r\n    # Enums\r\n    SystemConfigCreate,\r\n    SystemConfigUpdate,\r\n    SystemConfigResponse,\r\n    LLMProviderCreate,\r\n    LLMProviderUpdate,\r\n    LLMProviderResponse,\r\n    EmbeddingModelCreate,\r\n    EmbeddingModelUpdate,\r\n    EmbeddingModelResponse,\r\n    ConnectionConfigCreate,\r\n    ConnectionConfigUpdate,\r\n    ConnectionConfigResponse,\r\n    FeatureFlagCreate,\r\n    FeatureFlagUpdate,\r\n    FeatureFlagResponse,\r\n    AuditLogResponse,\r\n    AllAdminConfigsResponse,\r\n    ConfigHealthResponse,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 27
+    },
+    "message": "`models.admin_config_models.ConfigCategory` imported but unused",
+    "noqa_row": 27,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 16,
+      "row": 28
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.admin_config_models import (\r\n    # ORM Models\r\n    SystemConfiguration,\r\n    LLMProviderConfig,\r\n    EmbeddingModelConfig,\r\n    ConnectionConfig,\r\n    FeatureFlag,\r\n    AuditLog,\r\n    # Enums\r\n    SystemConfigCreate,\r\n    SystemConfigUpdate,\r\n    SystemConfigResponse,\r\n    LLMProviderCreate,\r\n    LLMProviderUpdate,\r\n    LLMProviderResponse,\r\n    EmbeddingModelCreate,\r\n    EmbeddingModelUpdate,\r\n    EmbeddingModelResponse,\r\n    ConnectionConfigCreate,\r\n    ConnectionConfigUpdate,\r\n    ConnectionConfigResponse,\r\n    FeatureFlagCreate,\r\n    FeatureFlagUpdate,\r\n    FeatureFlagResponse,\r\n    AuditLogResponse,\r\n    AllAdminConfigsResponse,\r\n    ConfigHealthResponse,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 28
+    },
+    "message": "`models.admin_config_models.LLMProvider` imported but unused",
+    "noqa_row": 28,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 22,
+      "row": 29
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.admin_config_models import (\r\n    # ORM Models\r\n    SystemConfiguration,\r\n    LLMProviderConfig,\r\n    EmbeddingModelConfig,\r\n    ConnectionConfig,\r\n    FeatureFlag,\r\n    AuditLog,\r\n    # Enums\r\n    SystemConfigCreate,\r\n    SystemConfigUpdate,\r\n    SystemConfigResponse,\r\n    LLMProviderCreate,\r\n    LLMProviderUpdate,\r\n    LLMProviderResponse,\r\n    EmbeddingModelCreate,\r\n    EmbeddingModelUpdate,\r\n    EmbeddingModelResponse,\r\n    ConnectionConfigCreate,\r\n    ConnectionConfigUpdate,\r\n    ConnectionConfigResponse,\r\n    FeatureFlagCreate,\r\n    FeatureFlagUpdate,\r\n    FeatureFlagResponse,\r\n    AuditLogResponse,\r\n    AllAdminConfigsResponse,\r\n    ConfigHealthResponse,\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 5,
+      "row": 29
+    },
+    "message": "`models.admin_config_models.EmbeddingProvider` imported but unused",
+    "noqa_row": 29,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 65,
+      "row": 179
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SystemConfiguration.enabled",
+          "end_location": {
+            "column": 65,
+            "row": 179
+          },
+          "location": {
+            "column": 30,
+            "row": 179
+          }
+        }
+      ],
+      "message": "Replace with `SystemConfiguration.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 179
+    },
+    "message": "Avoid equality comparisons to `True`; use `SystemConfiguration.enabled:` for truth checks",
+    "noqa_row": 179,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 45,
+      "row": 397
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "LLMProviderConfig.is_default",
+          "end_location": {
+            "column": 45,
+            "row": 397
+          },
+          "location": {
+            "column": 9,
+            "row": 397
+          }
+        }
+      ],
+      "message": "Replace with `LLMProviderConfig.is_default`"
+    },
+    "location": {
+      "column": 9,
+      "row": 397
+    },
+    "message": "Avoid equality comparisons to `True`; use `LLMProviderConfig.is_default:` for truth checks",
+    "noqa_row": 397,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 49,
+      "row": 494
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "LLMProviderConfig.is_default",
+          "end_location": {
+            "column": 49,
+            "row": 494
+          },
+          "location": {
+            "column": 13,
+            "row": 494
+          }
+        }
+      ],
+      "message": "Replace with `LLMProviderConfig.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 494
+    },
+    "message": "Avoid equality comparisons to `True`; use `LLMProviderConfig.is_default:` for truth checks",
+    "noqa_row": 494,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 49,
+      "row": 568
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "LLMProviderConfig.is_default",
+          "end_location": {
+            "column": 49,
+            "row": 568
+          },
+          "location": {
+            "column": 13,
+            "row": 568
+          }
+        }
+      ],
+      "message": "Replace with `LLMProviderConfig.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 568
+    },
+    "message": "Avoid equality comparisons to `True`; use `LLMProviderConfig.is_default:` for truth checks",
+    "noqa_row": 568,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 48,
+      "row": 671
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "EmbeddingModelConfig.is_default",
+          "end_location": {
+            "column": 48,
+            "row": 671
+          },
+          "location": {
+            "column": 9,
+            "row": 671
+          }
+        }
+      ],
+      "message": "Replace with `EmbeddingModelConfig.is_default`"
+    },
+    "location": {
+      "column": 9,
+      "row": 671
+    },
+    "message": "Avoid equality comparisons to `True`; use `EmbeddingModelConfig.is_default:` for truth checks",
+    "noqa_row": 671,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 86,
+      "row": 709
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "EmbeddingModelConfig.is_default",
+          "end_location": {
+            "column": 86,
+            "row": 709
+          },
+          "location": {
+            "column": 47,
+            "row": 709
+          }
+        }
+      ],
+      "message": "Replace with `EmbeddingModelConfig.is_default`"
+    },
+    "location": {
+      "column": 47,
+      "row": 709
+    },
+    "message": "Avoid equality comparisons to `True`; use `EmbeddingModelConfig.is_default:` for truth checks",
+    "noqa_row": 709,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 52,
+      "row": 745
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "EmbeddingModelConfig.is_default",
+          "end_location": {
+            "column": 52,
+            "row": 745
+          },
+          "location": {
+            "column": 13,
+            "row": 745
+          }
+        }
+      ],
+      "message": "Replace with `EmbeddingModelConfig.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 745
+    },
+    "message": "Avoid equality comparisons to `True`; use `EmbeddingModelConfig.is_default:` for truth checks",
+    "noqa_row": 745,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 48,
+      "row": 892
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "ConnectionConfig.is_default",
+          "end_location": {
+            "column": 48,
+            "row": 892
+          },
+          "location": {
+            "column": 13,
+            "row": 892
+          }
+        }
+      ],
+      "message": "Replace with `ConnectionConfig.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 892
+    },
+    "message": "Avoid equality comparisons to `True`; use `ConnectionConfig.is_default:` for truth checks",
+    "noqa_row": 892,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 48,
+      "row": 961
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "ConnectionConfig.is_default",
+          "end_location": {
+            "column": 48,
+            "row": 961
+          },
+          "location": {
+            "column": 13,
+            "row": 961
+          }
+        }
+      ],
+      "message": "Replace with `ConnectionConfig.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 961
+    },
+    "message": "Avoid equality comparisons to `True`; use `ConnectionConfig.is_default:` for truth checks",
+    "noqa_row": 961,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 57,
+      "row": 1049
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "FeatureFlag.enabled",
+          "end_location": {
+            "column": 57,
+            "row": 1049
+          },
+          "location": {
+            "column": 30,
+            "row": 1049
+          }
+        }
+      ],
+      "message": "Replace with `FeatureFlag.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 1049
+    },
+    "message": "Avoid equality comparisons to `True`; use `FeatureFlag.enabled:` for truth checks",
+    "noqa_row": 1049,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 94,
+      "row": 1187
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SystemConfiguration.enabled",
+          "end_location": {
+            "column": 94,
+            "row": 1187
+          },
+          "location": {
+            "column": 59,
+            "row": 1187
+          }
+        }
+      ],
+      "message": "Replace with `SystemConfiguration.enabled`"
+    },
+    "location": {
+      "column": 59,
+      "row": 1187
+    },
+    "message": "Avoid equality comparisons to `True`; use `SystemConfiguration.enabled:` for truth checks",
+    "noqa_row": 1187,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 70,
+      "row": 1640
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": null,
+    "location": {
+      "column": 51,
+      "row": 1640
+    },
+    "message": "`sentence_transformers.SentenceTransformer` imported but unused; consider using `importlib.util.find_spec` to test for availability",
+    "noqa_row": 1640,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 87,
+      "row": 1741
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\admin_config_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from core.oauth_service import get_connection_oauth_token",
+          "end_location": {
+            "column": 87,
+            "row": 1741
+          },
+          "location": {
+            "column": 5,
+            "row": 1741
+          }
+        }
+      ],
+      "message": "Remove unused import: `core.oauth_service.get_oauth_token_manager`"
+    },
+    "location": {
+      "column": 64,
+      "row": 1741
+    },
+    "message": "`core.oauth_service.get_oauth_token_manager` imported but unused",
+    "noqa_row": 1741,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 48,
+      "row": 154
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\conversational_search_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SearchConfiguration.enabled",
+          "end_location": {
+            "column": 48,
+            "row": 154
+          },
+          "location": {
+            "column": 13,
+            "row": 154
+          }
+        }
+      ],
+      "message": "Replace with `SearchConfiguration.enabled`"
+    },
+    "location": {
+      "column": 13,
+      "row": 154
+    },
+    "message": "Avoid equality comparisons to `True`; use `SearchConfiguration.enabled:` for truth checks",
+    "noqa_row": 154,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 20,
+      "row": 732
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\conversational_search_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 23,
+            "row": 732
+          },
+          "location": {
+            "column": 5,
+            "row": 732
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `sources_summary`"
+    },
+    "location": {
+      "column": 5,
+      "row": 732
+    },
+    "message": "Local variable `sources_summary` is assigned to but never used",
+    "noqa_row": 732,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 63,
+      "row": 56
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "FilePatternConfig.enabled",
+          "end_location": {
+            "column": 63,
+            "row": 56
+          },
+          "location": {
+            "column": 30,
+            "row": 56
+          }
+        }
+      ],
+      "message": "Replace with `FilePatternConfig.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 56
+    },
+    "message": "Avoid equality comparisons to `True`; use `FilePatternConfig.enabled:` for truth checks",
+    "noqa_row": 56,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 63,
+      "row": 69
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "FilePatternConfig.enabled",
+          "end_location": {
+            "column": 63,
+            "row": 69
+          },
+          "location": {
+            "column": 30,
+            "row": 69
+          }
+        }
+      ],
+      "message": "Replace with `FilePatternConfig.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 69
+    },
+    "message": "Avoid equality comparisons to `True`; use `FilePatternConfig.enabled:` for truth checks",
+    "noqa_row": 69,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 62,
+      "row": 205
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "PipelineTemplate.enabled",
+          "end_location": {
+            "column": 62,
+            "row": 205
+          },
+          "location": {
+            "column": 30,
+            "row": 205
+          }
+        }
+      ],
+      "message": "Replace with `PipelineTemplate.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 205
+    },
+    "message": "Avoid equality comparisons to `True`; use `PipelineTemplate.enabled:` for truth checks",
+    "noqa_row": 205,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 65,
+      "row": 297
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SearchConfiguration.enabled",
+          "end_location": {
+            "column": 65,
+            "row": 297
+          },
+          "location": {
+            "column": 30,
+            "row": 297
+          }
+        }
+      ],
+      "message": "Replace with `SearchConfiguration.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 297
+    },
+    "message": "Avoid equality comparisons to `True`; use `SearchConfiguration.enabled:` for truth checks",
+    "noqa_row": 297,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 51,
+      "row": 325
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SearchConfiguration.is_default",
+          "end_location": {
+            "column": 51,
+            "row": 325
+          },
+          "location": {
+            "column": 13,
+            "row": 325
+          }
+        }
+      ],
+      "message": "Replace with `SearchConfiguration.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 325
+    },
+    "message": "Avoid equality comparisons to `True`; use `SearchConfiguration.is_default:` for truth checks",
+    "noqa_row": 325,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 51,
+      "row": 353
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SearchConfiguration.is_default",
+          "end_location": {
+            "column": 51,
+            "row": 353
+          },
+          "location": {
+            "column": 13,
+            "row": 353
+          }
+        }
+      ],
+      "message": "Replace with `SearchConfiguration.is_default`"
+    },
+    "location": {
+      "column": 13,
+      "row": 353
+    },
+    "message": "Avoid equality comparisons to `True`; use `SearchConfiguration.is_default:` for truth checks",
+    "noqa_row": 353,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 68,
+      "row": 390
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "IndexConfiguration.knn_enabled",
+          "end_location": {
+            "column": 68,
+            "row": 390
+          },
+          "location": {
+            "column": 30,
+            "row": 390
+          }
+        }
+      ],
+      "message": "Replace with `IndexConfiguration.knn_enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 390
+    },
+    "message": "Avoid equality comparisons to `True`; use `IndexConfiguration.knn_enabled:` for truth checks",
+    "noqa_row": 390,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 64,
+      "row": 392
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "IndexConfiguration.enabled",
+          "end_location": {
+            "column": 64,
+            "row": 392
+          },
+          "location": {
+            "column": 30,
+            "row": 392
+          }
+        }
+      ],
+      "message": "Replace with `IndexConfiguration.enabled`"
+    },
+    "location": {
+      "column": 30,
+      "row": 392
+    },
+    "message": "Avoid equality comparisons to `True`; use `IndexConfiguration.enabled:` for truth checks",
+    "noqa_row": 392,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 91,
+      "row": 481
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "FilePatternConfig.enabled",
+          "end_location": {
+            "column": 91,
+            "row": 481
+          },
+          "location": {
+            "column": 58,
+            "row": 481
+          }
+        }
+      ],
+      "message": "Replace with `FilePatternConfig.enabled`"
+    },
+    "location": {
+      "column": 58,
+      "row": 481
+    },
+    "message": "Avoid equality comparisons to `True`; use `FilePatternConfig.enabled:` for truth checks",
+    "noqa_row": 481,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 82,
+      "row": 482
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "PipelineTemplate.enabled",
+          "end_location": {
+            "column": 82,
+            "row": 482
+          },
+          "location": {
+            "column": 50,
+            "row": 482
+          }
+        }
+      ],
+      "message": "Replace with `PipelineTemplate.enabled`"
+    },
+    "location": {
+      "column": 50,
+      "row": 482
+    },
+    "message": "Avoid equality comparisons to `True`; use `PipelineTemplate.enabled:` for truth checks",
+    "noqa_row": 482,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 79,
+      "row": 483
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SearchConfiguration.enabled",
+          "end_location": {
+            "column": 79,
+            "row": 483
+          },
+          "location": {
+            "column": 44,
+            "row": 483
+          }
+        }
+      ],
+      "message": "Replace with `SearchConfiguration.enabled`"
+    },
+    "location": {
+      "column": 44,
+      "row": 483
+    },
+    "message": "Avoid equality comparisons to `True`; use `SearchConfiguration.enabled:` for truth checks",
+    "noqa_row": 483,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 76,
+      "row": 484
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\routers\\pipeline_config_router.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "IndexConfiguration.enabled",
+          "end_location": {
+            "column": 76,
+            "row": 484
+          },
+          "location": {
+            "column": 42,
+            "row": 484
+          }
+        }
+      ],
+      "message": "Replace with `IndexConfiguration.enabled`"
+    },
+    "location": {
+      "column": 42,
+      "row": 484
+    },
+    "message": "Avoid equality comparisons to `True`; use `IndexConfiguration.enabled:` for truth checks",
+    "noqa_row": 484,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 11,
+      "row": 2
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_all_dbs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 3
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Remove unused import: `sys`"
+    },
+    "location": {
+      "column": 8,
+      "row": 2
+    },
+    "message": "`sys` imported but unused",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E701",
+    "end_location": {
+      "column": 27,
+      "row": 27
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_all_dbs.py",
+    "fix": null,
+    "location": {
+      "column": 26,
+      "row": 27
+    },
+    "message": "Multiple statements on one line (colon)",
+    "noqa_row": 27,
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-colon"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 31,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_llm_config.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 14
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 31,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_llm_config.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import: `core.database.Base`"
+    },
+    "location": {
+      "column": 27,
+      "row": 14
+    },
+    "message": "`core.database.Base` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 57,
+      "row": 15
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_llm_config.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 15
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 82,
+      "row": 32
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_llm_config.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "LLMProviderConfig.is_default",
+          "end_location": {
+            "column": 82,
+            "row": 32
+          },
+          "location": {
+            "column": 46,
+            "row": 32
+          }
+        }
+      ],
+      "message": "Replace with `LLMProviderConfig.is_default`"
+    },
+    "location": {
+      "column": 46,
+      "row": 32
+    },
+    "message": "Avoid equality comparisons to `True`; use `LLMProviderConfig.is_default:` for truth checks",
+    "noqa_row": 32,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 11,
+      "row": 2
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\check_multimodal.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 3
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Remove unused import: `sys`"
+    },
+    "location": {
+      "column": 8,
+      "row": 2
+    },
+    "message": "`sys` imported but unused",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 11,
+      "row": 3
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\debug_router_logic.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 4
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Remove unused import: `sys`"
+    },
+    "location": {
+      "column": 8,
+      "row": 3
+    },
+    "message": "`sys` imported but unused",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 12,
+      "row": 15
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\diagnose_mcp.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 15
+          }
+        }
+      ],
+      "message": "Remove unused import: `json`"
+    },
+    "location": {
+      "column": 8,
+      "row": 15
+    },
+    "message": "`json` imported but unused",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 22,
+      "row": 232
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\diagnose_mcp.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 25,
+            "row": 232
+          },
+          "location": {
+            "column": 5,
+            "row": 232
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `mcp_only_degraded`"
+    },
+    "location": {
+      "column": 5,
+      "row": 232
+    },
+    "message": "Local variable `mcp_only_degraded` is assigned to but never used",
+    "noqa_row": 232,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "E714",
+    "end_location": {
+      "column": 37,
+      "row": 234
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\diagnose_mcp.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "postgres_ok is not False",
+          "end_location": {
+            "column": 37,
+            "row": 234
+          },
+          "location": {
+            "column": 13,
+            "row": 234
+          }
+        }
+      ],
+      "message": "Convert to `is not`"
+    },
+    "location": {
+      "column": 17,
+      "row": 234
+    },
+    "message": "Test for object identity should be `is not`",
+    "noqa_row": 234,
+    "url": "https://docs.astral.sh/ruff/rules/not-is-test"
+  },
+  {
+    "cell": null,
+    "code": "E714",
+    "end_location": {
+      "column": 60,
+      "row": 236
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\diagnose_mcp.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "deps.get(\"postgres\", {}).get(\"ok\") is not False",
+          "end_location": {
+            "column": 60,
+            "row": 236
+          },
+          "location": {
+            "column": 13,
+            "row": 236
+          }
+        }
+      ],
+      "message": "Convert to `is not`"
+    },
+    "location": {
+      "column": 17,
+      "row": 236
+    },
+    "message": "Test for object identity should be `is not`",
+    "noqa_row": 236,
+    "url": "https://docs.astral.sh/ruff/rules/not-is-test"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 43,
+      "row": 13
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\init_rule_engine_db.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import create_engine",
+          "end_location": {
+            "column": 43,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Remove unused import: `sqlalchemy.text`"
+    },
+    "location": {
+      "column": 39,
+      "row": 13
+    },
+    "message": "`sqlalchemy.text` imported but unused",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 31,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\init_rule_engine_db.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import: `core.database.Base`"
+    },
+    "location": {
+      "column": 27,
+      "row": 14
+    },
+    "message": "`core.database.Base` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 10,
+      "row": 3
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\inspect_graph.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 4
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Remove unused import: `os`"
+    },
+    "location": {
+      "column": 8,
+      "row": 3
+    },
+    "message": "`os` imported but unused",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 30,
+      "row": 34
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 35
+          },
+          "location": {
+            "column": 1,
+            "row": 34
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 22,
+      "row": 34
+    },
+    "message": "`datetime.datetime` imported but unused",
+    "noqa_row": 34,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 40,
+      "row": 34
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 35
+          },
+          "location": {
+            "column": 1,
+            "row": 34
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 32,
+      "row": 34
+    },
+    "message": "`datetime.timezone` imported but unused",
+    "noqa_row": 34,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 84,
+      "row": 48
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 48
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 48,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 41,
+      "row": 48
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.plm_models import PLMIngestionRun, PLMStagedRecord",
+          "end_location": {
+            "column": 84,
+            "row": 48
+          },
+          "location": {
+            "column": 1,
+            "row": 48
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 31,
+      "row": 48
+    },
+    "message": "`models.plm_models.PLMBOMItem` imported but unused",
+    "noqa_row": 48,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 67,
+      "row": 48
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.plm_models import PLMIngestionRun, PLMStagedRecord",
+          "end_location": {
+            "column": 84,
+            "row": 48
+          },
+          "location": {
+            "column": 1,
+            "row": 48
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 60,
+      "row": 48
+    },
+    "message": "`models.plm_models.PLMPart` imported but unused",
+    "noqa_row": 48,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E402",
+    "end_location": {
+      "column": 75,
+      "row": 49
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": null,
+    "location": {
+      "column": 1,
+      "row": 49
+    },
+    "message": "Module level import not at top of file",
+    "noqa_row": 49,
+    "url": "https://docs.astral.sh/ruff/rules/module-import-not-at-top-of-file"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 75,
+      "row": 49
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\plm_migration_pipeline.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.quality_models import DataQualityGateResult",
+          "end_location": {
+            "column": 75,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 49
+          }
+        }
+      ],
+      "message": "Remove unused import: `models.quality_models.DataQualityResult`"
+    },
+    "location": {
+      "column": 58,
+      "row": 49
+    },
+    "message": "`models.quality_models.DataQualityResult` imported but unused",
+    "noqa_row": 49,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 30,
+      "row": 11
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\seed_admin_configs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 22,
+      "row": 11
+    },
+    "message": "`datetime.datetime` imported but unused",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 40,
+      "row": 11
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\seed_admin_configs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 32,
+      "row": 11
+    },
+    "message": "`datetime.timezone` imported but unused",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 12,
+      "row": 9
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\seed_pipeline_configs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 10
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Remove unused import: `json`"
+    },
+    "location": {
+      "column": 8,
+      "row": 9
+    },
+    "message": "`json` imported but unused",
+    "noqa_row": 9,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 10,
+      "row": 10
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\seed_pipeline_configs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 10
+          }
+        }
+      ],
+      "message": "Remove unused import: `os`"
+    },
+    "location": {
+      "column": 8,
+      "row": 10
+    },
+    "message": "`os` imported but unused",
+    "noqa_row": 10,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 10,
+      "row": 3
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\test_libs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 4
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Remove unused import: `os`"
+    },
+    "location": {
+      "column": 8,
+      "row": 3
+    },
+    "message": "`os` imported but unused",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 16,
+      "row": 48
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\test_libs.py",
+    "fix": null,
+    "location": {
+      "column": 12,
+      "row": 48
+    },
+    "message": "`docx` imported but unused; consider using `importlib.util.find_spec` to test for availability",
+    "noqa_row": 48,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 54,
+      "row": 71
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\test_libs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"OK (Binary found)\"",
+          "end_location": {
+            "column": 54,
+            "row": 71
+          },
+          "location": {
+            "column": 34,
+            "row": 71
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 34,
+      "row": 71
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 71,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 19,
+      "row": 28
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\verify_neo4j.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 22,
+            "row": 28
+          },
+          "location": {
+            "column": 13,
+            "row": 28
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `status`"
+    },
+    "location": {
+      "column": 13,
+      "row": 28
+    },
+    "message": "Local variable `status` is assigned to but never used",
+    "noqa_row": 28,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 40,
+      "row": 57
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\verify_neo4j.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 58
+          },
+          "location": {
+            "column": 1,
+            "row": 57
+          }
+        }
+      ],
+      "message": "Remove unused import: `neo4j.GraphDatabase`"
+    },
+    "location": {
+      "column": 27,
+      "row": 57
+    },
+    "message": "`neo4j.GraphDatabase` imported but unused",
+    "noqa_row": 57,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 12,
+      "row": 4
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\scripts\\verify_search_modes.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 5
+          },
+          "location": {
+            "column": 1,
+            "row": 4
+          }
+        }
+      ],
+      "message": "Remove unused import: `json`"
+    },
+    "location": {
+      "column": 8,
+      "row": 4
+    },
+    "message": "`json` imported but unused",
+    "noqa_row": 4,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 32,
+      "row": 21
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\admin_config_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 22
+          },
+          "location": {
+            "column": 1,
+            "row": 21
+          }
+        }
+      ],
+      "message": "Remove unused import: `functools.lru_cache`"
+    },
+    "location": {
+      "column": 23,
+      "row": 21
+    },
+    "message": "`functools.lru_cache` imported but unused",
+    "noqa_row": 21,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 61,
+      "row": 205
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\admin_config_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "LLMProviderConfig.is_default",
+          "end_location": {
+            "column": 61,
+            "row": 205
+          },
+          "location": {
+            "column": 25,
+            "row": 205
+          }
+        }
+      ],
+      "message": "Replace with `LLMProviderConfig.is_default`"
+    },
+    "location": {
+      "column": 25,
+      "row": 205
+    },
+    "message": "Avoid equality comparisons to `True`; use `LLMProviderConfig.is_default:` for truth checks",
+    "noqa_row": 205,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 81,
+      "row": 304
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\admin_config_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "EmbeddingModelConfig.is_default",
+          "end_location": {
+            "column": 81,
+            "row": 304
+          },
+          "location": {
+            "column": 42,
+            "row": 304
+          }
+        }
+      ],
+      "message": "Replace with `EmbeddingModelConfig.is_default`"
+    },
+    "location": {
+      "column": 42,
+      "row": 304
+    },
+    "message": "Avoid equality comparisons to `True`; use `EmbeddingModelConfig.is_default:` for truth checks",
+    "noqa_row": 304,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 60,
+      "row": 491
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\admin_config_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SystemConfiguration.enabled",
+          "end_location": {
+            "column": 60,
+            "row": 491
+          },
+          "location": {
+            "column": 25,
+            "row": 491
+          }
+        }
+      ],
+      "message": "Replace with `SystemConfiguration.enabled`"
+    },
+    "location": {
+      "column": 25,
+      "row": 491
+    },
+    "message": "Avoid equality comparisons to `True`; use `SystemConfiguration.enabled:` for truth checks",
+    "noqa_row": 491,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "E712",
+    "end_location": {
+      "column": 60,
+      "row": 524
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\admin_config_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "SystemConfiguration.enabled",
+          "end_location": {
+            "column": 60,
+            "row": 524
+          },
+          "location": {
+            "column": 25,
+            "row": 524
+          }
+        }
+      ],
+      "message": "Replace with `SystemConfiguration.enabled`"
+    },
+    "location": {
+      "column": 25,
+      "row": 524
+    },
+    "message": "Avoid equality comparisons to `True`; use `SystemConfiguration.enabled:` for truth checks",
+    "noqa_row": 524,
+    "url": "https://docs.astral.sh/ruff/rules/true-false-comparison"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 52,
+      "row": 15
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\database_migration_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Dict, Any, List, Optional",
+          "end_location": {
+            "column": 52,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 15
+          }
+        }
+      ],
+      "message": "Remove unused import: `typing.Tuple`"
+    },
+    "location": {
+      "column": 47,
+      "row": 15
+    },
+    "message": "`typing.Tuple` imported but unused",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 15,
+      "row": 17
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\database_migration_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 18
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import: `asyncio`"
+    },
+    "location": {
+      "column": 8,
+      "row": 17
+    },
+    "message": "`asyncio` imported but unused",
+    "noqa_row": 17,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 25,
+      "row": 394
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\database_migration_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 28,
+            "row": 394
+          },
+          "location": {
+            "column": 13,
+            "row": 394
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `source_query`"
+    },
+    "location": {
+      "column": 13,
+      "row": 394
+    },
+    "message": "Local variable `source_query` is assigned to but never used",
+    "noqa_row": 394,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 10,
+      "row": 21
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\file_batch_processor.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 22
+          },
+          "location": {
+            "column": 1,
+            "row": 21
+          }
+        }
+      ],
+      "message": "Remove unused import: `os`"
+    },
+    "location": {
+      "column": 8,
+      "row": 21
+    },
+    "message": "`os` imported but unused",
+    "noqa_row": 21,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 50,
+      "row": 7
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\graphql_catalogue_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import datetime, timezone",
+          "end_location": {
+            "column": 50,
+            "row": 7
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Remove definition: `timezone`"
+    },
+    "location": {
+      "column": 42,
+      "row": 7
+    },
+    "message": "Redefinition of unused `timezone` from line 7",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 20,
+      "row": 9
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\graphql_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 10
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Remove unused import: `pandas`"
+    },
+    "location": {
+      "column": 18,
+      "row": 9
+    },
+    "message": "`pandas` imported but unused",
+    "noqa_row": 9,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 50,
+      "row": 11
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\graphql_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import datetime, timezone",
+          "end_location": {
+            "column": 50,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove definition: `timezone`"
+    },
+    "location": {
+      "column": 42,
+      "row": 11
+    },
+    "message": "Redefinition of unused `timezone` from line 11",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 50,
+      "row": 11
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\neo4j_graphrag_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import datetime, timezone",
+          "end_location": {
+            "column": 50,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove definition: `timezone`"
+    },
+    "location": {
+      "column": 42,
+      "row": 11
+    },
+    "message": "Redefinition of unused `timezone` from line 11",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "F841",
+    "end_location": {
+      "column": 32,
+      "row": 205
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_remediation_service.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 35,
+            "row": 205
+          },
+          "location": {
+            "column": 13,
+            "row": 205
+          }
+        }
+      ],
+      "message": "Remove assignment to unused variable `remediation_request`"
+    },
+    "location": {
+      "column": 13,
+      "row": 205
+    },
+    "message": "Local variable `remediation_request` is assigned to but never used",
+    "noqa_row": 205,
+    "url": "https://docs.astral.sh/ruff/rules/unused-variable"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 96,
+      "row": 237
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_remediation_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"SELECT column_name FROM information_schema.columns WHERE table_name = :table\"",
+          "end_location": {
+            "column": 96,
+            "row": 237
+          },
+          "location": {
+            "column": 17,
+            "row": 237
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 17,
+      "row": 237
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 237,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 51,
+      "row": 12
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_scan_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import datetime, timezone",
+          "end_location": {
+            "column": 51,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 12
+          }
+        }
+      ],
+      "message": "Remove unused import: `datetime.timedelta`"
+    },
+    "location": {
+      "column": 42,
+      "row": 12
+    },
+    "message": "`datetime.timedelta` imported but unused",
+    "noqa_row": 12,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 28,
+      "row": 15
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_scan_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from sqlalchemy import text as sql_text",
+          "end_location": {
+            "column": 46,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 15
+          }
+        }
+      ],
+      "message": "Remove unused import: `sqlalchemy.func`"
+    },
+    "location": {
+      "column": 24,
+      "row": 15
+    },
+    "message": "`sqlalchemy.func` imported but unused",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 74,
+      "row": 17
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_scan_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.quality_models import DataQualityScanReport, FieldQualityMetric",
+          "end_location": {
+            "column": 94,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import: `models.quality_models.DataQualityIssue`"
+    },
+    "location": {
+      "column": 58,
+      "row": 17
+    },
+    "message": "`models.quality_models.DataQualityIssue` imported but unused",
+    "noqa_row": 17,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 105,
+      "row": 160
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\quality_scan_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"SELECT column_name FROM information_schema.columns WHERE table_name = :table\"",
+          "end_location": {
+            "column": 105,
+            "row": 160
+          },
+          "location": {
+            "column": 26,
+            "row": 160
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 26,
+      "row": 160
+    },
+    "message": "f-string without any placeholders",
+    "noqa_row": 160,
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 12,
+      "row": 14
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_engine.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Remove unused import: `json`"
+    },
+    "location": {
+      "column": 8,
+      "row": 14
+    },
+    "message": "`json` imported but unused",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 16,
+      "row": 15
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_engine.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 15
+          }
+        }
+      ],
+      "message": "Remove unused import: `operator`"
+    },
+    "location": {
+      "column": 8,
+      "row": 15
+    },
+    "message": "`operator` imported but unused",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 62,
+      "row": 17
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_engine.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Any, Dict, List, Optional, Tuple",
+          "end_location": {
+            "column": 62,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import: `typing.Callable`"
+    },
+    "location": {
+      "column": 54,
+      "row": 17
+    },
+    "message": "`typing.Callable` imported but unused",
+    "noqa_row": 17,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 29,
+      "row": 20
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_engine.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 21
+          },
+          "location": {
+            "column": 1,
+            "row": 20
+          }
+        }
+      ],
+      "message": "Remove unused import: `functools.reduce`"
+    },
+    "location": {
+      "column": 23,
+      "row": 20
+    },
+    "message": "`functools.reduce` imported but unused",
+    "noqa_row": 20,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 11,
+      "row": 21
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_engine.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 22
+          },
+          "location": {
+            "column": 1,
+            "row": 21
+          }
+        }
+      ],
+      "message": "Remove unused import: `ast`"
+    },
+    "location": {
+      "column": 8,
+      "row": 21
+    },
+    "message": "`ast` imported but unused",
+    "noqa_row": 21,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 51,
+      "row": 18
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_execution_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleSetExecution, ExecutionStatus, QuarantineRecord\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 20
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 38,
+      "row": 18
+    },
+    "message": "`models.rule_engine_models.RuleExecution` imported but unused",
+    "noqa_row": 18,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 31,
+      "row": 19
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_execution_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleSetExecution, ExecutionStatus, QuarantineRecord\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 20
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 22,
+      "row": 19
+    },
+    "message": "`models.rule_engine_models.RuleLevel` imported but unused",
+    "noqa_row": 19,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 49,
+      "row": 19
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\services\\rule_execution_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from models.rule_engine_models import (\r\n    RuleSet, Rule, RuleSetExecution, ExecutionStatus, QuarantineRecord\r\n)",
+          "end_location": {
+            "column": 2,
+            "row": 20
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 33,
+      "row": 19
+    },
+    "message": "`models.rule_engine_models.RuleActionOnFail` imported but unused",
+    "noqa_row": 19,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 11,
+      "row": 2
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\tests\\test_integration_routers_fail_closed.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 3
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Remove unused import: `sys`"
+    },
+    "location": {
+      "column": 8,
+      "row": 2
+    },
+    "message": "`sys` imported but unused",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 13,
+      "row": 3
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\tests\\test_integration_routers_fail_closed.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 4
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Remove unused import: `types`"
+    },
+    "location": {
+      "column": 8,
+      "row": 3
+    },
+    "message": "`types` imported but unused",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "E711",
+    "end_location": {
+      "column": 48,
+      "row": 118
+    },
+    "filename": "D:\\Download\\GoodpointAI\\python_backend\\tests\\test_neo4j_graphrag.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "embedding1 == embedding2 is None",
+          "end_location": {
+            "column": 48,
+            "row": 118
+          },
+          "location": {
+            "column": 16,
+            "row": 118
+          }
+        }
+      ],
+      "message": "Replace with `cond is None`"
+    },
+    "location": {
+      "column": 44,
+      "row": 118
+    },
+    "message": "Comparison to `None` should be `cond is None`",
+    "noqa_row": 118,
+    "url": "https://docs.astral.sh/ruff/rules/none-comparison"
+  }
+]

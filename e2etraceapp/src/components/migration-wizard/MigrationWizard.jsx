@@ -428,10 +428,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Step navigation
   const canProceed = useCallback((step) => {
     switch (step) {
-      case 1: return wizardData.workflowName.trim().length > 0 && wizardData.sourceSystem && wizardData.targetSystem;
+      case 1: return (
+        wizardData.workflowName.trim().length > 0 &&
+        wizardData.sourceSystem &&
+        wizardData.targetSystem &&
+        // Prevent migrating from a system to itself
+        wizardData.sourceSystem.id !== wizardData.targetSystem.id
+      );
       case 2: return wizardData.discoveryAccepted;
       case 3: return wizardData.fieldMappings.length > 0;
-      case 4: return wizardData.validationRun && (wizardData.validationResults.length > 0 || wizardData.qualityChecks.passed > 0);
+      case 4: return wizardData.validationRun;
       case 5: return true;
       default: return false;
     }
@@ -501,7 +507,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       }));
       setCurrentStep(prev => prev + 1);
     }
-  }, [currentStep, canProceed, wizardData]);
+  // Specific deps instead of entire wizardData to avoid recreating on every state change
+  // (e.g., progress updates during executeMigration would otherwise re-create nextStep)
+  }, [currentStep, canProceed, wizardData.workflowName, wizardData.sourceSystem, wizardData.targetSystem, wizardData.savedWorkflowId, wizardData.savedWorkflowName]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 1) {
@@ -521,6 +529,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     setWizardData(prev => ({
       ...prev,
       [type === 'source' ? 'sourceSystem' : 'targetSystem']: source,
+      // Reset all downstream discovery/mapping/validation state when source changes
+      // to prevent stale data from a prior source flowing through the wizard
       discoveryStatus: 'idle',
       discoveryAccepted: false,
       discoveryRunId: null,
@@ -531,7 +541,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       semanticProfile: null,
       semanticProfileStatus: 'idle',
       sourceSchema: null,
-      targetSchema: null
+      targetSchema: null,
+      // Also clear mapping/validation/rule state — stale data from the prior source
+      // would silently pass validation against a different target
+      fieldMappings: [],
+      aiSuggestedMappings: [],
+      rules: [],
+      validationResults: [],
+      qualityChecks: { passed: 0, failed: 0, warnings: 0 },
+      validationRun: false,
+      savedRuleSetId: null,
     }));
 
     // Reset completion for downstream steps when changing sources
@@ -608,13 +627,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         }
       } catch (e) {
         // Non-fatal: discovery continues with whatever records were collected.
-        // Distinguish 404 (source not registered) from network/5xx (connection failed).
-        stagedFrom = e?.isClientError ? 'not_registered' : 'unreachable';
+        // Distinguish 4xx (source not registered / access denied) from network/5xx (connection failed).
+        // e?.isClientError is not a standard Fetch API property — check HTTP status code instead.
+        const httpStatus = e?.status || e?.response?.status || 0;
+        stagedFrom = (httpStatus >= 400 && httpStatus < 500) ? 'not_registered' : 'unreachable';
         console.warn('Data source sampling unavailable:', e?.message || e);
       }
 
       // If sample was attempted (samplePayload set) but returned no records,
       // mark as synthetic so the UI can show "Source Fields Not Detected".
+      // Only override if stagedFrom hasn't already been set to a specific value.
       if (stagedFrom === 'none' && samplePayload !== null) {
         stagedFrom = 'synthetic';
       }
@@ -1071,7 +1093,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       discoveryInFlightRef.current = false;
       setOpLoading(prev => ({ ...prev, discovery: false }));
     }
-  }, [wizardData.sourceSystem, wizardData.targetSystem]);
+  }, [wizardData.sourceSystem, wizardData.targetSystem, availableSources]);
 
   const acceptDiscovery = useCallback(async () => {
     setWizardData(prev => ({
@@ -1152,7 +1174,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     message += '\nReady to proceed to field mapping.';
 
     toast.success(message, 6000);
-  }, [wizardData.discoveryIntrospect, wizardData.sourceSchema, wizardData.discoverySodaResult]);
+  }, [wizardData.discoveryIntrospect, wizardData.sourceSchema, wizardData.discoverySodaResult, wizardData.aiSuggestedMappings]);
 
   // Step 3: AI-powered mapping suggestions via schema analysis.
   // Uses reliable schema-based smart matching that returns the correct
@@ -1334,7 +1356,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           const sourceFields = extractSchemaFields(wizardData.sourceSchema);
           sourceFields.forEach(f => { sampleRecord[f] = null; }); // null triggers not_null rules
           (wizardData.fieldMappings || []).forEach(m => {
-            if (m.sourceField) sampleRecord[m.sourceField] = sampleRecord[m.sourceField] ?? '';
+            // fieldMappings may use camelCase (sourceField) or snake_case (source_field)
+            const srcField = m.source_field || m.sourceField;
+            if (srcField) sampleRecord[srcField] = sampleRecord[srcField] ?? '';
           });
 
           const execRes = await e2etraceFetchWithRetry(API_CONFIG.ENDPOINTS.RULES_EXECUTE, {
@@ -1432,10 +1456,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setWizardData(prev => ({
         ...prev,
         validationResults: [...prev.validationResults.filter(v => !v.insight?.includes('SODA')), sodaInsight],
+        // Replace SODA-contributed quality check counts (don't accumulate — re-runs would double count)
         qualityChecks: { 
-          passed: prev.qualityChecks.passed + passed,
-          failed: prev.qualityChecks.failed + failed,
-          warnings: prev.qualityChecks.warnings + warnings
+          passed: Math.max(0, prev.qualityChecks.passed - (prev.sodaScanResult?.status === 'pass' ? 1 : 0)) + passed,
+          failed: Math.max(0, prev.qualityChecks.failed - (prev.sodaScanResult?.status === 'fail' ? 1 : 0)) + failed,
+          warnings: Math.max(0, prev.qualityChecks.warnings - (prev.sodaScanResult?.status === 'warn' ? 1 : 0)) + warnings
         },
         sodaScanResult: sodaResult,
         validationRun: true
@@ -1449,7 +1474,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, validation: false }));
     }
-  }, [wizardData.runId]);
+  // wizardData.sodaScanResult needed to correctly subtract prior SODA counts on re-run
+  }, [wizardData.runId, wizardData.sodaScanResult, wizardData.qualityChecks]);
 
   const testTransformation = useCallback(async () => {
     if (!wizardData.fieldMappings.length) return;
@@ -1488,7 +1514,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, validation: false }));
     }
-  }, [wizardData, graphqlTransform]);
+  }, [wizardData.sourceSchema, wizardData.targetSchema, wizardData.fieldMappings, graphqlTransform]);
 
   // Generate Non-Conformance Report (NCR) as Excel — called from Validate step
   const generateNcr = useCallback(async () => {
@@ -1556,8 +1582,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           headers.map(h => ({ width: h.width || 20 })),
         ],
       }
-    );
-    toast.success('Non-Conformance Report exported as Excel', 3000);
+    ).then(() => {
+      toast.success('Non-Conformance Report exported as Excel', 3000);
+    }).catch(exportErr => {
+      console.error('NCR export failed:', exportErr);
+      toast.error(`NCR export failed: ${exportErr?.message || 'Unknown error'}`, 5000);
+    });
   }, [wizardData]);
 
   // Step 5: Execute migration - Complete 5-step workflow
@@ -1733,7 +1763,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, execute: false }));
     }
-  }, [wizardData, onComplete]);
+  }, [wizardData.sourceSystem, wizardData.targetSystem, wizardData.fieldMappings, wizardData.workflowName, wizardData.savedWorkflowId, onComplete]);
 
   // Render step content
   const renderStepContent = () => {

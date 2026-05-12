@@ -280,6 +280,15 @@ class WorkflowStepType(str, Enum):
     VALIDATION = "validation"        # VALIDATION stage
 
 
+class WorkflowExecutionStatus(str, Enum):
+    """Overall workflow execution status (execution-level)"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class WorkflowStepStatus(str, Enum):
     """Individual workflow step execution status"""
     PENDING = "pending"
@@ -371,7 +380,7 @@ class WorkflowExecution(Base):
     workflow_id = Column(String(100), nullable=False, index=True)
     
     # Execution state
-    status = Column(String(32), default=WorkflowStepStatus.PENDING.value, nullable=False)
+    status = Column(String(32), default=WorkflowExecutionStatus.PENDING.value, nullable=False)
     current_stage = Column(String(32), default=MigrationStage.IDLE.value)
     progress_percentage = Column(Float, default=0.0)
     

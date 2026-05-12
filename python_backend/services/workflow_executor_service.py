@@ -9,6 +9,8 @@ Orchestrates workflow execution with DAG-based dependency resolution.
 """
 
 import logging
+import re
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,11 +21,20 @@ from sqlalchemy.orm import Session
 from models.workflow_models import (
     WorkflowDefinition,
     WorkflowExecution,
+    WorkflowExecutionStatus,
     WorkflowStep,
     WorkflowStepExecution,
     WorkflowStepStatus,
 )
 from services.rule_expression_executor import RuleExpressionExecutor
+
+# Allowlist for SQL step type: only SELECT statements are permitted
+_SQL_SELECT_RE = re.compile(r'^\s*SELECT\s', re.IGNORECASE)
+
+# Blocked Python builtins/patterns for the python step type sandbox check
+_PYTHON_BLOCKED_PATTERNS = re.compile(
+    r'\b(import|exec|eval|__import__|open|os\.|subprocess|sys\.)', re.IGNORECASE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +63,12 @@ class DAGBuilder:
             for neighbor in graph[node]:
                 in_degree[neighbor] = in_degree.get(neighbor, 0) + 1
 
-        queue = [node for node in graph if in_degree[node] == 0]
+        # Use deque for O(1) popleft instead of O(n) list.pop(0)
+        queue: deque[str] = deque(node for node in graph if in_degree[node] == 0)
         result: List[str] = []
 
         while queue:
-            node = queue.pop(0)
+            node = queue.popleft()
             result.append(node)
 
             for neighbor in graph[node]:
@@ -128,7 +140,7 @@ class WorkflowExecutor:
 
             is_valid, error = self.dag_builder.validate_dag(steps)
             if not is_valid:
-                execution.status = WorkflowStepStatus.FAILED.value
+                execution.status = WorkflowExecutionStatus.FAILED.value
                 execution.error_message = error
                 execution.completed_at = datetime.now(timezone.utc)
                 self.db.add(execution)
@@ -136,7 +148,7 @@ class WorkflowExecutor:
                 return False
 
             execution_order = self.dag_builder.topological_sort(self.dag_builder.build_dag(steps))
-            execution.status = WorkflowStepStatus.RUNNING.value
+            execution.status = WorkflowExecutionStatus.RUNNING.value
             execution.started_at = datetime.now(timezone.utc)
             execution.total_steps = len(steps)
             self.db.add(execution)
@@ -173,7 +185,7 @@ class WorkflowExecutor:
 
             overall_success = len(failed_steps) == 0
             execution.status = (
-                WorkflowStepStatus.COMPLETED.value if overall_success else WorkflowStepStatus.FAILED.value
+                WorkflowExecutionStatus.COMPLETED.value if overall_success else WorkflowExecutionStatus.FAILED.value
             )
             execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
@@ -189,7 +201,7 @@ class WorkflowExecutor:
 
         except Exception as exc:  # pylint: disable=broad-exception-caught
             logger.error("Error executing workflow: %s", exc)
-            execution.status = WorkflowStepStatus.FAILED.value
+            execution.status = WorkflowExecutionStatus.FAILED.value
             execution.error_message = str(exc)
             execution.completed_at = datetime.now(timezone.utc)
             self.db.add(execution)
@@ -197,45 +209,130 @@ class WorkflowExecutor:
             return False
 
     async def _execute_step(self, step: WorkflowStep, execution_id: str) -> Tuple[bool, Dict[str, Any]]:
-        step_exec = WorkflowStepExecution(
-            id=f"stepexec_{step.id}_{int(datetime.now(timezone.utc).timestamp())}",
-            execution_id=execution_id,
-            step_id=step.id,
-            status=WorkflowStepStatus.RUNNING.value,
-            started_at=datetime.now(timezone.utc),
-            retry_count=0,
-        )
-        self.db.add(step_exec)
-        self.db.commit()
+        max_retries = max(0, int(step.retries or 0))
+        attempt = 0
+        last_error: Optional[Exception] = None
 
-        try:
-            success, result_data = await self._dispatch_step(step)
-            step_exec.status = WorkflowStepStatus.COMPLETED.value if success else WorkflowStepStatus.FAILED.value
-            step_exec.completed_at = datetime.now(timezone.utc)
-            step_exec.duration_ms = int((step_exec.completed_at - step_exec.started_at).total_seconds() * 1000)
-            step_exec.result = {"success": success, **result_data}
+        while attempt <= max_retries:
+            step_exec = WorkflowStepExecution(
+                id=f"stepexec_{step.id}_{int(datetime.now(timezone.utc).timestamp())}_{attempt}",
+                execution_id=execution_id,
+                step_id=step.id,
+                status=WorkflowStepStatus.RUNNING.value,
+                started_at=datetime.now(timezone.utc),
+                retry_count=attempt,
+            )
             self.db.add(step_exec)
             self.db.commit()
-            return success, {"success": success, **result_data}
 
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            step_exec.status = WorkflowStepStatus.FAILED.value
-            step_exec.completed_at = datetime.now(timezone.utc)
-            step_exec.error_message = str(exc)
-            self.db.add(step_exec)
-            self.db.commit()
-            return False, {"success": False, "error": str(exc)}
+            try:
+                success, result_data = await self._dispatch_step(step)
+                step_exec.status = WorkflowStepStatus.COMPLETED.value if success else WorkflowStepStatus.FAILED.value
+                step_exec.completed_at = datetime.now(timezone.utc)
+                if step_exec.started_at:
+                    step_exec.duration_ms = int(
+                        (step_exec.completed_at - step_exec.started_at).total_seconds() * 1000
+                    )
+                step_exec.result = {"success": success, **result_data}
+                self.db.add(step_exec)
+                self.db.commit()
+                if success or not step.retries:
+                    return success, {"success": success, **result_data}
+                # Step returned failure — retry if allowed
+                attempt += 1
+                continue
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                last_error = exc
+                step_exec.status = WorkflowStepStatus.FAILED.value
+                step_exec.completed_at = datetime.now(timezone.utc)
+                step_exec.error_message = str(exc)
+                self.db.add(step_exec)
+                self.db.commit()
+                attempt += 1
+
+        err_msg = str(last_error) if last_error else "Step failed after retries"
+        return False, {"success": False, "error": err_msg}
 
     async def _dispatch_step(self, step: WorkflowStep) -> Tuple[bool, Dict[str, Any]]:
         step_type = (step.step_type or "").lower()
 
         if step_type == "sql":
-            result = self.db.execute(sql_text(step.expression)).fetchall()
+            # Security: only allow SELECT statements to prevent destructive SQL injection
+            expr = (step.expression or "").strip()
+            if not _SQL_SELECT_RE.match(expr):
+                logger.warning(
+                    "SQL step %s rejected: only SELECT statements are permitted (got: %s...)",
+                    step.id, expr[:50],
+                )
+                return False, {"error": "Only SELECT statements are permitted in sql step type"}
+            result = self.db.execute(sql_text(expr)).fetchall()
             return True, {"rows_affected": len(result)}
 
         if step_type == "python":
+            expr = step.expression or ""
+            # Security: reject expressions containing dangerous builtins
+            if _PYTHON_BLOCKED_PATTERNS.search(expr):
+                logger.warning(
+                    "Python step %s rejected: expression contains blocked patterns", step.id
+                )
+                return False, {"error": "Python expression contains disallowed patterns (import, exec, eval, open, os, subprocess, sys)"}
             result = self.expr_executor.evaluate_python_expression(
-                step.expression,
+                expr,
+                step.parameters or {},
+            )
+            return True, {"result": bool(result)}
+
+        if step_type == "api":
+            cfg = step.parameters or {}
+            method = str(cfg.get("method", "GET")).upper()
+            url = cfg.get("url")
+            payload = cfg.get("payload", {})
+            if not url:
+                return False, {"error": "Missing API URL in parameters.url"}
+
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                if method == "GET":
+                    resp = await client.get(url)
+                elif method == "POST":
+                    resp = await client.post(url, json=payload)
+                else:
+                    return False, {"error": f"Unsupported HTTP method: {method}"}
+
+            return resp.status_code < 400, {"status_code": resp.status_code}
+
+        # Domain-specific step types currently map to metadata-only execution;
+        # they are considered successful placeholders until concrete executors are added.
+        if step_type in {"discovery", "profiling", "schema_mapping", "etl_execution", "validation"}:
+            return True, {"stage": step.stage, "message": f"{step_type} placeholder executed"}
+
+        return False, {"error": f"Unknown step type: {step.step_type}"}
+
+    async def _dispatch_step(self, step: WorkflowStep) -> Tuple[bool, Dict[str, Any]]:
+        step_type = (step.step_type or "").lower()
+
+        if step_type == "sql":
+            # Security: only allow SELECT statements to prevent destructive SQL injection
+            expr = (step.expression or "").strip()
+            if not _SQL_SELECT_RE.match(expr):
+                logger.warning(
+                    "SQL step %s rejected: only SELECT statements are permitted (got: %s...)",
+                    step.id, expr[:50],
+                )
+                return False, {"error": "Only SELECT statements are permitted in sql step type"}
+            result = self.db.execute(sql_text(expr)).fetchall()
+            return True, {"rows_affected": len(result)}
+
+        if step_type == "python":
+            expr = step.expression or ""
+            # Security: reject expressions containing dangerous builtins
+            if _PYTHON_BLOCKED_PATTERNS.search(expr):
+                logger.warning(
+                    "Python step %s rejected: expression contains blocked patterns", step.id
+                )
+                return False, {"error": "Python expression contains disallowed patterns (import, exec, eval, open, os, subprocess, sys)"}
+            result = self.expr_executor.evaluate_python_expression(
+                expr,
                 step.parameters or {},
             )
             return True, {"result": bool(result)}

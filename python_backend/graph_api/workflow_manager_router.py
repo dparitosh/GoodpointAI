@@ -140,13 +140,24 @@ def _build_migration_factory_report(db: Session, wf: Dict[str, Any]) -> Dict[str
     dq_results: List[DataQualityResult] = []
     dq_gates: List[DataQualityGateResult] = []
     if plm_run_id:
+        _DQ_RESULTS_LIMIT = 5000
+        dq_results_total = (
+            db.query(DataQualityResult)
+            .filter(DataQualityResult.run_id == plm_run_id)
+            .count()
+        )
         dq_results = (
             db.query(DataQualityResult)
             .filter(DataQualityResult.run_id == plm_run_id)
             .order_by(DataQualityResult.id.desc())
-            .limit(5000)
+            .limit(_DQ_RESULTS_LIMIT)
             .all()
         )
+        if dq_results_total > _DQ_RESULTS_LIMIT:
+            logger.warning(
+                "DQ results for run %s truncated to %d (total: %d)",
+                plm_run_id, _DQ_RESULTS_LIMIT, dq_results_total,
+            )
         dq_gates = (
             db.query(DataQualityGateResult)
             .filter(DataQualityGateResult.run_id == plm_run_id)
@@ -252,7 +263,8 @@ def _build_migration_factory_report(db: Session, wf: Dict[str, Any]) -> Dict[str
         "rules": {
             "rulesets": rulesets,
             "total_rules": len(rules),
-            "total_results": len(dq_results),
+            "total_results": dq_results_total if plm_run_id else 0,
+            "truncated": (dq_results_total > _DQ_RESULTS_LIMIT) if plm_run_id else False,
         },
     }
 
@@ -332,15 +344,19 @@ def _set_workflow_state(
 ) -> None:
     now = _now_utc()
     async def _update() -> None:
-        async with _WORKFLOWS_STORE_LOCK:
-            wf = WORKFLOWS_STORE.get(workflow_id)
-            if wf is None:
-                return
+        # Open a fresh DB session scoped to this background task (the request-scoped `db`
+        # is closed by the time this coroutine runs).
+        _task_db = SessionLocal()
+        try:
+            async with _WORKFLOWS_STORE_LOCK:
+                wf = WORKFLOWS_STORE.get(workflow_id)
+                if wf is None:
+                    return
 
-            if status is not None:
-                wf["status"] = status
-            if stage is not None:
-                wf["current_stage"] = stage
+                if status is not None:
+                    wf["status"] = status
+                if stage is not None:
+                    wf["current_stage"] = stage
             if progress is not None:
                 try:
                     wf["progress_percentage"] = float(max(0.0, min(100.0, progress)))
@@ -363,9 +379,18 @@ def _set_workflow_state(
 
             wf["updated_at"] = now
             WORKFLOWS_STORE[workflow_id] = wf
-            _upsert_workflow_model(db, wf)
+            _upsert_workflow_model(_task_db, wf)
+        finally:
+            try:
+                _task_db.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
 
     # Bridge sync caller -> async lock.
+    # NOTE: We must NOT pass the request-scoped `db` into the async task, because the
+    # request session is closed by the time the task runs. The async variant _update()
+    # opens its own session.
+    del db  # Unused; _update() opens its own SessionLocal session.
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_update())
@@ -373,29 +398,36 @@ def _set_workflow_state(
         # No running loop; fall back to a best-effort synchronous update.
         # This path is primarily for tests/CLI calls.
         try:
-            wf = WORKFLOWS_STORE.get(workflow_id)
-            if wf is None:
-                return
-            if status is not None:
-                wf["status"] = status
-            if stage is not None:
-                wf["current_stage"] = stage
-            if progress is not None:
-                wf["progress_percentage"] = float(max(0.0, min(100.0, progress)))
-            if started_at is not None:
-                wf["started_at"] = started_at
-            if completed_at is not None:
-                wf["completed_at"] = completed_at
-            if meta_patch:
-                meta = dict(wf.get("execution_metadata") or {})
-                meta.update(meta_patch)
-                wf["execution_metadata"] = meta
-            if stats_patch:
-                for k, v in stats_patch.items():
-                    wf[k] = v
-            wf["updated_at"] = now
-            WORKFLOWS_STORE[workflow_id] = wf
-            _upsert_workflow_model(db, wf)
+            sync_db = SessionLocal()
+            try:
+                wf = WORKFLOWS_STORE.get(workflow_id)
+                if wf is None:
+                    return
+                if status is not None:
+                    wf["status"] = status
+                if stage is not None:
+                    wf["current_stage"] = stage
+                if progress is not None:
+                    wf["progress_percentage"] = float(max(0.0, min(100.0, progress)))
+                if started_at is not None:
+                    wf["started_at"] = started_at
+                if completed_at is not None:
+                    wf["completed_at"] = completed_at
+                if meta_patch:
+                    meta = dict(wf.get("execution_metadata") or {})
+                    meta.update(meta_patch)
+                    wf["execution_metadata"] = meta
+                if stats_patch:
+                    for k, v in stats_patch.items():
+                        wf[k] = v
+                wf["updated_at"] = now
+                WORKFLOWS_STORE[workflow_id] = wf
+                _upsert_workflow_model(sync_db, wf)
+            finally:
+                try:
+                    sync_db.close()
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
         except (KeyError, TypeError, ValueError, RuntimeError, OSError):
             return
 
@@ -959,6 +991,8 @@ async def list_workflows(
             if s in str(w.get("name") or "").lower() or s in str(w.get("description") or "").lower()
         ]
 
+    # Stable sort by created_at desc ensures deterministic pagination across requests.
+    workflows.sort(key=lambda w: str(w.get("created_at") or ""), reverse=True)
     total_count = len(workflows)
     page_items = workflows[skip : skip + limit]
 
@@ -1192,6 +1226,12 @@ async def delete_workflow(
     if _normalize_status(existing.get("status")) == WorkflowStatus.RUNNING:
         raise HTTPException(status_code=400, detail="Cannot delete running workflow. Stop it first.")
 
+    # Cancel any background runner task to prevent it from writing after the record is gone.
+    async with _WORKFLOW_RUN_TASKS_LOCK:
+        task = _WORKFLOW_RUN_TASKS.pop(workflow_id, None)
+    if task is not None and not task.done():
+        task.cancel()
+
     async with _WORKFLOWS_STORE_LOCK:
         WORKFLOWS_STORE.pop(workflow_id, None)
 
@@ -1327,9 +1367,13 @@ async def execute_workflow(
                 message="Workflow already running",
                 started_at=wf.get("started_at"),
             )
+        # Work on a local copy to avoid mutating the shared dict outside the lock.
+        wf = dict(wf)
         wf["status"] = WorkflowStatus.RUNNING
         wf["current_stage"] = WorkflowStage.EXTRACTING
-        wf["started_at"] = wf.get("started_at") or now
+        # Reset progress on restart so the UI doesn't show stale 100 % from a prior run.
+        wf["progress_percentage"] = 0.0
+        wf["started_at"] = now
         wf["completed_at"] = None
 
         meta = dict(wf.get("execution_metadata") or {})
@@ -1349,19 +1393,33 @@ async def execute_workflow(
     elif action == "pause":
         if status != WorkflowStatus.RUNNING:
             raise HTTPException(status_code=400, detail="Workflow is not running")
+        # Work on a local copy to avoid a race condition with the background runner.
+        wf = dict(wf)
         wf["status"] = WorkflowStatus.PAUSED
+        # Cancel the background runner task so it doesn't overwrite the paused status.
+        async with _WORKFLOW_RUN_TASKS_LOCK:
+            task = _WORKFLOW_RUN_TASKS.pop(workflow_id, None)
+        if task is not None and not task.done():
+            task.cancel()
         message = "Workflow paused"
 
     elif action == "resume":
         if status != WorkflowStatus.PAUSED:
             raise HTTPException(status_code=400, detail="Workflow is not paused")
+        wf = dict(wf)
         wf["status"] = WorkflowStatus.RUNNING
         message = "Workflow resumed"
 
     elif action in {"stop", "cancel"}:
+        wf = dict(wf)
         wf["status"] = WorkflowStatus.CANCELLED
         wf["current_stage"] = WorkflowStage.FINALIZING
         wf["completed_at"] = now
+        # Cancel the background runner task.
+        async with _WORKFLOW_RUN_TASKS_LOCK:
+            task = _WORKFLOW_RUN_TASKS.pop(workflow_id, None)
+        if task is not None and not task.done():
+            task.cancel()
         message = "Workflow cancelled"
 
     else:
@@ -1742,16 +1800,16 @@ async def instantiate_workflow_from_template(
 
     wf_name = (name or "").strip() or str(template.get("name") or "").strip() or f"{source_id} → {target_id}"
 
-    # Enforce name uniqueness (case-insensitive)
+    # Enforce name uniqueness (case-insensitive) — query DB as authoritative source.
     await _ensure_store_loaded(db)
-    wf_name_lower = wf_name.lower()
-    async with _WORKFLOWS_STORE_LOCK:
-        for existing in WORKFLOWS_STORE.values():
-            if (existing.get("name") or "").lower() == wf_name_lower:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"A workflow named '{wf_name}' already exists. Choose a unique name.",
-                )
+    existing_db = db.query(WorkflowInstance).filter(
+        func.lower(WorkflowInstance.name) == wf_name.strip().lower()
+    ).first()
+    if existing_db:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A workflow named '{wf_name}' already exists. Choose a unique name.",
+        )
 
     created_at = _now_utc()
     workflow_id = _make_workflow_id()

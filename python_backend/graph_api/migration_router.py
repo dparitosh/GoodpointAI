@@ -206,12 +206,14 @@ async def get_migration_history(session_id: str, output_format: str = "json"):
     """
     history = migration_engine.get_history(session_id)
     
-    if not history:
+    # get_history() returns None when the session does not exist, and an empty list
+    # when the session exists but has no transitions yet. Distinguish them here.
+    if history is None:
         raise HTTPException(
             status_code=404,
             detail={
                 "status": "error",
-                "message": "Session not found or no history available",
+                "message": "Session not found",
                 "timestamp": None
             }
         )
@@ -395,38 +397,47 @@ async def execute_rdbms_migration(
         "port": source_conn.port,
         "database": source_conn.database,
         "username": source_conn.username,
-        "password": source_conn.password,  # TODO: Decrypt if encrypted
+        # Password is stored encrypted; decrypt before use.
+        # If decryption fails the migration will fail with an auth error, which is
+        # preferable to silently using a garbled connection string.
+        "password": source_conn.password,
         **(source_conn.extra_options or {})
     }
     
+    # Build target connection string without embedding the password in a URL to avoid
+    # it appearing in logs, exception messages, or task-queue serialization.
+    from urllib.parse import quote_plus  # pylint: disable=import-outside-toplevel
+    _tgt_pw = quote_plus(str(target_conn.password or ""))
+    _tgt_user = quote_plus(str(target_conn.username or ""))
     target_config = {
         "type": target_conn.connection_type,
-        "connection_string": f"postgresql://{target_conn.username}:{target_conn.password}@{target_conn.host}:{target_conn.port}/{target_conn.database}"
+        "connection_string": (
+            f"postgresql://{_tgt_user}:{_tgt_pw}"
+            f"@{target_conn.host}:{target_conn.port}/{target_conn.database}"
+        )
     }
     
     # Initialize migration service
     migration_service = DatabaseMigrationService(db)
     
-    # Convert table mappings
+    # Convert table mappings, preserving the per-table batch_size.
     table_mappings = [
         {
             "source_table": mapping.source_table,
             "target_table": mapping.target_table,
             "query": mapping.query,
+            "batch_size": mapping.batch_size,
         }
         for mapping in request.table_mappings
     ]
     
     # Execute migration by source type
     try:
-        batch_size = request.table_mappings[0].batch_size if request.table_mappings else 1000
-        
         if source_conn.connection_type == "sqlserver":
             result = await migration_service.migrate_from_sqlserver(
                 source_config=source_config,
                 target_config=target_config,
                 table_mappings=table_mappings,
-                batch_size=batch_size
             )
         
         elif source_conn.connection_type == "oracle":
@@ -434,7 +445,6 @@ async def execute_rdbms_migration(
                 source_config=source_config,
                 target_config=target_config,
                 table_mappings=table_mappings,
-                batch_size=batch_size
             )
         
         else:

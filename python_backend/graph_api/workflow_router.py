@@ -10,6 +10,7 @@ Endpoints for:
 """
 
 import logging
+import uuid
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -119,7 +120,8 @@ async def create_workflow_from_mcp(
         )
 
 
-@router.get("/mcp-complexity/{task_id}")
+# NOTE: Must be POST — List[Dict[str,Any]] cannot be passed as a query parameter via GET.
+@router.post("/mcp-complexity/{task_id}")
 async def estimate_workflow_complexity(
     task_id: str,
     subtasks: List[Dict[str, Any]],
@@ -155,7 +157,6 @@ async def create_workflow_definition(
 ):
     """Create a new workflow definition"""
     try:
-        import uuid
         workflow_id = f"wf_{uuid.uuid4().hex[:12]}"
         
         # Create workflow record
@@ -275,7 +276,6 @@ async def execute_workflow(
         Execution ID for monitoring progress
     """
     try:
-        import uuid
         # Verify workflow exists
         workflow = db.query(WorkflowDefinition).filter(
             WorkflowDefinition.id == workflow_id
