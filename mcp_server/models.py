@@ -49,6 +49,12 @@ class TaskType(str, Enum):
     SEMANTIC_PROFILE = "semantic_profile"
     SMART_GUIDANCE = "smart_guidance"
     DATA_HEALTH_REPORT = "data_health_report"
+    # ── Unified AI Workflow steps ──────────────────────────────────────────
+    PROFILING = "profiling"
+    QUALITY_SCAN = "quality_scan"
+    ETL_PIPELINE = "etl_pipeline"
+    WORKFLOW_RUN = "workflow_run"
+    WORKFLOW_DECOMPOSITION = "workflow_decomposition"
 
 
 class TaskStatus(str, Enum):

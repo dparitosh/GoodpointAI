@@ -39,6 +39,16 @@ const DEFAULT_CONFIG = {
     AGENTIC_SMART_GUIDANCE: '/api/agentic/smart-guidance',
     AGENTIC_WORKFLOW_FROM_GOAL: '/api/agentic/workflows/from-goal',
 
+    // Unified AI Workflow: Discover → Profile → Quality → ETL → Report
+    AGENTIC_WORKFLOW_RUN: '/api/agentic/workflow/run',
+    AGENTIC_WORKFLOW_STEP: (step) => `/api/agentic/workflow/step/${encodeURIComponent(step)}`,
+    // Per-step convenience aliases
+    AGENTIC_WORKFLOW_DISCOVER: '/api/agentic/workflow/step/discover',
+    AGENTIC_WORKFLOW_PROFILE:  '/api/agentic/workflow/step/profile',
+    AGENTIC_WORKFLOW_QUALITY:  '/api/agentic/workflow/step/quality',
+    AGENTIC_WORKFLOW_ETL:      '/api/agentic/workflow/step/etl',
+    AGENTIC_WORKFLOW_REPORT:   '/api/agentic/workflow/step/report',
+
     // File patterns
     FILE_PATTERNS: '/api/config/file-patterns',
 

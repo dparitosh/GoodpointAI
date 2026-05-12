@@ -119,6 +119,8 @@ class AgenticOrchestrator:
                     AgentCapability(name="generate_quality_reports", description="Generate quality reports"),
                     AgentCapability(name="execute_rules", description="Execute Rule Engine rule sets against data"),
                     AgentCapability(name="scan_datasource_quality", description="Run DQ scan on a registered data source by source_id"),
+                    AgentCapability(name="recommend_rules", description="AI-powered DQ rule recommendations from profile data"),
+                    AgentCapability(name="quality_scan", description="Run full quality scan and return scored quality report with violations"),
                 ]
             },
             AgentType.DATA_DISCOVERY_AGENT: {
@@ -142,6 +144,9 @@ class AgenticOrchestrator:
                     AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
                     AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health"),
                     AgentCapability(name="file_batch_processing", description="Discover and process thousands of files in parallel with lineage tracking"),
+                    AgentCapability(name="etl_pipeline", description="Execute full ETL pipeline: extract → transform → load with rule validation and lineage tracking"),
+                    AgentCapability(name="run_workflow", description="Execute a migration workflow step by step"),
+                    AgentCapability(name="track_progress", description="Track and report execution progress"),
                 ]
             },
             AgentType.CHAT_COORDINATOR: {
@@ -188,6 +193,8 @@ class AgenticOrchestrator:
                     AgentCapability(name="update_schema_cluster", description="Add an auto-detected schema cluster and re-evaluate FK relationships"),
                     AgentCapability(name="trigger_reprofiling", description="Invoke selective re-profiling on files affected by high-severity schema drift"),
                     AgentCapability(name="route_unknown_files", description="Route files with unknown/unsupported types to ETLOrchestrator for extraction"),
+                    AgentCapability(name="report_generation", description="Generate comprehensive migration/workflow report from all pipeline artifacts"),
+                    AgentCapability(name="generate_report", description="Generate a full workflow report consolidating discovery, profiling, quality, and ETL results"),
                 ]
             },
             AgentType.DATA_PROFILER: {
@@ -198,6 +205,8 @@ class AgenticOrchestrator:
                     AgentCapability(name="classify_entities", description="Vote-based per-file entity classification: Part / BOM / Supplier / Document / ECO / Revision"),
                     AgentCapability(name="detect_relationships", description="Detect cross-file FK/alignment relationships using column name similarity"),
                     AgentCapability(name="align_schemas", description="Group semantically equivalent column names across files into alignment clusters"),
+                    AgentCapability(name="profiling", description="Run full data profiling: column stats, null rates, value distributions, semantic roles and entity classification"),
+                    AgentCapability(name="run_profiling", description="Execute complete dataset profiling pass and return structured insights"),
                 ]
             }
         }

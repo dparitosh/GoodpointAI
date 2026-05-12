@@ -63,6 +63,11 @@ class TaskType(str, Enum):
     REPORT_GENERATION = "report_generation"
     SMART_GUIDANCE = "smart_guidance"
     DATA_HEALTH_REPORT = "data_health_report"
+    # ── Unified AI Workflow steps ──────────────────────────────────────────
+    PROFILING = "profiling"
+    QUALITY_SCAN = "quality_scan"
+    ETL_PIPELINE = "etl_pipeline"
+    WORKFLOW_RUN = "workflow_run"
 
 # ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
 
@@ -1739,4 +1744,379 @@ async def create_workflow_from_goal_via_mcp(req: GoalToWorkflowRequest, db: Sess
             "subtasks_count": len(decomposition_payload.get("subtasks", [])),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  UNIFIED AI WORKFLOW ORCHESTRATION
+#  Drives all tools/capabilities through MCP agents in sequence:
+#   Discover → Profile → Quality → ETL → Report
+# ═══════════════════════════════════════════════════════════════════════════
+
+_WORKFLOW_STEPS = ["discover", "profile", "quality", "etl", "report"]
+
+# Maps each workflow step to the AgentType + required capabilities
+_STEP_AGENT_MAP: Dict[str, Dict[str, Any]] = {
+    "discover": {
+        "task_type": TaskType.DATA_DISCOVERY,
+        "required_capabilities": ["discover_files", "profile_files", "data_health_report"],
+        "description": "Discover and enumerate files, infer schemas, collect stats",
+    },
+    "profile": {
+        "task_type": TaskType.PROFILING,
+        "required_capabilities": ["semantic_profile", "infer_column_semantics", "classify_entities"],
+        "description": "Semantic profiling: column roles, entity classification, relationship detection",
+    },
+    "quality": {
+        "task_type": TaskType.QUALITY_SCAN,
+        "required_capabilities": ["quality_scan", "scan_datasource_quality", "recommend_rules"],
+        "description": "Quality scan: DQ rules, anomaly detection, completeness scoring",
+    },
+    "etl": {
+        "task_type": TaskType.ETL_PIPELINE,
+        "required_capabilities": ["etl_pipeline", "manage_data_pipelines", "run_workflow"],
+        "description": "ETL pipeline: extract, transform, load with rule validation and lineage",
+    },
+    "report": {
+        "task_type": TaskType.REPORT_GENERATION,
+        "required_capabilities": ["report_generation", "generate_plm_report", "generate_report"],
+        "description": "Generate comprehensive report from all pipeline artifacts",
+    },
+}
+
+
+class WorkflowStepRequest(BaseModel):
+    """Request body for a single AI workflow step."""
+    source_id: Optional[str] = None
+    folder_path: Optional[str] = None
+    run_id: Optional[str] = None
+    workflow_id: Optional[str] = None
+    file_profiles: List[Dict[str, Any]] = Field(default_factory=list)
+    records: List[Dict[str, Any]] = Field(default_factory=list)
+    prior_results: Dict[str, Any] = Field(default_factory=dict)
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowStepResult(BaseModel):
+    step: str
+    status: str          # "completed" | "failed" | "skipped"
+    agent_id: Optional[str] = None
+    agent_type: Optional[str] = None
+    success: bool = False
+    result: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
+    execution_time: float = 0.0
+
+
+class WorkflowRunRequest(BaseModel):
+    """Request body for POST /api/agentic/workflow/run — runs all 5 AI steps."""
+    source_id: Optional[str] = None
+    folder_path: Optional[str] = None
+    run_id: Optional[str] = None
+    workflow_name: Optional[str] = None
+    steps: List[str] = Field(
+        default_factory=lambda: list(_WORKFLOW_STEPS),
+        description="Ordered list of steps to run. Defaults to all 5.",
+    )
+    params: Dict[str, Any] = Field(default_factory=dict)
+    stop_on_failure: bool = False
+
+
+class WorkflowRunResult(BaseModel):
+    workflow_run_id: str
+    source_id: Optional[str]
+    folder_path: Optional[str]
+    steps_requested: List[str]
+    steps_completed: List[str]
+    steps_failed: List[str]
+    overall_success: bool
+    step_results: Dict[str, WorkflowStepResult]
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    started_at: datetime = Field(default_factory=datetime.now)
+    completed_at: Optional[datetime] = None
+    total_execution_time: float = 0.0
+
+
+def _build_step_payload(
+    step: str,
+    req_source_id: Optional[str],
+    folder_path: Optional[str],
+    run_id: Optional[str],
+    prior_results: Dict[str, Any],
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build the MCP task payload for a given workflow step, forwarding prior step outputs."""
+    base: Dict[str, Any] = {
+        "source_id": req_source_id,
+        "folder_path": folder_path,
+        "run_id": run_id,
+        **params,
+    }
+    # Forward file profiles from discover step to profile/quality/report
+    if step in ("profile", "quality", "report"):
+        discover = prior_results.get("discover", {})
+        file_profiles = (
+            discover.get("file_profiles")
+            or discover.get("discovered_files")
+            or discover.get("files")
+            or []
+        )
+        if file_profiles:
+            base["file_profiles"] = file_profiles
+        records = discover.get("sample_records") or discover.get("records") or []
+        if records:
+            base["records"] = records
+
+    # Forward profile insights to quality/report
+    if step in ("quality", "report"):
+        profile = prior_results.get("profile", {})
+        if profile:
+            base["profile_summary"] = profile
+            base["column_corpus"] = profile.get("column_corpus") or profile.get("semantic_insights", {}).get("columns") or []
+
+    # Forward quality results to etl/report
+    if step in ("etl", "report"):
+        quality = prior_results.get("quality", {})
+        if quality:
+            base["quality_summary"] = quality
+            base["dq_violations"] = quality.get("violations") or quality.get("rule_validation", {}).get("violations") or []
+
+    # Forward ETL results to report
+    if step == "report":
+        etl = prior_results.get("etl", {})
+        if etl:
+            base["etl_summary"] = etl
+
+    return base
+
+
+@router.post(
+    "/workflow/step/{step_name}",
+    response_model=WorkflowStepResult,
+    summary="Run a single AI workflow step via the MCP agent cluster",
+)
+async def run_workflow_step(
+    step_name: str,
+    req: WorkflowStepRequest,
+):
+    """
+    Run one step of the AI-driven workflow via MCP:
+      - **discover** → DataDiscoveryAgent
+      - **profile**  → DataProfilerAgent
+      - **quality**  → QualityMonitorAgent
+      - **etl**      → ETLOrchestrator
+      - **report**   → ReportingAgent
+
+    Returns the agent's result for that step.
+    """
+    step_name = step_name.lower().strip()
+    if step_name not in _STEP_AGENT_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown step '{step_name}'. Valid steps: {list(_STEP_AGENT_MAP.keys())}",
+        )
+
+    cfg = _STEP_AGENT_MAP[step_name]
+    payload = _build_step_payload(
+        step=step_name,
+        req_source_id=req.source_id,
+        folder_path=req.folder_path,
+        run_id=req.run_id,
+        prior_results=req.prior_results,
+        params=req.params,
+    )
+    # Merge in any explicit file_profiles / records supplied by caller
+    if req.file_profiles:
+        payload["file_profiles"] = req.file_profiles
+    if req.records:
+        payload["records"] = req.records
+
+    start = datetime.now()
+    task = AgenticTask(
+        type=cfg["task_type"],
+        required_capabilities=cfg["required_capabilities"],
+        payload=payload,
+    )
+
+    try:
+        result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
+        ar = AgenticTaskResult(**result_dict)
+        return WorkflowStepResult(
+            step=step_name,
+            status="completed" if ar.success else "failed",
+            agent_id=ar.agent_id,
+            agent_type=str(ar.agent_type),
+            success=ar.success,
+            result=ar.result,
+            error=ar.error,
+            execution_time=(datetime.now() - start).total_seconds(),
+        )
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"MCP agent cluster unavailable for step '{step_name}': {e}",
+        ) from e
+    except Exception as e:
+        logger.error("Workflow step '%s' failed: %s", step_name, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workflow step '{step_name}' failed: {e}",
+        ) from e
+
+
+@router.post(
+    "/workflow/run",
+    response_model=WorkflowRunResult,
+    summary="Run the full AI workflow: Discover → Profile → Quality → ETL → Report",
+)
+async def run_full_workflow(req: WorkflowRunRequest):
+    """
+    Orchestrate the complete 5-step AI workflow through MCP agents:
+
+    1. **Discover**  — DataDiscoveryAgent: enumerate files, infer schemas
+    2. **Profile**   — DataProfilerAgent: semantic column analysis, entity classification
+    3. **Quality**   — QualityMonitorAgent: DQ rules, anomaly detection, scoring
+    4. **ETL**       — ETLOrchestrator: extract → transform → load with lineage
+    5. **Report**    — ReportingAgent: assemble comprehensive pipeline report
+
+    Each step receives the outputs of previous steps as context.
+    Set `stop_on_failure=true` to abort on the first failing step.
+    """
+    if not req.source_id and not req.folder_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide source_id or folder_path",
+        )
+
+    run_id = req.run_id or f"wfrun_{int(datetime.now().timestamp()*1000)}"
+    workflow_run_id = f"wr_{int(datetime.now().timestamp()*1000)}"
+    started_at = datetime.now()
+
+    # Validate requested steps
+    steps_to_run: List[str] = []
+    for s in req.steps:
+        sl = s.lower().strip()
+        if sl not in _STEP_AGENT_MAP:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown step '{sl}'. Valid: {list(_STEP_AGENT_MAP.keys())}",
+            )
+        steps_to_run.append(sl)
+
+    step_results: Dict[str, WorkflowStepResult] = {}
+    prior_results: Dict[str, Any] = {}
+    completed: List[str] = []
+    failed: List[str] = []
+
+    for step_name in steps_to_run:
+        cfg = _STEP_AGENT_MAP[step_name]
+        payload = _build_step_payload(
+            step=step_name,
+            req_source_id=req.source_id,
+            folder_path=req.folder_path,
+            run_id=run_id,
+            prior_results=prior_results,
+            params=req.params,
+        )
+
+        step_start = datetime.now()
+        task = AgenticTask(
+            type=cfg["task_type"],
+            required_capabilities=cfg["required_capabilities"],
+            payload=payload,
+        )
+
+        try:
+            result_dict = await mcp_client.submit_task(task.model_dump(mode="json"))
+            ar = AgenticTaskResult(**result_dict)
+            sr = WorkflowStepResult(
+                step=step_name,
+                status="completed" if ar.success else "failed",
+                agent_id=ar.agent_id,
+                agent_type=str(ar.agent_type),
+                success=ar.success,
+                result=ar.result,
+                error=ar.error,
+                execution_time=(datetime.now() - step_start).total_seconds(),
+            )
+            step_results[step_name] = sr
+            if ar.success:
+                completed.append(step_name)
+                # Forward result as context to the next step
+                prior_results[step_name] = ar.result
+            else:
+                failed.append(step_name)
+                if req.stop_on_failure:
+                    break
+
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+            sr = WorkflowStepResult(
+                step=step_name,
+                status="failed",
+                success=False,
+                error=f"MCP agent cluster unavailable: {e}",
+                execution_time=(datetime.now() - step_start).total_seconds(),
+            )
+            step_results[step_name] = sr
+            failed.append(step_name)
+            if req.stop_on_failure:
+                break
+        except Exception as e:
+            logger.error("Workflow step '%s' error: %s", step_name, e)
+            sr = WorkflowStepResult(
+                step=step_name,
+                status="failed",
+                success=False,
+                error=str(e),
+                execution_time=(datetime.now() - step_start).total_seconds(),
+            )
+            step_results[step_name] = sr
+            failed.append(step_name)
+            if req.stop_on_failure:
+                break
+
+    completed_at = datetime.now()
+    total_time = (completed_at - started_at).total_seconds()
+    overall_success = len(failed) == 0 and len(completed) > 0
+
+    # Build workflow summary
+    summary: Dict[str, Any] = {
+        "run_id": run_id,
+        "steps_run": len(steps_to_run),
+        "steps_completed": len(completed),
+        "steps_failed": len(failed),
+        "total_execution_time_s": round(total_time, 2),
+    }
+    # Pull key metrics from each step result
+    if "discover" in prior_results:
+        d = prior_results["discover"]
+        summary["files_discovered"] = (
+            len(d.get("discovered_files") or d.get("files") or [])
+            or d.get("file_count", 0)
+        )
+    if "quality" in prior_results:
+        q = prior_results["quality"]
+        summary["quality_score"] = q.get("quality_score") or q.get("overall_score")
+        summary["dq_violations"] = q.get("anomalies_found") or q.get("total_violations", 0)
+    if "profile" in prior_results:
+        p = prior_results["profile"]
+        si = p.get("semantic_insights") or {}
+        summary["columns_profiled"] = si.get("total_columns_analysed") or len(si.get("columns") or [])
+    if "report" in prior_results:
+        r = prior_results["report"]
+        summary["report_id"] = r.get("report_id") or r.get("id")
+
+    return WorkflowRunResult(
+        workflow_run_id=workflow_run_id,
+        source_id=req.source_id,
+        folder_path=req.folder_path,
+        steps_requested=steps_to_run,
+        steps_completed=completed,
+        steps_failed=failed,
+        overall_success=overall_success,
+        step_results=step_results,
+        summary=summary,
+        started_at=started_at,
+        completed_at=completed_at,
+        total_execution_time=total_time,
+    )
 
