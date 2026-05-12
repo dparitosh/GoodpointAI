@@ -1,6 +1,8 @@
+import asyncio
 import logging
+import os
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple, TYPE_CHECKING, Callable, Awaitable, cast
 import neo4j
 from fastapi import HTTPException
@@ -10,8 +12,12 @@ if TYPE_CHECKING:
 
 from .models import (
     AgentType, AgentCapability, AgentDefinition,
-    AgenticTask, AgenticTaskResult, SystemStatus
+    AgenticTask, AgenticTaskResult, SystemStatus, _utcnow,
 )
+
+# Per-task HTTP timeout for remote agent dispatch (seconds).
+# Override via AGENT_DISPATCH_TIMEOUT_S env variable.
+_AGENT_DISPATCH_TIMEOUT = float(os.getenv("AGENT_DISPATCH_TIMEOUT_S", "60"))
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +200,8 @@ class AgenticOrchestrator:
         }
 
         for agent_type, config in agent_configs.items():
-            agent_id = f"{agent_type.value}_{int(datetime.now().timestamp())}"
+            # Use a stable, deterministic ID so restarts don't create orphan entries.
+            agent_id = f"{agent_type.value}_primary"
             self.agents[agent_id] = AgentDefinition(
                 id=agent_id,
                 type=agent_type,
@@ -202,24 +209,35 @@ class AgenticOrchestrator:
                 **config
             )
 
+        # Per-agent asyncio locks: prevent concurrent tasks mutating the same agent status
+        self._agent_locks: Dict[str, asyncio.Lock] = {
+            aid: asyncio.Lock() for aid in self.agents
+        }
+
     async def route_task_to_agent(self, task: AgenticTask) -> Optional[str]:
-        """Route task to the most suitable agent"""
+        """Route task to the most suitable agent."""
         suitable_agents: List[Tuple[str, float]] = []
-        
+        required = set(task.required_capabilities)
+
         for agent_id, agent in self.agents.items():
             if agent.status != "ready":
                 continue
-                
+
             agent_capabilities = [cap.name for cap in agent.capabilities]
-            matching_capabilities = set(task.required_capabilities) & set(agent_capabilities)
-            
+            matching_capabilities = required & set(agent_capabilities)
+
             if matching_capabilities:
-                score = len(matching_capabilities) / len(task.required_capabilities)
+                # Guard against division-by-zero when required_capabilities is empty.
+                if required:
+                    score = len(matching_capabilities) / len(required)
+                else:
+                    # Any agent matches an empty capability set — score by capability count.
+                    score = 1.0 / (len(agent_capabilities) + 1)
                 suitable_agents.append((agent_id, score))
-        
+
         if not suitable_agents:
             return None
-            
+
         # Sort by capability match score
         suitable_agents.sort(key=lambda x: x[1], reverse=True)
         return suitable_agents[0][0]
@@ -239,8 +257,23 @@ class AgenticOrchestrator:
             )
 
         agent = self.agents[agent_id]
-        start_time = datetime.now()
-        
+        # Ensure lock exists for dynamically registered agents
+        if agent_id not in self._agent_locks:
+            self._agent_locks[agent_id] = asyncio.Lock()
+
+        start_time = _utcnow()
+
+        async with self._agent_locks[agent_id]:
+            return await self._execute_with_agent(task, agent, agent_id, start_time)
+
+    async def _execute_with_agent(
+        self,
+        task: AgenticTask,
+        agent: AgentDefinition,
+        agent_id: str,
+        start_time: datetime,
+    ) -> AgenticTaskResult:
+        """Inner execution — called while holding the per-agent lock."""
         try:
             # Update agent status
             agent.status = "busy"
@@ -249,7 +282,7 @@ class AgenticOrchestrator:
             # Execute task based on type
             result = await self._execute_agent_task(task, agent)
             
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (_utcnow() - start_time).total_seconds()
             
             # Update metrics
             self.system_metrics["tasks_completed"] += 1
@@ -274,13 +307,15 @@ class AgenticOrchestrator:
         except (
             neo4j.exceptions.Neo4jError,
             HTTPException,
+            httpx.HTTPStatusError,
+            httpx.RequestError,
             OSError,
             RuntimeError,
             ValueError,
             TypeError,
             KeyError,
         ) as e:
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (_utcnow() - start_time).total_seconds()
             self.system_metrics["tasks_failed"] += 1
             self._update_performance_metrics(agent_id, execution_time, False)
             
@@ -365,7 +400,7 @@ class AgenticOrchestrator:
                 # context is optional in AgentTaskRequest
             }
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=_AGENT_DISPATCH_TIMEOUT) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 
@@ -385,11 +420,20 @@ class AgenticOrchestrator:
             raise
 
     def get_system_status(self) -> SystemStatus:
-        """Get current system status"""
+        """Get current system status."""
+        ready_agents = [a for a in self.agents.values() if a.status == "ready"]
+        # System is only healthy when a majority of registered agents are ready.
+        # A single ready agent out of many degraded ones is still "degraded".
+        if len(self.agents) == 0:
+            health = "degraded"
+        elif len(ready_agents) / len(self.agents) >= 0.5:
+            health = "healthy"
+        else:
+            health = "degraded"
         return SystemStatus(
             active_agents=list(self.agents.values()),
             task_queue_size=len(self.task_queue),
-            system_health="healthy" if len([a for a in self.agents.values() if a.status == "ready"]) > 0 else "degraded",
+            system_health=health,
             performance_metrics=self.system_metrics
         )
 

@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import httpx
 import uvicorn
 import asyncio
@@ -26,7 +27,9 @@ class AgentService(ABC):
         self.port = port
         self.mcp_server_url = os.getenv("MCP_SERVER_URL", mcp_server_url)
         self.agent_id = f"{agent_type.value}-{os.getenv('AGENT_INSTANCE_ID', 'default')}"
-        
+        # Heartbeat task reference held to prevent GC
+        self._registration_task: Optional[asyncio.Task] = None
+
         # Initialize FastAPI
         self.app = FastAPI(
             title=f"{agent_name} Service",
@@ -61,17 +64,13 @@ class AgentService(ABC):
 
         @self.app.post("/execute", response_model=AgentTaskResponse)
         async def execute_task(task: AgentTaskRequest):
-            logger.info(f"Received task {task.task_id} of type {task.task_type}")
+            logger.info("Received task %s of type %s", task.task_id, task.task_type)
             loop = asyncio.get_running_loop()
             start_time = loop.time()
 
             try:
-                # Execute the abstract process_task method
                 result = await self.process_task(task)
-
-                # Calculate duration
                 duration_ms = (loop.time() - start_time) * 1000
-
                 return AgentTaskResponse(
                     task_id=task.task_id,
                     status=TaskStatus.COMPLETED,
@@ -79,7 +78,7 @@ class AgentService(ABC):
                     execution_time_ms=duration_ms
                 )
             except Exception as e:
-                logger.error(f"Task execution failed: {e}", exc_info=True)
+                logger.error("Task %s execution failed: %s", task.task_id, e, exc_info=True)
                 duration_ms = (loop.time() - start_time) * 1000
                 return AgentTaskResponse(
                     task_id=task.task_id,
@@ -92,20 +91,30 @@ class AgentService(ABC):
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):
         # Startup: Register with MCP Server
-        # We run this in the background to not block startup if MCP is slow
-        asyncio.create_task(self._maintain_registration())
-        
+        # Hold a reference to the task so it is not garbage-collected.
+        self._registration_task = asyncio.create_task(self._maintain_registration())
+
         yield
-        
-        # Shutdown: Deregister (optional, logic can be added here)
+
+        # Shutdown: cancel heartbeat
+        if self._registration_task and not self._registration_task.done():
+            self._registration_task.cancel()
+            try:
+                await self._registration_task
+            except asyncio.CancelledError:
+                pass
         logger.info("Shutting down agent service...")
 
     async def _maintain_registration(self):
-        """Periodically register with MCP server (heartbeat pattern)."""
+        """Periodically register with MCP server (heartbeat pattern).
+        
+        A random jitter of 0–5 s is applied on each iteration so all
+        agents don't thunder-herd the MCP server simultaneously on restart.
+        """
         while True:
             await self.register_with_mcp()
-            # Retry/Heartbeat interval
-            await asyncio.sleep(30) # Send heartbeat every 30 seconds
+            jitter = random.uniform(0, 5)
+            await asyncio.sleep(30 + jitter)
 
     async def register_with_mcp(self):
         """Register valid endpoint with the MCP Server so it can route tasks here."""
@@ -116,7 +125,7 @@ class AgentService(ABC):
             "id": self.agent_id,
             "type": self.agent_type.value,
             "name": self.agent_name,
-            "service_url": f"http://localhost:{self.port}", # In container/Azure this needs to be real IP/DNS
+            "service_url": f"http://{os.getenv('AGENT_SERVICE_HOST', 'localhost')}:{self.port}",
             "capabilities": [c.model_dump() for c in self.get_capabilities()],
             "status": "ready",
             "metadata": {"version": "1.0.0"}
@@ -134,10 +143,10 @@ class AgentService(ABC):
                 if resp.status_code in (200, 201):
                     logger.info("Successfully registered with MCP Server (Heartbeat).")
                 else:
-                    logger.warning(f"Registration failed: {resp.status_code} - {resp.text}")
+                    logger.warning("Registration failed: %s - %s", resp.status_code, resp.text)
         except Exception as e:
             # Log as debug to avoid spamming console if MCP is down for a while
-            logger.debug(f"Could not register with MCP Server (is it running?): {e}")
+            logger.debug("Could not register with MCP Server (is it running?): %s", e)
 
     def start(self):
         """Run the service"""

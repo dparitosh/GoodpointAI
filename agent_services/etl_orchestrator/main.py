@@ -1,6 +1,7 @@
 import sys
 import os
 import asyncio
+import json
 import uuid
 import logging
 from datetime import datetime
@@ -55,8 +56,7 @@ class ETLOrchestratorAgent(AgentService):
     @asynccontextmanager
     async def _lifespan(self, _app: FastAPI):
         # Initialize resources
-        logger_name = f"{self.agent_name}.lifespan"
-        print(f"[{logger_name}] Initializing Neo4j driver...")
+        logger.info("Initializing Neo4j driver...")
         
         try:
             self.driver = AsyncGraphDatabase.driver(
@@ -65,17 +65,17 @@ class ETLOrchestratorAgent(AgentService):
             )
             # Verify connectivity
             await self.driver.verify_connectivity()
-            print(f"[{logger_name}] Neo4j connectivity verified.")
+            logger.info("Neo4j connectivity verified.")
         except Exception as e:
-            print(f"[{logger_name}] WARNING: Neo4j connectivity failed: {e}")
+            logger.warning("Neo4j connectivity failed: %s", e)
 
         # Initialize Postgres Engine
         if DATABASE_URL:
             try:
                 self.db_engine = create_engine(DATABASE_URL)
-                print(f"[{logger_name}] SQL Database connected.")
+                logger.info("SQL Database connected.")
             except Exception as e:
-                print(f"[{logger_name}] WARNING: SQL Database connection failed: {e}")
+                logger.warning("SQL Database connection failed: %s", e)
 
         # Chain upstream registration
         async with super()._lifespan(_app):
@@ -251,7 +251,7 @@ class ETLOrchestratorAgent(AgentService):
             available_targets = [c for c in target_columns if c in df_transformed.columns]
             df_transformed = df_transformed[available_targets].copy()
             df_transformed["run_id"] = run_id
-            df_transformed["raw"] = df.to_dict(orient="records")
+            df_transformed["raw"] = df.apply(lambda row: json.dumps(row.to_dict()), axis=1)
             
             # Persist to DB (PLMPart table)
             try:

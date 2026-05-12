@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 import logging
 from typing import Dict, Any, List, Optional
 import uuid
@@ -19,7 +20,7 @@ logger = logging.getLogger("task_decomposer")
 def _st(parent_id: str, task_type: str, caps: list, payload: dict, deps: Optional[list] = None, priority: int = 5) -> dict:
     """Build a raw subtask dict."""
     return {
-        "id": f"st_{uuid.uuid4().hex[:8]}",
+        "id": f"st_{uuid.uuid4().hex[:12]}",
         "parent_task_id": parent_id,
         "type": task_type,
         "required_capabilities": caps,
@@ -35,7 +36,7 @@ def _extract_source(payload: dict) -> dict:
     if not source_name or source_name == "unknown":
         # Try to extract a quoted or parenthetical name from the goal text
         goal = payload.get("goal", payload.get("message", ""))
-        import re
+
         # Match: 'from X', 'source X', 'named X' — capture word/phrase before optional qualifier
         m = re.search(r'\bfrom\s+["\']?([A-Za-z0-9_.\- ]+?)["\']?\s*(?:\(|$|\s)', goal, re.IGNORECASE)
         if not m:
@@ -141,6 +142,9 @@ def _build_plm_profiling_dag(task_id: str, payload: dict) -> List[dict]:
     migration_label = payload.get("migration_label")
 
     batch_count = max(1, (file_count + batch_size - 1) // batch_size)
+    # Cap to prevent creating an unmanageable number of subtasks
+    MAX_BATCH_COUNT = 200
+    batch_count = min(MAX_BATCH_COUNT, batch_count)
 
     base = {**src, "folder_path": folder_path, "recursive": recursive}
     if migration_label:
@@ -266,7 +270,9 @@ def _build_plm_profiling_dag(task_id: str, payload: dict) -> List[dict]:
             "check_duplicates":             True,
             "check_completeness":           True,
         },
-        [schema_corr["id"], rel_detect["id"], sem_profile["id"]],
+        # rel_detect has ft_skip=True; excluding it as a hard dependency prevents
+        # dq_eval from being permanently blocked when rel_detect is skipped.
+        [schema_corr["id"], sem_profile["id"]],
         priority=7,
     )
     dq_eval["dag_layer"]       = 4

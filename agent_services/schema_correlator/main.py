@@ -48,6 +48,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -262,7 +263,7 @@ def _detect_schema_drift(corpus: Dict[str, Dict]) -> List[Dict]:
 
         if has_numeric and has_text:
             severity = "high"
-        elif not has_text and len(set(d.split("6")[0].split("3")[0].split("1")[0] for d in dtype_keys)) > 1:
+        elif not has_text and len(set(re.sub(r'\d+$', '', d) for d in dtype_keys)) > 1:
             # mixed int / float variants
             severity = "medium"
         else:

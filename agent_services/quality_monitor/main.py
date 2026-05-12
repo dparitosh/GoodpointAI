@@ -1,7 +1,8 @@
 import sys
 import os
+import logging
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "python_b
 # Load environment variables from backend .env
 env_path = Path(__file__).resolve().parent.parent.parent / "python_backend" / ".env"
 load_dotenv(dotenv_path=env_path)
+
+logger = logging.getLogger(__name__)
 
 from neo4j import AsyncGraphDatabase
 from agent_services.base.agent_service import AgentService
@@ -40,16 +43,15 @@ class QualityMonitorAgent(AgentService):
     @asynccontextmanager
     async def _lifespan(self, _app: FastAPI):
         # Initialize resources
-        logger_name = f"{self.agent_name}.lifespan"
         try:
             self.driver = AsyncGraphDatabase.driver(
                 self.neo4j_uri, 
                 auth=(self.neo4j_user, self.neo4j_password)
             )
             await self.driver.verify_connectivity()
-            print(f"[{logger_name}] Neo4j connectivity verified.")
+            logger.info("Neo4j connectivity verified.")
         except Exception as e:
-            print(f"[{logger_name}] WARNING: Neo4j connectivity failed: {e}")
+            logger.warning("Neo4j connectivity failed: %s", e)
 
         async with super()._lifespan(_app):
             yield
@@ -89,7 +91,7 @@ class QualityMonitorAgent(AgentService):
             "quality_score": quality_score,
             "anomalies_found": rule_result.get("total_failures", 0) if rule_result else 0,
             "rule_validation": rule_result if rule_result else None,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def _scan_datasource_via_backend(self, task: AgentTaskRequest) -> Dict[str, Any]:
@@ -144,9 +146,8 @@ class QualityMonitorAgent(AgentService):
                 )
                 if resp.status_code == 200:
                     return resp.json()
-                # Fall back to direct ORM if API route not available
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Rule engine API call failed: %s; falling back to direct execution", exc)
 
         # Direct ORM fallback (only when backend API unavailable)
         return self._run_rule_engine_direct(records, entity_type)

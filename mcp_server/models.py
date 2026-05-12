@@ -1,9 +1,22 @@
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any, Union
 from enum import Enum
 from pydantic import BaseModel, Field
 
-#  AGENT TYPE DEFINITIONS
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _new_subtask_id() -> str:
+    return f"subtask_{uuid.uuid4().hex[:12]}"
+
+
+def _new_task_id() -> str:
+    return f"task_{uuid.uuid4().hex[:12]}"
+
+
 class AgentType(str, Enum):
     DATA_ANALYST = "data_analyst"
     ETL_ORCHESTRATOR = "etl_orchestrator"
@@ -18,9 +31,7 @@ class AgentType(str, Enum):
     REPORTING_AGENT = "reporting_agent"
     DATA_PROFILER = "data_profiler"
 
-#  AGENT TYPE DEFINITIONS — add DATA_DISCOVERY_AGENT before CHAT_COORDINATOR
 
-#  TASK DEFINITIONS
 class TaskType(str, Enum):
     DATA_ANALYSIS = "data_analysis"
     PIPELINE_ORCHESTRATION = "pipeline_orchestration"
@@ -28,7 +39,6 @@ class TaskType(str, Enum):
     VISUALIZATION_GENERATION = "visualization_generation"
     QUALITY_ASSESSMENT = "quality_assessment"
     CHAT_PROCESSING = "chat_processing"
-    # New task types for data discovery and quality
     DATA_DISCOVERY = "data_discovery"
     DATA_QUALITY_SCAN = "data_quality_scan"
     FILE_BATCH_PROCESSING = "file_batch_processing"
@@ -38,18 +48,22 @@ class TaskType(str, Enum):
     REPORT_GENERATION = "report_generation"
     SEMANTIC_PROFILE = "semantic_profile"
 
+
 class TaskStatus(str, Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
     BLOCKED = "blocked"
+    CANCELLED = "cancelled"
+    TIMEOUT = "timeout"
 
-#  PYDANTIC MODELS
+
 class AgentCapability(BaseModel):
     name: str
     description: str
     parameters: Dict[str, Any] = {}
+
 
 class AgentDefinition(BaseModel):
     id: str
@@ -57,13 +71,14 @@ class AgentDefinition(BaseModel):
     name: str
     capabilities: List[AgentCapability]
     status: str = "ready"
-    service_url: Optional[str] = None  # URL for standalone agent service
-    metadata: Dict[str, Any] = {}     # Additional metadata
-    last_activity: datetime = Field(default_factory=datetime.now)
+    service_url: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+    last_activity: datetime = Field(default_factory=_utcnow)
     performance_metrics: Dict[str, float] = {}
 
+
 class AgenticSubtask(BaseModel):
-    id: str = Field(default_factory=lambda: f"subtask_{int(datetime.now().timestamp() * 1000)}")
+    id: str = Field(default_factory=_new_subtask_id)
     parent_task_id: str
     type: TaskType
     required_capabilities: List[str]
@@ -72,10 +87,11 @@ class AgenticSubtask(BaseModel):
     dependencies: List[str] = []
     priority: int = 5
     timeout: int = 30
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=_utcnow)
+
 
 class AgenticTask(BaseModel):
-    id: str = Field(default_factory=lambda: f"task_{int(datetime.now().timestamp() * 1000)}")
+    id: str = Field(default_factory=_new_task_id)
     type: TaskType
     required_capabilities: List[str]
     payload: Dict[str, Any]
@@ -83,23 +99,27 @@ class AgenticTask(BaseModel):
     subtasks: List[AgenticSubtask] = []
     priority: int = 5
     timeout: int = 30
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=_utcnow)
+
 
 class AgenticTaskResult(BaseModel):
     task_id: str
     agent_id: str
-    agent_type: AgentType
+    # Accept both AgentType enum values and plain strings (e.g. "system")
+    agent_type: Union[AgentType, str]
     success: bool
     result: Dict[str, Any] = {}
     error: Optional[str] = None
     execution_time: float
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=_utcnow)
+
 
 class ChatRequest(BaseModel):
     message: str
     context: Dict[str, Any] = {}
     session_id: Optional[str] = None
     intent: Optional[str] = None
+
 
 class ChatResponse(BaseModel):
     message: str
@@ -108,9 +128,10 @@ class ChatResponse(BaseModel):
     requires_followup: bool = False
     session_id: str
 
+
 class SystemStatus(BaseModel):
     active_agents: List[AgentDefinition]
     task_queue_size: int
     system_health: str
     performance_metrics: Dict[str, Any]
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=_utcnow)

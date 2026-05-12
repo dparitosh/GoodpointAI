@@ -1,21 +1,26 @@
+import asyncio
 import json
 import logging
-from typing import Optional, Any, Dict, List, Awaitable, cast
+import time
+from typing import Optional, Any, Dict, List, Tuple, Awaitable, cast
 import redis
 import redis.asyncio as redis_async
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .config import Settings
 
 logger = logging.getLogger(__name__)
 RedisError = redis.exceptions.RedisError
 
+
 class StateManager:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.redis: Optional[redis_async.Redis] = None
         self.use_redis = False
-        self._memory_store: Dict[str, str] = {}
+        # In-memory store: key → (json_value, expires_at_monotonic)
+        self._memory_store: Dict[str, Tuple[str, Optional[float]]] = {}
+        self._memory_lock = asyncio.Lock()
         self._connected = False
 
     @property
@@ -63,10 +68,12 @@ class StateManager:
         self.redis = None
 
     async def register_agent(self, agent_id: str, metadata: Dict[str, Any], ttl: int = 300):
-        """Register an active agent with a TTL"""
+        """Register an active agent with a TTL."""
         key = f"agent:{agent_id}"
-        metadata["last_heartbeat"] = datetime.now().isoformat()
-        value = json.dumps(metadata)
+        # Work on a copy to avoid mutating the caller's dict
+        meta_copy = dict(metadata)
+        meta_copy["last_heartbeat"] = datetime.now(timezone.utc).isoformat()
+        value = json.dumps(meta_copy)
 
         if self.use_redis and self.redis:
             try:
@@ -74,37 +81,45 @@ class StateManager:
             except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.error("Failed to register agent %s: %s", agent_id, e)
         else:
-            self._memory_store[key] = value
+            async with self._memory_lock:
+                expires_at = time.monotonic() + ttl
+                self._memory_store[key] = (value, expires_at)
 
     async def get_active_agents(self) -> List[Dict[str, Any]]:
-        """Get all currently active agents"""
+        """Get all currently active agents."""
         agents = []
-        
+
         if self.use_redis and self.redis:
             try:
-                keys = await self.redis.keys("agent:*")
-                if not keys:
-                    return []
-                
-                # Using mget for efficiency, but keys is a list of keys
-                agents_json = await self.redis.mget(keys)
-                for j in agents_json:
-                    if j:
-                        agents.append(json.loads(j))
-            except (RedisError, OSError, RuntimeError, ValueError, TypeError, json.JSONDecodeError) as e:
+                # Use SCAN instead of KEYS to avoid blocking Redis on large keyspaces
+                async for key in self.redis.scan_iter("agent:*"):
+                    try:
+                        raw = await self.redis.get(key)
+                        if raw:
+                            agents.append(json.loads(raw))
+                    except (json.JSONDecodeError, RedisError):
+                        pass
+            except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.error("Failed to get active agents: %s", e)
         else:
-            for key, val in self._memory_store.items():
-                if key.startswith("agent:"):
+            now = time.monotonic()
+            async with self._memory_lock:
+                for key, (val, expires_at) in list(self._memory_store.items()):
+                    if not key.startswith("agent:"):
+                        continue
+                    if expires_at is not None and now > expires_at:
+                        # Evict expired entry lazily
+                        del self._memory_store[key]
+                        continue
                     try:
                         agents.append(json.loads(val))
                     except (TypeError, ValueError, json.JSONDecodeError):
                         pass
-                        
+
         return agents
 
     async def save_task_state(self, task_id: str, state: Dict[str, Any], ttl: int = 3600):
-        """Persist task state/result"""
+        """Persist task state/result."""
         key = f"task:{task_id}"
         value = json.dumps(state)
 
@@ -114,12 +129,14 @@ class StateManager:
             except (RedisError, OSError, RuntimeError, ValueError, TypeError) as e:
                 logger.error("Failed to save task state %s: %s", task_id, e)
         else:
-            self._memory_store[key] = value
+            async with self._memory_lock:
+                expires_at = time.monotonic() + ttl
+                self._memory_store[key] = (value, expires_at)
 
     async def get_task_state(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve task state"""
+        """Retrieve task state."""
         key = f"task:{task_id}"
-        
+
         if self.use_redis and self.redis:
             try:
                 data = await self.redis.get(key)
@@ -130,7 +147,13 @@ class StateManager:
                 logger.error("Failed to get task state %s: %s", task_id, e)
                 return None
         else:
-            data = self._memory_store.get(key)
-            if data:
-                return json.loads(data)
-            return None
+            now = time.monotonic()
+            async with self._memory_lock:
+                entry = self._memory_store.get(key)
+                if entry is None:
+                    return None
+                val, expires_at = entry
+                if expires_at is not None and now > expires_at:
+                    del self._memory_store[key]
+                    return None
+                return json.loads(val)

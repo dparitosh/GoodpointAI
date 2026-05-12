@@ -1,5 +1,6 @@
 import logging
 import contextlib
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -77,10 +78,17 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check():
+    neo4j_ok: bool = False
+    if app.state.neo4j_driver is not None:
+        try:
+            await app.state.neo4j_driver.verify_connectivity()
+            neo4j_ok = True
+        except Exception:
+            neo4j_ok = False
     return {
-        "status": "healthy", 
+        "status": "healthy",
         "service": settings.MCP_SERVER_ID,
-        "neo4j_connected": app.state.neo4j_driver is not None
+        "neo4j_connected": neo4j_ok,
     }
 
 @app.get("/metrics")
@@ -112,8 +120,17 @@ async def submit_task(task: AgenticTask):
 @app.get("/mcp/v1/tasks/{task_id}", response_model=AgenticTaskResult)
 async def get_task_status(task_id: str):
     orchestrator: AgenticOrchestrator = app.state.orchestrator
+    state_manager: StateManager = app.state.state_manager
+
+    # Check in-memory result cache first (fastest path)
     if task_id in orchestrator.task_results:
         return orchestrator.task_results[task_id]
+
+    # Fall back to persistent state (survives server restarts)
+    persisted = await state_manager.get_task_state(task_id)
+    if persisted:
+        return AgenticTaskResult(**persisted)
+
     raise HTTPException(status_code=404, detail="Task not found")
 
 
@@ -124,7 +141,7 @@ class DagSubmission(BaseModel):
     Each subtask ``type`` must be a valid TaskType value.
     Each subtask ``dependencies`` list references other subtask ``id`` values.
     """
-    parent_task_id: str = Field(default_factory=lambda: f"dag_{int(datetime.now().timestamp() * 1000)}")
+    parent_task_id: str = Field(default_factory=lambda: f"dag_{uuid.uuid4().hex[:12]}")
     goal: str = ""
     subtasks: List[Dict[str, Any]]
     priority: int = 5
@@ -160,7 +177,7 @@ async def submit_dag(submission: DagSubmission):
             task_type = TaskType.DATA_ANALYSIS
         built_subtasks.append(
             AgenticSubtask(
-                id=raw.get("id", f"st_{int(datetime.now().timestamp() * 1000)}"),
+                id=raw.get("id") or f"st_{uuid.uuid4().hex[:12]}",
                 parent_task_id=wrapper_id,
                 type=task_type,
                 required_capabilities=raw.get("required_capabilities", []),

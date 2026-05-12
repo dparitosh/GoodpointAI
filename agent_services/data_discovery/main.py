@@ -17,8 +17,9 @@ import sys
 import os
 import logging
 import asyncio
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -39,6 +40,8 @@ logger = logging.getLogger(__name__)
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8012")
 # Backend URL — all DB access goes through the FastAPI backend, not direct ORM
 BACKEND_URL = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://localhost:8011")
+# Maximum rows to read when profiling a single file (prevents OOM on huge files)
+MAX_PROFILE_ROWS = int(os.getenv("MAX_PROFILE_ROWS", "10000"))
 
 
 # ── File type helpers ──────────────────────────────────────────────────────
@@ -162,11 +165,10 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
     df = None
     try:
         if ftype == "csv":
-            # Try encodings for CSV
+            # Try encodings for CSV; read only up to MAX_PROFILE_ROWS to prevent OOM
             for enc in ("utf-8-sig", "cp1252", "latin-1"):
                 try:
-                    df = pd.read_csv(str(path), encoding=enc, nrows=0)  # First check header
-                    df = pd.read_csv(str(path), encoding=enc)
+                    df = pd.read_csv(str(path), encoding=enc, nrows=MAX_PROFILE_ROWS)
                     break
                 except (UnicodeDecodeError, pd.errors.ParserError):
                     continue
@@ -188,8 +190,6 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
         elif ftype == "json":
             try:
                 df = pd.read_json(str(path))
-                if isinstance(df, pd.Series):
-                    df = df.to_frame().T
             except Exception as e:
                 profile["parse_error"] = f"pd.read_json failed: {str(e)}"
                 profile["parse_ok"] = False
@@ -210,12 +210,14 @@ def _profile_file(file_meta: Dict[str, Any]) -> Dict[str, Any]:
                 valid_count = int(len(df) - null_count)
                 null_rate = round(float(null_count) / len(df), 4) if len(df) > 0 else 0
                 
-                # Distinct values
-                distinct_values = df[col].dropna().unique()
-                distinct_count = int(len(distinct_values))
-                
-                # Sample values (convert to native Python types)
-                sample_values = [str(v) for v in distinct_values[:10]]
+                # Distinct values — use nunique() to avoid materialising full unique array
+                distinct_count = int(df[col].nunique())
+
+                # Sample values — only materialize unique array when cardinality is manageable
+                if distinct_count <= 50:
+                    sample_values = [str(v) for v in df[col].dropna().unique()[:10]]
+                else:
+                    sample_values = [str(v) for v in df[col].dropna().head(10)]
                 
                 # Infer semantic type
                 col_dtype = str(df[col].dtype)
@@ -341,6 +343,8 @@ checks for data:
     total_rows = len(df)
     missing_count = int(df.isnull().sum().sum())
     duplicate_count = int(df.duplicated().sum())
+    # Use 5% of rows as the missing-count threshold, with a floor of 100.
+    _missing_threshold = max(100, int(total_rows * 0.05))
     
     # Column-level nulls for reporting
     max_null_rate = 0.0
@@ -359,10 +363,10 @@ checks for data:
             "engine": "builtin",
         },
         {
-            "name": "missing_count < 100",
-            "outcome": "pass" if missing_count < 100 else "fail",
-            "fail": bool(missing_count >= 100),
-            "pass": bool(missing_count < 100),
+            "name": f"missing_count < {_missing_threshold}",
+            "outcome": "pass" if missing_count < _missing_threshold else "fail",
+            "fail": bool(missing_count >= _missing_threshold),
+            "pass": bool(missing_count < _missing_threshold),
             "value": int(missing_count),
             "engine": "builtin",
         },
@@ -503,8 +507,6 @@ class DataDiscoveryAgent(AgentService):
         """Fire-and-forget: submit a DATA_QUALITY_SCAN task to the quality_monitor
         agent via the MCP server.  Returns the new task_id, or None if MCP is
         not reachable (non-blocking — discovery result is returned regardless)."""
-        import time
-
         dq_task_id = f"task_dq_{int(time.time() * 1000)}"
         task_payload = {
             "id": dq_task_id,
@@ -576,7 +578,7 @@ class DataDiscoveryAgent(AgentService):
             "total_files": len(files),
             "total_size_bytes": total_size,
             "by_type": by_type,
-            "discovered_at": datetime.now().isoformat(),
+            "discovered_at": datetime.now(timezone.utc).isoformat(),
             "files": files,
         }
 
@@ -657,13 +659,21 @@ class DataDiscoveryAgent(AgentService):
 
         loop = asyncio.get_running_loop()
         metas = [{"path": p, "file_type": _classify(Path(p).suffix), "size_bytes": Path(p).stat().st_size if Path(p).exists() else 0} for p in file_paths]
-        profiles = await loop.run_in_executor(None, lambda: [_profile_file(m) for m in metas])
+
+        # Profile files in parallel (same semaphore pattern as _handle_discovery)
+        _sem = asyncio.Semaphore(min(32, len(metas)))
+
+        async def _profile_one(m: Dict[str, Any]) -> Dict[str, Any]:
+            async with _sem:
+                return await loop.run_in_executor(None, _profile_file, m)
+
+        profiles = list(await asyncio.gather(*[_profile_one(m) for m in metas]))
 
         return {
             "status": "completed",
             "profiled_files": len(profiles),
             "profiles": profiles,
-            "profiled_at": datetime.now().isoformat(),
+            "profiled_at": datetime.now(timezone.utc).isoformat(),
         }
 
     async def _handle_quality_scan(self, task: AgentTaskRequest) -> Dict[str, Any]:
