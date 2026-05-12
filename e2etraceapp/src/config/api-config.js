@@ -58,7 +58,7 @@ const DEFAULT_CONFIG = {
 
     // Agentic Orchestration Config
     AGENTIC_ORCHESTRATION_CONFIG: '/api/orchestration/config',
-    AGENTIC_SYSTEM: '/api/agentic/system',
+    AGENTIC_SYSTEM: '/api/agentic',
 
     // Conversational Search
     SEARCH_HEALTH: '/api/search/health',
