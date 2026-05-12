@@ -31,7 +31,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     const stepParam = searchParams.get('step');
     if (stepParam && !isNaN(stepParam)) {
       const step = parseInt(stepParam, 10);
-      if (step >= 1 && step <= 5) {
+      if (step >= 1 && step <= 6) {
         return step;
       }
     }
@@ -103,6 +103,23 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     // Step 2: AI Data Health Report (DataDiscoveryAgent `data_health_report` task)
     dataHealthReport: null,
     dataHealthLoading: false,
+    // Step 3: Profile — DataProfilerAgent
+    profileStatus: 'idle',    // idle | running | completed | failed
+    profileResult: null,
+    profileError: null,
+    profileAccepted: false,
+    // Step 4: Quality — QualityMonitorAgent
+    qualityStatus: 'idle',    // idle | running | completed | failed
+    qualityResult: null,
+    qualityError: null,
+    qualityRun: false,
+    qualityAccepted: false,
+    // Step 5: ETL completion flag (set when executeMigration finishes)
+    etlCompleted: false,
+    // Step 6: Report — ReportingAgent
+    agentReportStatus: 'idle', // idle | running | completed | failed
+    agentReportResult: null,
+    agentReportError: null,
   });
   
   // Available data sources
@@ -121,7 +138,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     2: { complete: false, valid: false },
     3: { complete: false, valid: false },
     4: { complete: false, valid: false },
-    5: { complete: false, valid: false }
+    5: { complete: false, valid: false },
+    6: { complete: false, valid: false }
   });
 
   // Derived loading helpers
@@ -134,11 +152,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   // Define steps as a memoized constant to avoid dependency array issues
   const steps = useMemo(() => [
-    { id: 1, name: 'Connect', icon: 'fa-plug', description: 'Configure data sources' },
-    { id: 2, name: 'Discovery', icon: 'fa-search', description: 'Agentic discovery insights' },
-    { id: 3, name: 'Map', icon: 'fa-arrows-alt-h', description: 'Define field mappings' },
-    { id: 4, name: 'Validate', icon: 'fa-check-double', description: 'Quality & transform' },
-    { id: 5, name: 'Execute', icon: 'fa-play-circle', description: 'Run migration' }
+    { id: 1, name: 'Connect',  icon: 'fa-plug',         description: 'Configure data sources' },
+    { id: 2, name: 'Discover', icon: 'fa-search',        description: 'AI-driven discovery & schema' },
+    { id: 3, name: 'Profile',  icon: 'fa-brain',         description: 'Semantic profiling & entity classification' },
+    { id: 4, name: 'Quality',  icon: 'fa-shield-alt',    description: 'DQ rules, anomaly detection & scoring' },
+    { id: 5, name: 'ETL',      icon: 'fa-exchange-alt',  description: 'Extract, transform, load via agent' },
+    { id: 6, name: 'Report',   icon: 'fa-chart-bar',     description: 'AI-generated comprehensive report' },
   ], []);
 
   // Load data from Data Workbench (via localStorage)
@@ -440,15 +459,16 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         wizardData.sourceSystem.id !== wizardData.targetSystem.id
       );
       case 2: return wizardData.discoveryAccepted;
-      case 3: return wizardData.fieldMappings.length > 0;
-      case 4: return wizardData.validationRun;
-      case 5: return true;
+      case 3: return wizardData.profileAccepted || wizardData.profileResult != null;
+      case 4: return wizardData.qualityAccepted || wizardData.qualityRun;
+      case 5: return wizardData.etlCompleted || wizardData.migrationStatus === 'completed';
+      case 6: return true;
       default: return false;
     }
   }, [wizardData]);
 
   const nextStep = useCallback(async () => {
-    if (currentStep < 5 && canProceed(currentStep)) {
+    if (currentStep < 6 && canProceed(currentStep)) {
       // On leaving step 1, enforce workflow name uniqueness before advancing
       if (currentStep === 1) {
         const apiBase = import.meta.env.VITE_API_BASE_URL || '';
@@ -951,7 +971,6 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           actions: agentDirectorActions.length,
           dq_violations: violations.length,
         });
-      // eslint-disable-next-line no-restricted-syntax
       } catch (ingestErr) {
         if (import.meta.env.DEV) console.warn('Agent Director ingest unavailable:', ingestErr?.message || ingestErr);
       }
@@ -1316,6 +1335,181 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     addRules([rule]);
   }, [addRules]);
 
+  // ── Step 3: Profile — DataProfilerAgent via MCP ──────────────────────────
+  const runProfileAgent = useCallback(async () => {
+    if (!wizardData.sourceSystem && !wizardData.discoveryRunId) return;
+    setOpLoading(prev => ({ ...prev, profile: true }));
+    setWizardData(prev => ({ ...prev, profileStatus: 'running', profileResult: null, profileError: null }));
+    try {
+      const fileProfiles = wizardData.discoveryIntrospect?.file_profiles
+        || (wizardData.discoverySample ? [{ file: wizardData.sourceSystem?.name || 'source', columns: Object.keys(wizardData.discoverySample[0] || {}).map(n => ({ name: n })) }] : []);
+
+      const res = await e2etraceFetchWithRetry(
+        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_PROFILE}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_id: wizardData.sourceSystem?.id || null,
+            folder_path: wizardData.sourceSystem?.connection?.file_path || null,
+            run_id: wizardData.discoveryRunId || null,
+            file_profiles: fileProfiles,
+            records: wizardData.discoverySample?.slice?.(0, 200) || [],
+            prior_results: {},
+            params: { source_name: wizardData.sourceSystem?.name },
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success !== false) {
+        setWizardData(prev => ({
+          ...prev,
+          profileStatus: 'completed',
+          profileResult: data.result || data,
+          profileAccepted: true,
+        }));
+      } else {
+        throw new Error(data.error || 'Profile agent returned failure');
+      }
+    } catch (err) {
+      console.error('Profile agent failed:', err);
+      setWizardData(prev => ({
+        ...prev,
+        profileStatus: 'failed',
+        profileError: err.message || String(err),
+        // Allow proceeding even if profiling fails — heuristic fallback
+        profileAccepted: true,
+      }));
+    } finally {
+      setOpLoading(prev => ({ ...prev, profile: false }));
+    }
+  }, [wizardData.sourceSystem, wizardData.discoveryRunId, wizardData.discoverySample, wizardData.discoveryIntrospect]);
+
+  // ── Step 4: Quality — QualityMonitorAgent via MCP ───────────────────────
+  const runQualityAgent = useCallback(async () => {
+    if (!wizardData.sourceSystem && !wizardData.discoveryRunId) return;
+    setOpLoading(prev => ({ ...prev, quality: true }));
+    setWizardData(prev => ({ ...prev, qualityStatus: 'running', qualityResult: null, qualityError: null }));
+    try {
+      const res = await e2etraceFetchWithRetry(
+        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_QUALITY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_id: wizardData.sourceSystem?.id || null,
+            folder_path: wizardData.sourceSystem?.connection?.file_path || null,
+            run_id: wizardData.discoveryRunId || null,
+            file_profiles: [],
+            records: wizardData.discoverySample?.slice?.(0, 500) || [],
+            prior_results: wizardData.profileResult ? { profile: wizardData.profileResult } : {},
+            params: {
+              source_name: wizardData.sourceSystem?.name,
+              profile_summary: wizardData.profileResult || null,
+            },
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success !== false) {
+        const result = data.result || data;
+        setWizardData(prev => ({
+          ...prev,
+          qualityStatus: 'completed',
+          qualityResult: result,
+          qualityRun: true,
+          qualityAccepted: true,
+          // Back-fill validation results for the legacy quality checks panel
+          validationResults: (result.rule_validation?.violations || []).map((v, i) => ({
+            id: `qv-${i}`,
+            insight: `[${v.rule_name || 'Rule'}] ${v.message || v.detail || v.severity}`,
+            severity: v.severity === 'critical' ? 'error' : v.severity || 'warning',
+            recommendation: v.action || '',
+          })),
+          qualityChecks: {
+            passed: result.quality_score >= 80 ? 1 : 0,
+            failed: (result.anomalies_found || 0),
+            warnings: result.quality_score < 80 && result.quality_score >= 50 ? 1 : 0,
+          },
+        }));
+      } else {
+        throw new Error(data.error || 'Quality agent returned failure');
+      }
+    } catch (err) {
+      console.error('Quality agent failed:', err);
+      setWizardData(prev => ({
+        ...prev,
+        qualityStatus: 'failed',
+        qualityError: err.message || String(err),
+        qualityRun: true,
+      }));
+    } finally {
+      setOpLoading(prev => ({ ...prev, quality: false }));
+    }
+  }, [wizardData.sourceSystem, wizardData.discoveryRunId, wizardData.discoverySample, wizardData.profileResult]);
+
+  // ── Step 6: Report — ReportingAgent via MCP ─────────────────────────────
+  const generateAgentReport = useCallback(async () => {
+    setOpLoading(prev => ({ ...prev, report: true }));
+    setWizardData(prev => ({ ...prev, agentReportStatus: 'running', agentReportResult: null, agentReportError: null }));
+    try {
+      const priorResults = {};
+      if (wizardData.discoveryIntrospect || wizardData.discoveryInsights?.length)
+        priorResults.discover = {
+          file_profiles: wizardData.discoveryIntrospect?.file_profiles || [],
+          files: wizardData.discoveryIntrospect?.discovered_files || [],
+        };
+      if (wizardData.profileResult)
+        priorResults.profile = wizardData.profileResult;
+      if (wizardData.qualityResult)
+        priorResults.quality = wizardData.qualityResult;
+      if (wizardData.migrationStatus === 'completed')
+        priorResults.etl = {
+          records_processed: wizardData.processedRecords,
+          nodes_created: wizardData.nodesCreated,
+          status: wizardData.migrationStatus,
+        };
+
+      const res = await e2etraceFetchWithRetry(
+        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_REPORT}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_id: wizardData.sourceSystem?.id || null,
+            folder_path: wizardData.sourceSystem?.connection?.file_path || null,
+            run_id: wizardData.discoveryRunId || null,
+            prior_results: priorResults,
+            params: {
+              source_name: wizardData.sourceSystem?.name,
+              workflow_name: wizardData.workflowName,
+              capability: 'report_generation',
+            },
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success !== false) {
+        setWizardData(prev => ({
+          ...prev,
+          agentReportStatus: 'completed',
+          agentReportResult: data.result || data,
+        }));
+      } else {
+        throw new Error(data.error || 'Reporting agent returned failure');
+      }
+    } catch (err) {
+      console.error('Report generation failed:', err);
+      setWizardData(prev => ({
+        ...prev,
+        agentReportStatus: 'failed',
+        agentReportError: err.message || String(err),
+      }));
+    } finally {
+      setOpLoading(prev => ({ ...prev, report: false }));
+    }
+  }, [wizardData.sourceSystem, wizardData.discoveryRunId, wizardData.discoveryIntrospect, wizardData.discoveryInsights, wizardData.profileResult, wizardData.qualityResult, wizardData.migrationStatus, wizardData.processedRecords, wizardData.nodesCreated, wizardData.workflowName]);
+
   /** Trigger the DataDiscoveryAgent data_health_report task and store result */
   const generateDataHealthReport = useCallback(async () => {
     if (!wizardData.sourceSystem) return;
@@ -1528,8 +1722,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, validation: false }));
     }
-  // wizardData.sodaScanResult needed to correctly subtract prior SODA counts on re-run
-  }, [wizardData.runId, wizardData.sodaScanResult, wizardData.qualityChecks]);
+  }, [wizardData.runId]);
 
   const testTransformation = useCallback(async () => {
     if (!wizardData.fieldMappings.length) return;
@@ -1793,7 +1986,8 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         migrationStep: 'Complete!',
         processedRecords: syncResult?.parts_synced ?? records.length,
         totalRecords: syncResult?.parts_synced ?? records.length,
-        nodesCreated: syncResult?.nodes_created || 0
+        nodesCreated: syncResult?.nodes_created || 0,
+        etlCompleted: true,
       }));
       
       setStepStatus(prev => ({
@@ -1817,16 +2011,17 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, execute: false }));
     }
-  }, [wizardData.sourceSystem, wizardData.targetSystem, wizardData.fieldMappings, wizardData.workflowName, wizardData.savedWorkflowId, onComplete]);
+  }, [wizardData.sourceSystem, wizardData.targetSystem, wizardData.fieldMappings, onComplete]);
 
   // Render step content
   const renderStepContent = () => {
     switch (currentStep) {
       case 1: return renderConnectStep();
       case 2: return renderSchemaStep();
-      case 3: return renderMappingStep();
-      case 4: return renderValidateStep();
-      case 5: return renderExecuteStep();
+      case 3: return renderProfileStep();
+      case 4: return renderQualityStep();
+      case 5: return renderMappingStep();
+      case 6: return renderReportStep();
       default: return null;
     }
   };
@@ -2141,6 +2336,621 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       )}
     </div>
   );
+
+  // ── Step 3: Profile — DataProfilerAgent via MCP ──────────────────────────
+  const renderProfileStep = () => {
+    const pr = wizardData.profileResult;
+    const si = pr?.semantic_insights || pr?.result?.semantic_insights || wizardData.semanticProfile || {};
+    const colSem = si.column_semantics || [];
+    const entityCls = si.entity_classifications || [];
+    const relationships = si.relationships || [];
+    const summary = si.summary || {};
+    const hasResults = colSem.length > 0 || entityCls.length > 0 || wizardData.semanticProfile;
+
+    return (
+      <div className="wizard-step-content profile-step">
+        <div className="step-hero">
+          <h3><i className="fas fa-brain" /> Semantic Profiling</h3>
+          <p className="step-description">
+            DataProfilerAgent performs deep semantic analysis — classifying column roles, entity types,
+            and cross-file relationships using AI so downstream ETL is data-aware.
+          </p>
+        </div>
+
+        <div className="agent-action-panel">
+          <div className="agent-info">
+            <i className="fas fa-robot agent-icon" />
+            <div>
+              <strong>Agent:</strong> DataProfilerAgent
+              <span className="capability-tags">
+                <span className="cap-tag">profiling</span>
+                <span className="cap-tag">infer_column_semantics</span>
+                <span className="cap-tag">classify_entities</span>
+                <span className="cap-tag">detect_relationships</span>
+              </span>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-ai"
+            onClick={runProfileAgent}
+            disabled={opLoading.profile || wizardData.profileStatus === 'running'}
+          >
+            {wizardData.profileStatus === 'running' || opLoading.profile
+              ? <><i className="fas fa-spinner fa-spin" /> Profiling…</>
+              : wizardData.profileStatus === 'completed'
+                ? <><i className="fas fa-redo" /> Re-run Profiling</>
+                : <><i className="fas fa-brain" /> Run Semantic Profile</>}
+          </button>
+        </div>
+
+        {wizardData.profileStatus === 'running' && (
+          <div className="agent-running-card">
+            <i className="fas fa-spinner fa-spin" />
+            <span>DataProfilerAgent is analysing column semantics and entity classification…</span>
+          </div>
+        )}
+
+        {wizardData.profileStatus === 'failed' && (
+          <div className="agent-error-card">
+            <i className="fas fa-exclamation-triangle" />
+            <span>{wizardData.profileError || 'Profiling failed'}</span>
+            <button className="btn btn-sm btn-warning" onClick={runProfileAgent}>
+              <i className="fas fa-redo" /> Retry
+            </button>
+          </div>
+        )}
+
+        {hasResults && (
+          <div className="profile-results">
+            <div className="profile-summary-row">
+              <div className="profile-kpi">
+                <span className="kpi-value">{colSem.length || '—'}</span>
+                <span className="kpi-label">Columns Profiled</span>
+              </div>
+              <div className="profile-kpi">
+                <span className="kpi-value">{summary.top_entity_class || entityCls[0]?.entity_type || '—'}</span>
+                <span className="kpi-label">Entity Class</span>
+              </div>
+              <div className="profile-kpi">
+                <span className="kpi-value">{relationships.length || summary.relationship_count || 0}</span>
+                <span className="kpi-label">Relationships</span>
+              </div>
+              <div className="profile-kpi">
+                <span className="kpi-value">
+                  {summary.high_confidence_semantics || colSem.filter(c => (c.confidence || 0) >= 0.75).length || 0}
+                </span>
+                <span className="kpi-label">High-Confidence</span>
+              </div>
+            </div>
+
+            {colSem.length > 0 && (
+              <div className="profile-section">
+                <h4><i className="fas fa-columns" /> Column Semantics</h4>
+                <div className="semantics-table-wrap">
+                  <table className="semantics-table">
+                    <thead>
+                      <tr>
+                        <th>Column</th>
+                        <th>Semantic Role</th>
+                        <th>Entity Hint</th>
+                        <th>Confidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {colSem.slice(0, 20).map((cs, i) => (
+                        <tr key={i}>
+                          <td><code>{cs.column || cs.canonical_name || '—'}</code></td>
+                          <td>
+                            <span className={`role-badge role-${(cs.semantic_role || '').toLowerCase()}`}>
+                              {cs.semantic_role || '—'}
+                            </span>
+                          </td>
+                          <td>{cs.entity_hint || '—'}</td>
+                          <td>
+                            <div className="conf-bar-wrap">
+                              <div className="conf-bar" style={{ width: `${Math.round((cs.confidence || 0) * 100)}%` }} />
+                              <span>{Math.round((cs.confidence || 0) * 100)}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {colSem.length > 20 && <p className="more-note">+{colSem.length - 20} more columns</p>}
+                </div>
+              </div>
+            )}
+
+            {entityCls.length > 0 && (
+              <div className="profile-section">
+                <h4><i className="fas fa-tags" /> Entity Classifications</h4>
+                <div className="entity-cls-grid">
+                  {entityCls.map((ec, i) => (
+                    <div key={i} className="entity-cls-card">
+                      <span className="entity-type">{ec.entity_type || ec.type || '—'}</span>
+                      <span className="entity-conf">{Math.round((ec.confidence || 0) * 100)}%</span>
+                      {ec.files?.length > 0 && <span className="entity-files">{ec.files.length} file(s)</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {relationships.length > 0 && (
+              <div className="profile-section">
+                <h4><i className="fas fa-link" /> Detected Relationships</h4>
+                <div className="relationships-list">
+                  {relationships.slice(0, 10).map((rel, i) => (
+                    <div key={i} className="relationship-item">
+                      <span className="rel-source">{rel.source_column || rel.from || '—'}</span>
+                      <i className="fas fa-long-arrow-alt-right rel-arrow" />
+                      <span className="rel-target">{rel.target_column || rel.to || '—'}</span>
+                      {rel.relationship_type && <span className="rel-type-badge">{rel.relationship_type}</span>}
+                      {rel.similarity_score != null && (
+                        <span className="rel-score">{Math.round(rel.similarity_score * 100)}%</span>
+                      )}
+                    </div>
+                  ))}
+                  {relationships.length > 10 && <p className="more-note">+{relationships.length - 10} more</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {wizardData.profileStatus === 'idle' && !hasResults && (
+          <div className="agent-idle-card">
+            <i className="fas fa-brain" />
+            <p>
+              Click <strong>Run Semantic Profile</strong> to have DataProfilerAgent classify every
+              column&rsquo;s semantic role, identify entity types, and detect cross-column
+              relationships — enriching all downstream ETL and quality steps.
+            </p>
+          </div>
+        )}
+
+        <SmartGuidancePanel
+          context={{ step: 'profile', source: wizardData.sourceSystem?.name, profileStatus: wizardData.profileStatus }}
+          dismissed={smartGuidanceDismissed}
+          onDismiss={() => setSmartGuidanceDismissed(true)}
+        />
+      </div>
+    );
+  };
+
+  // ── Step 4: Quality — QualityMonitorAgent via MCP ─────────────────────────
+  const renderQualityStep = () => {
+    const qr = wizardData.qualityResult;
+    const score = qr?.quality_score ?? qr?.overall_score ?? null;
+    const anomalies = qr?.anomalies_found ?? 0;
+    const violations = qr?.rule_validation?.violations || qr?.violations || [];
+    const scoreClass = score == null ? '' : score >= 80 ? 'score-good' : score >= 50 ? 'score-warn' : 'score-bad';
+
+    return (
+      <div className="wizard-step-content quality-step">
+        <div className="step-hero">
+          <h3><i className="fas fa-shield-alt" /> Data Quality</h3>
+          <p className="step-description">
+            QualityMonitorAgent runs comprehensive DQ rules, anomaly detection, and quality scoring —
+            generating actionable violation reports to gate your ETL pipeline.
+          </p>
+        </div>
+
+        <div className="agent-action-panel">
+          <div className="agent-info">
+            <i className="fas fa-robot agent-icon" />
+            <div>
+              <strong>Agent:</strong> QualityMonitorAgent
+              <span className="capability-tags">
+                <span className="cap-tag">quality_scan</span>
+                <span className="cap-tag">scan_datasource_quality</span>
+                <span className="cap-tag">recommend_rules</span>
+              </span>
+            </div>
+          </div>
+          <div className="quality-action-row">
+            <button
+              className="btn btn-primary btn-ai"
+              onClick={runQualityAgent}
+              disabled={opLoading.quality || wizardData.qualityStatus === 'running'}
+            >
+              {wizardData.qualityStatus === 'running' || opLoading.quality
+                ? <><i className="fas fa-spinner fa-spin" /> Scanning…</>
+                : wizardData.qualityStatus === 'completed'
+                  ? <><i className="fas fa-redo" /> Re-scan Quality</>
+                  : <><i className="fas fa-shield-alt" /> Run Quality Scan</>}
+            </button>
+            {wizardData.sourceSystem && (
+              <button
+                className="btn btn-secondary"
+                onClick={generateDataHealthReport}
+                disabled={wizardData.dataHealthLoading}
+                title="Generate a comprehensive Data Health Report via DataDiscoveryAgent"
+              >
+                {wizardData.dataHealthLoading
+                  ? <><i className="fas fa-spinner fa-spin" /> Generating…</>
+                  : <><i className="fas fa-heartbeat" /> Data Health Report</>}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {wizardData.qualityStatus === 'running' && (
+          <div className="agent-running-card">
+            <i className="fas fa-spinner fa-spin" />
+            <span>QualityMonitorAgent is running DQ rules and anomaly detection…</span>
+          </div>
+        )}
+
+        {wizardData.qualityStatus === 'failed' && (
+          <div className="agent-error-card">
+            <i className="fas fa-exclamation-triangle" />
+            <span>{wizardData.qualityError || 'Quality scan failed'}</span>
+            <button className="btn btn-sm btn-warning" onClick={runQualityAgent}>
+              <i className="fas fa-redo" /> Retry
+            </button>
+          </div>
+        )}
+
+        {qr && (
+          <div className="quality-results">
+            <div className="quality-kpi-row">
+              <div className={`quality-score-kpi ${scoreClass}`}>
+                <span className="qs-value">{score != null ? `${Math.round(score)}` : '—'}</span>
+                <span className="qs-label">Quality Score</span>
+                {score != null && (
+                  <div className="qs-bar">
+                    <div className="qs-fill" style={{ width: `${Math.min(100, score)}%` }} />
+                  </div>
+                )}
+              </div>
+              <div className="quality-kpi">
+                <span className="kpi-value text-error">{anomalies}</span>
+                <span className="kpi-label">Anomalies Found</span>
+              </div>
+              <div className="quality-kpi">
+                <span className="kpi-value">{violations.length}</span>
+                <span className="kpi-label">Rule Violations</span>
+              </div>
+              {qr.columns_checked != null && (
+                <div className="quality-kpi">
+                  <span className="kpi-value">{qr.columns_checked}</span>
+                  <span className="kpi-label">Columns Checked</span>
+                </div>
+              )}
+            </div>
+
+            {violations.length > 0 && (
+              <div className="quality-section">
+                <h4><i className="fas fa-exclamation-triangle" /> Rule Violations</h4>
+                <div className="violations-list">
+                  {violations.slice(0, 15).map((v, i) => (
+                    <div key={i} className={`violation-item sev-${v.severity || 'warning'}`}>
+                      <i className={`fas ${v.severity === 'critical' || v.severity === 'error' ? 'fa-times-circle' : 'fa-exclamation-circle'}`} />
+                      <div className="viol-body">
+                        <span className="viol-rule">{v.rule_name || 'Rule'}</span>
+                        <span className="viol-msg">{v.message || v.detail || v.description || ''}</span>
+                      </div>
+                      <span className={`sev-badge sev-${v.severity || 'warning'}`}>{v.severity || 'warning'}</span>
+                    </div>
+                  ))}
+                  {violations.length > 15 && <p className="more-note">+{violations.length - 15} more violations</p>}
+                </div>
+              </div>
+            )}
+
+            {qr.anomaly_details?.length > 0 && (
+              <div className="quality-section">
+                <h4><i className="fas fa-search" /> Anomalies</h4>
+                <div className="anomalies-list">
+                  {qr.anomaly_details.slice(0, 10).map((a, i) => (
+                    <div key={i} className="anomaly-item">
+                      <span className="anom-col">{a.column || a.field || '—'}</span>
+                      <span className="anom-desc">{a.description || a.type || a.message || '—'}</span>
+                      {a.value != null && <code className="anom-val">{String(a.value)}</code>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {qr.recommendations?.length > 0 && (
+              <div className="quality-section">
+                <h4><i className="fas fa-lightbulb" /> AI Recommendations</h4>
+                <ul className="recommendations-list">
+                  {qr.recommendations.slice(0, 8).map((r, i) => (
+                    <li key={i}>{typeof r === 'string' ? r : r.recommendation || r.message || JSON.stringify(r)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Data Health Report panel */}
+        {wizardData.dataHealthReport && (
+          <DataHealthPanel report={wizardData.dataHealthReport} />
+        )}
+
+        {wizardData.qualityStatus === 'idle' && !qr && !wizardData.dataHealthReport && (
+          <div className="agent-idle-card">
+            <i className="fas fa-shield-alt" />
+            <p>
+              Click <strong>Run Quality Scan</strong> to have QualityMonitorAgent evaluate DQ rules,
+              detect anomalies, and compute a quality score. Use <strong>Data Health Report</strong>
+              for a comprehensive readiness analysis with trust and readiness scores.
+            </p>
+          </div>
+        )}
+
+        <SmartGuidancePanel
+          context={{ step: 'quality', source: wizardData.sourceSystem?.name, qualityScore: score }}
+          dismissed={smartGuidanceDismissed}
+          onDismiss={() => setSmartGuidanceDismissed(true)}
+        />
+
+        {/* ── Legacy QA Tools ──────────────────────────────────────────── */}
+        <details className="legacy-qa-section">
+          <summary><i className="fas fa-wrench" /> Advanced / Legacy QA Tools</summary>
+          <div className="legacy-qa-content">
+            <div className="validation-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={runValidation}
+                disabled={opLoading.validation}
+              >
+                <i className="fas fa-check-double" /> {opLoading.validation ? 'Running…' : 'Run Validation Rules'}
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={runSodaScan}
+                disabled={opLoading.validation || !wizardData.runId}
+                title={!wizardData.runId ? 'Execute ETL first to enable SODA scan' : 'Run SODA data quality checks'}
+              >
+                <i className="fas fa-shield-alt" /> SODA Quality Scan
+              </button>
+            </div>
+            {wizardData.validationResults.length > 0 && (
+              <div className="validation-results">
+                <div className="results-list">
+                  {wizardData.validationResults.slice(0, 10).map((result, idx) => (
+                    <div key={idx} className={`result-item ${result.severity}`}>
+                      <i className={`fas ${getSeverityIcon(result.severity)}`} />
+                      <div className="result-content">
+                        <span className="result-insight">{result.insight}</span>
+                        {result.recommendation && (
+                          <span className="result-recommendation">{result.recommendation}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
+      </div>
+    );
+  };
+
+  // ── Step 6: Report — ReportingAgent via MCP ───────────────────────────────
+  const renderReportStep = () => {
+    const rr = wizardData.agentReportResult;
+    const hasSummary = rr?.summary || rr?.pipeline_summary || rr?.report_summary;
+    const reportId = rr?.report_id || rr?.id;
+
+    return (
+      <div className="wizard-step-content report-step">
+        <div className="step-hero">
+          <h3><i className="fas fa-chart-bar" /> AI Pipeline Report</h3>
+          <p className="step-description">
+            ReportingAgent assembles a comprehensive end-to-end report consolidating discovery,
+            profiling, quality, and ETL results into a single exportable artefact.
+          </p>
+        </div>
+
+        <div className="agent-action-panel">
+          <div className="agent-info">
+            <i className="fas fa-robot agent-icon" />
+            <div>
+              <strong>Agent:</strong> ReportingAgent
+              <span className="capability-tags">
+                <span className="cap-tag">report_generation</span>
+                <span className="cap-tag">generate_report</span>
+              </span>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-ai"
+            onClick={generateAgentReport}
+            disabled={opLoading.report || wizardData.agentReportStatus === 'running'}
+          >
+            {wizardData.agentReportStatus === 'running' || opLoading.report
+              ? <><i className="fas fa-spinner fa-spin" /> Generating…</>
+              : wizardData.agentReportStatus === 'completed'
+                ? <><i className="fas fa-redo" /> Regenerate Report</>
+                : <><i className="fas fa-file-alt" /> Generate AI Report</>}
+          </button>
+        </div>
+
+        {wizardData.agentReportStatus === 'running' && (
+          <div className="agent-running-card">
+            <i className="fas fa-spinner fa-spin" />
+            <span>ReportingAgent is assembling the pipeline report from all step artefacts…</span>
+          </div>
+        )}
+
+        {wizardData.agentReportStatus === 'failed' && (
+          <div className="agent-error-card">
+            <i className="fas fa-exclamation-triangle" />
+            <span>{wizardData.agentReportError || 'Report generation failed'}</span>
+            <button className="btn btn-sm btn-warning" onClick={generateAgentReport}>
+              <i className="fas fa-redo" /> Retry
+            </button>
+          </div>
+        )}
+
+        {rr && (
+          <div className="report-results">
+            {/* Report header */}
+            <div className="report-header-card">
+              <i className="fas fa-file-alt report-icon" />
+              <div className="report-meta">
+                <span className="report-title">
+                  {rr.report_title || rr.title || `Migration Report — ${wizardData.workflowName || 'Pipeline'}`}
+                </span>
+                {reportId && <span className="report-id">ID: {reportId}</span>}
+                {rr.generated_at && <span className="report-date">{new Date(rr.generated_at).toLocaleString()}</span>}
+              </div>
+            </div>
+
+            {/* KPI bar */}
+            <div className="report-kpi-row">
+              {rr.files_discovered != null && (
+                <div className="report-kpi">
+                  <span className="kpi-value">{rr.files_discovered}</span>
+                  <span className="kpi-label">Files Discovered</span>
+                </div>
+              )}
+              {rr.columns_profiled != null && (
+                <div className="report-kpi">
+                  <span className="kpi-value">{rr.columns_profiled}</span>
+                  <span className="kpi-label">Columns Profiled</span>
+                </div>
+              )}
+              {rr.quality_score != null && (
+                <div className={`report-kpi ${rr.quality_score >= 80 ? 'score-good' : rr.quality_score >= 50 ? 'score-warn' : 'score-bad'}`}>
+                  <span className="kpi-value">{Math.round(rr.quality_score)}</span>
+                  <span className="kpi-label">Quality Score</span>
+                </div>
+              )}
+              {rr.records_loaded != null && (
+                <div className="report-kpi">
+                  <span className="kpi-value">{rr.records_loaded}</span>
+                  <span className="kpi-label">Records Loaded</span>
+                </div>
+              )}
+            </div>
+
+            {/* Pipeline summary */}
+            {(hasSummary || rr.executive_summary) && (
+              <div className="report-section">
+                <h4><i className="fas fa-align-left" /> Executive Summary</h4>
+                <div className="report-summary-text">
+                  {rr.executive_summary
+                    || (typeof hasSummary === 'string' ? hasSummary : null)
+                    || rr.pipeline_summary?.overview
+                    || rr.report_summary?.overview
+                    || JSON.stringify(hasSummary, null, 2)}
+                </div>
+              </div>
+            )}
+
+            {/* Step summaries */}
+            {rr.step_summaries && (
+              <div className="report-section">
+                <h4><i className="fas fa-list-alt" /> Step Results</h4>
+                <div className="step-summaries-list">
+                  {Object.entries(rr.step_summaries).map(([step, summary]) => (
+                    <div key={step} className={`step-summary-item ${summary.status || ''}`}>
+                      <span className="ss-step">{step.charAt(0).toUpperCase() + step.slice(1)}</span>
+                      <span className={`ss-status ss-${summary.status || 'unknown'}`}>
+                        <i className={`fas ${summary.status === 'completed' ? 'fa-check-circle' : summary.status === 'failed' ? 'fa-times-circle' : 'fa-circle'}`} />
+                        {summary.status || '—'}
+                      </span>
+                      {summary.message && <span className="ss-message">{summary.message}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {rr.recommendations?.length > 0 && (
+              <div className="report-section">
+                <h4><i className="fas fa-star" /> Recommendations</h4>
+                <ul className="recommendations-list">
+                  {rr.recommendations.slice(0, 10).map((r, i) => (
+                    <li key={i}>{typeof r === 'string' ? r : r.recommendation || r.message || JSON.stringify(r)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Raw JSON for developers */}
+            {import.meta.env.DEV && (
+              <details className="debug-panel" style={{ marginTop: 16 }}>
+                <summary style={{ cursor: 'pointer', color: '#999', fontSize: '0.85em' }}>🛠️ Full Report JSON</summary>
+                <pre className="schema-preview" style={{ fontSize: '0.75em', maxHeight: 400, overflowY: 'auto' }}>
+                  {JSON.stringify(rr, null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {/* Pipeline summary when report not yet generated */}
+        {wizardData.agentReportStatus === 'idle' && !rr && (
+          <div className="report-pipeline-summary">
+            <h4><i className="fas fa-list-check" /> Pipeline Status</h4>
+            <div className="pipeline-status-grid">
+              <div className={`pipeline-step-status ${wizardData.discoveryStatus === 'completed' ? 'done' : 'pending'}`}>
+                <i className={`fas ${wizardData.discoveryStatus === 'completed' ? 'fa-check-circle' : 'fa-circle'}`} />
+                <span>Discover</span>
+              </div>
+              <div className={`pipeline-step-status ${wizardData.profileStatus === 'completed' ? 'done' : 'pending'}`}>
+                <i className={`fas ${wizardData.profileStatus === 'completed' ? 'fa-check-circle' : 'fa-circle'}`} />
+                <span>Profile</span>
+              </div>
+              <div className={`pipeline-step-status ${wizardData.qualityStatus === 'completed' ? 'done' : 'pending'}`}>
+                <i className={`fas ${wizardData.qualityStatus === 'completed' ? 'fa-check-circle' : 'fa-circle'}`} />
+                <span>Quality</span>
+              </div>
+              <div className={`pipeline-step-status ${wizardData.migrationStatus === 'completed' ? 'done' : 'pending'}`}>
+                <i className={`fas ${wizardData.migrationStatus === 'completed' ? 'fa-check-circle' : 'fa-circle'}`} />
+                <span>ETL</span>
+              </div>
+            </div>
+            <p className="report-idle-hint">
+              Click <strong>Generate AI Report</strong> to have ReportingAgent compile a comprehensive
+              pipeline report. Run the Discover, Profile, Quality, and ETL steps first for the richest report.
+            </p>
+          </div>
+        )}
+
+        <SmartGuidancePanel
+          context={{ step: 'report', source: wizardData.sourceSystem?.name, reportGenerated: !!rr }}
+          dismissed={smartGuidanceDismissed}
+          onDismiss={() => setSmartGuidanceDismissed(true)}
+        />
+
+        {/* NCR export — available when validation issues exist */}
+        {(wizardData.qualityChecks.failed > 0 || wizardData.qualityChecks.warnings > 0) && (
+          <div className="ncr-export-section">
+            <div className="ncr-export-info">
+              <i className="fas fa-exclamation-triangle ncr-icon" />
+              <div>
+                <strong>Non-Conformance Report</strong>
+                <p>
+                  {wizardData.qualityChecks.failed > 0 && (
+                    <span className="ncr-fail-count">{wizardData.qualityChecks.failed} failed check(s)</span>
+                  )}
+                  {wizardData.qualityChecks.failed > 0 && wizardData.qualityChecks.warnings > 0 && ' · '}
+                  {wizardData.qualityChecks.warnings > 0 && (
+                    <span className="ncr-warn-count">{wizardData.qualityChecks.warnings} warning(s)</span>
+                  )}
+                  {' '}detected. Export for traceability.
+                </p>
+              </div>
+            </div>
+            <button className="btn btn-ncr-export" onClick={generateNcr} title="Export NCR as Excel">
+              <i className="fas fa-file-excel" /> Export NCR
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderMappingStep = () => {
     const sourceFields = extractSchemaFields(wizardData.sourceSchema);
@@ -2610,233 +3420,114 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         onUpdateRule={updateRule}
         onAddRules={addRules}
       />
+      {/* ── Execute ETL Pipeline ────────────────────────────────────────── */}
+      <div className="etl-execute-card">
+        <h4><i className="fas fa-rocket" /> Execute ETL Pipeline</h4>
+        <p className="etl-execute-desc">
+          Once field mappings are configured above, execute the Extract → Transform → Load pipeline.
+        </p>
+
+        {/* Pre-execution summary */}
+        {wizardData.migrationStatus === 'pending' && (
+          <div className="etl-pre-exec">
+            <div className="etl-summary-row">
+              <span><i className="fas fa-map-signs" /> {wizardData.fieldMappings.length} mapping(s) defined</span>
+              {wizardData.qualityResult?.quality_score != null && (
+                <span>
+                  <i className="fas fa-shield-alt" /> Quality: {Math.round(wizardData.qualityResult.quality_score)}
+                </span>
+              )}
+              {wizardData.profileResult && (
+                <span><i className="fas fa-check-circle" /> Profile complete</span>
+              )}
+            </div>
+            <button
+              className="btn btn-primary btn-lg btn-execute"
+              onClick={executeMigration}
+              disabled={opLoading.execute || wizardData.fieldMappings.length === 0}
+            >
+              <i className="fas fa-play" /> {opLoading.execute ? 'Executing…' : 'Start ETL Pipeline'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={testTransformation}
+              disabled={opLoading.validation || !wizardData.fieldMappings.length}
+              title="Test transformation rules without running the full pipeline"
+            >
+              <i className="fas fa-flask" /> Test Transform
+            </button>
+            {wizardData.fieldMappings.length === 0 && (
+              <p className="execute-warning">Define at least one field mapping above before executing.</p>
+            )}
+          </div>
+        )}
+
+        {/* Progress */}
+        {wizardData.migrationStatus === 'running' && (
+          <div className="migration-progress">
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: wizardData.totalRecords > 0 ? `${Math.round((wizardData.processedRecords / wizardData.totalRecords) * 100)}%` : '0%' }}
+              />
+            </div>
+            <div className="progress-text">
+              <i className="fas fa-spinner fa-spin" /> {wizardData.migrationStep || 'Processing…'}
+            </div>
+            <div className="migration-steps-list">
+              {[
+                { label: 'Create Run',          threshold: 1 },
+                { label: 'Stage Records',       threshold: 2 },
+                { label: 'Transform Data',      threshold: 3 },
+                { label: 'SODA Scan & Validate',threshold: 4 },
+                { label: 'Sync to Neo4j',       threshold: 5 },
+              ].map(({ label, threshold }) => (
+                <div
+                  key={label}
+                  className={`migration-step-item ${wizardData.processedRecords >= threshold ? 'complete' : wizardData.processedRecords >= threshold - 1 ? 'active' : ''}`}
+                >
+                  <i className="fas fa-circle" /> {label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Completion */}
+        {wizardData.migrationStatus === 'completed' && (
+          <div className="execute-complete">
+            <i className="fas fa-check-circle" />
+            <div>
+              <strong>ETL Pipeline Complete!</strong>
+              <span>
+                {wizardData.processedRecords} record(s) processed
+                {wizardData.nodesCreated > 0 && ` · ${wizardData.nodesCreated} node(s) created`}.
+                Proceed to <strong>Report</strong>.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Failure */}
+        {wizardData.migrationStatus === 'failed' && (
+          <div className="execute-failed">
+            <i className="fas fa-times-circle" />
+            <div className="error-list">
+              {wizardData.errors.map((e, i) => <div key={i} className="error-item">{e}</div>)}
+            </div>
+            <button
+              className="btn btn-sm btn-warning"
+              onClick={() => setWizardData(prev => ({ ...prev, migrationStatus: 'pending', errors: [] }))}
+            >
+              <i className="fas fa-redo" /> Retry
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
   };
 
-  const renderValidateStep = () => (
-    <div className="wizard-step-content validate-step">
-      <h3>Validate & Transform</h3>
-      <p className="step-description">Run quality checks and test transformations before execution</p>
-      
-      <div className="validation-actions">
-        <button 
-          className="btn btn-primary"
-          onClick={runValidation}
-          disabled={opLoading.validation}
-        >
-          <i className="fas fa-check-double" /> {opLoading.validation ? 'Running...' : 'Run Validation'}
-        </button>
-        <button 
-          className="btn btn-secondary"
-          onClick={testTransformation}
-          disabled={opLoading.validation || !wizardData.fieldMappings.length}
-        >
-          <i className="fas fa-exchange-alt" /> Test Transform
-        </button>
-        <button 
-          className="btn btn-info"
-          onClick={runSodaScan}
-          disabled={opLoading.validation || !wizardData.runId}
-          title={!wizardData.runId ? 'Run migration first to enable SODA scan' : 'Run SODA data quality checks'}
-        >
-          <i className="fas fa-shield-alt" /> SODA Quality Scan
-        </button>
-      </div>
-      
-      {/* SODA Scan Result */}
-      {wizardData.sodaScanResult && (
-        <div className={`soda-result ${wizardData.sodaScanResult.status}`}>
-          <div className="soda-header">
-            <i className={`fas ${wizardData.sodaScanResult.status === 'pass' ? 'fa-check-circle' : 'fa-exclamation-triangle'}`} />
-            <span>SODA Quality Gate: <strong>{wizardData.sodaScanResult.status?.toUpperCase()}</strong></span>
-          </div>
-          <div className="soda-metrics">
-            <span>Score: <strong>{(wizardData.sodaScanResult.overall_score * 100).toFixed(0)}%</strong></span>
-            <span>Issues: <strong>{wizardData.sodaScanResult.issues_count}</strong></span>
-            <span>Blocked: <strong>{wizardData.sodaScanResult.blocked ? 'Yes' : 'No'}</strong></span>
-          </div>
-        </div>
-      )}
-      
-      {/* Quality Metrics */}
-      <div className="quality-metrics">
-        <div className={`metric passed ${wizardData.qualityChecks.passed > 0 ? 'has-value' : ''}`}>
-          <span className="metric-value">{wizardData.qualityChecks.passed}</span>
-          <span className="metric-label">Passed</span>
-        </div>
-        <div className={`metric warnings ${wizardData.qualityChecks.warnings > 0 ? 'has-value' : ''}`}>
-          <span className="metric-value">{wizardData.qualityChecks.warnings}</span>
-          <span className="metric-label">Warnings</span>
-        </div>
-        <div className={`metric failed ${wizardData.qualityChecks.failed > 0 ? 'has-value' : ''}`}>
-          <span className="metric-value">{wizardData.qualityChecks.failed}</span>
-          <span className="metric-label">Failed</span>
-        </div>
-      </div>
-      
-      {/* Validation Results */}
-      {wizardData.validationResults.length > 0 && (
-        <div className="validation-results">
-          <h4>Validation Results</h4>
-          <div className="results-list">
-            {wizardData.validationResults.map((result, idx) => (
-              <div key={idx} className={`result-item ${result.severity}`}>
-                <i className={`fas ${getSeverityIcon(result.severity)}`} />
-                <div className="result-content">
-                  <span className="result-insight">{result.insight}</span>
-                  {result.recommendation && (
-                    <span className="result-recommendation">{result.recommendation}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Non-Conformance Report — shown after validation when issues exist */}
-      {wizardData.validationRun && (wizardData.qualityChecks.failed > 0 || wizardData.qualityChecks.warnings > 0) && (
-        <div className="ncr-export-section">
-          <div className="ncr-export-info">
-            <i className="fas fa-exclamation-triangle ncr-icon" />
-            <div>
-              <strong>Non-Conformance Report Required</strong>
-              <p>
-                {wizardData.qualityChecks.failed > 0 && <span className="ncr-fail-count">{wizardData.qualityChecks.failed} failed check{wizardData.qualityChecks.failed !== 1 ? 's' : ''}</span>}
-                {wizardData.qualityChecks.failed > 0 && wizardData.qualityChecks.warnings > 0 && ' · '}
-                {wizardData.qualityChecks.warnings > 0 && <span className="ncr-warn-count">{wizardData.qualityChecks.warnings} warning{wizardData.qualityChecks.warnings !== 1 ? 's' : ''}</span>}
-                {' '}detected during validation. Export an NCR for traceability and review.
-              </p>
-            </div>
-          </div>
-          <button className="btn btn-ncr-export" onClick={generateNcr} title="Export Non-Conformance Report as Excel">
-            <i className="fas fa-file-excel" /> Generate NCR
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderExecuteStep = () => (
-    <div className="wizard-step-content execute-step">
-      <h3>Execute Migration</h3>
-      <p className="step-description">Run the migration and monitor progress</p>
-      
-      {/* Migration Summary */}
-      <div className="migration-summary">
-        <h4>Migration Summary</h4>
-        <div className="summary-grid">
-          <div className="summary-item">
-            <label>Source:</label>
-            <span>{wizardData.sourceSystem?.name || 'Not configured'}</span>
-          </div>
-          <div className="summary-item">
-            <label>Target:</label>
-            <span>{wizardData.targetSystem?.name || 'Not configured'}</span>
-          </div>
-          <div className="summary-item">
-            <label>Mappings:</label>
-            <span>{wizardData.fieldMappings.length} field mappings</span>
-          </div>
-          <div className="summary-item">
-            <label>Validation:</label>
-            <span className={wizardData.qualityChecks.failed === 0 ? 'success' : 'warning'}>
-              {wizardData.qualityChecks.failed === 0 ? 'All checks passed' : `${wizardData.qualityChecks.failed} issues`}
-            </span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Execution Controls */}
-      {wizardData.migrationStatus === 'pending' && (
-        <div className="execution-controls">
-          <button 
-            className="btn btn-primary btn-lg"
-            onClick={executeMigration}
-            disabled={opLoading.execute || wizardData.qualityChecks.failed > 0}
-          >
-            <i className="fas fa-play" /> {opLoading.execute ? 'Running...' : 'Start Migration'}
-          </button>
-          {wizardData.qualityChecks.failed > 0 && (
-            <p className="warning">Please resolve validation errors before executing</p>
-          )}
-        </div>
-      )}
-      
-      {/* Progress */}
-      {wizardData.migrationStatus === 'running' && (
-        <div className="migration-progress">
-          <div className="progress-bar">
-            <div 
-              className="progress-fill"
-              style={{ width: wizardData.totalRecords > 0 ? `${(wizardData.processedRecords / wizardData.totalRecords) * 100}%` : '0%' }}
-            />
-          </div>
-          <div className="progress-text">
-            {wizardData.migrationStep || 'Processing...'}
-          </div>
-          <div className="migration-steps-list">
-            <div className={`migration-step-item ${wizardData.processedRecords >= 1 ? 'complete' : wizardData.processedRecords > 0 ? 'active' : ''}`}>
-              <i className="fas fa-plus-circle" /> Step 1: Create Run
-            </div>
-            <div className={`migration-step-item ${wizardData.processedRecords >= 2 ? 'complete' : wizardData.processedRecords >= 1 ? 'active' : ''}`}>
-              <i className="fas fa-database" /> Step 2: Stage Records
-            </div>
-            <div className={`migration-step-item ${wizardData.processedRecords >= 3 ? 'complete' : wizardData.processedRecords >= 2 ? 'active' : ''}`}>
-              <i className="fas fa-exchange-alt" /> Step 3: Transform
-            </div>
-            <div className={`migration-step-item ${wizardData.processedRecords >= 4 ? 'complete' : wizardData.processedRecords >= 3 ? 'active' : ''}`}>
-              <i className="fas fa-shield-alt" /> Step 4: SODA Scan & Validate
-            </div>
-            <div className={`migration-step-item ${wizardData.processedRecords >= 5 ? 'complete' : wizardData.processedRecords >= 4 ? 'active' : ''}`}>
-              <i className="fas fa-project-diagram" /> Step 5: Sync to Neo4j
-            </div>
-          </div>
-          <div className="spinner">
-            <i className="fas fa-spinner fa-spin" />
-          </div>
-        </div>
-      )}
-      
-      {/* Completion */}
-      {wizardData.migrationStatus === 'completed' && (
-        <div className="migration-complete">
-          <div className="success-icon">
-            <i className="fas fa-check-circle" />
-          </div>
-          <h4>Migration Completed Successfully!</h4>
-          <p>Processed {wizardData.processedRecords} records</p>
-          <div className="completion-actions">
-            <span className="completion-note">
-              Migration is complete. You can review results from the main navigation after finishing.
-            </span>
-          </div>
-        </div>
-      )}
-      
-      {/* Errors */}
-      {wizardData.migrationStatus === 'failed' && (
-        <div className="migration-failed">
-          <div className="error-icon">
-            <i className="fas fa-exclamation-circle" />
-          </div>
-          <h4>Migration Failed</h4>
-          <div className="error-list">
-            {wizardData.errors.map((error, idx) => (
-              <div key={idx} className="error-item">{error}</div>
-            ))}
-          </div>
-          <button 
-            className="btn btn-warning"
-            onClick={() => setWizardData(prev => ({ ...prev, migrationStatus: 'pending', errors: [] }))}
-          >
-            <i className="fas fa-redo" /> Retry
-          </button>
-        </div>
-      )}
-    </div>
-  );
 
   // Helper functions
   const getSourceIcon = (type) => {
@@ -2929,7 +3620,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           Step {currentStep} of {steps.length}
         </div>
         
-        {currentStep < 5 ? (
+        {currentStep < steps.length ? (
           <button 
             className="btn btn-primary"
             onClick={nextStep}
@@ -2941,7 +3632,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <button 
             className="btn btn-success"
             onClick={() => onComplete && onComplete({ runId: wizardData.runId })}
-            disabled={wizardData.migrationStatus !== 'completed'}
+            disabled={wizardData.agentReportStatus !== 'completed' && wizardData.migrationStatus !== 'completed'}
           >
             Finish <i className="fas fa-check" />
           </button>
