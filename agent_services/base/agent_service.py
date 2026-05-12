@@ -9,8 +9,7 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import FastAPI
 
 from .models import AgentTaskRequest, AgentTaskResponse, AgentRegistration, AgentCapability, TaskStatus, AgentType
 

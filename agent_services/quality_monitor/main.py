@@ -2,7 +2,6 @@ import sys
 import os
 import json
 import logging
-import re
 import httpx
 from datetime import datetime, timezone
 from pathlib import Path

@@ -79,7 +79,6 @@ const DEFAULT_CONFIG = {
     
     // Data Configuration
     DATA_SOURCES: '/api/data-sources',
-    DATA_SOURCES_LEGACY: '/api/_data-sources',
     DATA_SOURCE_TEST: (sourceId) => `/api/data-sources/${sourceId}/test`,
     DATA_SOURCE_SYNC: (sourceId) => `/api/data-sources/${sourceId}/sync`,
     DATA_SOURCE_TYPES: '/api/data-sources/types/supported',
@@ -173,7 +172,6 @@ const DEFAULT_CONFIG = {
     SCHEMA_CONSTRAINTS: '/api/schema/constraints',
     
     // Reporting
-    REPORT_GENERATE: '/api/reports/generate',
     DASHBOARDS: '/api/dashboards',
     DASHBOARD_DATA: (dashboardId) => `/api/dashboards/${dashboardId}/data`,
 
@@ -443,30 +441,5 @@ export const executeBatchOperations = async (operations) => {
   return { results, errors, success: errors.length === 0 };
 };
 
-// Environment-specific API behavior
-export const getEnvironmentFeatures = () => {
-  const features = {
-    development: {
-      enableMockData: false,
-      enableDebugLogs: true,
-      skipAuthentication: true,
-      enableHotReload: true
-    },
-    testing: {
-      enableMockData: false,
-      enableDebugLogs: true,
-      skipAuthentication: true,
-      enableHotReload: false
-    },
-    production: {
-      enableMockData: false,
-      enableDebugLogs: false,
-      skipAuthentication: false,
-      enableHotReload: false
-    }
-  };
-
-  return features[API_CONFIG.ENVIRONMENT] || features.development;
-};
 
 export default API_CONFIG;
