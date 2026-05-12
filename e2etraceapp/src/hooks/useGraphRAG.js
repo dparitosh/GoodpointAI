@@ -95,8 +95,7 @@ export const useGraphRAGHealth = () => {
     } catch (err) {
       const errorMsg = err.message || 'Health check failed';
       setError(errorMsg);
-      setHealth({ status: 'error', neo4j_connected: false });
-      throw err;
+      setHealth({ status: 'unavailable', neo4j_connected: false });
     } finally {
       setIsLoading(false);
     }

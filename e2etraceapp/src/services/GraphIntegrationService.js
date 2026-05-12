@@ -114,10 +114,18 @@ class GraphIntegrationService {
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     try {
       const response = await fetch(`${API_BASE}/api/neo4j-graphrag/health`, { signal: controller.signal });
+      if (response.status === 503 || response.status === 502) {
+        return { status: 'unavailable', neo4j_connected: false, degraded: true };
+      }
       if (!response.ok) {
-        throw new Error(`Health check failed: ${response.statusText}`);
+        return { status: 'error', neo4j_connected: false };
       }
       return await response.json();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return { status: 'unavailable', neo4j_connected: false, degraded: true };
+      }
+      return { status: 'unavailable', neo4j_connected: false };
     } finally {
       clearTimeout(timeoutId);
     }

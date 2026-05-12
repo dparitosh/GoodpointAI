@@ -26,11 +26,20 @@ export async function e2etraceFetchWithRetry(url, options, retries = API_CONFIG.
                 throw clientError;
             }
 
-            // For 5xx server errors, we'll throw, which triggers a retry.
+            // 503 Service Unavailable is non-retryable: optional services (Neo4j, MCP)
+            // may be permanently unavailable. Callers should treat this as degraded.
+            if (response.status === 503) {
+                const serviceError = new Error(`Service Unavailable: 503`);
+                serviceError.isServiceUnavailable = true;
+                serviceError.status = 503;
+                throw serviceError;
+            }
+
+            // For other 5xx server errors, throw to trigger a retry.
             throw new Error(`Server Error: ${response.status}`);
         } catch (error) {
-            // Don't retry client errors (4xx)
-            if (error.isClientError) {
+            // Don't retry client errors (4xx) or service-unavailable (503)
+            if (error.isClientError || error.isServiceUnavailable) {
                 throw error;
             }
             if (attempt >= retries) {
