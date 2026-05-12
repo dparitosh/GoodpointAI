@@ -62,6 +62,7 @@ class TaskType(str, Enum):
     PLM_MIGRATION_ORCHESTRATION = "plm_migration_orchestration"
     REPORT_GENERATION = "report_generation"
     SMART_GUIDANCE = "smart_guidance"
+    DATA_HEALTH_REPORT = "data_health_report"
 
 # ── Pydantic models (local; mcp_server models are kept separate to avoid cross-process imports) ──
 

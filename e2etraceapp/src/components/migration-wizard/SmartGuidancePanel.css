@@ -2,14 +2,14 @@
 
 /* ── Shell ────────────────────────────────────────────────────────── */
 .smart-guidance-panel {
-  background: var(--surface-2, #1a1f2e);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
   border-radius: 14px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   margin-bottom: 20px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -18,8 +18,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px 12px;
-  background: rgba(59, 130, 246, 0.07);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--accent-subtle);
+  border-bottom: 1px solid var(--border-color);
   gap: 10px;
 }
 
@@ -33,26 +33,26 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  background: var(--accent-color);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   font-size: 15px;
-  color: #fff;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  color: var(--on-accent, #fff);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 
 .sgp-title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .sgp-subtitle {
   font-size: 11px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   margin-top: 1px;
 }
 
@@ -72,15 +72,15 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(59, 130, 246, 0.2) 100%);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: var(--accent-subtle);
+  color: var(--accent-color);
+  border: 1px solid var(--accent-muted);
 }
 
 .sgp-dismiss {
   background: transparent;
   border: none;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 5px 7px;
   border-radius: 6px;
@@ -89,8 +89,8 @@
   transition: color 0.15s, background 0.15s;
 }
 .sgp-dismiss:hover {
-  color: var(--text-primary, #f1f5f9);
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+  background: var(--hover-bg);
 }
 
 /* ── Chat window ────────────────────────────────────────────────────── */
@@ -102,9 +102,10 @@
   gap: 14px;
   max-height: 480px;
   overflow-y: auto;
+  background: var(--bg-secondary);
 }
 .sgp-chat-window::-webkit-scrollbar { width: 4px; }
-.sgp-chat-window::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.sgp-chat-window::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
 
 /* ── Message rows ────────────────────────────────────────────────────── */
 .sgp-message-row {
@@ -120,12 +121,12 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: var(--accent-color);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #fff;
+  color: var(--on-accent, #fff);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -140,15 +141,15 @@
 }
 
 .sgp-bubble.user {
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  color: #fff;
+  background: var(--accent-color);
+  color: var(--on-accent, #fff);
   border-bottom-right-radius: 3px;
 }
 
 .sgp-bubble.assistant {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-primary, #e2e8f0);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
   border-bottom-left-radius: 3px;
   padding: 0;
   overflow: hidden;
@@ -169,7 +170,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-secondary, #64748b);
+  background: var(--text-secondary);
   animation: sgp-bounce 1.3s infinite ease-in-out;
 }
 .sgp-thinking-dots span:nth-child(1) { animation-delay: 0s; }
@@ -206,16 +207,16 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.sgp-rec-badge.discovery { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
-.sgp-rec-badge.profiling  { background: rgba(139,92,246,0.15);  color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
-.sgp-rec-badge.quality    { background: rgba(16,185,129,0.15);  color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+.sgp-rec-badge.discovery { background: var(--accent-subtle); color: var(--accent-color); border: 1px solid var(--accent-muted); }
+.sgp-rec-badge.profiling  { background: var(--accent-subtle); color: var(--accent-color); border: 1px solid var(--accent-muted); }
+.sgp-rec-badge.quality    { background: var(--success-subtle); color: var(--success-color); border: 1px solid var(--border-color); }
 
 .sgp-meta-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 .sgp-meta-chip i { font-size: 10px; }
 
@@ -224,14 +225,14 @@
   border-radius: 50%;
   display: inline-block;
 }
-.sgp-dot.low    { background: #34d399; }
-.sgp-dot.medium { background: #fbbf24; }
-.sgp-dot.high   { background: #f87171; }
+.sgp-dot.low    { background: var(--success-color); }
+.sgp-dot.medium { background: var(--warning-color-dark); }
+.sgp-dot.high   { background: var(--critical-color); }
 
 .sgp-card-headline {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--text-primary);
   margin: 0;
   line-height: 1.3;
 }
@@ -247,14 +248,14 @@
 }
 
 .sgp-card-cell {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
 }
 .sgp-card-cell p {
   font-size: 12px;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
   line-height: 1.5;
   margin: 4px 0 0;
 }
@@ -264,7 +265,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -274,8 +275,8 @@
 
 /* ── Steps ─────────────────────────────────────────────────────────────── */
 .sgp-card-steps {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
 }
@@ -293,14 +294,14 @@
   align-items: flex-start;
   gap: 9px;
   font-size: 12px;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
   line-height: 1.45;
 }
 .sgp-step-num {
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.18);
-  color: #60a5fa;
+  background: var(--accent-subtle);
+  color: var(--accent-color);
   font-size: 10px;
   font-weight: 700;
   display: flex;
@@ -320,13 +321,13 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: var(--text-secondary, #94a3b8);
-  background: rgba(251, 191, 36, 0.06);
-  border: 1px solid rgba(251, 191, 36, 0.15);
+  color: var(--text-secondary);
+  background: var(--warning-subtle);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 3px 8px;
 }
-.sgp-tip-chip i { color: #fbbf24; font-size: 10px; }
+.sgp-tip-chip i { color: var(--warning-color-dark); font-size: 10px; }
 
 /* ── Card action buttons ──────────────────────────────────────────────── */
 .sgp-card-actions {
@@ -346,16 +347,17 @@
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--on-accent, #fff);
+  background: var(--accent-color);
   cursor: pointer;
   transition: filter 0.15s, transform 0.1s;
 }
 .sgp-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
 .sgp-btn-primary:active { transform: translateY(0); }
 
-.sgp-btn-primary.c-blue   { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.sgp-btn-primary.c-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-.sgp-btn-primary.c-green  { background: linear-gradient(135deg, #10b981, #059669); }
+.sgp-btn-primary.c-blue   { background: var(--accent-color); }
+.sgp-btn-primary.c-purple { background: var(--accent-color); }
+.sgp-btn-primary.c-green  { background: var(--success-color); }
 
 .sgp-btn-ghost {
   display: inline-flex;
@@ -363,16 +365,17 @@
   gap: 6px;
   padding: 8px 14px;
   background: transparent;
-  color: var(--text-secondary, #94a3b8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 12px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .sgp-btn-ghost:hover {
-  color: var(--text-primary, #f1f5f9);
-  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+  border-color: var(--border-color-strong);
+  background: var(--hover-bg);
 }
 
 /* ── Suggestion chips ─────────────────────────────────────────────────── */
@@ -388,19 +391,18 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.07);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-muted);
   border-radius: 20px;
   font-size: 12px;
-  color: #60a5fa;
+  color: var(--accent-color);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 .sgp-chip:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.4);
-  color: #93c5fd;
+  background: var(--hover-bg);
+  border-color: var(--accent-color);
 }
 .sgp-chip:disabled { opacity: 0.4; cursor: not-allowed; }
 .sgp-chip i { font-size: 11px; }
@@ -408,27 +410,28 @@
 /* ── NLP input bar ───────────────────────────────────────────────────── */
 .sgp-input-bar {
   padding: 10px 14px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-color);
+  background: var(--panel-bg);
 }
 
 .sgp-input-wrap {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 0 6px 0 12px;
   gap: 8px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .sgp-input-wrap:focus-within {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-muted);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .sgp-input-icon {
   font-size: 13px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -437,20 +440,20 @@
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--text-primary);
   font-size: 13px;
   padding: 10px 0;
   min-width: 0;
 }
-.sgp-input::placeholder { color: var(--text-secondary, #475569); }
+.sgp-input::placeholder { color: var(--text-muted); }
 .sgp-input:disabled { opacity: 0.5; }
 
 .sgp-send-btn {
   width: 32px; height: 32px;
   border-radius: 7px;
   border: none;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  color: #fff;
+  background: var(--accent-color);
+  color: var(--on-accent, #fff);
   font-size: 12px;
   cursor: pointer;
   display: flex;
@@ -459,5 +462,5 @@
   flex-shrink: 0;
   transition: filter 0.15s, transform 0.1s;
 }
-.sgp-send-btn:hover:not(:disabled) { filter: brightness(1.15); transform: scale(1.05); }
+.sgp-send-btn:hover:not(:disabled) { filter: brightness(1.1); transform: scale(1.05); }
 .sgp-send-btn:disabled { opacity: 0.35; cursor: not-allowed; filter: none; transform: none; }

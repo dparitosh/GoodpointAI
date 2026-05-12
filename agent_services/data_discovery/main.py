@@ -576,7 +576,8 @@ class DataDiscoveryAgent(AgentService):
 
     async def process_task(self, task: AgentTaskRequest) -> Dict[str, Any]:
         caps = set(task.payload.get("required_capabilities", []))
-        task_type = task.payload.get("type", "")
+        # Check both the legacy payload "type" field and the canonical task_type field
+        task_type = task.payload.get("type", "") or task.task_type
 
         # Route by capability or explicit type
         if "data_health_report" in caps or task_type == "data_health_report":

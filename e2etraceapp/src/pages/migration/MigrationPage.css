@@ -75,9 +75,9 @@
 }
 
 .badge.graphql {
-  background: rgba(0, 210, 106, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(0, 210, 106, 0.3);
+  background: var(--success-subtle);
+  color: var(--success-color);
+  border: 1px solid var(--border-color);
 }
 
 .wizard-container {

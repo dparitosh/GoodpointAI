@@ -129,6 +129,9 @@ class AgenticOrchestrator:
                     AgentCapability(name="catalog_datasource", description="Build a data catalog entry for a registered data source"),
                     AgentCapability(name="scan_folder_quality", description="Run quality checks across all files in a folder data source"),
                     AgentCapability(name="infer_schema", description="Infer column types and schema from CSV/JSON/XML files"),
+                    AgentCapability(name="batch_discover_segment", description="Discover and profile a named offset/limit segment of files — enables parallel Wave-1 batches"),
+                    AgentCapability(name="semantic_header_analysis", description="Map cryptic legacy column headers to human-readable business names using LLM semantic analysis"),
+                    AgentCapability(name="data_health_report", description="Generate a comprehensive Data Health Report with Readiness Score, Trust Score, inferred rules, distribution anomalies, and semantic header map"),
                 ]
             },
             AgentType.ETL_ORCHESTRATOR: {

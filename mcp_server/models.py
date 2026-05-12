@@ -47,6 +47,8 @@ class TaskType(str, Enum):
     PLM_MIGRATION_ORCHESTRATION = "plm_migration_orchestration"
     REPORT_GENERATION = "report_generation"
     SEMANTIC_PROFILE = "semantic_profile"
+    SMART_GUIDANCE = "smart_guidance"
+    DATA_HEALTH_REPORT = "data_health_report"
 
 
 class TaskStatus(str, Enum):
