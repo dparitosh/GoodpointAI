@@ -192,10 +192,16 @@ async def request_timing_middleware(request: Request, call_next):
         
         # Check MCP Server Health
         mcp_ok = await _mcp_client.check_health()
-        
-        overall = "healthy" if (db_ok and neo4j_ok and mcp_ok) else "degraded"
-        # Return 503 when degraded so load-balancers/k8s pull the instance.
-        http_status = 200 if overall == "healthy" else 503
+
+        # Postgres is the only required dependency — Neo4j and MCP are optional.
+        # 503 only when the core DB is unavailable; optional services degrade gracefully.
+        if not db_ok:
+            overall = "unhealthy"
+        elif not (neo4j_ok and mcp_ok):
+            overall = "degraded"
+        else:
+            overall = "healthy"
+        http_status = 503 if overall == "unhealthy" else 200
         response = JSONResponse(
             status_code=http_status,
             content={
@@ -203,9 +209,9 @@ async def request_timing_middleware(request: Request, call_next):
                 "service": "GoodPoint AgenticAI API",
                 "timestamp": datetime.now().isoformat(),
                 "dependencies": {
-                    "postgres": {"ok": db_ok},
-                    "neo4j": {"ok": neo4j_ok},
-                    "mcp_server": {"ok": mcp_ok}
+                    "postgres": {"ok": db_ok, "required": True},
+                    "neo4j": {"ok": neo4j_ok, "required": False},
+                    "mcp_server": {"ok": mcp_ok, "required": False},
                 },
             },
         )
@@ -319,8 +325,13 @@ async def root_health_check():
     db_ok = bool(getattr(app.state, "db_ok", False))
     neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
     mcp_ok = await _mcp_client.check_health()
-    overall = "healthy" if (db_ok and neo4j_ok and mcp_ok) else "degraded"
-    http_status = 200 if overall == "healthy" else 503
+    if not db_ok:
+        overall = "unhealthy"
+    elif not (neo4j_ok and mcp_ok):
+        overall = "degraded"
+    else:
+        overall = "healthy"
+    http_status = 503 if overall == "unhealthy" else 200
     return JSONResponse(
         status_code=http_status,
         content={
@@ -328,9 +339,9 @@ async def root_health_check():
             "service": "GoodPoint AgenticAI API",
             "timestamp": datetime.now().isoformat(),
             "dependencies": {
-                "postgres": {"ok": db_ok},
-                "neo4j": {"ok": neo4j_ok},
-                "mcp_server": {"ok": mcp_ok},
+                "postgres": {"ok": db_ok, "required": True},
+                "neo4j": {"ok": neo4j_ok, "required": False},
+                "mcp_server": {"ok": mcp_ok, "required": False},
             },
         },
     )
