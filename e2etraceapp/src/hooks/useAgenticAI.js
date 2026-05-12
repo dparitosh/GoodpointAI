@@ -154,10 +154,13 @@ export const useAgenticSystemStatus = () => {
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       let response;
       try {
-        response = await e2etraceFetchWithRetry(`${AGENTIC_SYSTEM_API}/status`, { signal: controller.signal });
+        // Use plain fetch (no retries) — this is a best-effort health probe.
+        // Retries here cause console spam when the backend is starting up.
+        response = await fetch(`${AGENTIC_SYSTEM_API}/status`, { signal: controller.signal });
       } finally {
         clearTimeout(timeoutId);
       }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       
       setStatus(data);
