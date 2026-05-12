@@ -126,16 +126,22 @@ class QualityMonitorAgent(AgentService):
 
         Combines deterministic signal-based recommendations (always runs) with
         optional AI/LLM recommendations (graceful fallback when LLM unavailable).
+        Also generates a gap analysis comparing expected schema vs discovered columns.
         """
         profile_summary = task.payload.get("profile_summary", {})
         deterministic = self._recommend_rules_from_profile(profile_summary)
         ai_recs = await self._recommend_rules_with_llm(profile_summary, task.payload)
 
-        # Merge: AI recs go first (richer rationale), then deterministic for columns
-        # not already covered by the AI output.
+        # Merge: AI recs first (richer rationale), deterministic fills gaps
         ai_columns = {r.get("column") for r in (ai_recs or [])}
         extra = [r for r in deterministic if r.get("column") not in ai_columns]
         recommended_rules = (ai_recs or []) + extra
+
+        # Gap analysis: compare expected schema fields vs what was actually found
+        gap_analysis = self._generate_column_gap_analysis(
+            profile_summary,
+            task.payload.get("expected_columns", []),
+        )
 
         return {
             "status": "Rule recommendations generated",
@@ -144,7 +150,53 @@ class QualityMonitorAgent(AgentService):
             "rule_count": len(recommended_rules),
             "ai_powered": ai_recs is not None,
             "profile_signals": len(profile_summary.get("signals", [])),
+            "gap_analysis": gap_analysis,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _generate_column_gap_analysis(
+        self,
+        profile_summary: Dict[str, Any],
+        expected_columns: List[str],
+    ) -> Dict[str, Any]:
+        """Structured gap analysis — Marker 3 in the quality context.
+
+        Compares the expected schema columns against what was actually discovered
+        in the profiled dataset. Reports missing, extra, and matched columns.
+        """
+        found_columns = set(profile_summary.get("columns", {}).keys())
+        expected_set = set(expected_columns)
+
+        if not expected_set:
+            return {
+                "expected_columns": 0,
+                "found_columns": len(found_columns),
+                "matched": [],
+                "missing_from_data": [],
+                "extra_in_data": sorted(found_columns),
+                "coverage_pct": 100.0,
+                "note": "No expected schema provided — gap analysis skipped.",
+            }
+
+        matched = sorted(expected_set & found_columns)
+        missing = sorted(expected_set - found_columns)
+        extra   = sorted(found_columns - expected_set)
+        coverage = round(len(matched) / len(expected_set) * 100, 1) if expected_set else 100.0
+
+        return {
+            "expected_columns": len(expected_set),
+            "found_columns": len(found_columns),
+            "matched": matched,
+            "missing_from_data": missing,
+            "extra_in_data": extra,
+            "coverage_pct": coverage,
+            "migration_complete": len(missing) == 0,
+            "summary": (
+                f"{len(matched)}/{len(expected_set)} expected columns found "
+                f"({coverage:.0f}% coverage). "
+                + (f"{len(missing)} missing: {', '.join(missing[:5])}{'...' if len(missing) > 5 else ''}. " if missing else "")
+                + (f"{len(extra)} extra columns in source not in target schema." if extra else "")
+            ),
         }
 
     def _recommend_rules_from_profile(
@@ -287,15 +339,14 @@ class QualityMonitorAgent(AgentService):
     async def _recommend_rules_with_llm(
         self, profile_summary: Dict[str, Any], payload: Dict[str, Any]
     ) -> Optional[List[Dict[str, Any]]]:
-        """Call the backend LLM endpoint to generate AI-powered DQ rule recommendations.
+        """Call the backend LLM to generate AI-powered DQ rule recommendations.
 
-        Returns a list of rule recommendation dicts on success, or None when the
-        LLM is unavailable (caller falls back to deterministic recommendations only).
+        Uses _adaptive_llm_call (Marker 1) for error-adaptive retries.
+        Returns None when LLM unavailable — caller falls back to deterministic rules.
         """
         if not profile_summary:
             return None
 
-        # Send a condensed context — just column stats and top signals
         context = {
             "total_files":    profile_summary.get("total_files", 0),
             "total_rows":     profile_summary.get("total_rows", 0),
@@ -316,51 +367,24 @@ class QualityMonitorAgent(AgentService):
             "signals": profile_summary.get("signals", [])[:15],
         }
 
-        try:
-            llm_provider = payload.get("llm_provider", "openai")
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                resp = await client.post(
-                    f"{BACKEND_URL}/api/llm/chat",
-                    params={"provider": llm_provider},
-                    json={
-                        "messages": [
-                            {"role": "system", "content": _RULE_RECOMMENDATION_PROMPT},
-                            {"role": "user",   "content": json.dumps(context)},
-                        ],
-                        "temperature": 0.1,
-                        "max_tokens": 1500,
-                    },
-                )
-                if not resp.is_success:
-                    logger.debug(
-                        "LLM rule recommendations returned %d — falling back to deterministic",
-                        resp.status_code,
-                    )
-                    return None
-
-                raw = resp.json().get("response", "")
-                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-                m = re.search(r"\[.*\]", raw, re.DOTALL)
-                if not m:
-                    return None
-                recs = json.loads(m.group(0))
-                if not isinstance(recs, list):
-                    return None
-                # Annotate source + sanitise
-                valid = []
-                for r in recs:
-                    if isinstance(r, dict) and r.get("rule_type") and r.get("column"):
-                        r["source"] = "ai"
-                        valid.append(r)
-                logger.info(
-                    "LLM generated %d DQ rule recommendations for %d columns",
-                    len(valid),
-                    len(profile_summary.get("columns", {})),
-                )
-                return valid or None
-        except Exception as exc:
-            logger.debug("LLM rule recommendation unavailable: %s", exc)
-            return None
+        result = await self._adaptive_llm_call(
+            backend_url=BACKEND_URL,
+            system_prompt=_RULE_RECOMMENDATION_PROMPT,
+            user_content=json.dumps(context),
+            llm_provider=payload.get("llm_provider", "openai"),
+            max_tokens=1500,
+        )
+        if isinstance(result, list):
+            valid = [
+                {**r, "source": "ai"} for r in result
+                if isinstance(r, dict) and r.get("rule_type") and r.get("column")
+            ]
+            logger.info(
+                "LLM generated %d DQ rule recommendations for %d columns",
+                len(valid), len(profile_summary.get("columns", {})),
+            )
+            return valid or None
+        return None
 
     async def _scan_datasource_via_backend(self, task: AgentTaskRequest) -> Dict[str, Any]:
         """Call the backend quality scan endpoint — no direct DB access from agent."""

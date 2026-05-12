@@ -561,6 +561,17 @@ class DataDiscoveryAgent(AgentService):
                     "enables parallel Wave-1 batches for corpora with 200+ files"
                 ),
             ),
+            AgentCapability(
+                name="semantic_header_analysis",
+                description="Map cryptic legacy column headers to human-readable business names using LLM semantic analysis",
+            ),
+            AgentCapability(
+                name="data_health_report",
+                description=(
+                    "Generate a comprehensive Data Health Report with Readiness Score, "
+                    "Trust Score, inferred rules, distribution anomalies, and semantic header map"
+                ),
+            ),
         ]
 
     async def process_task(self, task: AgentTaskRequest) -> Dict[str, Any]:
@@ -568,6 +579,11 @@ class DataDiscoveryAgent(AgentService):
         task_type = task.payload.get("type", "")
 
         # Route by capability or explicit type
+        if "data_health_report" in caps or task_type == "data_health_report":
+            return await self._generate_data_health_report(task)
+
+        if "semantic_header_analysis" in caps or task_type == "semantic_header_analysis":
+            return await self._handle_semantic_header_analysis(task)
         if "discover_files" in caps or task_type == "data_discovery":
             return await self._handle_discovery(task)
         if "profile_files" in caps:
@@ -799,16 +815,9 @@ class DataDiscoveryAgent(AgentService):
     ) -> Optional[List[Dict[str, Any]]]:
         """Call the backend LLM to generate actionable data insights from discovery.
 
-        Returns a list of insight dicts::
-            [
-                {"type": "risk|opportunity|recommendation|observation",
-                 "title": str, "detail": str, "severity": "critical|high|medium|low",
-                 "action": str},
-                ...
-            ]
-        Returns None when LLM is unavailable (caller omits the field).
+        Uses _adaptive_llm_call (Marker 1) for error-adaptive retries.
+        Returns list of insight dicts, or None when LLM unavailable.
         """
-        # Build a compact context for the LLM — avoid sending raw file lists
         profile_summary = _build_profile_summary(
             discovery_result.get("profiles", [])
         ) if discovery_result.get("profiles") else {}
@@ -820,7 +829,7 @@ class DataDiscoveryAgent(AgentService):
             "total_rows": profile_summary.get("total_rows", 0),
             "parse_errors": discovery_result.get("parse_errors", 0),
             "column_count": len(profile_summary.get("columns", {})),
-            "signals": profile_summary.get("signals", [])[:20],  # top 20 quality signals
+            "signals": profile_summary.get("signals", [])[:20],
             "high_null_columns": [
                 s for s in profile_summary.get("signals", [])
                 if s.get("type") == "high_null"
@@ -846,42 +855,404 @@ class DataDiscoveryAgent(AgentService):
             "Output ONLY a valid JSON array, no other text."
         )
 
-        try:
-            backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
-            llm_provider = payload.get("llm_provider", "openai")
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                resp = await client.post(
-                    f"{backend_url}/api/llm/chat",
-                    params={"provider": llm_provider},
-                    json={
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user",   "content": json.dumps(context)},
-                        ],
-                        "temperature": 0.1,
-                        "max_tokens": 1200,
-                    },
+        backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+        result = await self._adaptive_llm_call(
+            backend_url=backend_url,
+            system_prompt=system_prompt,
+            user_content=json.dumps(context),
+            llm_provider=payload.get("llm_provider", "openai"),
+            max_tokens=1200,
+        )
+        if isinstance(result, list):
+            valid = [i for i in result if isinstance(i, dict) and i.get("title") and i.get("type")]
+            logger.info("LLM generated %d discovery insights", len(valid))
+            return valid or None
+        return None
+
+    # ── Semantic Header Analysis ────────────────────────────────────────────────
+
+    _SEMANTIC_HEADER_PROMPT = (
+        "You are a Data Schema Expert for PLM/ERP/legacy systems. "
+        "Given column names (often cryptic abbreviations or coded names) and their sample values, "
+        "map each to a human-readable business name. "
+        "Examples: C_DATE_01 → 'Creation Date', PRT_NR_V2 → 'Part Number', "
+        "REL_DT_V3 → 'Release Date', CRBY_USR → 'Created By', "
+        "STAT_CD → 'Status Code', MATL_GRP → 'Material Group'. "
+        "Output ONLY a valid JSON object mapping original_column_name → human_readable_name."
+    )
+
+    async def _semantic_header_analysis(
+        self,
+        column_names: List[str],
+        sample_values: Dict[str, List[str]],
+        payload: Dict[str, Any],
+    ) -> Dict[str, str]:
+        """LLM-powered semantic mapping of cryptic column names to business names.
+
+        Handles legacy ERP/PLM column naming like C_DATE_01 → 'Creation Date'.
+        Returns dict of {original_name: human_readable_name}.
+        """
+        if not column_names:
+            return {}
+        context = {
+            "columns": column_names[:60],  # cap for LLM context
+            "sample_values": {col: vals[:3] for col, vals in sample_values.items()},
+        }
+        backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+        result = await self._adaptive_llm_call(
+            backend_url=backend_url,
+            system_prompt=self._SEMANTIC_HEADER_PROMPT,
+            user_content=json.dumps(context),
+            llm_provider=payload.get("llm_provider", "openai"),
+            max_tokens=800,
+        )
+        if isinstance(result, dict):
+            return {k: v for k, v in result.items() if k in column_names and isinstance(v, str)}
+        return {}
+
+    async def _handle_semantic_header_analysis(self, task: AgentTaskRequest) -> Dict[str, Any]:
+        """Task handler: run semantic header analysis on provided column list."""
+        payload = task.payload
+        column_names = payload.get("column_names", [])
+        sample_values = payload.get("sample_values", {})
+        if not column_names:
+            return {"status": "error", "error": "column_names required"}
+        mapping = await self._semantic_header_analysis(column_names, sample_values, payload)
+        return {
+            "status": "Semantic header analysis completed",
+            "task_id": task.task_id,
+            "semantic_header_map": mapping,
+            "columns_mapped": len(mapping),
+            "ai_powered": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ── Distribution Anomaly Detection ─────────────────────────────────────────
+
+    _DATE_FORMAT_PATTERNS = [
+        (re.compile(r'^\d{4}-\d{2}-\d{2}'),      'YYYY-MM-DD'),
+        (re.compile(r'^\d{2}/\d{2}/\d{4}'),      'DD/MM/YYYY'),
+        (re.compile(r'^\d{2}/\d{2}/\d{2}$'),     'DD/MM/YY'),
+        (re.compile(r'^\d{2}-\d{2}-\d{4}'),      'DD-MM-YYYY'),
+        (re.compile(r'^\d{1,2}/\d{1,2}/\d{4}'), 'M/D/YYYY'),
+        (re.compile(r'^\d{4}/\d{2}/\d{2}'),      'YYYY/MM/DD'),
+        (re.compile(r'^\d{4}\d{2}\d{2}$'),       'YYYYMMDD'),
+    ]
+
+    def _detect_distribution_anomalies(self, profiles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Detect distribution anomalies such as mixed date formats within a column.
+
+        Example: a 'Release Date' column where 98% of values follow YYYY-MM-DD
+        but 2% follow DD/MM/YY — flagged as a Distribution Anomaly rather than
+        failing the entire transformation.
+        """
+        anomalies: List[Dict[str, Any]] = []
+        for profile in profiles:
+            if not profile.get("parse_ok"):
+                continue
+            for col in profile.get("columns", []):
+                col_name = col.get("name", "")
+                semantic = col.get("semantic_type", "")
+                samples = col.get("distinct_values") or col.get("sample_values", [])
+
+                # Only analyse date-like columns
+                is_date_col = (
+                    any(kw in col_name.lower() for kw in ("date", "dt", "time", "ts", "created", "modified", "release", "expir"))
+                    or any(kw in semantic.lower() for kw in ("date", "time"))
                 )
-                if not resp.is_success:
-                    return None
-                raw = resp.json().get("response", "")
-                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-                m = re.search(r"\[.*\]", raw, re.DOTALL)
-                if not m:
-                    return None
-                insights = json.loads(m.group(0))
-                if not isinstance(insights, list):
-                    return None
-                # Sanitise — keep only well-formed entries
-                valid = [
-                    i for i in insights
-                    if isinstance(i, dict) and i.get("title") and i.get("type")
-                ]
-                logger.info("LLM generated %d discovery insights", len(valid))
-                return valid or None
-        except Exception as exc:
-            logger.debug("LLM discovery insights unavailable: %s", exc)
-            return None
+                if not is_date_col or not samples:
+                    continue
+
+                fmt_counts: Dict[str, int] = {}
+                for val in samples:
+                    sv = str(val).strip()
+                    if not sv or sv in ("None", "nan", ""):
+                        continue
+                    for pattern, fmt_name in self._DATE_FORMAT_PATTERNS:
+                        if pattern.match(sv):
+                            fmt_counts[fmt_name] = fmt_counts.get(fmt_name, 0) + 1
+                            break
+                    else:
+                        fmt_counts["other"] = fmt_counts.get("other", 0) + 1
+
+                if len(fmt_counts) <= 1:
+                    continue  # uniform format, no anomaly
+
+                total = sum(fmt_counts.values())
+                dominant = max(fmt_counts, key=fmt_counts.__getitem__)
+                dominant_pct = round(fmt_counts[dominant] / total * 100, 1)
+                minority = {k: v for k, v in fmt_counts.items() if k != dominant}
+
+                anomalies.append({
+                    "type": "distribution_anomaly",
+                    "subtype": "mixed_date_format",
+                    "column": col_name,
+                    "file": profile.get("path", ""),
+                    "dominant_format": dominant,
+                    "dominant_pct": dominant_pct,
+                    "minority_formats": minority,
+                    "severity": "high" if dominant_pct < 95 else "medium",
+                    "description": (
+                        f"Column '{col_name}' has mixed date formats: "
+                        f"{dominant_pct:.0f}% follow {dominant}, "
+                        f"but also found: {', '.join(minority.keys())}."
+                    ),
+                    "recommendation": f"Normalise '{col_name}' to {dominant} before migration.",
+                })
+        return anomalies
+
+    # ── Dummy Data Detection & Trust Score ──────────────────────────────────
+
+    _DUMMY_MARKERS = frozenset({
+        "admin", "test", "user", "demo", "sample", "example", "placeholder",
+        "foo", "bar", "n/a", "na", "none", "null", "unknown", "temp", "tmp",
+        "123", "000", "test123", "testuser", "noreply", "dummy", "fake",
+        "anonymous", "system", "default", "guest", "noname", "tbd",
+    })
+
+    def _detect_dummy_data_trust_score(self, profiles: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Detect dummy/placeholder values and compute a per-column Trust Score.
+
+        Trust Score (0–100 per column, higher = more trustworthy):
+          -30 for high null rate (>50%)
+          -15 for moderate null rate (>10%)
+          -40 for high dummy value ratio (>30% of samples are dummy)
+          -20 for moderate dummy ratio (>10%)
+          -10 if any dummy values present
+          -10 for mixed types
+
+        Overall trust = mean of all column trust scores.
+        """
+        column_trust: Dict[str, Dict[str, Any]] = {}
+        total_flagged = 0
+
+        for profile in profiles:
+            if not profile.get("parse_ok"):
+                continue
+            for col in profile.get("columns", []):
+                col_name = col.get("name", "")
+                samples = col.get("distinct_values") or col.get("sample_values", [])
+                null_rate = col.get("null_rate", 0) or 0
+
+                dummy_hits = [v for v in samples if str(v).strip().lower() in self._DUMMY_MARKERS]
+                dummy_ratio = len(dummy_hits) / len(samples) if samples else 0
+
+                score = 100
+                flags: List[str] = []
+
+                if null_rate > 0.5:
+                    score -= 30
+                    flags.append(f"high_null:{null_rate*100:.0f}%")
+                elif null_rate > 0.1:
+                    score -= 15
+                    flags.append(f"moderate_null:{null_rate*100:.0f}%")
+
+                if dummy_ratio > 0.3:
+                    score -= 40
+                    flags.append(f"high_dummy_ratio:{dummy_ratio*100:.0f}%")
+                elif dummy_ratio > 0.1:
+                    score -= 20
+                    flags.append(f"moderate_dummy_ratio:{dummy_ratio*100:.0f}%")
+                elif dummy_hits:
+                    score -= 10
+                    flags.append(f"some_dummy_values:{len(dummy_hits)}")
+
+                pytypes = col.get("python_types", [])
+                if len(pytypes) > 2:
+                    score -= 10
+                    flags.append("mixed_types")
+
+                score = max(0, min(100, score))
+                if flags:
+                    total_flagged += 1
+
+                # Keep worst-case score across files for same column
+                existing = column_trust.get(col_name)
+                if not existing or existing["trust_score"] > score:
+                    column_trust[col_name] = {
+                        "trust_score": score,
+                        "flags": flags,
+                        "dummy_values_found": dummy_hits[:5],
+                    }
+
+        overall = (
+            round(sum(v["trust_score"] for v in column_trust.values()) / len(column_trust), 1)
+            if column_trust else 100.0
+        )
+        return {
+            "overall_trust_score": overall,
+            "columns_with_issues": total_flagged,
+            "column_trust_scores": column_trust,
+            "trust_level": (
+                "high" if overall >= 80
+                else "medium" if overall >= 60
+                else "low"
+            ),
+        }
+
+    # ── Data Health Report ───────────────────────────────────────────────────────
+
+    _INFER_RULES_PROMPT = (
+        "You are a Data Governance Expert analysing a PLM/ERP dataset. "
+        "Based on the column statistics, anomalies, and sample values provided, "
+        "infer specific business rules that this data follows or should follow. "
+        "Examples: 'Part Numbers must be unique and follow P-XXXX format', "
+        "'Release Date must be ISO 8601 YYYY-MM-DD', "
+        "'Status must be one of: Active, Inactive, Pending'. "
+        "Output a JSON array of rule objects with fields: "
+        "rule_name (string), rule_description (string), column (string or '*'), "
+        "rule_type (uniqueness|format|allowed_values|range|completeness|referential_integrity), "
+        "inferred_pattern (regex or plain-English description), "
+        "confidence (0.0–1.0), evidence (what pattern led to this rule). "
+        "Output ONLY valid JSON, no other text."
+    )
+
+    async def _infer_rules_from_patterns(
+        self,
+        profile_summary: Dict[str, Any],
+        distribution_anomalies: List[Dict[str, Any]],
+        payload: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to infer business rules autonomously from discovered data patterns."""
+        context = {
+            "column_stats": [
+                {
+                    "name": name,
+                    "null_rate_max": meta.get("null_rate_max", 0),
+                    "cardinality_ratio": meta.get("cardinality_ratio_avg", 0),
+                    "semantic_types": meta.get("semantic_types", []),
+                    "dtypes": meta.get("dtypes", []),
+                    "is_identifier": meta.get("is_identifier", False),
+                    "sample_values": meta.get("sample_values", [])[:5],
+                }
+                for name, meta in list(profile_summary.get("columns", {}).items())[:25]
+            ],
+            "distribution_anomalies": distribution_anomalies[:10],
+            "signals": profile_summary.get("signals", [])[:15],
+        }
+        backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+        result = await self._adaptive_llm_call(
+            backend_url=backend_url,
+            system_prompt=self._INFER_RULES_PROMPT,
+            user_content=json.dumps(context),
+            llm_provider=payload.get("llm_provider", "openai"),
+            max_tokens=1500,
+        )
+        if isinstance(result, list):
+            return [
+                r for r in result
+                if isinstance(r, dict) and r.get("rule_name") and r.get("column")
+            ]
+        return []
+
+    def _calculate_readiness_score(
+        self,
+        profile_summary: Dict[str, Any],
+        distribution_anomalies: List[Dict[str, Any]],
+        trust_analysis: Dict[str, Any],
+    ) -> int:
+        """Calculate a migration Readiness Score (0–100).
+
+        Weighted factors:
+          Parse success rate    20 pts
+          Column completeness   25 pts
+          Distribution anomalies 20 pts
+          Trust score           25 pts
+          Mixed-type signals    10 pts
+        """
+        score = 100
+        total = profile_summary.get("total_files", 1)
+        parseable = profile_summary.get("parseable_files", 0)
+        parse_rate = parseable / total if total > 0 else 1.0
+        score -= round((1 - parse_rate) * 20)
+
+        columns = profile_summary.get("columns", {})
+        if columns:
+            avg_null = sum(m.get("null_rate_avg", 0) for m in columns.values()) / len(columns)
+            score -= round(avg_null * 25)
+
+        critical_anomalies = sum(1 for a in distribution_anomalies if a.get("severity") == "high")
+        score -= min(20, critical_anomalies * 5)
+
+        trust = trust_analysis.get("overall_trust_score", 100)
+        score -= round((100 - trust) * 0.25)
+
+        mixed_signals = sum(1 for s in profile_summary.get("signals", []) if s.get("type") == "mixed_type")
+        score -= min(10, mixed_signals * 2)
+
+        return max(0, min(100, score))
+
+    async def _generate_data_health_report(self, task: AgentTaskRequest) -> Dict[str, Any]:
+        """Generate a comprehensive Data Health Report.
+
+        Output includes:
+          readiness_score    — migration readiness (0–100)
+          trust_score        — data trustworthiness (0–100)
+          semantic_header_map — cryptic column → human-readable name
+          distribution_anomalies — mixed-format fields flagged as anomalies (not hard failures)
+          column_trust_scores  — per-column trust breakdown
+          inferred_rules     — business rules the agent discovered autonomously
+          profile_summary    — aggregated column statistics
+        """
+        payload = task.payload
+        folder_path = payload.get("folder_path")
+        if not folder_path:
+            folder_path = await self._resolve_folder_path(payload.get("source_id"), None)
+        if not folder_path:
+            return {"status": "error", "error": "Provide folder_path or source_id"}
+
+        # Discover + profile the dataset
+        disc_task = AgentTaskRequest(
+            task_id=task.task_id + "_health_disc",
+            task_type="data_discovery",
+            payload={**payload, "folder_path": folder_path, "include_profiling": True},
+        )
+        discovery_result = await self._handle_discovery(disc_task)
+        profiles: List[Dict[str, Any]] = discovery_result.get("profiles", [])
+        if not profiles:
+            return {"status": "error", "error": "No files discovered or profiling failed", "detail": discovery_result}
+
+        profile_summary = _build_profile_summary(profiles)
+
+        # Semantic header analysis (LLM maps cryptic names → business names)
+        all_columns = list(profile_summary.get("columns", {}).keys())
+        sample_values_map: Dict[str, List[str]] = {
+            name: meta.get("sample_values", [])
+            for name, meta in profile_summary.get("columns", {}).items()
+        }
+        semantic_header_map = await self._semantic_header_analysis(all_columns, sample_values_map, payload)
+
+        # Distribution anomaly detection (mixed formats flagged as anomalies)
+        distribution_anomalies = self._detect_distribution_anomalies(profiles)
+
+        # Dummy data detection + Trust Score
+        trust_analysis = self._detect_dummy_data_trust_score(profiles)
+
+        # Autonomous rule inference from patterns (LLM)
+        inferred_rules = await self._infer_rules_from_patterns(profile_summary, distribution_anomalies, payload)
+
+        # Readiness Score
+        readiness_score = self._calculate_readiness_score(profile_summary, distribution_anomalies, trust_analysis)
+
+        return {
+            "status": "Data Health Report generated",
+            "task_id": task.task_id,
+            "readiness_score": readiness_score,
+            "readiness_level": (
+                "ready" if readiness_score >= 80
+                else "needs_attention" if readiness_score >= 60
+                else "not_ready"
+            ),
+            "trust_score": trust_analysis["overall_trust_score"],
+            "trust_level": trust_analysis["trust_level"],
+            "column_trust_scores": trust_analysis["column_trust_scores"],
+            "semantic_header_map": semantic_header_map,
+            "distribution_anomalies": distribution_anomalies,
+            "inferred_rules": inferred_rules,
+            "profile_summary": profile_summary,
+            "ai_powered": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
     async def _handle_profiling(self, task: AgentTaskRequest) -> Dict[str, Any]:
         payload = task.payload

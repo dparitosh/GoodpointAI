@@ -1,6 +1,8 @@
+import json
 import logging
 import os
 import random
+import re
 import httpx
 import uvicorn
 import asyncio
@@ -147,6 +149,103 @@ class AgentService(ABC):
         except Exception as e:
             # Log as debug to avoid spamming console if MCP is down for a while
             logger.debug("Could not register with MCP Server (is it running?): %s", e)
+
+    async def _adaptive_llm_call(
+        self,
+        backend_url: str,
+        system_prompt: str,
+        user_content: str,
+        llm_provider: str = "openai",
+        max_attempts: int = 3,
+        temperature: float = 0.1,
+        max_tokens: int = 1800,
+    ) -> Optional[Any]:
+        """Error-adaptive LLM call — Marker 1 (AI-Powered Agent).
+
+        Inspects each failure and modifies the request before retrying:
+          - HTTP 429 (rate-limited)  → exponential back-off
+          - HTTP 400/422 (too large) → truncate user_content, retry
+          - Non-JSON response        → inject correction turn, retry
+          - Timeout                  → halve max_tokens, retry
+
+        Returns parsed JSON (dict or list) on success, None on full exhaustion.
+        """
+        backend_url_resolved = os.getenv("GRAPH_TRACE_BACKEND_URL", backend_url)
+        messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_content},
+        ]
+        current_max_tokens = max_tokens
+        current_user_content = user_content
+
+        for attempt in range(max_attempts):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{backend_url_resolved}/api/llm/chat",
+                        params={"provider": llm_provider},
+                        json={
+                            "messages": messages,
+                            "temperature": temperature,
+                            "max_tokens": current_max_tokens,
+                        },
+                    )
+
+                if resp.is_success:
+                    raw = resp.json().get("response", "")
+                    raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                    m = re.search(r"\[.*\]|\{.*\}", raw, re.DOTALL)
+                    if m:
+                        return json.loads(m.group(0))
+                    # Non-JSON response — ask LLM to fix its output format
+                    if attempt < max_attempts - 1:
+                        logger.debug(
+                            "LLM returned non-JSON (attempt %d/%d) — injecting correction turn",
+                            attempt + 1, max_attempts,
+                        )
+                        messages.append({"role": "assistant", "content": raw[:500]})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Your previous response was not valid JSON. "
+                                "Output ONLY a valid JSON array or object — "
+                                "no markdown, no explanation, no code fences."
+                            ),
+                        })
+                        continue
+                    return None
+
+                # HTTP error — inspect status and adapt payload
+                status = resp.status_code
+                if status == 429 and attempt < max_attempts - 1:
+                    wait = 2 ** attempt
+                    logger.debug("LLM rate-limited (attempt %d) — backing off %ds", attempt + 1, wait)
+                    await asyncio.sleep(wait)
+                elif status in (400, 422) and attempt < max_attempts - 1:
+                    current_user_content = current_user_content[: len(current_user_content) // 2]
+                    messages[1] = {"role": "user", "content": current_user_content}
+                    logger.debug(
+                        "LLM rejected payload HTTP %d (attempt %d) — truncating to %d chars",
+                        status, attempt + 1, len(current_user_content),
+                    )
+                else:
+                    logger.debug("LLM HTTP %d on attempt %d — aborting", status, attempt + 1)
+                    return None
+
+            except httpx.TimeoutException:
+                current_max_tokens = max(512, current_max_tokens // 2)
+                logger.debug(
+                    "LLM timeout (attempt %d) — retrying with max_tokens=%d",
+                    attempt + 1, current_max_tokens,
+                )
+            except Exception as exc:
+                logger.debug("LLM call error (attempt %d/%d): %s", attempt + 1, max_attempts, exc)
+                if attempt >= max_attempts - 1:
+                    return None
+                await asyncio.sleep(1)
+
+        logger.debug("All %d LLM retry attempts exhausted", max_attempts)
+        return None
 
     def start(self):
         """Run the service"""

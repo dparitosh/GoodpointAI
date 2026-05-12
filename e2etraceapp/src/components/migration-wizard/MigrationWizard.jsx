@@ -10,6 +10,7 @@ import { toast } from '../../hooks/useToast';
 import WizardRuleEngine from './WizardRuleEngine';
 import SmartGuidancePanel from './SmartGuidancePanel';
 import DiscoveryResults from './DiscoveryResults';
+import DataHealthPanel from './DataHealthPanel';
 import './MigrationWizard.css';
 
 /**
@@ -99,6 +100,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     savedWorkflowName: null,
     // Backend rule_set_id created when wizard rules are persisted in step 4
     savedRuleSetId: null,
+    // Step 2: AI Data Health Report (DataDiscoveryAgent `data_health_report` task)
+    dataHealthReport: null,
+    dataHealthLoading: false,
   });
   
   // Available data sources
@@ -1307,6 +1311,47 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }));
   }, []);
 
+  /** Single-rule wrapper used by DataHealthPanel "Apply" button */
+  const applyInferredRule = useCallback((rule) => {
+    addRules([rule]);
+  }, [addRules]);
+
+  /** Trigger the DataDiscoveryAgent data_health_report task and store result */
+  const generateDataHealthReport = useCallback(async () => {
+    if (!wizardData.sourceSystem) return;
+    setWizardData(prev => ({ ...prev, dataHealthLoading: true, dataHealthReport: null }));
+    try {
+      const res = await e2etraceFetchWithRetry(
+        `${API_CONFIG?.API_BASE_URL || ''}/api/agentic/task`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'data_health_report',
+            required_capabilities: ['data_health_report'],
+            payload: {
+              source_id:   wizardData.sourceSystem?.id   || null,
+              folder_path: wizardData.sourceSystem?.connection?.file_path
+                        || wizardData.sourceSystem?.connection?.connection_string
+                        || null,
+              run_id:      wizardData.discoveryRunId || null,
+            },
+          }),
+        },
+        { retries: 1 }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
+      // AgenticTaskResult wraps agent response in `.result`
+      const report = data?.result ?? data;
+      setWizardData(prev => ({ ...prev, dataHealthReport: report, dataHealthLoading: false }));
+    } catch (err) {
+      if (import.meta.env.DEV) console.warn('Data health report unavailable:', err.message);
+      toast.error('Could not generate Data Health Report. Ensure the agent service is running.');
+      setWizardData(prev => ({ ...prev, dataHealthLoading: false }));
+    }
+  }, [wizardData.sourceSystem, wizardData.discoveryRunId]);
+
   const updateRule = useCallback((id, patch) => {
     setWizardData(prev => ({
       ...prev,
@@ -2056,6 +2101,26 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           semanticProfile={wizardData.semanticProfile}
           sodaResult={wizardData.discoverySodaResult}
           sourceSystem={wizardData.sourceSystem}
+        />
+      )}
+
+      {/* ── AI Data Health Report ──────────────────────────────────────── */}
+      {wizardData.discoveryStatus === 'completed' && !wizardData.dataHealthReport && !wizardData.dataHealthLoading && (
+        <button
+          className="dh-generate-btn"
+          onClick={generateDataHealthReport}
+          disabled={wizardData.dataHealthLoading}
+          title="Run AI-powered Data Health Report: Readiness Score, Trust Score, anomaly detection, inferred rules"
+        >
+          <i className="fas fa-heartbeat" />
+          Generate AI Data Health Report
+        </button>
+      )}
+      {(wizardData.dataHealthReport || wizardData.dataHealthLoading) && (
+        <DataHealthPanel
+          healthReport={wizardData.dataHealthReport}
+          loading={wizardData.dataHealthLoading}
+          onApplyRule={applyInferredRule}
         />
       )}
 
