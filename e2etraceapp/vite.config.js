@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
+        // Shared error handler — returns 503 when the backend is unreachable so
+        // the browser sees "Service Unavailable" instead of a generic 500.
         // Proxy API requests to your Python FastAPI Neo4j backend server
         '/api': {
           target: proxyTarget,
@@ -34,8 +36,12 @@ export default defineConfig(({ mode }) => {
           secure: false,
           ws: true,
           configure: (proxy) => {
-            proxy.on('error', (err) => {
-              console.error('proxy error', err);
+            proxy.on('error', (err, _req, res) => {
+              console.warn('Backend proxy error (API):', err.code || err.message);
+              if (res && !res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ detail: 'Backend unavailable', error: err.code }));
+              }
             });
           },
         },
@@ -44,6 +50,15 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
           secure: false,
+          configure: (proxy) => {
+            proxy.on('error', (err, _req, res) => {
+              console.warn('Backend proxy error (health):', err.code || err.message);
+              if (res && !res.headersSent) {
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'unhealthy', detail: 'Backend unavailable', error: err.code }));
+              }
+            });
+          },
         },
         // Proxy Swagger UI and OpenAPI docs
         '/docs': {

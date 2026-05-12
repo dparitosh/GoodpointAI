@@ -14,7 +14,20 @@ from typing import List, Optional
 # In installed/service deployments, configuration should be stored in the DB.
 # Allow opting into repo-local `.env` loading for local development only.
 dotenv_path = Path(__file__).resolve().parent.parent / '.env'
+
+# Bootstrap: check OS env first; if not set, peek at the .env file itself.
+# This handles the common case where GRAPH_TRACE_LOAD_DOTENV=true is written
+# inside .env (a self-referential bootstrap) — dotenv_values() reads the file
+# without mutating os.environ, so production env vars are never overridden here.
 _LOAD_DOTENV = (os.getenv("GRAPH_TRACE_LOAD_DOTENV") or "").strip().lower() in {"1", "true", "yes"}
+if not _LOAD_DOTENV and dotenv_path.exists():
+    try:
+        from dotenv import dotenv_values as _dotenv_values
+        _peek = _dotenv_values(dotenv_path)
+        _LOAD_DOTENV = _peek.get("GRAPH_TRACE_LOAD_DOTENV", "").strip().lower() in {"1", "true", "yes"}
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
 if _LOAD_DOTENV:
     load_dotenv(dotenv_path=dotenv_path, override=True)
 logger = logging.getLogger(__name__)

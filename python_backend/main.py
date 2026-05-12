@@ -17,6 +17,7 @@ from core.security_middleware import (
     InMemoryRateLimiter,
     enforce_api_key_if_configured,
     enforce_rate_limit,
+    _is_allowlisted_path,
 )
 from core.error_handlers import (
     http_exception_handler,
@@ -187,24 +188,24 @@ async def request_timing_middleware(request: Request, call_next):
     # Canonical health endpoint: bypass routing so we don't get surprised by
     # duplicate /health handlers from included routers.
     if request.method == "GET" and request.url.path == "/health":
-        db_ok = bool(getattr(app.state, "db_ok", False))
-        neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
-        
-        # Check MCP Server Health
-        mcp_ok = await _mcp_client.check_health()
-
-        # Postgres is the only required dependency — Neo4j and MCP are optional.
-        # 503 only when the core DB is unavailable; optional services degrade gracefully.
-        if not db_ok:
-            overall = "unhealthy"
-        elif not (neo4j_ok and mcp_ok):
-            overall = "degraded"
-        else:
-            overall = "healthy"
-        http_status = 503 if overall == "unhealthy" else 200
-        response = JSONResponse(
-            status_code=http_status,
-            content={
+        try:
+            db_ok = bool(getattr(app.state, "db_ok", False))
+            neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
+            mcp_ok = False
+            try:
+                mcp_ok = await _mcp_client.check_health()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            # Postgres is the only required dependency — Neo4j and MCP are optional.
+            # 503 only when the core DB is unavailable; optional services degrade gracefully.
+            if not db_ok:
+                overall = "unhealthy"
+            elif not (neo4j_ok and mcp_ok):
+                overall = "degraded"
+            else:
+                overall = "healthy"
+            http_status = 503 if overall == "unhealthy" else 200
+            payload: dict = {
                 "status": overall,
                 "service": "GoodPoint AgenticAI API",
                 "timestamp": datetime.now().isoformat(),
@@ -213,8 +214,17 @@ async def request_timing_middleware(request: Request, call_next):
                     "neo4j": {"ok": neo4j_ok, "required": False},
                     "mcp_server": {"ok": mcp_ok, "required": False},
                 },
-            },
-        )
+            }
+        except Exception as _hc_exc:  # pylint: disable=broad-exception-caught
+            logger.error("Health check raised unexpected error: %s", _hc_exc)
+            http_status = 503
+            payload = {
+                "status": "unhealthy",
+                "service": "GoodPoint AgenticAI API",
+                "timestamp": datetime.now().isoformat(),
+                "error": "Health check failed unexpectedly",
+            }
+        response = JSONResponse(status_code=http_status, content=payload)
         duration_ms = (perf_counter() - start) * 1000.0
         principal = get_request_principal(request)
         logger.info(
@@ -227,6 +237,22 @@ async def request_timing_middleware(request: Request, call_next):
             principal.auth_type if principal else "none",
         )
         return response
+
+    # DB availability guard — return 503 (not 500) for data-serving API routes when the
+    # database is not yet ready. Monitoring endpoints that handle their own degraded state
+    # (paths ending in /health, /status, /metrics, /info) are excluded so they can still
+    # respond with their own degraded payloads. Auth and docs paths are also excluded.
+    if (
+        request.url.path.startswith("/api")
+        and not _is_allowlisted_path(request.url.path)
+        and not request.url.path.endswith(("/health", "/status", "/metrics", "/info"))
+        and not bool(getattr(app.state, "db_ok", False))
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Service temporarily unavailable — database not ready. Please try again shortly."},
+            headers={"Retry-After": "10"},
+        )
 
     # Minimal RBAC (only when auth is enabled): require "admin" for mutating API calls.
     if auth_required() and request.url.path.startswith("/api") and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
@@ -322,29 +348,41 @@ app.include_router(admin_config_router)
 
 @app.get("/health", tags=["Health"], summary="Health check endpoint")
 async def root_health_check():
-    db_ok = bool(getattr(app.state, "db_ok", False))
-    neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
-    mcp_ok = await _mcp_client.check_health()
-    if not db_ok:
-        overall = "unhealthy"
-    elif not (neo4j_ok and mcp_ok):
-        overall = "degraded"
-    else:
-        overall = "healthy"
-    http_status = 503 if overall == "unhealthy" else 200
-    return JSONResponse(
-        status_code=http_status,
-        content={
-            "status": overall,
-            "service": "GoodPoint AgenticAI API",
-            "timestamp": datetime.now().isoformat(),
-            "dependencies": {
-                "postgres": {"ok": db_ok, "required": True},
-                "neo4j": {"ok": neo4j_ok, "required": False},
-                "mcp_server": {"ok": mcp_ok, "required": False},
+    try:
+        db_ok = bool(getattr(app.state, "db_ok", False))
+        neo4j_ok = bool(getattr(app.state, "neo4j_ok", False))
+        mcp_ok = False
+        try:
+            mcp_ok = await _mcp_client.check_health()
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        if not db_ok:
+            overall = "unhealthy"
+        elif not (neo4j_ok and mcp_ok):
+            overall = "degraded"
+        else:
+            overall = "healthy"
+        http_status = 503 if overall == "unhealthy" else 200
+        return JSONResponse(
+            status_code=http_status,
+            content={
+                "status": overall,
+                "service": "GoodPoint AgenticAI API",
+                "timestamp": datetime.now().isoformat(),
+                "dependencies": {
+                    "postgres": {"ok": db_ok, "required": True},
+                    "neo4j": {"ok": neo4j_ok, "required": False},
+                    "mcp_server": {"ok": mcp_ok, "required": False},
+                },
             },
-        },
-    )
+        )
+    except Exception as _exc:  # pylint: disable=broad-exception-caught
+        logger.error("Root health check raised unexpected error: %s", _exc)
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "service": "GoodPoint AgenticAI API",
+                     "timestamp": datetime.now().isoformat(), "error": "Health check failed"},
+        )
 
 if __name__ == "__main__":
     import uvicorn

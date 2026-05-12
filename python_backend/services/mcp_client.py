@@ -1,19 +1,20 @@
 import httpx
 import logging
 from typing import Dict, Any, Optional, List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
 class MCPSettings(BaseSettings):
     MCP_SERVER_URL: str = "http://localhost:8012"
-    MCP_TIMEOUT: float = 30.0
-    
-    model_config = {
-        "env_file": ".env", 
-        "extra": "ignore"
-    }
+    MCP_TIMEOUT: float = 10.0  # per-request timeout for task/agent calls
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 class MCPClient:
     def __init__(self, settings: Optional[MCPSettings] = None):
@@ -69,7 +70,7 @@ class MCPClient:
                 raise
 
     async def check_health(self) -> bool:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             try:
                 response = await client.get(f"{self.base_url}/health")
                 return response.status_code == 200
