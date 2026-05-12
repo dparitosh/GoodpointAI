@@ -1,325 +1,463 @@
-/* SmartGuidancePanel.css - Assistant Mode: "What should I do first?" */
+/* SmartGuidancePanel.css — AI Chat-style Migration Assistant */
 
+/* ── Shell ────────────────────────────────────────────────────────── */
 .smart-guidance-panel {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 12px;
-  padding: 20px 24px;
+  background: var(--surface-2, #1a1f2e);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   margin-bottom: 20px;
-  position: relative;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
-/* ── Header row ── */
+/* ── Header ────────────────────────────────────────────────────────── */
 .sgp-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  padding: 14px 18px 12px;
+  background: rgba(59, 130, 246, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 10px;
 }
 
 .sgp-header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
 }
 
-.sgp-icon {
+.sgp-avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 16px;
-  color: #60a5fa;
+  font-size: 15px;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
 .sgp-title {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary, #94a3b8);
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  line-height: 1.2;
+}
+
+.sgp-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  margin-top: 1px;
+}
+
+.sgp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sgp-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(59, 130, 246, 0.2) 100%);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
 }
 
 .sgp-dismiss {
   background: transparent;
   border: none;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary, #64748b);
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 5px 7px;
+  border-radius: 6px;
   font-size: 13px;
   line-height: 1;
   transition: color 0.15s, background 0.15s;
-  flex-shrink: 0;
 }
-
 .sgp-dismiss:hover {
-  color: var(--text-primary, #f8fafc);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary, #f1f5f9);
+  background: rgba(255, 255, 255, 0.07);
 }
 
-/* ── Loading skeleton ── */
-.sgp-loading {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 0;
-}
-
-.sgp-skeleton {
-  height: 14px;
-  border-radius: 6px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
-  background-size: 200% 100%;
-  animation: sgp-shimmer 1.6s infinite;
-}
-
-@keyframes sgp-shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* ── Recommendation card ── */
-.sgp-recommendation {
+/* ── Chat window ────────────────────────────────────────────────────── */
+.sgp-chat-window {
+  flex: 1;
+  padding: 16px 16px 8px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.sgp-chat-window::-webkit-scrollbar { width: 4px; }
+.sgp-chat-window::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+/* ── Message rows ────────────────────────────────────────────────────── */
+.sgp-message-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.sgp-message-row.user {
+  flex-direction: row-reverse;
 }
 
-.sgp-headline {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary, #f8fafc);
-  margin: 0;
-  line-height: 1.3;
+.sgp-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #fff;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.sgp-badge {
+/* ── Bubbles ─────────────────────────────────────────────────────────── */
+.sgp-bubble {
+  max-width: 88%;
+  border-radius: 12px;
+  padding: 10px 13px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sgp-bubble.user {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.sgp-bubble.assistant {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #e2e8f0);
+  border-bottom-left-radius: 3px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.sgp-bubble-loading {
+  padding: 13px 16px !important;
+}
+
+/* ── Thinking dots ────────────────────────────────────────────────────── */
+.sgp-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sgp-thinking-dots span {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary, #64748b);
+  animation: sgp-bounce 1.3s infinite ease-in-out;
+}
+.sgp-thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.sgp-thinking-dots span:nth-child(2) { animation-delay: 0.18s; }
+.sgp-thinking-dots span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes sgp-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30%            { transform: translateY(-5px); opacity: 1; }
+}
+
+/* ── Guidance card (inside assistant bubble) ──────────────────────────── */
+.sgp-guidance-card {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sgp-card-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.sgp-rec-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
   border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-top: 2px;
-}
-
-.sgp-badge.discovery {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.sgp-badge.profiling {
-  background: rgba(139, 92, 246, 0.15);
-  color: #a78bfa;
-  border: 1px solid rgba(139, 92, 246, 0.3);
-}
-
-.sgp-badge.quality {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-/* ── Info grid ── */
-.sgp-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.sgp-info-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  padding: 12px 14px;
-}
-
-.sgp-info-label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-secondary, #94a3b8);
-  margin-bottom: 5px;
+}
+.sgp-rec-badge.discovery { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+.sgp-rec-badge.profiling  { background: rgba(139,92,246,0.15);  color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
+.sgp-rec-badge.quality    { background: rgba(16,185,129,0.15);  color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+
+.sgp-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+}
+.sgp-meta-chip i { font-size: 10px; }
+
+.sgp-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.sgp-dot.low    { background: #34d399; }
+.sgp-dot.medium { background: #fbbf24; }
+.sgp-dot.high   { background: #f87171; }
+
+.sgp-card-headline {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* ── Two-column info grid ──────────────────────────────────────────────── */
+.sgp-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+@media (max-width: 560px) {
+  .sgp-card-grid { grid-template-columns: 1fr; }
+}
+
+.sgp-card-cell {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.sgp-card-cell p {
+  font-size: 12px;
+  color: var(--text-primary, #e2e8f0);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
+.sgp-cell-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #64748b);
   display: flex;
   align-items: center;
   gap: 5px;
+  margin-bottom: 2px;
+}
+.sgp-cell-label i { font-size: 9px; }
+
+/* ── Steps ─────────────────────────────────────────────────────────────── */
+.sgp-card-steps {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
 }
 
-.sgp-info-label i {
-  font-size: 10px;
-}
-
-.sgp-info-text {
-  font-size: 13px;
-  color: var(--text-primary, #e2e8f0);
-  line-height: 1.5;
-  margin: 0;
-}
-
-/* full-width info card variant */
-.sgp-info-card.full {
-  grid-column: 1 / -1;
-}
-
-/* ── Next steps ── */
-.sgp-next-steps {
-  margin: 0;
+.sgp-steps-list {
+  margin: 6px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
-
-.sgp-next-steps li {
+.sgp-steps-list li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
+  gap: 9px;
+  font-size: 12px;
   color: var(--text-primary, #e2e8f0);
+  line-height: 1.45;
 }
-
 .sgp-step-num {
-  width: 20px;
-  height: 20px;
+  width: 20px; height: 20px;
   border-radius: 50%;
   background: rgba(59, 130, 246, 0.18);
   color: #60a5fa;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-top: 1px;
 }
 
-/* ── Tips ── */
-.sgp-tips {
+/* ── Tips row ─────────────────────────────────────────────────────────── */
+.sgp-tips-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-
-.sgp-tip {
+.sgp-tip-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 11px;
   color: var(--text-secondary, #94a3b8);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.15);
   border-radius: 6px;
   padding: 3px 8px;
 }
+.sgp-tip-chip i { color: #fbbf24; font-size: 10px; }
 
-.sgp-tip i {
-  color: #fbbf24;
-  font-size: 10px;
-}
-
-/* ── Meta row (time + complexity) ── */
-.sgp-meta {
+/* ── Card action buttons ──────────────────────────────────────────────── */
+.sgp-card-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
   flex-wrap: wrap;
-}
-
-.sgp-meta-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--text-secondary, #94a3b8);
-}
-
-.sgp-meta-item i {
-  font-size: 11px;
-}
-
-.sgp-complexity-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  margin-right: 2px;
-}
-
-.sgp-complexity-dot.low    { background: #34d399; }
-.sgp-complexity-dot.medium { background: #fbbf24; }
-.sgp-complexity-dot.high   { background: #f87171; }
-
-/* ── Action row ── */
-.sgp-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-  flex-wrap: wrap;
+  padding-top: 2px;
 }
 
 .sgp-btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 9px 20px;
-  background: var(--primary-color, #3b82f6);
-  color: #fff;
+  padding: 9px 18px;
   border: none;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
+  color: #fff;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: filter 0.15s, transform 0.1s;
 }
+.sgp-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.sgp-btn-primary:active { transform: translateY(0); }
 
-.sgp-btn-primary:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-}
+.sgp-btn-primary.c-blue   { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.sgp-btn-primary.c-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.sgp-btn-primary.c-green  { background: linear-gradient(135deg, #10b981, #059669); }
 
-.sgp-btn-secondary {
+.sgp-btn-ghost {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 8px 14px;
   background: transparent;
   color: var(--text-secondary, #94a3b8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   font-size: 12px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-
-.sgp-btn-secondary:hover {
-  color: var(--text-primary, #f8fafc);
-  border-color: rgba(255, 255, 255, 0.25);
+.sgp-btn-ghost:hover {
+  color: var(--text-primary, #f1f5f9);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
-/* ── LLM-powered badge ── */
-.sgp-powered-badge {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--text-secondary, #64748b);
+/* ── Suggestion chips ─────────────────────────────────────────────────── */
+.sgp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 16px 10px;
+}
+
+.sgp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.07);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 20px;
+  font-size: 12px;
+  color: #60a5fa;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.sgp-chip:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+.sgp-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.sgp-chip i { font-size: 11px; }
+
+/* ── NLP input bar ───────────────────────────────────────────────────── */
+.sgp-input-bar {
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sgp-input-wrap {
   display: flex;
   align-items: center;
-  gap: 4px;
-  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0 6px 0 12px;
+  gap: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.sgp-input-wrap:focus-within {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.sgp-powered-badge i {
-  font-size: 9px;
+.sgp-input-icon {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  flex-shrink: 0;
 }
+
+.sgp-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary, #f1f5f9);
+  font-size: 13px;
+  padding: 10px 0;
+  min-width: 0;
+}
+.sgp-input::placeholder { color: var(--text-secondary, #475569); }
+.sgp-input:disabled { opacity: 0.5; }
+
+.sgp-send-btn {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: filter 0.15s, transform 0.1s;
+}
+.sgp-send-btn:hover:not(:disabled) { filter: brightness(1.15); transform: scale(1.05); }
+.sgp-send-btn:disabled { opacity: 0.35; cursor: not-allowed; filter: none; transform: none; }

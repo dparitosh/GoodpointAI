@@ -115,6 +115,7 @@ class SmartGuidanceRequest(BaseModel):
     previous_runs: bool = False
     user_role: str = "business"  # "business" | "technical"
     llm_provider: Optional[str] = None
+    nlp_query: Optional[str] = None  # free-text question from the NLP input bar
 
 
 class SmartGuidanceResponse(BaseModel):
@@ -384,6 +385,7 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
         "previous_runs": req.previous_runs,
         "user_role":     req.user_role,
         **({"llm_provider": req.llm_provider} if req.llm_provider else {}),
+        **({"nlp_query": req.nlp_query} if req.nlp_query else {}),
     }
 
     # ── Try ChatCoordinator via MCP ────────────────────────────────────────
@@ -418,6 +420,7 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
         "You are a friendly data assistant. "
         "Given a user's dataset context, recommend the single best first step "
         "from: discovery (scan files), profiling (understand columns), quality (fix issues). "
+        "If the user asks a specific question, tailor your recommendation to address it. "
         "Use plain business language. Output strict JSON only:\n"
         '{"recommendation":"discovery|profiling|quality","headline":"...","reason":"...","expected_outcome":"...",'
         '"next_steps":[],"complexity":"low|medium|high","estimated_time":"...","tips":[]}'
@@ -427,6 +430,7 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
         f"File count: {req.file_count or 'unknown'}. "
         f"File types: {', '.join(req.file_types) if req.file_types else 'unknown'}. "
         f"Previous runs: {'yes' if req.previous_runs else 'no'}."
+        + (f" User question: {req.nlp_query}" if req.nlp_query else "")
     )
 
     try:
