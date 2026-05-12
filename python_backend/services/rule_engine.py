@@ -508,12 +508,15 @@ class RuleEngine:
         
         # Track parent rule results for dependency checking
         self._execution_results.clear()
+        # Track skipped rule IDs so child rules cascade-skip correctly (Bug 3)
+        self._skipped_rule_ids: set = set()
         
         try:
             for rule in sorted_rules:
                 # Check if rule should be skipped based on parent result
                 if not self._should_execute_rule(rule):
                     result.rules_skipped += 1
+                    self._skipped_rule_ids.add(rule['id'])  # cascade skip to children
                     continue
                 
                 # Execute rule against all records
@@ -536,12 +539,18 @@ class RuleEngine:
                         break
             
             # Calculate overall pass rate
-            if result.total_records > 0 and result.total_rules > 0:
-                result.overall_pass_rate = (
-                    (result.total_records * result.rules_passed - result.total_failures) /
-                    (result.total_records * (result.rules_passed + result.rules_failed))
-                    if (result.rules_passed + result.rules_failed) > 0 else 0.0
-                ) * 100
+            # Formula: fraction of (rule × record) pairs that passed.
+            # Clamp to [0, 100] to guard against counter drift.
+            executed = result.rules_passed + result.rules_failed
+            if executed > 0 and result.total_records > 0:
+                total_pairs = result.total_records * executed
+                result.overall_pass_rate = round(
+                    max(0.0, min(100.0,
+                        (total_pairs - result.total_failures) / total_pairs * 100
+                    )), 2
+                )
+            else:
+                result.overall_pass_rate = 100.0 if executed == 0 else 0.0
             
             result.status = 'completed'
             
@@ -556,24 +565,34 @@ class RuleEngine:
         return result
     
     def _should_execute_rule(self, rule: Dict[str, Any]) -> bool:
-        """Check if rule should execute based on parent dependencies."""
+        """Check if rule should execute based on parent dependencies.
+
+        Cascade-skip: if the parent rule was itself skipped (due to its own
+        dependency condition not being met), skip this rule too rather than
+        treating the absent parent result as "proceed".
+        """
         parent_id = rule.get('parent_rule_id')
         if not parent_id:
             return True
-        
+
+        # Parent was skipped — cascade the skip so we don’t silently run child rules
+        # whose precondition was never satisfied.
+        if hasattr(self, '_skipped_rule_ids') and parent_id in self._skipped_rule_ids:
+            return False
+
         parent_result = self._execution_results.get(parent_id)
         if not parent_result:
-            return True  # Parent not executed yet, proceed
-        
+            return True  # Parent not yet executed (e.g. different branch), proceed
+
         dependency_condition = rule.get('dependency_condition', 'parent_pass')
-        
+
         if dependency_condition == 'parent_pass':
             return parent_result.passed
         elif dependency_condition == 'parent_fail':
             return not parent_result.passed
         elif dependency_condition == 'always':
             return True
-        
+
         return True
 
 

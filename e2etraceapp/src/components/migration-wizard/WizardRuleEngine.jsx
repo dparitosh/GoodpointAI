@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
+import { API_CONFIG } from '../../config/api-config.js';
 
 const CONDITIONS = {
   pre:     ['IS_NULL', 'IS_EMPTY', 'MATCHES_REGEX', 'NOT_IN_LIST', 'CUSTOM'],
@@ -20,6 +21,129 @@ const PHASES = [
 
 const PHASE_META = Object.fromEntries(PHASES.map(p => [p.key, p]));
 
+// ── NLP_EXAMPLES ─────────────────────────────────────────────────────────────
+const NLP_EXAMPLES = [
+  'part_number must not be empty',
+  'status must be one of: Active, Inactive, Pending',
+  'quantity must be between 0 and 99999',
+  'customer_id must be unique',
+  'description must have at least 3 characters',
+  'sku must match pattern ^[A-Z]{3}-\\d{4}$',
+];
+
+/**
+ * NlpRuleInput — chat-style panel for describing rules in plain English.
+ * Calls POST /api/rules/v1/nlp-to-rule and appends the returned rule(s) to
+ * the wizard rule list via onAddRules.
+ */
+const NlpRuleInput = ({ sourceFields, fieldMappings, onAddRules }) => {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [lastResult, setLastResult] = useState(null); // { rules, interpretation, ai_powered }
+  const [error, setError] = useState(null);
+
+  const handleGenerate = useCallback(async () => {
+    const desc = text.trim();
+    if (!desc) return;
+    setLoading(true);
+    setError(null);
+    setLastResult(null);
+    try {
+      const _apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
+      const res = await fetch(`${_apiBase}${API_CONFIG.ENDPOINTS.RULES_NLP_TO_RULE}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: desc,
+          available_fields: sourceFields || [],
+          context_hint: 'PLM/ETL migration wizard rule configuration',
+        }),
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      setLastResult(data);
+      if (data.rules && data.rules.length > 0) {
+        onAddRules(data.rules);
+        setText('');
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to generate rule');
+    } finally {
+      setLoading(false);
+    }
+  }, [text, sourceFields, onAddRules]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      handleGenerate();
+    }
+  };
+
+  return (
+    <div className="re-nlp-panel">
+      <div className="re-nlp-header">
+        <span className="re-nlp-title">
+          <i className="fas fa-robot" /> Describe a rule in plain English
+        </span>
+        <span className="re-nlp-badge re-nlp-badge--ai">AI</span>
+      </div>
+
+      <div className="re-nlp-examples">
+        {NLP_EXAMPLES.map(ex => (
+          <button
+            key={ex}
+            className="re-nlp-example-chip"
+            onClick={() => setText(ex)}
+            tabIndex={-1}
+          >
+            {ex}
+          </button>
+        ))}
+      </div>
+
+      <div className="re-nlp-input-row">
+        <textarea
+          className="re-nlp-textarea"
+          rows={2}
+          placeholder={'e.g. "part_number must not be empty and must be unique"\nPress Ctrl+Enter or click Generate'}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={loading}
+        />
+        <button
+          className={`re-nlp-generate-btn${loading ? ' re-nlp-generate-btn--loading' : ''}`}
+          onClick={handleGenerate}
+          disabled={loading || !text.trim()}
+          title="Generate rule(s) from description (Ctrl+Enter)"
+        >
+          {loading
+            ? <><i className="fas fa-spinner fa-spin" /> Generating…</>
+            : <><i className="fas fa-wand-magic-sparkles" /> Generate</>}
+        </button>
+      </div>
+
+      {error && (
+        <div className="re-nlp-error">
+          <i className="fas fa-exclamation-triangle" /> {error}
+        </div>
+      )}
+
+      {lastResult && (
+        <div className={`re-nlp-result ${lastResult.ai_powered ? 're-nlp-result--ai' : 're-nlp-result--fallback'}`}>
+          <i className={`fas ${lastResult.ai_powered ? 'fa-robot' : 'fa-puzzle-piece'}`} />
+          {' '}{lastResult.interpretation}
+          {lastResult.rules?.length > 0 && (
+            <span className="re-nlp-rule-count">
+              {lastResult.rules.length} rule{lastResult.rules.length !== 1 ? 's' : ''} added ✓
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /**
  * WizardRuleEngine — unified Rule Engine table showing pre-transform, quality,
  * and post-transform rules as categories in one place.
@@ -28,7 +152,9 @@ const PHASE_META = Object.fromEntries(PHASES.map(p => [p.key, p]));
  *   rules        – array of rule objects from wizardData.rules
  *   activePhase  – kept for API compat (not used for display filtering)
  *   sourceFields – string[] of source field names
+ *   fieldMappings – array of field mapping objects
  *   onPhaseChange, onAddRule, onRemoveRule, onUpdateRule – callbacks
+ *   onAddRules   – callback(rules[]) to bulk-append rules (from NLP generation)
  */
 const WizardRuleEngine = ({
   rules,
@@ -37,6 +163,7 @@ const WizardRuleEngine = ({
   onAddRule,
   onRemoveRule,
   onUpdateRule,
+  onAddRules,
 }) => {
   // Build source-field → target-field lookup for inline mapping context
   const mappedTargetBySource = useMemo(() => {
@@ -48,6 +175,16 @@ const WizardRuleEngine = ({
     }
     return map;
   }, [fieldMappings]);
+
+  // Bulk-add callback for NLP panel (falls back to onAddRule if not provided)
+  const handleAddRules = useCallback((newRules) => {
+    if (typeof onAddRules === 'function') {
+      onAddRules(newRules);
+    } else if (typeof onAddRule === 'function') {
+      // Fallback: add each rule individually using the single-add callback
+      newRules.forEach(r => onAddRule(r.phase || 'quality', r));
+    }
+  }, [onAddRules, onAddRule]);
   return (
     <div className="re-panel">
       <div className="re-panel-header">
@@ -59,6 +196,13 @@ const WizardRuleEngine = ({
         </span>
         <span className="re-badge">{rules.length} rule{rules.length !== 1 ? 's' : ''}</span>
       </div>
+
+      {/* ── NLP Rule Input ─────────────────────────────────────────────── */}
+      <NlpRuleInput
+        sourceFields={sourceFields}
+        fieldMappings={fieldMappings}
+        onAddRules={handleAddRules}
+      />
 
       {/* Category legend */}
       <div className="re-legend">

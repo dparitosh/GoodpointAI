@@ -1298,6 +1298,15 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     setWizardData(prev => ({ ...prev, rules: prev.rules.filter(r => r.id !== id) }));
   }, []);
 
+  // Bulk-add rules returned by the NLP rule generator
+  const addRules = useCallback((newRules) => {
+    if (!Array.isArray(newRules) || newRules.length === 0) return;
+    setWizardData(prev => ({
+      ...prev,
+      rules: [...prev.rules, ...newRules],
+    }));
+  }, []);
+
   const updateRule = useCallback((id, patch) => {
     setWizardData(prev => ({
       ...prev,
@@ -2534,6 +2543,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         onAddRule={addRule}
         onRemoveRule={removeRule}
         onUpdateRule={updateRule}
+        onAddRules={addRules}
       />
     </div>
   );

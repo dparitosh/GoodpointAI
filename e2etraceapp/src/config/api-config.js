@@ -101,6 +101,7 @@ const DEFAULT_CONFIG = {
     RULES_FROM_WIZARD: '/api/rules/v1/from-wizard',
     RULES_EXECUTE: '/api/rules/v1/execute',
     RULES_DQ_CHECKS_YAML: '/api/rules/v1/dq-rules/checks-yaml',
+    RULES_NLP_TO_RULE: '/api/rules/v1/nlp-to-rule',
     
     // Configuration Management
     NEO4J_CONFIG: '/api/config/neo4j',

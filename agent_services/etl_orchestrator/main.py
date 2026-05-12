@@ -94,15 +94,20 @@ class ETLOrchestratorAgent(AgentService):
             AgentCapability(name="handle_data_transformations", description="Handle data transformations"),
             AgentCapability(name="monitor_pipeline_health", description="Monitor pipeline health"),
             AgentCapability(name="file_batch_processing", description="Discover and process thousands of files in parallel with lineage tracking"),
+            AgentCapability(name="assess_transformation_risk", description="AI-powered risk assessment for field mappings and transformations"),
         ]
 
     async def process_task(self, task: AgentTaskRequest):
         task_type = task.payload.get("type", "unknown")
+        caps = set(task.payload.get("required_capabilities", []))
 
-        if task_type == "discovery" or "perform_data_discovery" in task.payload.get("required_capabilities", []):
+        if "assess_transformation_risk" in caps or task_type == "assess_transformation_risk":
+            return await self._assess_transformation_risk(task)
+
+        if task_type == "discovery" or "perform_data_discovery" in caps:
             return await self.perform_discovery(task)
 
-        if task_type == "file_batch_processing" or "file_batch_processing" in task.payload.get("required_capabilities", []):
+        if task_type == "file_batch_processing" or "file_batch_processing" in caps:
             return await self.process_file_batch(task)
 
         return {
@@ -110,6 +115,167 @@ class ETLOrchestratorAgent(AgentService):
             "message": f"Task type {task_type} acknowledged (placeholder implementation)",
             "timestamp": datetime.now().isoformat()
         }
+
+    # ── AI Transformation Risk Assessment ────────────────────────────────────
+
+    _RISK_ASSESSMENT_PROMPT = """\
+You are a Migration Risk Analyst specialising in PLM/ETL data pipelines.
+Given a list of field mappings (source→target) with optional transformation rules \
+and a data profile summary, assess the migration risk for each mapped field.
+
+For each field mapping output a JSON object with:
+  source_field     : source field name
+  target_field     : target field name
+  risk_level       : critical|high|medium|low
+  risk_type        : data_loss|type_mismatch|truncation|null_propagation|
+                     format_change|precision_loss|encoding_issue|business_rule_gap|none
+  confidence       : 0.0-1.0 (your confidence in the risk assessment)
+  issues           : list of specific issue strings (may be empty)
+  recommendation   : single actionable sentence (≤20 words)
+
+Also include a final object at the end with:
+  summary_risk     : overall migration risk (critical|high|medium|low)
+  blocking_issues  : count of critical+high risk fields
+  total_fields     : total field count
+  recommendation   : overall recommendation (1-2 sentences)
+
+Output ONLY a valid JSON array, no other text.
+"""
+
+    async def _assess_transformation_risk(self, task: AgentTaskRequest) -> Dict[str, Any]:
+        """AI-powered risk assessment for field mappings and transformations.
+
+        Combines rule-based heuristics (fast, always available) with LLM analysis
+        (richer context, graceful fallback).
+        """
+        payload = task.payload
+        field_mappings  = payload.get("field_mappings", [])
+        profile_summary = payload.get("profile_summary", {})
+        backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+
+        # Deterministic risk checks (type mismatches, nullability, format)
+        heuristic_risks = self._heuristic_risk_check(field_mappings, profile_summary)
+
+        # LLM-powered risk analysis
+        ai_risks = None
+        if field_mappings:
+            try:
+                import httpx as _httpx
+                import re as _re
+                context = {
+                    "field_mappings": field_mappings[:50],  # cap for LLM context
+                    "profile_signals": profile_summary.get("signals", [])[:15],
+                    "total_source_columns": len(profile_summary.get("columns", {})),
+                }
+                async with _httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{backend_url}/api/llm/chat",
+                        params={"provider": payload.get("llm_provider", "openai")},
+                        json={
+                            "messages": [
+                                {"role": "system", "content": self._RISK_ASSESSMENT_PROMPT},
+                                {"role": "user",   "content": json.dumps(context)},
+                            ],
+                            "temperature": 0.1,
+                            "max_tokens": 1800,
+                        },
+                    )
+                    if resp.is_success:
+                        raw = resp.json().get("response", "")
+                        raw = _re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                        m = _re.search(r"\[.*\]", raw, re.DOTALL)
+                        if m:
+                            parsed = json.loads(m.group(0))
+                            if isinstance(parsed, list):
+                                ai_risks = parsed
+            except Exception as exc:
+                logger.debug("LLM transformation risk assessment unavailable: %s", exc)
+
+        # Extract summary object from ai_risks (last element if it has summary_risk)
+        summary = None
+        field_risks = []
+        if ai_risks:
+            if ai_risks and ai_risks[-1].get("summary_risk"):
+                summary = ai_risks[-1]
+                field_risks = ai_risks[:-1]
+            else:
+                field_risks = ai_risks
+
+        # Fall back to heuristic summary if AI unavailable
+        if not summary:
+            critical_count = sum(1 for r in heuristic_risks if r.get("risk_level") in ("critical", "high"))
+            summary = {
+                "summary_risk": "high" if critical_count > 0 else "medium" if heuristic_risks else "low",
+                "blocking_issues": critical_count,
+                "total_fields": len(field_mappings),
+                "recommendation": (
+                    f"{critical_count} high-risk mapping(s) require review before migration."
+                    if critical_count else "Heuristic checks passed. Validate with a data sample before execution."
+                ),
+            }
+
+        return {
+            "status": "Risk assessment completed",
+            "task_id": task.task_id,
+            "field_risks": field_risks if field_risks else heuristic_risks,
+            "summary": summary,
+            "ai_powered": ai_risks is not None,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+    def _heuristic_risk_check(
+        self,
+        field_mappings: List[Dict[str, Any]],
+        profile_summary: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Fast deterministic risk checks with no external dependencies."""
+        risks = []
+        columns = profile_summary.get("columns", {})
+
+        for fm in field_mappings:
+            src = fm.get("sourceField") or fm.get("source_field", "")
+            tgt = fm.get("targetField") or fm.get("target_field", "")
+            transformation = fm.get("transformation") or ""
+            col_meta = columns.get(src, {})
+
+            issues = []
+            risk_level = "low"
+            risk_type  = "none"
+
+            # High null rate in source → possible null propagation
+            null_max = col_meta.get("null_rate_max", 0) or 0
+            if null_max > 0.3:
+                issues.append(f"Source field has {null_max*100:.0f}% null rate — nulls will propagate to target.")
+                risk_level = "high"
+                risk_type  = "null_propagation"
+
+            # Mixed types → type mismatch / format change risk
+            if col_meta.get("has_mixed_types"):
+                issues.append("Source field has mixed data types — casting may fail or silently truncate.")
+                _LEVELS = ["low", "medium", "high", "critical"]
+                risk_level = _LEVELS[max(_LEVELS.index(risk_level), _LEVELS.index("medium"))]
+                risk_type  = "type_mismatch"
+
+            # No transformation rule but mixed types
+            if col_meta.get("has_mixed_types") and not transformation:
+                issues.append("No transformation defined for a mixed-type field.")
+                risk_level = "high"
+                risk_type  = "format_change"
+
+            risks.append({
+                "source_field":  src,
+                "target_field":  tgt,
+                "risk_level":    risk_level,
+                "risk_type":     risk_type,
+                "issues":        issues,
+                "recommendation": (
+                    "Add explicit type-casting in transformation rules."
+                    if issues else "No issues detected."
+                ),
+                "source": "heuristic",
+            })
+
+        return risks
 
     async def process_file_batch(self, task: AgentTaskRequest) -> Dict[str, Any]:
         """ETL Orchestrator handler for large-scale file batch processing.

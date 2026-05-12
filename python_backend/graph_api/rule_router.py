@@ -5,7 +5,10 @@ Endpoints for rule set management and rule execution.
 """
 
 import logging
+import re
+import json
 import uuid
+import httpx
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import PlainTextResponse
@@ -151,6 +154,13 @@ async def execute_rules(
             entity_data=request.entity_data,
             entity_id=request.entity_id
         )
+        # Bug 9 fix: persist execution history so run-level audit trail is written.
+        # record_execution() is a best-effort operation — failure must not mask the result.
+        execution_id = str(uuid.uuid4())
+        try:
+            service.record_execution(request.rule_set_id, execution_id, result)
+        except Exception as persist_err:
+            logger.warning("Could not persist rule execution record: %s", persist_err)
         return result.to_dict()
     except Exception as e:
         logger.error("Error executing rules: %s", e)
@@ -250,7 +260,10 @@ _CONDITION_EXPR_MAP: Dict[str, str] = {
     "IS_NULL":          "is_empty(record.get('{field}'))",
     "IS_NOT_NULL":      "not is_empty(record.get('{field}'))",
     "IS_EMPTY":         "is_empty(str(record.get('{field}', '')))",
-    "IS_NOT_UNIQUE":    "len([r for r in dataset if r.get('{field}') == record.get('{field}')]) > 1",
+    # IS_NOT_UNIQUE: uses _related.get('all_records') consistent with the UNIQUE
+    # system template; the execution context injects _related={}  so NameError
+    # never surfaces even when no related records are supplied.
+    "IS_NOT_UNIQUE":    "len([r for r in _related.get('all_records', []) if r.get('{field}') == record.get('{field}')]) > 1",
     "MATCHES_REGEX":    "matches_regex(str(record.get('{field}', '')), r'{value}')",
     "FAILS_REGEX":      "not matches_regex(str(record.get('{field}', '')), r'{value}')",
     "NOT_IN_LIST":      "record.get('{field}') not in [{value}]",
@@ -310,19 +323,41 @@ def _wizard_rule_to_expression(rule: WizardRuleItem) -> str:
 
     template = _CONDITION_EXPR_MAP.get(rule.condition, "True")
 
-    # Handle OUT_OF_RANGE: value should be "min-max" e.g. "0-100"
-    if rule.condition == "OUT_OF_RANGE" and "-" in val:
-        parts = val.split("-", 1)
-        min_v = parts[0].strip() or "0"
-        max_v = parts[1].strip() or "9999999"
-        return template.replace("{field}", field).replace("{min}", min_v).replace("{max}", max_v)
+    # Handle OUT_OF_RANGE: value can be "0-100" or "-10-100" (negative min).
+    # Use a regex to parse so that a leading minus on the min bound is captured
+    # correctly (plain split("-", 1) would lose it).
+    if rule.condition == "OUT_OF_RANGE":
+        import re as _re_range
+        m = _re_range.match(r'^(-?\d+(?:\.\d+)?)[-–](-?\d+(?:\.\d+)?)$', val.strip())
+        if m:
+            min_v, max_v = m.group(1), m.group(2)
+        elif "-" in val:
+            # Fallback: legacy split — works for non-negative min values
+            parts = val.split("-", 1)
+            min_v = parts[0].strip() or "0"
+            max_v = parts[1].strip() or "9999999"
+        else:
+            # No range separator — fall through to placeholder-safety net below
+            min_v, max_v = None, None
+        if min_v is not None and max_v is not None:
+            return template.replace("{field}", field).replace("{min}", min_v).replace("{max}", max_v)
 
-    # For regex conditions, escape the user-supplied value so arbitrary regex
-    # metacharacters (including ReDoS patterns like `(a+)+`) cannot be injected.
+    # For regex conditions, validate that the user-supplied value is a legal
+    # regex pattern (catches typos and ReDoS attempts).  re.escape() must NOT
+    # be applied here because it would destroy intentional regex metacharacters
+    # like `^[A-Z]+$` — the user is deliberately writing a regex pattern.
     effective_val = val
     if rule.condition in ("MATCHES_REGEX", "FAILS_REGEX"):
         import re as _re
-        effective_val = _re.escape(val)
+        try:
+            _re.compile(val)        # validate syntax; raises re.error if invalid
+        except _re.error:
+            # Invalid regex — treat as a literal string match to avoid SyntaxError
+            effective_val = _re.escape(val)
+            logger.warning(
+                "Rule '%s' has invalid regex pattern '%s'; treating as literal string",
+                rule.name, val,
+            )
 
     expr = template.replace("{field}", field).replace("{value}", effective_val)
     # Safety net: if any placeholder is still unreplaced (e.g. {min}, {max} for
@@ -534,3 +569,241 @@ async def export_dq_rules_as_sodacl(
                 lines.append("")
 
     return "\n".join(lines)
+
+
+# ── NLP → Rule Engine ─────────────────────────────────────────────────────────
+
+_NLP_RULE_SYSTEM_PROMPT = """\
+You are a Rule Engine Configuration Assistant for a PLM/ETL data migration platform.
+The user describes a data quality rule in natural language. Parse the description and \
+produce a JSON array of one or more wizard rule objects.
+
+Each rule object MUST have exactly these fields:
+  name            : concise rule label (≤40 chars)
+  phase           : "pre" | "quality" | "post"
+  field           : field name from the available_fields list, or "*" for all fields
+  condition       : one of the valid conditions for the phase (see below)
+  condition_value : string value if the condition requires one (empty string otherwise)
+  action          : one of the valid actions for the phase (see below)
+  action_value    : string value if the action requires one (empty string otherwise)
+  enabled         : true
+  description     : one sentence explaining what this rule does
+
+VALID CONDITIONS per phase:
+  pre:     IS_NULL | IS_EMPTY | MATCHES_REGEX | NOT_IN_LIST | CUSTOM
+  quality: IS_NULL | IS_NOT_UNIQUE | OUT_OF_RANGE | FAILS_REGEX | BELOW_MIN_LENGTH | ABOVE_MAX_LENGTH | CUSTOM
+  post:    IS_NULL | OUT_OF_RANGE | MATCHES_REGEX | CUSTOM
+
+VALID ACTIONS per phase:
+  pre:     SET_DEFAULT | SKIP_RECORD | COERCE_TYPE | TRIM | TO_UPPER | TO_LOWER | REGEX_REPLACE
+  quality: REJECT_RECORD | FLAG_WARNING | SET_DEFAULT | QUARANTINE
+  post:    REJECT_RECORD | FLAG_WARNING | ROUTE_TO_DLQ | AUDIT_LOG | ASSERT
+
+RULES:
+- Match the field name exactly to one from available_fields (case-sensitive)
+- "must not be empty/null/blank"  → condition=IS_NULL, phase=pre or quality
+- "must be unique"                → condition=IS_NOT_UNIQUE, phase=quality
+- "must be one of X, Y, Z"       → condition=NOT_IN_LIST, condition_value="X,Y,Z", phase=pre
+- "must match pattern X"         → condition=MATCHES_REGEX, condition_value=<pattern>
+- "must be between N and M"      → condition=OUT_OF_RANGE, condition_value="N-M"
+- "must be at least N chars"     → condition=BELOW_MIN_LENGTH, condition_value="N"
+- "must not exceed N chars"      → condition=ABOVE_MAX_LENGTH, condition_value="N"
+- Compound sentences produce multiple rule objects (one per constraint)
+- If no matching field is found, use "*" and note it in description
+- Return ONLY a valid JSON array, no explanatory text outside the JSON
+"""
+
+
+class NlpToRuleRequest(BaseModel):
+    description: str
+    available_fields: Optional[List[str]] = None
+    field_types: Optional[Dict[str, str]] = None
+    context_hint: Optional[str] = None      # e.g. "PLM parts data, pre-transform phase"
+    llm_provider: Optional[str] = "openai"
+
+
+@router.post("/nlp-to-rule")
+async def nlp_to_rule(request: NlpToRuleRequest):
+    """Convert a natural language rule description into one or more wizard rule objects.
+
+    The LLM interprets the description and maps it to valid condition/action pairs
+    supported by the WizardRuleEngine.  Each returned object is ready to be appended
+    directly to ``wizardData.rules`` in the frontend without further transformation.
+
+    On LLM unavailability, falls back to a best-effort keyword parser so the endpoint
+    always returns something useful.
+    """
+    import os
+    backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+
+    # Build context block for the LLM
+    ctx_parts = []
+    if request.available_fields:
+        ctx_parts.append(f"available_fields: {json.dumps(request.available_fields)}")
+    if request.field_types:
+        ctx_parts.append(f"field_types: {json.dumps(request.field_types)}")
+    if request.context_hint:
+        ctx_parts.append(f"context: {request.context_hint}")
+
+    user_content = request.description
+    if ctx_parts:
+        user_content = "\n".join(ctx_parts) + "\n\ndescription: " + request.description
+
+    # ── Try LLM first ─────────────────────────────────────────────────────────
+    rules_from_llm = None
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                f"{backend_url}/api/llm/chat",
+                params={"provider": request.llm_provider or "openai"},
+                json={
+                    "messages": [
+                        {"role": "system", "content": _NLP_RULE_SYSTEM_PROMPT},
+                        {"role": "user",   "content": user_content},
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 800,
+                },
+            )
+            if resp.is_success:
+                raw = resp.json().get("response", "")
+                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                m = re.search(r"\[.*\]", raw, re.DOTALL)
+                if m:
+                    parsed = json.loads(m.group(0))
+                    if isinstance(parsed, list) and parsed:
+                        rules_from_llm = parsed
+    except Exception as exc:
+        logger.debug("LLM nlp-to-rule unavailable: %s", exc)
+
+    if rules_from_llm:
+        # Assign stable IDs and ensure required fields are present
+        sanitised = []
+        for r in rules_from_llm:
+            if not isinstance(r, dict):
+                continue
+            sanitised.append({
+                "id":              f"nlp-{uuid.uuid4().hex[:10]}",
+                "name":            str(r.get("name", "AI Rule"))[:80],
+                "phase":           r.get("phase", "quality") if r.get("phase") in ("pre", "quality", "post") else "quality",
+                "field":           r.get("field", "*"),
+                "condition":       r.get("condition", "IS_NULL"),
+                "condition_value": str(r.get("condition_value") or ""),
+                "action":          r.get("action", "FLAG_WARNING"),
+                "action_value":    str(r.get("action_value") or ""),
+                "enabled":         True,
+                "description":     str(r.get("description", "")),
+                "source":          "ai",
+            })
+        return {
+            "rules":          sanitised,
+            "interpretation": f"AI parsed {len(sanitised)} rule(s) from your description.",
+            "ai_powered":     True,
+        }
+
+    # ── Keyword fallback — always works without LLM ───────────────────────────
+    fallback_rules = _keyword_parse_rule(
+        request.description, request.available_fields or []
+    )
+    return {
+        "rules":          fallback_rules,
+        "interpretation": "Parsed using keyword matching (LLM unavailable).",
+        "ai_powered":     False,
+    }
+
+
+def _keyword_parse_rule(description: str, available_fields: List[str]) -> List[Dict[str, Any]]:
+    """Best-effort keyword parser — no LLM required.
+
+    Handles the most common natural language patterns:
+    - "X must not be empty/null"
+    - "X must be unique"
+    - "X must be one of A, B, C"
+    - "X must match pattern /regex/"
+    - "X must be between N and M"
+    - "X must have at least N characters"
+    - "X must not exceed N characters"
+    """
+    d = description.lower()
+    rules: List[Dict[str, Any]] = []
+
+    # Find field name — first token that matches an available field (case-insensitive)
+    detected_field = "*"
+    for f in available_fields:
+        if f.lower() in d:
+            detected_field = f
+            break
+
+    def _make(name: str, phase: str, condition: str, cond_val: str,
+              action: str, action_val: str, desc: str) -> Dict[str, Any]:
+        return {
+            "id":              f"nlp-{uuid.uuid4().hex[:10]}",
+            "name":            name,
+            "phase":           phase,
+            "field":           detected_field,
+            "condition":       condition,
+            "condition_value": cond_val,
+            "action":          action,
+            "action_value":    action_val,
+            "enabled":         True,
+            "description":     desc,
+            "source":          "keyword_fallback",
+        }
+
+    if any(kw in d for kw in ("not be empty", "not be null", "not be blank", "must not be empty", "required", "non-null", "non-empty")):
+        rules.append(_make(
+            f"Completeness — {detected_field}", "quality", "IS_NULL", "",
+            "REJECT_RECORD", "", f"Field '{detected_field}' must not be null or empty.",
+        ))
+
+    if any(kw in d for kw in ("unique", "must be unique", "no duplicate", "no duplicates")):
+        rules.append(_make(
+            f"Uniqueness — {detected_field}", "quality", "IS_NOT_UNIQUE", "",
+            "REJECT_RECORD", "", f"Field '{detected_field}' must be unique across all records.",
+        ))
+
+    m_list = re.search(r"one of[:\s]+([a-zA-Z0-9_\s,|/]+)", d)
+    if m_list:
+        vals = ",".join(v.strip() for v in re.split(r"[,|]", m_list.group(1)) if v.strip())
+        rules.append(_make(
+            f"Allowed values — {detected_field}", "pre", "NOT_IN_LIST", vals,
+            "SKIP_RECORD", "", f"Field '{detected_field}' must be one of: {vals}.",
+        ))
+
+    m_range = re.search(r"between\s+(-?[\d.]+)\s+and\s+(-?[\d.]+)", d)
+    if m_range:
+        rng = f"{m_range.group(1)}-{m_range.group(2)}"
+        rules.append(_make(
+            f"Range check — {detected_field}", "quality", "OUT_OF_RANGE", rng,
+            "FLAG_WARNING", "", f"Field '{detected_field}' must be in range {rng}.",
+        ))
+
+    m_min_len = re.search(r"at least\s+(\d+)\s+char", d)
+    if m_min_len:
+        rules.append(_make(
+            f"Min length — {detected_field}", "quality", "BELOW_MIN_LENGTH", m_min_len.group(1),
+            "FLAG_WARNING", "", f"Field '{detected_field}' must be at least {m_min_len.group(1)} characters.",
+        ))
+
+    m_max_len = re.search(r"(?:not exceed|no more than|max(?:imum)?)\s+(\d+)\s+char", d)
+    if m_max_len:
+        rules.append(_make(
+            f"Max length — {detected_field}", "quality", "ABOVE_MAX_LENGTH", m_max_len.group(1),
+            "FLAG_WARNING", "", f"Field '{detected_field}' must not exceed {m_max_len.group(1)} characters.",
+        ))
+
+    m_regex = re.search(r"match(?:es)?\s+(?:pattern|regex|format)?\s*[:/]?\s*([^\s]+)", d)
+    if m_regex and m_regex.group(1) not in ("the", "a", "an"):
+        rules.append(_make(
+            f"Pattern — {detected_field}", "quality", "FAILS_REGEX", m_regex.group(1),
+            "FLAG_WARNING", "", f"Field '{detected_field}' must match pattern: {m_regex.group(1)}.",
+        ))
+
+    # Generic fallback if nothing matched
+    if not rules:
+        rules.append(_make(
+            f"Custom rule — {detected_field}", "quality", "CUSTOM", "",
+            "FLAG_WARNING", "", description,
+        ))
+
+    return rules

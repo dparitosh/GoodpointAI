@@ -1,6 +1,8 @@
 import sys
 import os
+import json
 import logging
+import re
 import httpx
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +29,24 @@ from agent_services.base.models import AgentCapability, AgentTaskRequest, AgentT
 
 # All DB access goes through the backend API — no direct ORM imports
 BACKEND_URL = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://localhost:8011")
+
+# ── LLM prompt for AI-powered rule recommendations ────────────────────────────
+_RULE_RECOMMENDATION_PROMPT = """\
+You are a Data Quality Rules Advisor for PLM/ETL migration pipelines.
+You receive column-level profile statistics from a data discovery run and must \
+recommend specific, actionable DQ rules that should be applied to this dataset.
+
+For each recommended rule output a JSON object with:
+  rule_type       : completeness|uniqueness|range|pattern|freshness|allowed_values|referential_integrity|format
+  column          : exact column name (or "*" for dataset-level rules)
+  threshold       : numeric threshold (null if not applicable)
+  expression_hint : short Python expression hint using is_empty/matches_regex/in_range/in_list helpers
+  rationale       : one sentence explaining WHY this rule matters for THIS specific data
+  priority        : critical|high|medium|low
+  severity        : critical|warning|info
+
+Output ONLY a valid JSON array of rule recommendation objects. No other text.
+"""
 
 class QualityMonitorAgent(AgentService):
     def __init__(self):
@@ -66,10 +86,17 @@ class QualityMonitorAgent(AgentService):
             AgentCapability(name="validate_transformations", description="Validate data transformations"),
             AgentCapability(name="generate_quality_reports", description="Generate quality reports"),
             AgentCapability(name="execute_rules", description="Execute Rule Engine rule sets against data"),
+            AgentCapability(name="recommend_rules", description="AI-powered DQ rule recommendations from profile data"),
         ]
 
     async def process_task(self, task: AgentTaskRequest):
         caps = set(task.payload.get("required_capabilities", []))
+        profile_summary = task.payload.get("profile_summary")
+
+        # AI rule recommendation — can be requested explicitly or triggered by
+        # profile data arriving in the payload (from data_discovery handoff).
+        if "recommend_rules" in caps or (profile_summary and not task.payload.get("source_id") and not task.payload.get("folder_path")):
+            return await self._handle_rule_recommendation(task)
 
         # Route to datasource quality scan (folder or registered source_id)
         if "scan_datasource_quality" in caps or task.payload.get("source_id") or task.payload.get("folder_path"):
@@ -93,6 +120,247 @@ class QualityMonitorAgent(AgentService):
             "rule_validation": rule_result if rule_result else None,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+    async def _handle_rule_recommendation(self, task: AgentTaskRequest) -> Dict[str, Any]:
+        """Entry point for the recommend_rules capability.
+
+        Combines deterministic signal-based recommendations (always runs) with
+        optional AI/LLM recommendations (graceful fallback when LLM unavailable).
+        """
+        profile_summary = task.payload.get("profile_summary", {})
+        deterministic = self._recommend_rules_from_profile(profile_summary)
+        ai_recs = await self._recommend_rules_with_llm(profile_summary, task.payload)
+
+        # Merge: AI recs go first (richer rationale), then deterministic for columns
+        # not already covered by the AI output.
+        ai_columns = {r.get("column") for r in (ai_recs or [])}
+        extra = [r for r in deterministic if r.get("column") not in ai_columns]
+        recommended_rules = (ai_recs or []) + extra
+
+        return {
+            "status": "Rule recommendations generated",
+            "task_id": task.task_id,
+            "recommended_rules": recommended_rules,
+            "rule_count": len(recommended_rules),
+            "ai_powered": ai_recs is not None,
+            "profile_signals": len(profile_summary.get("signals", [])),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _recommend_rules_from_profile(
+        self, profile_summary: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Deterministic rule recommendations derived from column profile statistics.
+
+        Always runs regardless of LLM availability. Covers the most important
+        signal types so operators get useful recommendations even when AI is off.
+        """
+        recommendations: List[Dict[str, Any]] = []
+        columns = profile_summary.get("columns", {})
+        signals = profile_summary.get("signals", [])
+
+        # Index signals by type for quick lookup
+        signal_by_col: Dict[str, List[Dict[str, Any]]] = {}
+        for s in signals:
+            col = s.get("column", "*")
+            signal_by_col.setdefault(col, []).append(s)
+
+        for col_name, meta in columns.items():
+            null_max = meta.get("null_rate_max", 0) or 0
+            null_avg = meta.get("null_rate_avg", 0) or 0
+            cr_avg   = meta.get("cardinality_ratio_avg", 0) or 0
+            is_id    = meta.get("is_identifier", False)
+            dtypes   = meta.get("dtypes", [])
+            semtypes = meta.get("semantic_types", [])
+
+            # Completeness — high null rate
+            if null_max > 0.05:
+                priority = "critical" if null_max > 0.5 else "high" if null_max > 0.2 else "medium"
+                recommendations.append({
+                    "rule_type": "completeness",
+                    "column": col_name,
+                    "threshold": round(1 - null_max, 2),
+                    "expression_hint": f"not is_empty(record.get('{col_name}'))",
+                    "rationale": (
+                        f"Column '{col_name}' has up to {null_max*100:.0f}% missing values — "
+                        "a completeness rule enforces a minimum fill rate."
+                    ),
+                    "priority": priority,
+                    "severity": "critical" if priority == "critical" else "warning",
+                    "source": "deterministic",
+                })
+
+            # Uniqueness — identifier column with low cardinality
+            if is_id and cr_avg < 0.99:
+                recommendations.append({
+                    "rule_type": "uniqueness",
+                    "column": col_name,
+                    "threshold": None,
+                    "expression_hint": (
+                        f"len(set(r.get('{col_name}') for r in _related.get('all_records',[]))) "
+                        f"== len(_related.get('all_records',[]))"
+                    ),
+                    "rationale": (
+                        f"Column '{col_name}' is classified as an identifier "
+                        f"but has only {cr_avg*100:.0f}% distinct values — duplicates detected."
+                    ),
+                    "priority": "critical",
+                    "severity": "critical",
+                    "source": "deterministic",
+                })
+
+            # Allowed values — very low cardinality non-identifier (enum/flag)
+            if cr_avg < 0.01 and not is_id and null_avg < 0.5:
+                samples = meta.get("sample_values", [])
+                if 1 <= len(samples) <= 15:
+                    recommendations.append({
+                        "rule_type": "allowed_values",
+                        "column": col_name,
+                        "threshold": None,
+                        "expression_hint": f"in_list(record.get('{col_name}'), {samples!r})",
+                        "rationale": (
+                            f"Column '{col_name}' has only {len(samples)} distinct value(s) — "
+                            "an allowed-values rule prevents unexpected entries."
+                        ),
+                        "priority": "medium",
+                        "severity": "warning",
+                        "source": "deterministic",
+                    })
+
+            # Format — date/timestamp stored as text
+            if any("datetime" in s or "date" in s for s in semtypes):
+                recommendations.append({
+                    "rule_type": "format",
+                    "column": col_name,
+                    "threshold": None,
+                    "expression_hint": (
+                        f"matches_regex(str(record.get('{col_name}','')), "
+                        r"r'^\d{4}-\d{2}-\d{2}')"
+                    ),
+                    "rationale": (
+                        f"Column '{col_name}' contains date/time data — "
+                        "a format rule validates ISO-8601 date strings and catches corrupt values."
+                    ),
+                    "priority": "medium",
+                    "severity": "warning",
+                    "source": "deterministic",
+                })
+
+            # Mixed type — data type inconsistency
+            if meta.get("has_mixed_types") and len(dtypes) > 1:
+                recommendations.append({
+                    "rule_type": "pattern",
+                    "column": col_name,
+                    "threshold": None,
+                    "expression_hint": f"isinstance(record.get('{col_name}'), str)",
+                    "rationale": (
+                        f"Column '{col_name}' has mixed dtypes ({', '.join(dtypes)}) — "
+                        "a type-consistency rule ensures all values are the same type before loading."
+                    ),
+                    "priority": "high",
+                    "severity": "warning",
+                    "source": "deterministic",
+                })
+
+        # Dataset-level: flag when parse errors exist
+        if profile_summary.get("total_files", 0) > profile_summary.get("parseable_files", 0):
+            unparseable = (
+                profile_summary.get("total_files", 0)
+                - profile_summary.get("parseable_files", 0)
+            )
+            recommendations.append({
+                "rule_type": "completeness",
+                "column": "*",
+                "threshold": None,
+                "expression_hint": "True",
+                "rationale": (
+                    f"{unparseable} file(s) could not be parsed — "
+                    "investigate encoding or format issues before migration."
+                ),
+                "priority": "critical",
+                "severity": "critical",
+                "source": "deterministic",
+            })
+
+        return recommendations
+
+    async def _recommend_rules_with_llm(
+        self, profile_summary: Dict[str, Any], payload: Dict[str, Any]
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Call the backend LLM endpoint to generate AI-powered DQ rule recommendations.
+
+        Returns a list of rule recommendation dicts on success, or None when the
+        LLM is unavailable (caller falls back to deterministic recommendations only).
+        """
+        if not profile_summary:
+            return None
+
+        # Send a condensed context — just column stats and top signals
+        context = {
+            "total_files":    profile_summary.get("total_files", 0),
+            "total_rows":     profile_summary.get("total_rows", 0),
+            "column_stats": [
+                {
+                    "name":              name,
+                    "null_rate_max":     meta.get("null_rate_max", 0),
+                    "null_rate_avg":     meta.get("null_rate_avg", 0),
+                    "cardinality_ratio": meta.get("cardinality_ratio_avg", 0),
+                    "semantic_types":    meta.get("semantic_types", []),
+                    "dtypes":            meta.get("dtypes", []),
+                    "is_identifier":     meta.get("is_identifier", False),
+                    "has_mixed_types":   meta.get("has_mixed_types", False),
+                    "sample_values":     meta.get("sample_values", [])[:5],
+                }
+                for name, meta in list(profile_summary.get("columns", {}).items())[:30]
+            ],
+            "signals": profile_summary.get("signals", [])[:15],
+        }
+
+        try:
+            llm_provider = payload.get("llm_provider", "openai")
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                resp = await client.post(
+                    f"{BACKEND_URL}/api/llm/chat",
+                    params={"provider": llm_provider},
+                    json={
+                        "messages": [
+                            {"role": "system", "content": _RULE_RECOMMENDATION_PROMPT},
+                            {"role": "user",   "content": json.dumps(context)},
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 1500,
+                    },
+                )
+                if not resp.is_success:
+                    logger.debug(
+                        "LLM rule recommendations returned %d — falling back to deterministic",
+                        resp.status_code,
+                    )
+                    return None
+
+                raw = resp.json().get("response", "")
+                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+                m = re.search(r"\[.*\]", raw, re.DOTALL)
+                if not m:
+                    return None
+                recs = json.loads(m.group(0))
+                if not isinstance(recs, list):
+                    return None
+                # Annotate source + sanitise
+                valid = []
+                for r in recs:
+                    if isinstance(r, dict) and r.get("rule_type") and r.get("column"):
+                        r["source"] = "ai"
+                        valid.append(r)
+                logger.info(
+                    "LLM generated %d DQ rule recommendations for %d columns",
+                    len(valid),
+                    len(profile_summary.get("columns", {})),
+                )
+                return valid or None
+        except Exception as exc:
+            logger.debug("LLM rule recommendation unavailable: %s", exc)
+            return None
 
     async def _scan_datasource_via_backend(self, task: AgentTaskRequest) -> Dict[str, Any]:
         """Call the backend quality scan endpoint — no direct DB access from agent."""
@@ -128,6 +396,18 @@ class QualityMonitorAgent(AgentService):
                     result = resp.json()
                     result["routed_via"] = "quality_monitor_agent"
                     result["source_id"] = source_id
+                    # ── AI rule recommendations augmentation ───────────────────
+                    # When the discovery agent forwarded a profile_summary, use it to
+                    # generate rule recommendations alongside the quality scan result.
+                    profile_summary = payload.get("profile_summary")
+                    if profile_summary and profile_summary.get("columns"):
+                        deterministic = self._recommend_rules_from_profile(profile_summary)
+                        ai_recs = await self._recommend_rules_with_llm(profile_summary, payload)
+                        ai_cols = {r.get("column") for r in (ai_recs or [])}
+                        extra = [r for r in deterministic if r.get("column") not in ai_cols]
+                        result["recommended_rules"] = (ai_recs or []) + extra
+                        result["ai_powered_recommendations"] = ai_recs is not None
+                        result["recommendation_count"] = len(result["recommended_rules"])
                     return result
                 return {
                     "status": "error",

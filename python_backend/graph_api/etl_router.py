@@ -62,7 +62,9 @@ async def get_etl_metrics(db: Session = Depends(get_db)):
         
         latest_status = latest_run.status if latest_run else "no_runs"
         
-        # Count total ingestion volume (simplified - count all runs)
+        # Count total ingestion runs as a proxy for pipeline activity.
+        # We use run count directly — the previous `run_count * 100` multiplier
+        # was a placeholder that produced misleading numbers in the UI.
         run_count = db.query(func.count(PLMIngestionRun.run_id)).scalar() or 0
         
         # Get DQ issues from scan reports
@@ -92,7 +94,7 @@ async def get_etl_metrics(db: Session = Depends(get_db)):
         
         return ETLMetricsResponse(
             latestStatus=latest_status,
-            ingestionVolume=run_count * 100,  # Approximate
+            ingestionVolume=run_count,
             pendingDQIssues=pending_issues,
             criticalDQIssues=critical_issues,
             scheduledJobs=scheduled_jobs,

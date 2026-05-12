@@ -141,7 +141,16 @@ class RuleExecutionService:
 
             # Execute rules
             violations: List[RuleViolation] = []
-            rules = self.db.query(Rule).filter(Rule.rule_set_id == rule_set_id).all()
+            # Bug 7 fix: filter out disabled/inactive rules so they don’t silently execute
+            rules = (
+                self.db.query(Rule)
+                .filter(
+                    Rule.rule_set_id == rule_set_id,
+                    Rule.enabled == True,  # noqa: E712
+                )
+                .order_by(Rule.sequence_order)
+                .all()
+            )
 
             for rule in rules:
                 try:
@@ -219,11 +228,18 @@ class RuleExecutionService:
 
             # Evaluate based on rule level and expression language
             if rule.expression_language == "python":
-                # Inject `record` so expression templates like
-                # `is_empty(record.get('field'))` resolve correctly.
+                # Inject `record` and `_related` so expression templates
+                # like `is_empty(record.get('field'))` and
+                # IS_NOT_UNIQUE / FK_EXISTS (which use `_related`) resolve
+                # correctly without raising NameError.
                 rule_passed = self.executor.evaluate_python_expression(
                     rule.expression,
-                    {"record": entity_data, **entity_data, **(rule.parameters or {})}
+                    {
+                        "record": entity_data,
+                        "_related": {},           # populated by caller when available
+                        **entity_data,
+                        **(rule.parameters or {}),
+                    },
                 )
             elif rule.expression_language == "sql":
                 if not table_name or not entity_id:
@@ -238,8 +254,20 @@ class RuleExecutionService:
                     rule.parameters
                 )
             else:
-                logger.warning("Unknown expression language: %s", rule.expression_language)
-                return None
+                # Bug 8 fix: unknown expression language is a configuration error,
+                # not a silent pass.  Create a warning violation so the operator
+                # knows the rule was not evaluated.
+                logger.warning(
+                    "Unsupported expression language '%s' for rule %s — skipping with warning",
+                    rule.expression_language, rule.id,
+                )
+                return RuleViolation(
+                    rule_id=rule.id,
+                    rule_name=rule.name,
+                    severity="warning",
+                    message=f"Unsupported expression language: {rule.expression_language}",
+                    action="log",
+                )
 
             # If rule passed, no violation
             if rule_passed:

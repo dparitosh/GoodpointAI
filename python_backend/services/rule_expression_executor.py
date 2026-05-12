@@ -7,6 +7,8 @@ Evaluates rule expressions in Python and SQL with security constraints.
 """
 
 import logging
+import re as _re
+from collections import defaultdict
 from typing import Any, Dict, List, Optional
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
@@ -124,20 +126,63 @@ class RuleExpressionExecutor:
             if isinstance(item, dict) and item.get(field) == value
         )
 
+    @staticmethod
+    def _has_circular_dependency(
+        nodes: list,
+        id_field: str = "id",
+        ref_field: str = "parent_id",
+    ) -> bool:
+        """Detect circular dependencies in hierarchical data (iterative DFS).
+
+        Mirrors SafeExpressionEvaluator.has_circular_dependency so both
+        evaluator code-paths expose the same namespace to rule expressions.
+        """
+        graph: dict = defaultdict(list)
+        for node in nodes or []:
+            node_id_raw = node.get(id_field)
+            ref_id_raw = node.get(ref_field)
+            if node_id_raw is not None and ref_id_raw is not None:
+                graph[str(ref_id_raw)].append(str(node_id_raw))
+
+        all_ids = {
+            str(n.get(id_field))
+            for n in nodes or []
+            if n.get(id_field) is not None
+        }
+        visited: set = set()
+        for start in all_ids:
+            if start in visited:
+                continue
+            stack: list = [(start, iter(graph[start]), {start})]
+            while stack:
+                node, children, ancestors = stack[-1]
+                try:
+                    child: str = next(children)
+                    if child in ancestors:
+                        return True
+                    if child not in visited:
+                        stack.append((child, iter(graph[child]), ancestors | {child}))
+                except StopIteration:
+                    visited.add(node)
+                    stack.pop()
+        return False
+
     @classmethod
     def _custom_functions(cls) -> dict:
         return {
-            'is_empty':      cls._is_empty,
-            'is_not_null':   cls._is_not_null,
-            'matches_regex': cls._matches_regex,
-            'contains':      cls._contains,
-            'in_range':      cls._in_range,
-            'in_list':       cls._in_list,
-            'size':          cls._size,
-            'starts_with':   cls._starts_with,
-            'ends_with':     cls._ends_with,
-            'sum_of':        cls._sum_of,
-            'count_where':   cls._count_where,
+            'is_empty':               cls._is_empty,
+            'is_not_null':            cls._is_not_null,
+            'matches_regex':          cls._matches_regex,
+            'contains':               cls._contains,
+            'in_range':               cls._in_range,
+            'in_list':                cls._in_list,
+            'size':                   cls._size,
+            'starts_with':            cls._starts_with,
+            'ends_with':              cls._ends_with,
+            'sum_of':                 cls._sum_of,
+            'count_where':            cls._count_where,
+            # Parity with SafeExpressionEvaluator — required by NO_CIRCULAR_DEPENDENCY template
+            'has_circular_dependency': cls._has_circular_dependency,
         }
 
     @staticmethod
