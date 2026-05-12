@@ -36,7 +36,7 @@ const NLP_EXAMPLES = [
  * Calls POST /api/rules/v1/nlp-to-rule and appends the returned rule(s) to
  * the wizard rule list via onAddRules.
  */
-const NlpRuleInput = ({ sourceFields, fieldMappings, onAddRules }) => {
+const NlpRuleInput = ({ sourceFields, onAddRules }) => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [lastResult, setLastResult] = useState(null); // { rules, interpretation, ai_powered }

@@ -688,6 +688,61 @@ class DataProfilerAgent(AgentService):
 
         insights = _build_semantic_insights(file_profiles, column_corpus, entity_inference)
 
+        # ── LLM semantic enrichment pass ──────────────────────────────────────
+        # For columns where heuristic confidence is low, ask the LLM for
+        # a richer semantic interpretation before returning the insights.
+        low_conf_cols = [
+            cs for cs in insights["column_semantics"] if cs["confidence"] < 0.4
+        ]
+        if low_conf_cols:
+            backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+            _SEMANTIC_PROMPT = (
+                "You are a PLM data engineer expert. Given column names and statistics "
+                "from a dataset, infer the semantic role and entity type for each column. "
+                "Return a JSON array where each element has: "
+                "column (string), canonical_name (string), semantic_role (string), "
+                "entity_hint (string), confidence (float 0-1), and reasoning (string). "
+                "Only return the JSON array, no extra text."
+            )
+            col_summary = [
+                {
+                    "column": cs["column"],
+                    "dtype": cs.get("dtype", ""),
+                    "cardinality_ratio": cs.get("cardinality_ratio", 0.0),
+                    "null_rate": cs.get("null_rate", 0.0),
+                }
+                for cs in low_conf_cols
+            ]
+            try:
+                import json as _json
+                llm_result = await self._adaptive_llm_call(
+                    backend_url=backend_url,
+                    system_prompt=_SEMANTIC_PROMPT,
+                    user_content=_json.dumps(col_summary),
+                    temperature=0.1,
+                    max_tokens=1200,
+                )
+                if isinstance(llm_result, list):
+                    # Merge LLM-enriched semantics back by column name
+                    llm_by_col = {item["column"]: item for item in llm_result if isinstance(item, dict) and "column" in item}
+                    for cs in insights["column_semantics"]:
+                        enriched = llm_by_col.get(cs["column"])
+                        if enriched and float(enriched.get("confidence", 0)) > cs["confidence"]:
+                            cs.update({
+                                "canonical_name": enriched.get("canonical_name", cs["canonical_name"]),
+                                "semantic_role":  enriched.get("semantic_role", cs["semantic_role"]),
+                                "entity_hint":    enriched.get("entity_hint", cs["entity_hint"]),
+                                "confidence":     float(enriched.get("confidence", cs["confidence"])),
+                                "llm_reasoning":  enriched.get("reasoning", ""),
+                            })
+                    logger.info(
+                        "DataProfilerAgent: LLM enriched %d low-confidence columns",
+                        len(llm_by_col),
+                    )
+            except Exception as llm_err:
+                logger.debug("DataProfilerAgent: LLM enrichment skipped: %s", llm_err)
+        # ── End LLM enrichment ────────────────────────────────────────────────
+
         logger.info(
             "DataProfilerAgent: %d columns, %d entity classifications, %d relationships",
             insights["summary"]["total_columns_analysed"],

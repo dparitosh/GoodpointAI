@@ -176,7 +176,6 @@ const SmartGuidancePanel = ({
 
   // The most recent assistant guidance entry
   const latestGuidance = [...chatHistory].reverse().find(m => m.role === 'assistant' && m.guidance)?.guidance || guidance;
-  const meta = latestGuidance ? (RECOMMENDATION_META[latestGuidance.recommendation] || RECOMMENDATION_META.discovery) : null;
 
   return (
     <div className="smart-guidance-panel" role="region" aria-label="Smart Guidance">

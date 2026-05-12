@@ -101,7 +101,7 @@ export default function DataHealthPanel({ healthReport, onApplyRule, loading = f
     semantic_header_map   = {},
     distribution_anomalies = [],
     inferred_rules        = [],
-    profile_summary       = {},
+
     signals               = [],
     files_scanned         = 0,
     timestamp,

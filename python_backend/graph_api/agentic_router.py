@@ -552,11 +552,6 @@ async def get_orchestrator_agents(
     response.headers["X-Total-Count"] = str(len(agents))
     return agents[skip : skip + limit]
 
-@router.post("/agents/{agent_id}/reset")
-async def reset_agent(agent_id: str):
-    """Reset agent status - Deprecated in MCP Architecture"""
-    raise HTTPException(status_code=501, detail="Agent reset not supported in distributed MCP architecture")
-
 @router.get("/metrics")
 async def get_performance_metrics():
     """Get system performance metrics"""
@@ -578,24 +573,7 @@ async def get_performance_metrics():
             "timestamp": datetime.now(),
         }
 
-#  SYSTEM STATUS ENDPOINTS
-
-@router.get("/system/status")
-async def get_agentic_system_status():
-    """Get overall agentic system status"""
-    try:
-        # Return real orchestrator status (no fabricated payloads)
-        status_data = await mcp_client.get_system_status()
-        return SystemStatus(**status_data)
-    except Exception as e:
-        logger.warning("Agentic system status unavailable: %s", e)
-        return {
-            "status": "unavailable",
-            "agents": [],
-            "mcp_server": {"connected": False},
-            "error": str(e),
-            "timestamp": datetime.now().isoformat(),
-        }
+#  AGENT ACTIVE / METRICS ENDPOINTS
 
 @router.get("/agents/active")
 async def get_active_agents_list(

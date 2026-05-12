@@ -1017,6 +1017,48 @@ class ReportingAgent(AgentService):
             len(recommended_actions),
             len(semantic_insights.get("column_semantics", [])),
         )
+
+        # ── LLM executive-summary pass ─────────────────────────────────────────
+        # Generate a human-readable executive narrative from the structured report.
+        backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
+        _EXEC_SUMMARY_PROMPT = (
+            "You are a PLM data migration expert. Based on the migration readiness score, "
+            "data quality summary, top anomalies, and recommended actions provided, "
+            "write a concise executive summary (3-5 sentences). "
+            "Focus on: overall readiness, critical risks, and immediate next steps. "
+            "Return a JSON object with a single key 'executive_summary' containing the narrative string."
+        )
+        try:
+            import json as _json
+            summary_input = {
+                "readiness_score": readiness_score,
+                "data_quality_summary": {
+                    k: v for k, v in data_quality_summary.items()
+                    if k in ("total_issues", "critical_issues", "overall_dq_score", "quality_level")
+                },
+                "top_anomalies": [
+                    {"type": a.get("anomaly_type"), "severity": a.get("severity"), "description": a.get("description", "")[:120]}
+                    for a in enriched_anomalies[:5]
+                ],
+                "top_actions": [
+                    {"action": a.get("action"), "priority": a.get("priority"), "agent": a.get("agent")}
+                    for a in recommended_actions[:5]
+                ],
+            }
+            llm_result = await self._adaptive_llm_call(
+                backend_url=backend_url,
+                system_prompt=_EXEC_SUMMARY_PROMPT,
+                user_content=_json.dumps(summary_input),
+                temperature=0.3,
+                max_tokens=400,
+            )
+            if isinstance(llm_result, dict) and "executive_summary" in llm_result:
+                report["executive_summary"] = llm_result["executive_summary"]
+                logger.info("ReportingAgent: LLM executive summary generated for report %s", report_id)
+        except Exception as llm_err:
+            logger.debug("ReportingAgent: LLM executive summary skipped: %s", llm_err)
+        # ── End LLM executive-summary ──────────────────────────────────────────
+
         return report
 
     # ── Narrow capability handlers ────────────────────────────────────────────

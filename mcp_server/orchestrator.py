@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple, TYPE_CHECKING, Callable, Awaitable, cast
 import neo4j
 from fastapi import HTTPException

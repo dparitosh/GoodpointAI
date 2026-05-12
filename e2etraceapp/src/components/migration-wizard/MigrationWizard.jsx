@@ -41,7 +41,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Wizard state
   const [currentStep, setCurrentStep] = useState(getInitialStepFromURL);
   // Per-operation loading flags — prevents unrelated buttons from being disabled during an operation
-  const [opLoading, setOpLoading] = useState({ discovery: false, suggestions: false, validation: false, execute: false });
+  const [opLoading, setOpLoading] = useState({ discovery: false, suggestions: false, validation: false, execute: false, profile: false, quality: false, report: false });
   // Template browser panel expanded/collapsed in the Mapping step
   const [showTemplateBrowser, setShowTemplateBrowser] = useState(false);
   // Smart Guidance: dismissed by user or after an operation starts
@@ -145,6 +145,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
   // Derived loading helpers
   const anyLoading = Object.values(opLoading).some(Boolean);
   const loadingMessage = opLoading.discovery ? 'Running discovery analysis...'
+    : opLoading.profile  ? 'Running semantic profiling agent...'
+    : opLoading.quality  ? 'Running quality scan agent...'
+    : opLoading.report   ? 'Generating AI pipeline report...'
     : opLoading.suggestions ? 'Generating mapping suggestions...'
     : opLoading.validation ? 'Running validation checks...'
     : opLoading.execute ? 'Executing migration pipeline...'
