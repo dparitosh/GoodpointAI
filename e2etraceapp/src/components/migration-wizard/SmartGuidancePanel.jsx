@@ -125,10 +125,17 @@ const SmartGuidancePanel = ({
       const data = await resp.json();
 
       if (nlpText) {
-        setChatHistory(prev => [
-          ...prev,
-          { role: 'assistant', text: data.headline, guidance: data },
-        ]);
+        // Replace the previous guidance card if the recommendation hasn't changed
+        // (avoids showing two identical cards when backend echoes the same advice)
+        setChatHistory(prev => {
+          const lastAssistantIdx = prev.map((m, i) => m.role === 'assistant' && m.guidance ? i : -1).filter(i => i !== -1).pop();
+          if (lastAssistantIdx != null && prev[lastAssistantIdx]?.guidance?.recommendation === data.recommendation) {
+            const updated = [...prev];
+            updated[lastAssistantIdx] = { role: 'assistant', text: data.headline, guidance: data };
+            return updated;
+          }
+          return [...prev, { role: 'assistant', text: data.headline, guidance: data }];
+        });
         setGuidance(data);
       } else {
         setGuidance(data);
@@ -137,9 +144,10 @@ const SmartGuidancePanel = ({
     } catch {
       const fallback = STATIC_FALLBACK(previousRuns);
       if (nlpText) {
+        // Show a plain text response — do NOT duplicate the existing guidance card
         setChatHistory(prev => [
           ...prev,
-          { role: 'assistant', text: fallback.headline, guidance: fallback },
+          { role: 'assistant', text: "I'm having trouble reaching the AI service right now. Please check the backend is running or try again shortly.", guidance: null },
         ]);
       } else {
         setGuidance(fallback);
