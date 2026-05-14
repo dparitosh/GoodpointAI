@@ -28,6 +28,11 @@ from models.workflow_models import WorkflowExecution, MigrationStage
 from models.conversation_models import Conversation, ConversationMetadata, ChatMessage as ConversationMessage, MessageRole
 from models.workflow_context_models import WorkflowContext, EnhancedChatRequest, WorkflowContextResponse, WorkflowContextList
 from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
+from core.error_handling import (
+    classify_error, retry_with_backoff, get_circuit_breaker,
+    ErrorSeverity, ErrorCategory, ClassifiedError
+)
+from core.fallback_responses import FallbackResponse, get_fallback_by_error_type
 from services.conversation_repository import ConversationRepository
 from services.workflow_context_repository import WorkflowContextRepository
 from models.configuration_models import DataSourceConfigRecord
@@ -601,22 +606,154 @@ async def process_chat_message(
             payload=task_payload
         )
         
-        # Delegate to MCP Server with timeout protection (30 seconds)
+        # Check circuit breaker for MCP service
+        mcp_circuit_breaker = get_circuit_breaker("mcp_chat_service")
+        if mcp_circuit_breaker.state == "OPEN":
+            logger.warning("MCP circuit breaker is OPEN - returning fallback response")
+            fallback_response = get_fallback_by_error_type(
+                "circuit_breaker_open",
+                service_name="Chat Agent",
+                estimated_recovery_minutes=1,
+                session_id=session_id
+            )
+            
+            # Save fallback to conversation
+            fallback_message = ConversationMessage(
+                role=MessageRole.SYSTEM,
+                content=fallback_response.get("message", "Service unavailable"),
+                timestamp=datetime.utcnow(),
+                metadata={"_fallback": True, "reason": "circuit_breaker"}
+            )
+            conversation = repo.add_message(conversation.conversation_id, fallback_message)
+            
+            return ChatResponse(
+                message=fallback_response["message"],
+                agent_responses=[],
+                suggested_actions=fallback_response.get("suggested_actions", []),
+                requires_followup=fallback_response.get("requires_followup", False),
+                session_id=session_id
+            )
+        
+        # Delegate to MCP Server with timeout protection (30 seconds) and error recovery
+        result = None
         try:
             result_dict = await asyncio.wait_for(
                 mcp_client.submit_task(chat_task.model_dump(mode="json")),
                 timeout=30.0
             )
-        except asyncio.TimeoutError:
-            logger.error("Chat processing timeout - MCP agent took longer than 30 seconds")
-            raise HTTPException(
-                status_code=504,
-                detail="Chat processing timeout. The agent took too long to respond. Please try again."
-            ) from None
+            result = AgenticTaskResult(**result_dict)
+            mcp_circuit_breaker.record_success()  # Record successful call for circuit breaker
+            
+        except asyncio.TimeoutError as e:
+            classified_error = ClassifiedError(
+                message="Chat processing exceeded 30 second timeout",
+                severity=ErrorSeverity.TRANSIENT,
+                category=ErrorCategory.AGENT_TIMEOUT,
+                original_error=e
+            )
+            logger.error("Chat timeout: %s", classified_error.message, extra={"error_context": classified_error.to_dict()})
+            
+            # Record failure for circuit breaker
+            mcp_circuit_breaker.record_failure()
+            
+            # Generate and return fallback response
+            fallback_response = get_fallback_by_error_type(
+                "agent_timeout",
+                message_context=chat_request.message,
+                session_id=session_id
+            )
+            
+            # Save fallback to conversation
+            fallback_message = ConversationMessage(
+                role=MessageRole.SYSTEM,
+                content=fallback_response.get("message", "Chat processing timed out"),
+                timestamp=datetime.utcnow(),
+                metadata={"_fallback": True, "reason": "timeout"}
+            )
+            conversation = repo.add_message(conversation.conversation_id, fallback_message)
+            
+            return ChatResponse(
+                message=fallback_response["message"],
+                agent_responses=[],
+                suggested_actions=fallback_response.get("suggested_actions", []),
+                requires_followup=fallback_response.get("requires_followup", False),
+                session_id=session_id
+            )
+            
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+            classified_error = classify_error(e)
+            logger.warning("MCP service unavailable: %s", classified_error.message, extra={"error_context": classified_error.to_dict()})
+            
+            # Record failure for circuit breaker
+            mcp_circuit_breaker.record_failure()
+            
+            # Generate fallback response
+            fallback_response = get_fallback_by_error_type(
+                "service_unavailable",
+                service_name="Chat Agent",
+                message_context=chat_request.message,
+                session_id=session_id
+            )
+            
+            # Save fallback to conversation
+            fallback_message = ConversationMessage(
+                role=MessageRole.SYSTEM,
+                content=fallback_response.get("message", "Chat service unavailable"),
+                timestamp=datetime.utcnow(),
+                metadata={"_fallback": True, "reason": "service_unavailable"}
+            )
+            conversation = repo.add_message(conversation.conversation_id, fallback_message)
+            
+            return ChatResponse(
+                message=fallback_response["message"],
+                agent_responses=[],
+                suggested_actions=fallback_response.get("suggested_actions", []),
+                requires_followup=fallback_response.get("requires_followup", False),
+                session_id=session_id
+            )
+            
+        except Exception as e:
+            classified_error = classify_error(e)
+            logger.error("Chat processing failed: %s", classified_error.message, extra={"error_context": classified_error.to_dict()})
+            
+            # Record failure for circuit breaker if transient
+            if classified_error.severity in [ErrorSeverity.TRANSIENT, ErrorSeverity.RECOVERABLE]:
+                mcp_circuit_breaker.record_failure()
+            
+            # Use workflow context for error recovery if available
+            if workflow_context_dict:
+                fallback_response = get_fallback_by_error_type(
+                    "agent_failed_with_context",
+                    workflow_id=workflow_context_dict.get("workflow_id", "unknown"),
+                    message_context=chat_request.message,
+                    session_id=session_id
+                )
+            else:
+                fallback_response = get_fallback_by_error_type(
+                    classified_error.category.value,
+                    error_message=classified_error.message,
+                    session_id=session_id
+                )
+            
+            # Save error to conversation
+            error_message_obj = ConversationMessage(
+                role=MessageRole.SYSTEM,
+                content=fallback_response.get("message", "An error occurred"),
+                timestamp=datetime.utcnow(),
+                metadata={"_fallback": True, "error_category": classified_error.category.value}
+            )
+            conversation = repo.add_message(conversation.conversation_id, error_message_obj)
+            
+            return ChatResponse(
+                message=fallback_response["message"],
+                agent_responses=[],
+                suggested_actions=fallback_response.get("suggested_actions", []),
+                requires_followup=fallback_response.get("requires_followup", False),
+                session_id=session_id
+            )
         
-        result = AgenticTaskResult(**result_dict)
-        
-        if result.success:
+        # If we got here successfully
+        if result and result.success:
             chat_data = result.result
             assistant_response = chat_data.get("primaryResponse", "I understand your request.")
             
@@ -628,7 +765,7 @@ async def process_chat_message(
                 metadata={"agent_type": chat_data.get("agent_type")}
             )
             conversation = repo.add_message(conversation.conversation_id, assistant_message)
-            logger.debug(f"Saved assistant response to conversation {conversation.conversation_id}")
+            logger.debug("Saved assistant response to conversation %s", conversation.conversation_id)
             
             return ChatResponse(
                 message=assistant_response,
@@ -637,26 +774,58 @@ async def process_chat_message(
                 requires_followup=chat_data.get("collaborationNeeded", False),
                 session_id=session_id
             )
-        else:
+        elif result:
+            # Result exists but success=false
+            fallback_response = get_fallback_by_error_type(
+                "generic_error",
+                error_message=result.error or "Unknown error",
+                session_id=session_id
+            )
+            
             # Add error message to history
             error_message = ConversationMessage(
                 role=MessageRole.SYSTEM,
-                content="An error occurred while processing the message.",
+                content=fallback_response.get("message", "An error occurred"),
                 timestamp=datetime.utcnow(),
-                metadata={"error": result.error}
+                metadata={"_fallback": True, "error": result.error}
             )
             conversation = repo.add_message(conversation.conversation_id, error_message)
             
             return ChatResponse(
-                message="I'm sorry, I encountered an issue processing your message.",
+                message=fallback_response["message"],
+                agent_responses=[],
+                suggested_actions=fallback_response.get("suggested_actions", []),
+                requires_followup=fallback_response.get("requires_followup", False),
+                session_id=session_id
+            )
+        else:
+            # This shouldn't happen - no result returned
+            logger.error("No result returned from MCP agent for chat processing")
+            fallback_response = get_fallback_by_error_type(
+                "generic_error",
+                error_message="No response from agent",
+                session_id=session_id
+            )
+            
+            return ChatResponse(
+                message=fallback_response["message"],
                 session_id=session_id
             )
     
     except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+        # This catch block is now superseded by the handlers above, but kept for safety
         logger.warning("MCP unavailable for /chat: %s", e)
         session_id = chat_request.session_id or f"session_{int(datetime.now().timestamp())}"
+        fallback_response = get_fallback_by_error_type(
+            "service_unavailable",
+            service_name="Chat Agent",
+            session_id=session_id
+        )
         return ChatResponse(
-            message="The AI agent cluster is currently unavailable. Start the MCP server to enable chat.",
+            message=fallback_response["message"],
+            agent_responses=[],
+            suggested_actions=fallback_response.get("suggested_actions", []),
+            requires_followup=fallback_response.get("requires_followup", False),
             session_id=session_id,
         )
     except Exception as e:
