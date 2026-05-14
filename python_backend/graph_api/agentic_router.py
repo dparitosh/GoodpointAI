@@ -26,8 +26,10 @@ from models.quality_models import DiscoveryReport, DataQualityRule
 from models.report_hub_models import UnifiedReport
 from models.workflow_models import WorkflowExecution, MigrationStage
 from models.conversation_models import Conversation, ConversationMetadata, ChatMessage as ConversationMessage, MessageRole
+from models.workflow_context_models import WorkflowContext, EnhancedChatRequest, WorkflowContextResponse, WorkflowContextList
 from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
 from services.conversation_repository import ConversationRepository
+from services.workflow_context_repository import WorkflowContextRepository
 from models.configuration_models import DataSourceConfigRecord
 from services.mcp_client import mcp_client
 
@@ -109,11 +111,13 @@ class AgenticTaskResult(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 class ChatRequest(BaseModel):
+    """Chat request with optional workflow context support"""
     message: str
     context: Dict[str, Any] = {}
     session_id: Optional[str] = None
     intent: Optional[str] = None
     ui_context: Dict[str, Any] = {}
+    workflow_context: Optional[WorkflowContext] = None  # NEW: Typed workflow context
 
 
 class SmartGuidanceRequest(BaseModel):
@@ -504,11 +508,19 @@ async def process_chat_message(
     chat_request: ChatRequest,
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
-    """Process chat message with multi-agent coordination and conversation persistence"""
+    """Process chat message with multi-agent coordination, conversation persistence, and workflow context"""
     repo = ConversationRepository()
+    workflow_repo = WorkflowContextRepository()
     
     try:
         session_id = chat_request.session_id or f"session_{int(datetime.now().timestamp())}"
+        
+        # Determine workflow ID from request or conversation
+        workflow_id = None
+        if chat_request.workflow_context:
+            workflow_id = chat_request.workflow_context.workflow_id
+        elif chat_request.ui_context.get("workflow_id"):
+            workflow_id = chat_request.ui_context.get("workflow_id")
         
         # Load or create conversation
         conversation = repo.read_by_session(session_id)
@@ -517,7 +529,7 @@ async def process_chat_message(
             conversation = Conversation(
                 session_id=session_id,
                 metadata=ConversationMetadata(
-                    workflow_id=chat_request.ui_context.get("workflow_id"),
+                    workflow_id=workflow_id or chat_request.ui_context.get("workflow_id"),
                     step=chat_request.ui_context.get("step"),
                     source_id=chat_request.ui_context.get("source_id"),
                     file_count=chat_request.ui_context.get("file_count"),
@@ -554,16 +566,39 @@ async def process_chat_message(
             ]
         }
         
+        # Load workflow context if provided
+        workflow_context_dict = None
+        if chat_request.workflow_context:
+            # Use provided workflow context
+            workflow_context_dict = chat_request.workflow_context.model_dump()
+            logger.debug(f"Using provided workflow context: {chat_request.workflow_context.workflow_id}")
+        elif workflow_id:
+            # Load from database
+            try:
+                workflow_context = workflow_repo.get_context(workflow_id)
+                if workflow_context:
+                    workflow_context_dict = workflow_context.model_dump()
+                    logger.debug(f"Loaded workflow context from database: {workflow_id}")
+            except Exception as e:
+                logger.warning(f"Could not load workflow context {workflow_id}: {str(e)}")
+        
+        # Build payload with context
+        task_payload = {
+            "message": chat_request.message,
+            "context": {**chat_request.context, **conversation_context},
+            "session_id": session_id,
+            "conversation_id": conversation.conversation_id
+        }
+        
+        # Add workflow context if available
+        if workflow_context_dict:
+            task_payload["workflow_context"] = workflow_context_dict
+        
         # Create chat processing task
         chat_task = AgenticTask(
             type=TaskType.CHAT_PROCESSING,
             required_capabilities=["process_natural_language", "coordinate_agent_responses"],
-            payload={
-                "message": chat_request.message,
-                "context": {**chat_request.context, **conversation_context},
-                "session_id": session_id,
-                "conversation_id": conversation.conversation_id
-            }
+            payload=task_payload
         )
         
         # Delegate to MCP Server with timeout protection (30 seconds)
@@ -629,6 +664,7 @@ async def process_chat_message(
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
     finally:
         repo.close()
+        workflow_repo.close()
 
 
 @router.post("/smart-guidance", response_model=SmartGuidanceResponse)
@@ -2704,6 +2740,186 @@ async def export_conversation(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to export conversation: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+# ============================================================
+# WORKFLOW CONTEXT ENDPOINTS
+# ============================================================
+
+
+@router.get("/workflow-context/{workflow_id}", response_model=WorkflowContextResponse)
+async def get_workflow_context(workflow_id: str):
+    """
+    Retrieve current workflow execution context
+    
+    Returns workflow state including progress, quality metrics, and stage information.
+    """
+    repo = WorkflowContextRepository()
+    try:
+        context = repo.get_context(workflow_id)
+        
+        if not context:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow not found: {workflow_id}"
+            )
+        
+        return WorkflowContextResponse(
+            workflow_id=context.workflow_id,
+            workflow_name=context.workflow_name,
+            status=context.status.value,
+            current_stage=context.current_stage.value,
+            progress_percentage=context.progress_percentage,
+            source_id=context.source.source_id,
+            source_name=context.source.source_name,
+            target_id=context.target.target_id,
+            target_name=context.target.target_name,
+            total_records=context.stats.total_records,
+            processed_records=context.stats.processed_records,
+            quality_score=context.stats.quality_score,
+            started_at=context.started_at.isoformat() if context.started_at else None,
+            estimated_completion_at=context.estimated_completion_at.isoformat() if context.estimated_completion_at else None,
+            ai_agents_enabled=context.ai_agents_enabled
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving workflow context {workflow_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve workflow context: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.get("/workflow-context/source/{source_id}", response_model=WorkflowContextResponse)
+async def get_workflow_context_by_source(source_id: str):
+    """
+    Retrieve most recent workflow context for a source system
+    
+    Useful for getting the latest workflow state for a particular data source.
+    """
+    repo = WorkflowContextRepository()
+    try:
+        context = repo.get_context_by_source(source_id)
+        
+        if not context:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No workflows found for source: {source_id}"
+            )
+        
+        return WorkflowContextResponse(
+            workflow_id=context.workflow_id,
+            workflow_name=context.workflow_name,
+            status=context.status.value,
+            current_stage=context.current_stage.value,
+            progress_percentage=context.progress_percentage,
+            source_id=context.source.source_id,
+            source_name=context.source.source_name,
+            target_id=context.target.target_id,
+            target_name=context.target.target_name,
+            total_records=context.stats.total_records,
+            processed_records=context.stats.processed_records,
+            quality_score=context.stats.quality_score,
+            started_at=context.started_at.isoformat() if context.started_at else None,
+            estimated_completion_at=context.estimated_completion_at.isoformat() if context.estimated_completion_at else None,
+            ai_agents_enabled=context.ai_agents_enabled
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving workflow context for source {source_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve workflow context: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.get("/active-workflows", response_model=WorkflowContextList)
+async def list_active_workflows(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100)
+):
+    """
+    List currently active workflows
+    
+    Returns workflows with RUNNING or PAUSED status for real-time monitoring.
+    """
+    repo = WorkflowContextRepository()
+    try:
+        active_workflows = repo.list_active_contexts(skip=skip, limit=limit)
+        
+        workflows = [
+            WorkflowContextResponse(
+                workflow_id=ctx.workflow_id,
+                workflow_name=ctx.workflow_name,
+                status=ctx.status.value,
+                current_stage=ctx.current_stage.value,
+                progress_percentage=ctx.progress_percentage,
+                source_id=ctx.source.source_id,
+                source_name=ctx.source.source_name,
+                target_id=ctx.target.target_id,
+                target_name=ctx.target.target_name,
+                total_records=ctx.stats.total_records,
+                processed_records=ctx.stats.processed_records,
+                quality_score=ctx.stats.quality_score,
+                started_at=ctx.started_at.isoformat() if ctx.started_at else None,
+                estimated_completion_at=ctx.estimated_completion_at.isoformat() if ctx.estimated_completion_at else None,
+                ai_agents_enabled=ctx.ai_agents_enabled
+            )
+            for ctx in active_workflows
+        ]
+        
+        return WorkflowContextList(
+            workflows=workflows,
+            total=len(workflows)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error listing active workflows: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list active workflows: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.get("/workflow-stage/{workflow_id}")
+async def get_workflow_stage_info(workflow_id: str):
+    """
+    Get lightweight stage and progress information
+    
+    Returns only essential stage and progress data for frequent polling/monitoring.
+    """
+    repo = WorkflowContextRepository()
+    try:
+        stage_info = repo.get_stage_info(workflow_id)
+        
+        if not stage_info:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow not found: {workflow_id}"
+            )
+        
+        return stage_info
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving stage info for {workflow_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve stage information: {str(e)}"
         )
     finally:
         repo.close()
