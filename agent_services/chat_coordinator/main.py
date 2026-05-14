@@ -172,38 +172,65 @@ Keep reason short and next_steps to at most 3 items.
 """
 
 
-def _is_ollama_provider(provider: str) -> bool:
-    return str(provider).strip().lower() == "ollama"
+# LLM Provider Registry - Extensible provider configuration
+class _LLMProviderRegistry:
+    """Registry for LLM provider-specific configurations"""
+    
+    def __init__(self):
+        self.providers = {
+            "ollama": {
+                "classification": {
+                    "timeout": float(os.getenv("OLLAMA_CLASSIFIER_TIMEOUT_SECONDS", "20")),
+                    "max_tokens": int(os.getenv("OLLAMA_CLASSIFIER_MAX_TOKENS", "160")),
+                    "system_prompt": _OLLAMA_MIGRATION_ASSISTANT_PROMPT,
+                },
+                "guidance": {
+                    "timeout": float(os.getenv("OLLAMA_GUIDANCE_TIMEOUT_SECONDS", "20")),
+                    "max_tokens": int(os.getenv("OLLAMA_GUIDANCE_MAX_TOKENS", "192")),
+                    "system_prompt": _OLLAMA_SMART_GUIDANCE_PROMPT,
+                },
+            },
+            "openai": {
+                "classification": {
+                    "timeout": 20.0,
+                    "max_tokens": 1024,
+                    "system_prompt": _MIGRATION_ASSISTANT_PROMPT,
+                },
+                "guidance": {
+                    "timeout": 15.0,
+                    "max_tokens": 512,
+                    "system_prompt": _SMART_GUIDANCE_PROMPT,
+                },
+            },
+        }
+    
+    def get_settings(self, provider: str, purpose: str) -> dict:
+        """Get settings for a provider and purpose (classification/guidance)"""
+        normalized_provider = str(provider).strip().lower()
+        
+        if normalized_provider not in self.providers:
+            logger.warning(f"Unknown LLM provider: {provider}, using OpenAI defaults")
+            normalized_provider = "openai"
+        
+        settings = self.providers[normalized_provider].get(purpose)
+        if not settings:
+            logger.error(f"No {purpose} settings for provider {normalized_provider}")
+            raise ValueError(f"Unsupported purpose: {purpose}")
+        
+        return settings
+    
+    def register_provider(self, provider_name: str, config: dict):
+        """Register a new LLM provider configuration"""
+        self.providers[str(provider_name).lower()] = config
+        logger.info(f"Registered LLM provider: {provider_name}")
+
+
+_provider_registry = _LLMProviderRegistry()
 
 
 def _get_llm_request_settings(provider: str, purpose: str) -> dict:
-    if _is_ollama_provider(provider):
-        if purpose == "classification":
-            return {
-                "timeout": float(os.getenv("OLLAMA_CLASSIFIER_TIMEOUT_SECONDS", "20")),
-                "max_tokens": int(os.getenv("OLLAMA_CLASSIFIER_MAX_TOKENS", "160")),
-                "system_prompt": _OLLAMA_MIGRATION_ASSISTANT_PROMPT,
-            }
-        if purpose == "guidance":
-            return {
-                "timeout": float(os.getenv("OLLAMA_GUIDANCE_TIMEOUT_SECONDS", "20")),
-                "max_tokens": int(os.getenv("OLLAMA_GUIDANCE_MAX_TOKENS", "192")),
-                "system_prompt": _OLLAMA_SMART_GUIDANCE_PROMPT,
-            }
-
-    defaults = {
-        "classification": {
-            "timeout": 20.0,
-            "max_tokens": 1024,
-            "system_prompt": _MIGRATION_ASSISTANT_PROMPT,
-        },
-        "guidance": {
-            "timeout": 15.0,
-            "max_tokens": 512,
-            "system_prompt": _SMART_GUIDANCE_PROMPT,
-        },
-    }
-    return defaults[purpose]
+    """Get LLM request settings for a provider and purpose"""
+    return _provider_registry.get_settings(provider, purpose)
 
 # Maps LLM intent labels → internal (intent, task_type, required_capabilities)
 _LLM_INTENT_MAP: dict[str, tuple[str, str, list[str]]] = {

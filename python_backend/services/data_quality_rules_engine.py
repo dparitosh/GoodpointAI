@@ -75,8 +75,8 @@ class DataQualityRulesEngine:
             else:
                 unique_field_values[tuple(rule.fields)] = set()
         
-        # Process each row
-        for idx, row in df.iterrows():
+        # Process each row - use itertuples for better performance (10-100x faster than iterrows)
+        for idx, row in enumerate(df.itertuples(index=False, name='Row')):
             result = ValidationResult(
                 row_number=idx + 1,  # 1-based indexing for user
                 is_valid=True,
@@ -84,14 +84,17 @@ class DataQualityRulesEngine:
                 feedback=""
             )
             
+            # Convert namedtuple to dict for validation methods
+            row_dict = row._asdict() if hasattr(row, '_asdict') else dict(row)
+            
             # Apply rules in order
-            self._validate_mandatory_fields(row, result)
-            self._validate_format_checks(row, result)
-            self._validate_data_types(row, result)
-            self._validate_range_checks(row, result)
-            self._validate_dropdown_values(row, result)
-            self._validate_uniqueness(row, result, unique_field_values, idx)
-            self._validate_cross_field(row, result)
+            self._validate_mandatory_fields(row_dict, result)
+            self._validate_format_checks(row_dict, result)
+            self._validate_data_types(row_dict, result)
+            self._validate_range_checks(row_dict, result)
+            self._validate_dropdown_values(row_dict, result)
+            self._validate_uniqueness(row_dict, result, unique_field_values, idx)
+            self._validate_cross_field(row_dict, result)
             
             # Generate final feedback
             result.feedback = "; ".join(result.violations) if result.violations else "OK"
@@ -381,11 +384,15 @@ class DataQualityRulesEngine:
             for violation in result.violations:
                 violation_counts[violation] = violation_counts.get(violation, 0) + 1
         
-        report.most_common_issues = sorted(
-            violation_counts.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:10]
+        # Convert to list of dicts for JSON serialization
+        report.most_common_issues = [
+            {"issue": issue, "count": count}
+            for issue, count in sorted(
+                violation_counts.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]
+        ]
         
         return report
 

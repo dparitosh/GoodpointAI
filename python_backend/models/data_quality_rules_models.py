@@ -9,8 +9,9 @@ Supports configurable validation rules including:
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict, Optional, Set, Tuple, Any
 from enum import Enum
+import uuid
 
 
 class RuleType(str, Enum):
@@ -144,7 +145,7 @@ class CrossFieldRule(BaseModel):
 
 class DataQualityRuleSet(BaseModel):
     """Complete rule set for data quality validation"""
-    rule_set_id: str = Field(default_factory=lambda: f"ruleset_{int(__import__('time').time() * 1000)}")
+    rule_set_id: str = Field(default_factory=lambda: f"ruleset_{uuid.uuid4().hex[:8]}")
     name: str = Field(..., description="Descriptive name for the rule set")
     description: Optional[str] = None
     enabled: bool = Field(default=True)
@@ -208,7 +209,7 @@ class ValidationResult(BaseModel):
 
 class DataQualityReport(BaseModel):
     """Complete data quality validation report"""
-    report_id: str = Field(default_factory=lambda: f"dq_report_{int(__import__('time').time() * 1000)}")
+    report_id: str = Field(default_factory=lambda: f"dq_report_{uuid.uuid4().hex[:8]}")
     rule_set_id: str
     total_records: int
     valid_records: int
@@ -223,7 +224,10 @@ class DataQualityReport(BaseModel):
     rule_violations: Dict[str, int] = Field(default_factory=dict, description="Count of violations per rule")
     
     # Feedback summary
-    most_common_issues: List[Tuple[str, int]] = Field(default_factory=list)
+    most_common_issues: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of most common issues with format: {\"issue\": str, \"count\": int}"
+    )
     
     class Config:
         arbitrary_types_allowed = True
