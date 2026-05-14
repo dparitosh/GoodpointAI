@@ -13,6 +13,8 @@ to environment variables for backward compatibility.
 
 import logging
 import time
+import asyncio
+import threading
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
@@ -197,13 +199,16 @@ def _get_search_config(db: Session) -> Dict[str, Any]:
     }
 
 
-# Cached embedding model instance
+# Cached embedding model instance with locking mechanism
+import threading
+
 _embedding_model = None
 _embedding_model_name = None
+_model_lock = threading.Lock()  # Thread-safe lock for model reloading
 
 
 def _get_embedding_model(db: Optional[Session] = None):
-    """Get or create embedding model instance based on config."""
+    """Get or create embedding model instance based on config (thread-safe)."""
     global _embedding_model, _embedding_model_name
     
     # Get configured model name from admin config
@@ -211,32 +216,35 @@ def _get_embedding_model(db: Optional[Session] = None):
     embedding_config = config_service.get_embedding_config()
     model_name = embedding_config.get("model", "all-MiniLM-L6-v2")
     
-    # Reload model if config changed
+    # Reload model if config changed (with lock to prevent race condition)
     if _embedding_model is None or _embedding_model_name != model_name:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _embedding_model = SentenceTransformer(model_name)
-            _embedding_model_name = model_name
-            logger.info("Loaded embedding model: %s", model_name)
-        except ImportError:
-            logger.warning("sentence-transformers not available")
-            _embedding_model = None
-        except Exception as e:
-            logger.error("Failed to load embedding model %s: %s", model_name, e)
-            _embedding_model = None
+        with _model_lock:  # Serialize access to prevent concurrent reloads
+            # Double-check pattern: verify again inside lock
+            if _embedding_model is None or _embedding_model_name != model_name:
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    _embedding_model = SentenceTransformer(model_name)
+                    _embedding_model_name = model_name
+                    logger.info("Loaded embedding model: %s", model_name)
+                except ImportError:
+                    logger.warning("sentence-transformers not available")
+                    _embedding_model = None
+                except Exception as err:
+                    logger.error("Failed to load embedding model %s: %s", model_name, err)
+                    _embedding_model = None
     
     return _embedding_model
 
 
 def _generate_embedding(text: str, db: Optional[Session] = None) -> Optional[List[float]]:
-    """Generate embedding vector for text using configured model."""
+    """Generate embedding vector for text using configured model (thread-safe)."""
     try:
         model = _get_embedding_model(db)
         if model is not None:
             embedding = model.encode(text).tolist()
             return embedding
-    except Exception as e:
-        logger.error("Embedding generation failed: %s", e)
+    except Exception as err:
+        logger.error("Embedding generation failed: %s", err)
     
     # Fallback: try basic sentence-transformers
     try:

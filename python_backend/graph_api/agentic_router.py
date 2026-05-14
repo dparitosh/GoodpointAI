@@ -517,8 +517,19 @@ async def process_chat_message(
             }
         )
         
-        # Delegate to MCP Server
-        result_dict = await mcp_client.submit_task(chat_task.model_dump(mode="json"))
+        # Delegate to MCP Server with timeout protection (30 seconds)
+        try:
+            result_dict = await asyncio.wait_for(
+                mcp_client.submit_task(chat_task.model_dump(mode="json")),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.error("Chat processing timeout - MCP agent took longer than 30 seconds")
+            raise HTTPException(
+                status_code=504,
+                detail="Chat processing timeout. The agent took too long to respond. Please try again."
+            ) from None
+        
         result = AgenticTaskResult(**result_dict)
         
         if result.success:

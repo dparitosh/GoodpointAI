@@ -407,8 +407,10 @@ class ChatCoordinatorAgent(AgentService):
         llm_provider  = payload.get("llm_provider", "openai")
         llm_settings  = _get_llm_request_settings(llm_provider, "classification")
 
+        # Prevent prompt injection by escaping user input properly
+        safe_message = json.dumps(message)  # Escapes special characters and braces
         filled = llm_settings["system_prompt"].format(
-            user_message=message,
+            user_message=safe_message,
             source_name=source_name,
             file_count=file_count,
             file_types=file_types,

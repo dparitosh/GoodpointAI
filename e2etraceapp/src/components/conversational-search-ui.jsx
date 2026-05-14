@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import './conversational-search-ui.css';
 import API_CONFIG, { getFullUrl } from '../config/api-config';
 
@@ -105,14 +106,15 @@ function SearchModeSelector({ mode, onChange, disabled }) {
 function SearchResultCard({ result, index }) {
   const sourceStyle = SOURCE_STYLES[result.source_type] || SOURCE_STYLES.unknown;
   
-  // Parse highlights if available
+  // Parse highlights if available - sanitize HTML to prevent XSS
   const renderSnippet = () => {
     if (result.highlights && result.highlights.length > 0) {
-      // Render HTML highlights safely
+      // Sanitize HTML to prevent XSS attacks
+      const cleanHtml = DOMPurify.sanitize(result.highlights[0]);
       return (
         <p 
           className="result-snippet" 
-          dangerouslySetInnerHTML={{ __html: result.highlights[0] }} 
+          dangerouslySetInnerHTML={{ __html: cleanHtml }} 
         />
       );
     }
