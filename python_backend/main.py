@@ -40,6 +40,8 @@ from graph_api.neo4j_graphrag_router import router as neo4j_graphrag_router
 from graph_api.agentic_router import router as agentic_router
 from graph_api.report_hub_router import router as report_hub_router
 from graph_api.quality_router import router as quality_router
+from graph_api.composition_router import router as composition_router
+from graph_api.ranking_router import router as ranking_router
 from graph_api.agentic_config_router import router as agentic_config_router
 from graph_api.plm_workflow_router import router as plm_workflow_router
 from graph_api.plm_etl_router import router as plm_etl_router
@@ -319,6 +321,8 @@ app.include_router(neo4j_graphrag_router)
 app.include_router(agentic_router)
 app.include_router(report_hub_router)
 app.include_router(quality_router)
+app.include_router(composition_router)
+app.include_router(ranking_router)
 app.include_router(agentic_config_router)
 app.include_router(plm_workflow_router)
 app.include_router(plm_etl_router)
