@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text, func
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,6 +27,11 @@ from sqlalchemy.orm import Session
 from core.db_session import DATABASE_URL, get_db
 from core.postgres_config import is_postgres_database_url
 from models.quality_models import DataQualityRule, DataQualityResult, DataQualityScanReport
+from core.streaming_validation import StreamingResponseGenerator
+from services.streaming_quality_service import (
+    create_streaming_quality_scan,
+    create_streaming_data_profile
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analytics/quality", tags=["Analytics - Quality"])
@@ -2790,6 +2795,144 @@ async def quality_dashboard(db: Session = Depends(get_db)):
         ],
         "top_issues": top_issues,
     }
+
+# --- Streaming Endpoints (SSE) ---
+
+@router.post("/stream/scan/{table_name}")
+async def stream_quality_scan(
+    table_name: str,
+    total_rows: Optional[int] = Query(None, description="Total rows in table for progress estimation"),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream quality scan results in real-time via Server-Sent Events (SSE)
+    
+    This endpoint streams validation results as they're processed, enabling:
+    - Real-time progress updates (0-100%)
+    - Individual validation results as they're found
+    - Aggregated metrics at intervals
+    - Graceful handling of large datasets (100K-1M+ rows)
+    - No timeout limitations (streaming continues indefinitely)
+    
+    Returns: StreamingResponse with SSE content-type
+    
+    Event types in stream:
+    - start: Scan initiated
+    - progress: Progress update (rows/sec, ETA, %)
+    - result: Individual validation result found
+    - metrics: Aggregated quality metrics
+    - warning: Non-fatal warning during scan
+    - error: Error occurred (may continue processing)
+    - complete: Scan finished successfully
+    - cancelled: Scan was cancelled by user
+    
+    Example client:
+    ```javascript
+    const eventSource = new EventSource(`/api/analytics/quality/stream/scan/my_table`);
+    eventSource.addEventListener('progress', (e) => {
+        const progress = JSON.parse(e.data);
+        console.log(`${progress.progress_percentage}% complete`);
+    });
+    eventSource.addEventListener('complete', (e) => {
+        const result = JSON.parse(e.data);
+        console.log('Scan complete!', result);
+        eventSource.close();
+    });
+    ```
+    """
+    try:
+        _require_postgres()
+        
+        # Create streaming validator
+        validator = create_streaming_quality_scan(
+            table_name=table_name,
+            total_rows=total_rows
+        )
+        
+        # Create response generator
+        generator = StreamingResponseGenerator(
+            validator=validator,
+            progress_update_interval=100,
+            heartbeat_interval=30.0
+        )
+        
+        # Return SSE stream
+        return StreamingResponse(
+            generator.generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Disable nginx buffering
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Error in quality stream endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/stream/profile/{table_name}")
+async def stream_data_profile(
+    table_name: str,
+    total_rows: Optional[int] = Query(None, description="Total rows in table"),
+    sample_rate: float = Query(1.0, ge=0.0, le=1.0, description="Sampling rate (0.0-1.0)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Stream data profiling results in real-time via SSE
+    
+    Analyzes dataset characteristics and streams column statistics as computed.
+    
+    Returns: StreamingResponse with SSE content-type
+    
+    Event types:
+    - start: Profiling started
+    - progress: Progress update
+    - result: Column statistics computed
+    - metrics: Aggregated profiling metrics
+    - complete: Profiling finished
+    
+    Example client:
+    ```javascript
+    const eventSource = new EventSource(`/api/analytics/quality/stream/profile/my_table`);
+    eventSource.addEventListener('result', (e) => {
+        const columnStats = JSON.parse(e.data);
+        console.log(`Column ${columnStats.data.column} profiled`, columnStats.data.statistics);
+    });
+    ```
+    """
+    try:
+        _require_postgres()
+        
+        # Create streaming profiler
+        validator = create_streaming_data_profile(
+            table_name=table_name,
+            total_rows=total_rows
+        )
+        
+        # Create response generator
+        generator = StreamingResponseGenerator(
+            validator=validator,
+            progress_update_interval=50,
+            heartbeat_interval=45.0
+        )
+        
+        # Return SSE stream
+        return StreamingResponse(
+            generator.generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"Error in profile stream endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Health Check ---
 
