@@ -25,7 +25,9 @@ from core.db_session import get_db
 from models.quality_models import DiscoveryReport, DataQualityRule
 from models.report_hub_models import UnifiedReport
 from models.workflow_models import WorkflowExecution, MigrationStage
+from models.conversation_models import Conversation, ConversationMetadata, ChatMessage as ConversationMessage, MessageRole
 from services.mcp_workflow_adapter import MCPWorkflowAdapter, MCPIntegrationHelper
+from services.conversation_repository import ConversationRepository
 from models.configuration_models import DataSourceConfigRecord
 from services.mcp_client import mcp_client
 
@@ -502,9 +504,55 @@ async def process_chat_message(
     chat_request: ChatRequest,
     driver_instance: neo4j.AsyncDriver = Depends(get_driver)
 ):
-    """Process chat message with multi-agent coordination"""
+    """Process chat message with multi-agent coordination and conversation persistence"""
+    repo = ConversationRepository()
+    
     try:
         session_id = chat_request.session_id or f"session_{int(datetime.now().timestamp())}"
+        
+        # Load or create conversation
+        conversation = repo.read_by_session(session_id)
+        if not conversation:
+            # Create new conversation with metadata
+            conversation = Conversation(
+                session_id=session_id,
+                metadata=ConversationMetadata(
+                    workflow_id=chat_request.ui_context.get("workflow_id"),
+                    step=chat_request.ui_context.get("step"),
+                    source_id=chat_request.ui_context.get("source_id"),
+                    file_count=chat_request.ui_context.get("file_count"),
+                    tags=chat_request.ui_context.get("tags", []),
+                )
+            )
+            conversation = repo.create(conversation)
+            logger.info(f"Created new conversation: {conversation.conversation_id} (session: {session_id})")
+        else:
+            logger.debug(f"Loaded conversation: {conversation.conversation_id} (messages: {len(conversation.messages)})")
+        
+        # Add user message to conversation history
+        user_message = ConversationMessage(
+            role=MessageRole.USER,
+            content=chat_request.message,
+            timestamp=datetime.utcnow(),
+            metadata={"ui_context": chat_request.ui_context}
+        )
+        conversation = repo.add_message(conversation.conversation_id, user_message)
+        logger.debug(f"Added user message to conversation {conversation.conversation_id}")
+        
+        # Build context with conversation history
+        conversation_context = {
+            "conversation_id": conversation.conversation_id,
+            "session_id": session_id,
+            "message_count": len(conversation.messages),
+            "history": [
+                {
+                    "role": msg.role.value,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+                }
+                for msg in conversation.messages[:-1]  # Exclude the message we just added
+            ]
+        }
         
         # Create chat processing task
         chat_task = AgenticTask(
@@ -512,8 +560,9 @@ async def process_chat_message(
             required_capabilities=["process_natural_language", "coordinate_agent_responses"],
             payload={
                 "message": chat_request.message,
-                "context": chat_request.context,
-                "session_id": session_id
+                "context": {**chat_request.context, **conversation_context},
+                "session_id": session_id,
+                "conversation_id": conversation.conversation_id
             }
         )
         
@@ -534,14 +583,35 @@ async def process_chat_message(
         
         if result.success:
             chat_data = result.result
+            assistant_response = chat_data.get("primaryResponse", "I understand your request.")
+            
+            # Add assistant message to conversation history
+            assistant_message = ConversationMessage(
+                role=MessageRole.ASSISTANT,
+                content=assistant_response,
+                timestamp=datetime.utcnow(),
+                metadata={"agent_type": chat_data.get("agent_type")}
+            )
+            conversation = repo.add_message(conversation.conversation_id, assistant_message)
+            logger.debug(f"Saved assistant response to conversation {conversation.conversation_id}")
+            
             return ChatResponse(
-                message=chat_data.get("primaryResponse", "I understand your request."),
+                message=assistant_response,
                 agent_responses=[],
                 suggested_actions=chat_data.get("followupQuestions", []),
                 requires_followup=chat_data.get("collaborationNeeded", False),
                 session_id=session_id
             )
         else:
+            # Add error message to history
+            error_message = ConversationMessage(
+                role=MessageRole.SYSTEM,
+                content="An error occurred while processing the message.",
+                timestamp=datetime.utcnow(),
+                metadata={"error": result.error}
+            )
+            conversation = repo.add_message(conversation.conversation_id, error_message)
+            
             return ChatResponse(
                 message="I'm sorry, I encountered an issue processing your message.",
                 session_id=session_id
@@ -557,6 +627,8 @@ async def process_chat_message(
     except Exception as e:
         logger.error("Chat processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
+    finally:
+        repo.close()
 
 
 @router.post("/smart-guidance", response_model=SmartGuidanceResponse)
@@ -2320,4 +2392,319 @@ async def run_full_workflow(req: WorkflowRunRequest):
         completed_at=completed_at,
         total_execution_time=total_time,
     )
+
+
+# ============================================================
+# CONVERSATION HISTORY ENDPOINTS
+# ============================================================
+
+
+class ConversationResponseModel(BaseModel):
+    """Response model for conversation data"""
+    conversation_id: str
+    session_id: str
+    messages: List[Dict[str, Any]]
+    message_count: int
+    workflow_id: Optional[str]
+    status: str
+    created_at: Optional[str]
+    updated_at: Optional[str]
+
+
+class ConversationListResponseModel(BaseModel):
+    """Response model for conversation list"""
+    conversations: List[ConversationResponseModel]
+    total: int
+    skip: int
+    limit: int
+
+
+class ConversationHistoryResponseModel(BaseModel):
+    """Response model for conversation history"""
+    conversation_id: str
+    session_id: str
+    messages: List[Dict[str, Any]]
+    message_count: int
+
+
+@router.get("/conversations/{session_id}", response_model=ConversationHistoryResponseModel)
+async def get_conversation_history(
+    session_id: str,
+    limit: Optional[int] = Query(None, ge=1, le=1000)
+):
+    """
+    Retrieve conversation history for a session
+    
+    Returns the complete or limited conversation messages for the specified session.
+    """
+    repo = ConversationRepository()
+    try:
+        conversation = repo.read_by_session(session_id)
+        
+        if not conversation:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No active conversation found for session: {session_id}"
+            )
+        
+        # Get messages
+        messages = [
+            {
+                "role": msg.role.value,
+                "content": msg.content,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                "metadata": msg.metadata
+            }
+            for msg in conversation.messages
+        ]
+        
+        # Apply limit if specified (get most recent messages)
+        if limit:
+            messages = messages[-limit:]
+        
+        return ConversationHistoryResponseModel(
+            conversation_id=conversation.conversation_id,
+            session_id=conversation.session_id,
+            messages=messages,
+            message_count=len(conversation.messages)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving conversation history for {session_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve conversation history: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.get("/conversations", response_model=ConversationListResponseModel)
+async def list_conversations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    workflow_id: Optional[str] = None,
+    status: Optional[str] = None
+):
+    """
+    List conversations with optional filtering
+    
+    Returns a paginated list of conversations.
+    """
+    repo = ConversationRepository()
+    try:
+        # Parse status if provided
+        status_enum = None
+        if status:
+            try:
+                from models.conversation_models import ConversationStatus
+                status_enum = ConversationStatus(status)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status: {status}. Must be 'active', 'archived', or 'completed'"
+                )
+        
+        conversations = repo.list(
+            skip=skip,
+            limit=limit,
+            workflow_id=workflow_id,
+            status=status_enum,
+            active_only=False
+        )
+        
+        total = repo.get_count(
+            workflow_id=workflow_id,
+            active_only=False
+        )
+        
+        # Convert to response format
+        conv_responses = [
+            ConversationResponseModel(
+                conversation_id=conv.conversation_id,
+                session_id=conv.session_id,
+                messages=[
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+                    }
+                    for msg in conv.messages
+                ],
+                message_count=len(conv.messages),
+                workflow_id=conv.metadata.workflow_id,
+                status=conv.status.value,
+                created_at=conv.created_at.isoformat() if conv.created_at else None,
+                updated_at=conv.updated_at.isoformat() if conv.updated_at else None
+            )
+            for conv in conversations
+        ]
+        
+        return ConversationListResponseModel(
+            conversations=conv_responses,
+            total=total,
+            skip=skip,
+            limit=limit
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing conversations: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list conversations: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.post("/conversations/{conversation_id}/archive")
+async def archive_conversation(conversation_id: str):
+    """
+    Archive a conversation (soft delete)
+    
+    Archived conversations are not returned in list queries but can be restored.
+    """
+    repo = ConversationRepository()
+    try:
+        result = repo.archive(conversation_id)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Conversation not found: {conversation_id}"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Conversation {conversation_id} archived",
+            "conversation_id": conversation_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error archiving conversation {conversation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to archive conversation: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """
+    Delete a conversation (hard delete)
+    
+    WARNING: This permanently deletes the conversation and cannot be undone.
+    """
+    repo = ConversationRepository()
+    try:
+        result = repo.delete(conversation_id)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Conversation not found: {conversation_id}"
+            )
+        
+        return {
+            "success": True,
+            "message": f"Conversation {conversation_id} deleted",
+            "conversation_id": conversation_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation {conversation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete conversation: {str(e)}"
+        )
+    finally:
+        repo.close()
+
+
+@router.get("/conversations/{conversation_id}/export")
+async def export_conversation(
+    conversation_id: str,
+    format: str = Query("json", regex="^(json|text)$")
+):
+    """
+    Export a conversation in JSON or text format
+    
+    Returns the conversation suitable for download or archival.
+    """
+    repo = ConversationRepository()
+    try:
+        conversation = repo.read(conversation_id)
+        
+        if not conversation:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Conversation not found: {conversation_id}"
+            )
+        
+        if format == "json":
+            # Return as JSON
+            export_data = {
+                "conversation_id": conversation.conversation_id,
+                "session_id": conversation.session_id,
+                "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+                "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
+                "messages": [
+                    {
+                        "role": msg.role.value,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                        "metadata": msg.metadata
+                    }
+                    for msg in conversation.messages
+                ]
+            }
+            
+            return Response(
+                content=_json.dumps(export_data, indent=2),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=conversation_{conversation_id}.json"}
+            )
+        else:
+            # Return as plain text
+            lines = [
+                f"Conversation: {conversation.conversation_id}",
+                f"Session: {conversation.session_id}",
+                f"Created: {conversation.created_at.isoformat() if conversation.created_at else 'N/A'}",
+                f"Messages: {len(conversation.messages)}",
+                "",
+                "=" * 80,
+                ""
+            ]
+            
+            for msg in conversation.messages:
+                lines.append(f"[{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') if msg.timestamp else 'N/A'}] {msg.role.value.upper()}:")
+                lines.append(msg.content)
+                lines.append("")
+            
+            return Response(
+                content="\n".join(lines),
+                media_type="text/plain",
+                headers={"Content-Disposition": f"attachment; filename=conversation_{conversation_id}.txt"}
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting conversation {conversation_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export conversation: {str(e)}"
+        )
+    finally:
+        repo.close()
 

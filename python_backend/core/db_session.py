@@ -89,7 +89,8 @@ def init_db() -> None:
         "models.admin_config_models",
         "models.rule_engine_models",
         "models.report_hub_models",
-        "models.data_quality_rules_models",  # Add DQRE models for rule set persistence
+        "models.data_quality_rules_models",
+        "models.conversation_models",  # Add conversation model for chat history persistence
     ):
         importlib.import_module(module_name)
 
