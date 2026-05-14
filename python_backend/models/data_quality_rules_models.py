@@ -12,6 +12,15 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Set, Tuple, Any
 from enum import Enum
 import uuid
+import json
+from datetime import datetime
+
+# SQLAlchemy imports
+from sqlalchemy import String, Text, Boolean, DateTime, Integer, Index, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import text
+
+from core.database import Base
 
 
 class RuleType(str, Enum):
@@ -239,3 +248,98 @@ class DataQualityReport(BaseModel):
             self.invalid_records = self.total_records - self.valid_records
             self.passed_percentage = (self.valid_records / self.total_records) * 100
             self.failed_percentage = (self.invalid_records / self.total_records) * 100
+
+
+# ============================================================
+# SQLAlchemy ORM Models for Database Persistence
+# ============================================================
+
+class DataQualityRuleSetORM(Base):
+    """
+    SQLAlchemy ORM model for persistent rule set storage.
+    Stores complete rule configurations in PostgreSQL.
+    """
+    __tablename__ = "data_quality_rule_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_set_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Complete rule set configuration stored as JSON
+    # This allows flexible schema evolution without multiple migrations
+    mandatory_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    uniqueness_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    dropdown_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    format_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    range_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    datatype_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cross_field_rules_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("CURRENT_TIMESTAMP"), nullable=False
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), onupdate=text("CURRENT_TIMESTAMP"), server_default=text("CURRENT_TIMESTAMP")
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Audit trail
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    __table_args__ = (
+        Index('ix_rule_set_enabled', 'enabled'),
+        Index('ix_rule_set_created_at', 'created_at'),
+        Index('ix_rule_set_active', 'is_active'),
+    )
+
+    @classmethod
+    def from_pydantic(cls, rule_set: 'DataQualityRuleSet') -> 'DataQualityRuleSetORM':
+        """Convert Pydantic model to ORM model"""
+        orm_obj = cls(
+            rule_set_id=rule_set.rule_set_id,
+            name=rule_set.name,
+            description=rule_set.description,
+            enabled=rule_set.enabled,
+            mandatory_rules_json=json.dumps([r.dict() for r in rule_set.mandatory_rules]),
+            uniqueness_rules_json=json.dumps([r.dict() for r in rule_set.uniqueness_rules]),
+            dropdown_rules_json=json.dumps([r.dict() for r in rule_set.dropdown_rules]),
+            format_rules_json=json.dumps([r.dict() for r in rule_set.format_rules]),
+            range_rules_json=json.dumps([r.dict() for r in rule_set.range_rules]),
+            datatype_rules_json=json.dumps([r.dict() for r in rule_set.datatype_rules]),
+            cross_field_rules_json=json.dumps([r.dict() for r in rule_set.cross_field_rules]),
+            created_by=rule_set.created_by,
+        )
+        return orm_obj
+
+    def to_pydantic(self) -> 'DataQualityRuleSet':
+        """Convert ORM model back to Pydantic model"""
+        def parse_rules(json_str, rule_class):
+            if not json_str:
+                return []
+            try:
+                data = json.loads(json_str)
+                return [rule_class(**item) for item in data]
+            except (json.JSONDecodeError, ValueError):
+                return []
+        
+        return DataQualityRuleSet(
+            rule_set_id=self.rule_set_id,
+            name=self.name,
+            description=self.description,
+            enabled=self.enabled,
+            mandatory_rules=parse_rules(self.mandatory_rules_json, MandatoryFieldRule),
+            uniqueness_rules=parse_rules(self.uniqueness_rules_json, UniqueConstraintRule),
+            dropdown_rules=parse_rules(self.dropdown_rules_json, DropdownValueRule),
+            format_rules=parse_rules(self.format_rules_json, FormatCheckRule),
+            range_rules=parse_rules(self.range_rules_json, RangeCheckRule),
+            datatype_rules=parse_rules(self.datatype_rules_json, DataTypeCheckRule),
+            cross_field_rules=parse_rules(self.cross_field_rules_json, CrossFieldRule),
+            created_at=self.created_at.isoformat() if self.created_at else None,
+            updated_at=self.updated_at.isoformat() if self.updated_at else None,
+            created_by=self.created_by,
+        )

@@ -5,10 +5,10 @@ Provides REST endpoints for:
 - Creating and configuring data quality rules
 - Applying rules to workflows
 - Generating validation reports
-- Managing rule sets
+- Managing rule sets (with PostgreSQL persistence)
 """
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, Depends
 from typing import List, Optional, Dict
 import json
 import logging
@@ -31,18 +31,22 @@ from services.data_quality_rules_engine import (
     add_feedback_column,
     get_rule_configuration_summary,
 )
+from services.rule_set_repository import RuleSetRepository
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/quality-rules", tags=["data-quality-rules"])
 
-# In-memory storage for rule sets (would be database in production)
-rule_sets_db: Dict[str, DataQualityRuleSet] = {}
+
+def get_repository() -> RuleSetRepository:
+    """Dependency for rule set repository"""
+    return RuleSetRepository()
 
 
 @router.post("/rule-sets", response_model=DataQualityRuleSet, status_code=201)
 async def create_rule_set(
-    rule_set: DataQualityRuleSet = Body(..., description="Rule set configuration")
+    rule_set: DataQualityRuleSet = Body(..., description="Rule set configuration"),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
     """
     Create a new data quality rule set
@@ -55,118 +59,138 @@ async def create_rule_set(
     - Range validation
     - Data type checks
     - Cross-field rules
+    
+    Rule sets are persisted to PostgreSQL database.
     """
     try:
-        rule_set.created_at = datetime.utcnow().isoformat()
-        rule_set.updated_at = datetime.utcnow().isoformat()
-        
-        rule_sets_db[rule_set.rule_set_id] = rule_set
+        result = repository.create(rule_set)
         logger.info(f"Created rule set: {rule_set.rule_set_id} ({rule_set.name})")
-        
-        return rule_set
+        return result
+    except ValueError as e:
+        logger.warning(f"Validation error creating rule set: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating rule set: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.get("/rule-sets", response_model=List[DataQualityRuleSet])
 async def list_rule_sets(
     enabled_only: bool = Query(False, description="Return only enabled rule sets"),
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(100, ge=1, le=1000),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
-    """List all available rule sets"""
+    """List all available rule sets from database"""
     try:
-        sets = list(rule_sets_db.values())
-        
-        if enabled_only:
-            sets = [s for s in sets if s.enabled]
-        
-        return sets[skip : skip + limit]
+        sets = repository.list(skip=skip, limit=limit, enabled_only=enabled_only)
+        logger.debug(f"Listed {len(sets)} rule sets")
+        return sets
     except Exception as e:
         logger.error(f"Error listing rule sets: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.get("/rule-sets/{rule_set_id}", response_model=DataQualityRuleSet)
-async def get_rule_set(rule_set_id: str):
-    """Get specific rule set by ID"""
+async def get_rule_set(
+    rule_set_id: str,
+    repository: RuleSetRepository = Depends(get_repository)
+):
+    """Get specific rule set by ID from database"""
     try:
-        if rule_set_id not in rule_sets_db:
+        rule_set = repository.read(rule_set_id)
+        
+        if not rule_set:
             raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
-        return rule_sets_db[rule_set_id]
+        return rule_set
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting rule set: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.put("/rule-sets/{rule_set_id}", response_model=DataQualityRuleSet)
 async def update_rule_set(
     rule_set_id: str,
-    rule_set_update: DataQualityRuleSet = Body(...)
+    rule_set_update: DataQualityRuleSet = Body(...),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
-    """Update an existing rule set"""
+    """Update an existing rule set in database"""
     try:
-        if rule_set_id not in rule_sets_db:
+        result = repository.update(rule_set_id, rule_set_update)
+        
+        if not result:
             raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
-        rule_set_update.rule_set_id = rule_set_id
-        rule_set_update.updated_at = datetime.utcnow().isoformat()
-        
-        rule_sets_db[rule_set_id] = rule_set_update
         logger.info(f"Updated rule set: {rule_set_id}")
-        
-        return rule_set_update
-    except HTTPException:
-        raise
+        return result
+    except ValueError as e:
+        logger.warning(f"Validation error updating rule set: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating rule set: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.delete("/rule-sets/{rule_set_id}", status_code=204)
-async def delete_rule_set(rule_set_id: str):
-    """Delete a rule set"""
+async def delete_rule_set(
+    rule_set_id: str,
+    repository: RuleSetRepository = Depends(get_repository)
+):
+    """Delete a rule set (soft delete - marks as inactive)"""
     try:
-        if rule_set_id not in rule_sets_db:
+        success = repository.delete(rule_set_id, soft_delete=True)
+        
+        if not success:
             raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
-        del rule_sets_db[rule_set_id]
         logger.info(f"Deleted rule set: {rule_set_id}")
-        
-        return {"message": "Rule set deleted"}
-    except HTTPException:
-        raise
+        return None
     except Exception as e:
         logger.error(f"Error deleting rule set: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.get("/rule-sets/{rule_set_id}/summary")
-async def get_rule_set_summary(rule_set_id: str):
+async def get_rule_set_summary(
+    rule_set_id: str,
+    repository: RuleSetRepository = Depends(get_repository)
+):
     """Get human-readable summary of rule configuration"""
     try:
-        if rule_set_id not in rule_sets_db:
+        rule_set = repository.read(rule_set_id)
+        
+        if not rule_set:
             raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
-        rule_set = rule_sets_db[rule_set_id]
         summary = get_rule_configuration_summary(rule_set)
-        
         return summary
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting rule set summary: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/rule-sets/{rule_set_id}/validate-sample", response_model=ValidationResult)
 async def validate_sample_row(
     rule_set_id: str,
-    row_data: Dict = Body(..., description="Single row of data to validate")
+    row_data: Dict = Body(..., description="Single row of data to validate"),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
     """
     Validate a single row of data against rule set
@@ -182,12 +206,12 @@ async def validate_sample_row(
     ```
     """
     try:
-        if rule_set_id not in rule_sets_db:
+        rule_set = repository.read(rule_set_id)
+        
+        if not rule_set:
             raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
-        rule_set = rule_sets_db[rule_set_id]
         engine = DataQualityRulesEngine(rule_set)
-        
         result = engine.validate_row(row_data)
         
         return result
@@ -195,13 +219,16 @@ async def validate_sample_row(
         raise
     except Exception as e:
         logger.error(f"Error validating sample row: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/rule-sets/{rule_set_id}/validate-batch", response_model=DataQualityReport)
 async def validate_batch(
     rule_set_id: str,
-    records: List[Dict] = Body(..., description="Array of records to validate")
+    records: List[Dict] = Body(..., description="Array of records to validate"),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
     """
     Validate multiple records and generate quality report
@@ -213,13 +240,14 @@ async def validate_batch(
     - Most common issues summary
     """
     try:
-        if rule_set_id not in rule_sets_db:
-            raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
-        
         if not records:
             raise HTTPException(status_code=400, detail="No records provided")
         
-        rule_set = rule_sets_db[rule_set_id]
+        rule_set = repository.read(rule_set_id)
+        
+        if not rule_set:
+            raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
+        
         engine = DataQualityRulesEngine(rule_set)
         
         # Convert to DataFrame and validate
@@ -235,13 +263,16 @@ async def validate_batch(
         raise
     except Exception as e:
         logger.error(f"Error validating batch: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/rule-sets/{rule_set_id}/add-feedback-column")
 async def add_feedback_to_dataset(
     rule_set_id: str,
-    records: List[Dict] = Body(..., description="Dataset records")
+    records: List[Dict] = Body(..., description="Dataset records"),
+    repository: RuleSetRepository = Depends(get_repository)
 ):
     """
     Add Feedback column to dataset with validation results
@@ -251,13 +282,13 @@ async def add_feedback_to_dataset(
     - Quality report with statistics
     """
     try:
-        if rule_set_id not in rule_sets_db:
-            raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
-        
         if not records:
             raise HTTPException(status_code=400, detail="No records provided")
         
-        rule_set = rule_sets_db[rule_set_id]
+        rule_set = repository.read(rule_set_id)
+        
+        if not rule_set:
+            raise HTTPException(status_code=404, detail=f"Rule set not found: {rule_set_id}")
         
         # Convert to DataFrame
         import pandas as pd
@@ -284,16 +315,19 @@ async def add_feedback_to_dataset(
         raise
     except Exception as e:
         logger.error(f"Error adding feedback column: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/templates/mandatory-fields", response_model=DataQualityRuleSet)
 async def create_mandatory_fields_template(
     rule_name: str = Query(...),
     fields: List[str] = Body(...),
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    repository: RuleSetRepository = Depends(get_repository)
 ):
-    """Create a template rule set for mandatory field validation"""
+    """Create and save a template rule set for mandatory field validation"""
     try:
         rule = MandatoryFieldRule(
             rule_name=rule_name,
@@ -307,12 +341,12 @@ async def create_mandatory_fields_template(
             mandatory_rules=[rule]
         )
         
-        rule_sets_db[rule_set.rule_set_id] = rule_set
-        
-        return rule_set
+        return repository.create(rule_set)
     except Exception as e:
         logger.error(f"Error creating template: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/templates/uniqueness", response_model=DataQualityRuleSet)
@@ -320,9 +354,10 @@ async def create_uniqueness_template(
     rule_name: str = Query(...),
     fields: List[str] = Body(...),
     allow_null: bool = Query(True),
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    repository: RuleSetRepository = Depends(get_repository)
 ):
-    """Create a template rule set for uniqueness validation"""
+    """Create and save a template rule set for uniqueness validation"""
     try:
         rule = UniqueConstraintRule(
             rule_name=rule_name,
@@ -337,12 +372,12 @@ async def create_uniqueness_template(
             uniqueness_rules=[rule]
         )
         
-        rule_sets_db[rule_set.rule_set_id] = rule_set
-        
-        return rule_set
+        return repository.create(rule_set)
     except Exception as e:
         logger.error(f"Error creating template: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 @router.post("/templates/dropdown", response_model=DataQualityRuleSet)
@@ -351,9 +386,10 @@ async def create_dropdown_template(
     field_name: str = Query(...),
     allowed_values: List[str] = Body(...),
     case_sensitive: bool = Query(False),
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    repository: RuleSetRepository = Depends(get_repository)
 ):
-    """Create a template rule set for dropdown value validation"""
+    """Create and save a template rule set for dropdown value validation"""
     try:
         rule = DropdownValueRule(
             rule_name=rule_name,
@@ -369,12 +405,12 @@ async def create_dropdown_template(
             dropdown_rules=[rule]
         )
         
-        rule_sets_db[rule_set.rule_set_id] = rule_set
-        
-        return rule_set
+        return repository.create(rule_set)
     except Exception as e:
         logger.error(f"Error creating template: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        repository.close()
 
 
 # Export router for inclusion in main app
