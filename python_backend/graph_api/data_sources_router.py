@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import logging
 import json
 import os
@@ -61,13 +62,13 @@ def _allowed_local_roots() -> List[Path]:
                         allowed_list = roots_val2
 
         for item in allowed_list:
-                p = str(item).strip().strip('"')
-                if not p:
-                    continue
-                try:
-                    candidates.append(Path(p))
-                except Exception:
-                    continue
+            p = str(item).strip().strip('"')
+            if not p:
+                continue
+            try:
+                candidates.append(Path(p))
+            except Exception:
+                continue
     except Exception:
         # Non-fatal: fall back to env + repo-local defaults.
         pass
@@ -572,7 +573,10 @@ async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
     )
 
     try:
-        with psycopg.connect(conninfo) as db_conn:
+        db_conn = psycopg.connect(conninfo)
+        if db_conn is None:
+            raise RuntimeError("psycopg.connect returned no connection")
+        try:
             with db_conn.cursor() as cur:
                 # Discover the first user table to sample
                 cur.execute(
@@ -596,6 +600,8 @@ async def _sample_postgres(conn: Dict[str, Any], limit: int) -> tuple:
                     records.append(dict(zip(columns, db_row)))
 
                 warnings.append(f"Sampled from table: {table_name}")
+        finally:
+            db_conn.close()
     except Exception as exc:  # pylint: disable=broad-exception-caught
         warnings.append(f"SQL sampling error: {str(exc)}")
 
@@ -672,7 +678,7 @@ async def _sample_oracle(conn: Dict[str, Any], limit: int) -> tuple:
         import oracledb  # type: ignore[import-untyped]
     except ImportError:
         try:
-            import cx_Oracle as oracledb  # type: ignore[import-untyped]
+            oracledb = importlib.import_module("cx_Oracle")
         except ImportError:
             warnings.append("oracledb driver not installed — cannot sample Oracle database")
             return records, warnings
@@ -1209,7 +1215,7 @@ async def get_data_source_sample(
             _bucket, _key = bucket, key
 
             # R-02: boto3 is synchronous — offload to thread to avoid blocking event loop.
-            def _s3_fetch() -> bytes:
+            def _s3_fetch() -> Tuple[bytes, int]:
                 s3 = boto3.client("s3", **_ck)
                 obj = s3.get_object(Bucket=_bucket, Key=_key)
                 body = obj.get("Body")
@@ -1217,10 +1223,9 @@ async def get_data_source_sample(
                     raise RuntimeError("S3 object body missing")
                 raw = body.read(max_bytes)
                 cl = int(obj.get("ContentLength") or 0)
-                return raw, cl  # type: ignore[return-value]
+                return raw, cl
 
-            raw_result = await asyncio.to_thread(_s3_fetch)
-            content, content_length = raw_result  # type: ignore[misc]
+            content, content_length = await asyncio.to_thread(_s3_fetch)
             name_hint = key
 
             if content_length and content_length > max_bytes:
@@ -1249,7 +1254,7 @@ async def get_data_source_sample(
             _cs, _cname, _bname = connection_string, container_name, blob_name
 
             # R-02: azure-storage-blob is synchronous — offload to thread.
-            def _azure_fetch() -> bytes:
+            def _azure_fetch() -> Tuple[bytes, int]:
                 svc = BlobServiceClient.from_connection_string(_cs)
                 bc = svc.get_blob_client(container=_cname, blob=_bname)
                 raw = bc.download_blob(max_concurrency=1).readall()
@@ -1259,10 +1264,9 @@ async def get_data_source_sample(
                     size = int(getattr(props, "size", 0) or size)
                 except Exception:
                     pass
-                return raw[:max_bytes], size  # type: ignore[return-value]
+                return raw[:max_bytes], size
 
-            raw_result = await asyncio.to_thread(_azure_fetch)
-            content, blob_size = raw_result  # type: ignore[misc]
+            content, blob_size = await asyncio.to_thread(_azure_fetch)
             name_hint = blob_name
 
             if blob_size and blob_size > max_bytes:
@@ -1539,13 +1543,13 @@ async def get_data_sources(
 
             # Fallback for empty DB (legacy checks)
             if not rows and conn_count == 0 and ds_count == 0:
-                 legacy = _load_data_sources_legacy_file()
-                 # best-effort redaction for legacy payloads
-                 for item in legacy:
-                     if isinstance(item, dict) and isinstance(item.get("connection"), dict):
-                         item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
-                 response.headers["X-Total-Count"] = str(len(legacy))
-                 return legacy[skip : skip + limit]
+                legacy = _load_data_sources_legacy_file()
+                # best-effort redaction for legacy payloads
+                for item in legacy:
+                    if isinstance(item, dict) and isinstance(item.get("connection"), dict):
+                        item["connection"] = _redact_connection(_filter_connection_fields(item["connection"]))
+                response.headers["X-Total-Count"] = str(len(legacy))
+                return legacy[skip : skip + limit]
 
             for row in rows:
                 try:
@@ -1949,7 +1953,6 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
     """Test PostgreSQL connection using psycopg v3 (off-loop to avoid blocking)."""
     try:
         import psycopg
-        import asyncio
 
         host = connection.get('host', 'localhost')
         port = connection.get('port', '5432')
@@ -1960,10 +1963,18 @@ async def _test_postgres_connection(connection: Dict) -> TestConnectionResponse:
         conninfo = f"host={host} port={port} dbname={database} user={username} password={password} connect_timeout=5"
 
         def _query() -> str:
-            with psycopg.connect(conninfo) as conn:
-                with conn.cursor() as cur:
+            db_conn = psycopg.connect(conninfo)
+            if db_conn is None:
+                raise RuntimeError("psycopg.connect returned no connection")
+            try:
+                with db_conn.cursor() as cur:
                     cur.execute("SELECT version()")
-                    return cur.fetchone()[0]
+                    row = cur.fetchone()
+                    if not row:
+                        raise RuntimeError("PostgreSQL version query returned no rows")
+                    return str(row[0])
+            finally:
+                db_conn.close()
 
         version = await asyncio.to_thread(_query)
 
@@ -1995,8 +2006,6 @@ async def _test_mysql_connection(connection: Dict) -> TestConnectionResponse:
         )
 
     try:
-        import asyncio
-
         host = connection.get('host', 'localhost')
         port = int(connection.get('port', 3306) or 3306)
         database = connection.get('database', '')
@@ -2011,7 +2020,10 @@ async def _test_mysql_connection(connection: Dict) -> TestConnectionResponse:
             try:
                 with conn.cursor() as cur:
                     cur.execute("SELECT VERSION()")
-                    return cur.fetchone()[0]
+                    row = cur.fetchone()
+                    if not row:
+                        raise RuntimeError("MySQL version query returned no rows")
+                    return str(row[0])
             finally:
                 conn.close()
 
@@ -2050,13 +2062,14 @@ async def _test_sqlserver_connection(connection: Dict) -> TestConnectionResponse
             f"Connection Timeout=5;"
         )
 
-        import asyncio
-
         def _query() -> str:
             with pyodbc.connect(conn_str) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT @@VERSION")
-                    return cur.fetchone()[0]
+                    row = cur.fetchone()
+                    if not row:
+                        raise RuntimeError("SQL Server version query returned no rows")
+                    return str(row[0])
 
         version = await asyncio.to_thread(_query)
 
@@ -2083,7 +2096,7 @@ async def _test_oracle_connection(connection: Dict) -> TestConnectionResponse:
         import oracledb
     except ImportError:
         try:
-            import cx_Oracle as oracledb  # type: ignore
+            oracledb = importlib.import_module("cx_Oracle")
         except ImportError:
             return TestConnectionResponse(
                 success=False,
@@ -2099,13 +2112,14 @@ async def _test_oracle_connection(connection: Dict) -> TestConnectionResponse:
         
         dsn = f"{host}:{port}/{service_name}"
 
-        import asyncio
-
         def _query() -> str:
             with oracledb.connect(user=username, password=password, dsn=dsn) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT * FROM v$version WHERE ROWNUM = 1")
-                    return cur.fetchone()[0]
+                    row = cur.fetchone()
+                    if not row:
+                        raise RuntimeError("Oracle version query returned no rows")
+                    return str(row[0])
 
         version = await asyncio.to_thread(_query)
 

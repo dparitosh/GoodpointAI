@@ -15,10 +15,35 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/llm", tags=["LLM Integration"])
 
+_PLACEHOLDER_SECRET_MARKERS = (
+    "your_api_key",
+    "your-api-key",
+    "your key",
+    "placeholder",
+    "changeme",
+    "change_me",
+    "replace_me",
+    "replace-with",
+    "replace this",
+    "example",
+    "dummy",
+    "test-key",
+    "sk-your_",
+)
+
 
 def _is_ollama_explicitly_configured() -> bool:
     # Avoid treating default config values as "configured".
     return bool((os.getenv("OLLAMA_BASE_URL") or "").strip() or (os.getenv("OLLAMA_HOST") or "").strip())
+
+
+def _has_real_config_value(value: Optional[str]) -> bool:
+    """Return True when a config value is present and not an obvious placeholder."""
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    return not any(marker in lowered for marker in _PLACEHOLDER_SECRET_MARKERS)
 
 
 def _make_ollama_client(ollama_mod: Any, base_url: str) -> Any:
@@ -28,6 +53,111 @@ def _make_ollama_client(ollama_mod: Any, base_url: str) -> Any:
     respect OLLAMA_BASE_URL.  Always pass an explicit host so our config is honoured.
     """
     return ollama_mod.Client(host=base_url)
+
+
+def _extract_ollama_models(ollama_resp: Any) -> List[Dict[str, Any]]:
+    """Normalize model metadata returned by the Ollama Python SDK."""
+    raw_models = []
+    if isinstance(ollama_resp, dict):
+        raw_models = cast(List[Any], ollama_resp.get("models", []))
+    elif hasattr(ollama_resp, "models"):
+        raw_models = cast(List[Any], getattr(ollama_resp, "models"))
+
+    models: List[Dict[str, Any]] = []
+    for model in raw_models:
+        if isinstance(model, dict):
+            name = model.get("name") or model.get("model")
+            size = model.get("size")
+            modified_at = model.get("modified_at")
+            digest = model.get("digest")
+        else:
+            name = getattr(model, "name", None) or getattr(model, "model", None)
+            size = getattr(model, "size", None)
+            modified_at = getattr(model, "modified_at", None)
+            digest = getattr(model, "digest", None)
+        if not name:
+            continue
+        models.append(
+            {
+                "name": str(name),
+                "size": size,
+                "modified_at": modified_at,
+                "digest": digest,
+            }
+        )
+    return models
+
+
+def _resolve_ollama_model_name(requested_model: Optional[str], available_models: List[str]) -> Optional[str]:
+    """Resolve a requested Ollama model against the installed model list."""
+    candidate = (requested_model or "").strip()
+    if not candidate:
+        return None
+    if candidate in available_models:
+        return candidate
+
+    if ":" not in candidate:
+        tagged_candidate = f"{candidate}:latest"
+        if tagged_candidate in available_models:
+            return tagged_candidate
+
+    return None
+
+
+def _get_ollama_num_predict(*, requested_max_tokens: Optional[int], default_max_tokens: int, max_tokens_cap: int) -> int:
+    """Return a bounded Ollama generation budget for responsive local inference."""
+    fallback_budget = max(32, int(default_max_tokens))
+    hard_cap = max(32, int(max_tokens_cap))
+    if requested_max_tokens is not None:
+        return max(1, min(int(requested_max_tokens), hard_cap))
+    return min(fallback_budget, hard_cap)
+
+
+def _get_ollama_timeout_seconds(timeout_seconds: float) -> float:
+    """Normalize Ollama timeout configuration to a safe positive value."""
+    return max(5.0, float(timeout_seconds))
+
+
+async def _fetch_ollama_model_catalog(base_url: str) -> List[Dict[str, Any]]:
+    """Return the installed Ollama model catalog for *base_url*."""
+    ollama = _require_module(
+        "ollama",
+        install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST.",
+    )
+    client = _make_ollama_client(ollama, base_url)
+    ollama_resp = await asyncio.to_thread(client.list)
+    return _extract_ollama_models(ollama_resp)
+
+
+async def _resolve_requested_ollama_model(
+    *,
+    requested_model: Optional[str],
+    configured_model: str,
+    base_url: str,
+) -> str:
+    """Resolve the effective Ollama model or raise a clear HTTP error."""
+    candidate = (requested_model or configured_model or "").strip()
+    if not candidate:
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama default model is not configured. Set OLLAMA_MODEL or pass a model in the request.",
+        )
+
+    catalog = await _fetch_ollama_model_catalog(base_url)
+    available_models = [entry["name"] for entry in catalog if entry.get("name")]
+    resolved_model = _resolve_ollama_model_name(candidate, available_models)
+    if resolved_model:
+        return resolved_model
+
+    model_source = "request" if requested_model else "configured default"
+    preview = ", ".join(available_models[:10]) if available_models else "none"
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            f"Ollama {model_source} model '{candidate}' is not installed. "
+            f"Available models: {preview}"
+        ),
+    )
 
 
 def _require_module(module_name: str, *, install_hint: str) -> Any:
@@ -43,11 +173,14 @@ def _require_module(module_name: str, *, install_hint: str) -> Any:
 def _require_provider_configured(provider: str) -> None:
     from core.external_config import llm_config
 
-    if provider == "openai" and not llm_config.openai_api_key:
+    if provider == "openai" and not _has_real_config_value(llm_config.openai_api_key):
         raise HTTPException(status_code=503, detail="OpenAI is not configured")
-    if provider == "anthropic" and not llm_config.anthropic_api_key:
+    if provider == "anthropic" and not _has_real_config_value(llm_config.anthropic_api_key):
         raise HTTPException(status_code=503, detail="Anthropic is not configured")
-    if provider == "azure-openai" and not (llm_config.azure_openai_endpoint and llm_config.azure_openai_key):
+    if provider == "azure-openai" and not (
+        _has_real_config_value(llm_config.azure_openai_endpoint)
+        and _has_real_config_value(llm_config.azure_openai_key)
+    ):
         raise HTTPException(status_code=503, detail="Azure OpenAI is not configured")
     if provider == "ollama" and not _is_ollama_explicitly_configured():
         raise HTTPException(status_code=503, detail="Ollama is not configured")
@@ -285,10 +418,19 @@ async def ollama_chat_completion(request: LLMChatRequest):
     try:
         from core.external_config import llm_config
         _require_provider_configured("ollama")
+        model = await _resolve_requested_ollama_model(
+            requested_model=request.model,
+            configured_model=llm_config.ollama_model,
+            base_url=llm_config.ollama_base_url,
+        )
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         client = _make_ollama_client(ollama, llm_config.ollama_base_url)
-
-        model = request.model or llm_config.ollama_model
+        num_predict = _get_ollama_num_predict(
+            requested_max_tokens=request.max_tokens,
+            default_max_tokens=llm_config.ollama_default_max_tokens,
+            max_tokens_cap=llm_config.ollama_max_tokens_cap,
+        )
+        timeout_seconds = _get_ollama_timeout_seconds(llm_config.ollama_request_timeout_seconds)
 
         # Convert messages
         messages = [
@@ -298,14 +440,18 @@ async def ollama_chat_completion(request: LLMChatRequest):
 
         # Wrap sync client call in a thread so the event loop is not blocked.
         def _call() -> Any:
+            options: Dict[str, Any] = {
+                "temperature": request.temperature,
+                "num_predict": num_predict,
+            }
             return client.chat(
                 model=model,
                 messages=messages,
                 stream=False,  # stream=True not yet supported; honour False explicitly
-                options={"temperature": request.temperature},
+                options=options,
             )
 
-        response = await asyncio.to_thread(_call)
+        response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=timeout_seconds)
 
         return {
             "status": "success",
@@ -318,6 +464,15 @@ async def ollama_chat_completion(request: LLMChatRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError as e:
+        logger.warning("Ollama chat timed out after %.1fs", timeout_seconds)
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Ollama chat timed out before producing a response. "
+                "Reduce the prompt size or lower OLLAMA_DEFAULT_MAX_TOKENS / OLLAMA_MAX_TOKENS_CAP for faster local inference."
+            ),
+        ) from e
     except Exception as e:
         logger.error("Error with Ollama chat: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -329,19 +484,32 @@ async def ollama_generate(request: LLMCompletionRequest):
     try:
         from core.external_config import llm_config
         _require_provider_configured("ollama")
+        model = await _resolve_requested_ollama_model(
+            requested_model=request.model,
+            configured_model=llm_config.ollama_model,
+            base_url=llm_config.ollama_base_url,
+        )
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         client = _make_ollama_client(ollama, llm_config.ollama_base_url)
-
-        model = request.model or llm_config.ollama_model
+        num_predict = _get_ollama_num_predict(
+            requested_max_tokens=request.max_tokens,
+            default_max_tokens=llm_config.ollama_default_max_tokens,
+            max_tokens_cap=llm_config.ollama_max_tokens_cap,
+        )
+        timeout_seconds = _get_ollama_timeout_seconds(llm_config.ollama_request_timeout_seconds)
 
         def _call() -> Any:
+            options: Dict[str, Any] = {
+                "temperature": request.temperature,
+                "num_predict": num_predict,
+            }
             return client.generate(
                 model=model,
                 prompt=request.prompt,
-                options={"temperature": request.temperature},
+                options=options,
             )
 
-        response = await asyncio.to_thread(_call)
+        response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=timeout_seconds)
 
         return {
             "status": "success",
@@ -353,6 +521,15 @@ async def ollama_generate(request: LLMCompletionRequest):
 
     except HTTPException:
         raise
+    except asyncio.TimeoutError as e:
+        logger.warning("Ollama generate timed out after %.1fs", timeout_seconds)
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Ollama text generation timed out before completion. "
+                "Reduce the prompt size or lower OLLAMA_DEFAULT_MAX_TOKENS / OLLAMA_MAX_TOKENS_CAP for faster local inference."
+            ),
+        ) from e
     except Exception as e:
         logger.error("Error with Ollama generate: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -368,19 +545,7 @@ async def list_ollama_models(
     try:
         from core.external_config import llm_config
         _require_provider_configured("ollama")
-        ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
-        client = _make_ollama_client(ollama, llm_config.ollama_base_url)
-
-        ollama_resp = cast(Dict[str, Any], await asyncio.to_thread(client.list))
-
-        models = []
-        for model in ollama_resp.get('models', []):
-            models.append({
-                "name": model.get('name'),
-                "size": model.get('size'),
-                "modified_at": model.get('modified_at'),
-                "digest": model.get('digest')
-            })
+        models = await _fetch_ollama_model_catalog(llm_config.ollama_base_url)
 
         total_count = len(models)
         http_response.headers["X-Total-Count"] = str(total_count)
@@ -406,10 +571,13 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
     try:
         from core.external_config import llm_config
         _require_provider_configured("ollama")
+        model = await _resolve_requested_ollama_model(
+            requested_model=request.model,
+            configured_model=llm_config.ollama_model,
+            base_url=llm_config.ollama_base_url,
+        )
         ollama = _require_module("ollama", install_hint="Install `ollama` (the Python client) and configure OLLAMA_BASE_URL/OLLAMA_HOST." )
         client = _make_ollama_client(ollama, llm_config.ollama_base_url)
-
-        model = request.model or llm_config.ollama_model
 
         def _call() -> Any:
             return client.embeddings(model=model, prompt=request.text)
@@ -435,6 +603,21 @@ async def ollama_embedding(request: LLMEmbeddingRequest):
 # UNIFIED LLM ENDPOINT
 # ============================================================================
 
+async def dispatch_chat_completion(
+    request: LLMChatRequest,
+    provider: str = "openai",
+):
+    """Dispatch a chat completion request to the configured provider without self-HTTP."""
+    if provider == "openai":
+        return await openai_chat_completion(request)
+    if provider == "anthropic":
+        return await anthropic_chat_completion(request)
+    if provider == "azure-openai":
+        return await azure_openai_chat_completion(request)
+    if provider == "ollama":
+        return await ollama_chat_completion(request)
+    raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+
 @router.post("/chat")
 async def unified_chat_completion(
     request: LLMChatRequest,
@@ -442,16 +625,7 @@ async def unified_chat_completion(
 ):
     """Unified chat completion endpoint - routes to appropriate provider"""
     try:
-        if provider == "openai":
-            return await openai_chat_completion(request)
-        elif provider == "anthropic":
-            return await anthropic_chat_completion(request)
-        elif provider == "azure-openai":
-            return await azure_openai_chat_completion(request)
-        elif provider == "ollama":
-            return await ollama_chat_completion(request)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+        return await dispatch_chat_completion(request, provider=provider)
             
     except HTTPException:
         raise
@@ -470,17 +644,71 @@ async def llm_health_check():
     from core.external_config import llm_config
 
     providers = {
-        "openai": bool(llm_config.openai_api_key),
-        "anthropic": bool(llm_config.anthropic_api_key),
-        "azure_openai": bool(llm_config.azure_openai_endpoint and llm_config.azure_openai_key),
+        "openai": _has_real_config_value(llm_config.openai_api_key),
+        "anthropic": _has_real_config_value(llm_config.anthropic_api_key),
+        "azure_openai": _has_real_config_value(llm_config.azure_openai_endpoint) and _has_real_config_value(llm_config.azure_openai_key),
         "ollama": _is_ollama_explicitly_configured(),
     }
+    usable_providers = dict(providers)
+    provider_health: Dict[str, Any] = {}
+
+    if providers["ollama"]:
+        configured_ollama_model = str(getattr(llm_config, "ollama_model", "") or "")
+        ollama_health: Dict[str, Any] = {
+            "configured": True,
+            "reachable": False,
+            "default_model": configured_ollama_model,
+            "default_model_available": False,
+            "resolved_default_model": None,
+            "available_models": [],
+        }
+        try:
+            catalog = await _fetch_ollama_model_catalog(llm_config.ollama_base_url)
+            available_models = [entry["name"] for entry in catalog if entry.get("name")]
+            resolved_default_model = _resolve_ollama_model_name(
+                configured_ollama_model,
+                available_models,
+            )
+            ollama_health.update(
+                {
+                    "reachable": True,
+                    "available_models": available_models,
+                    "default_model_available": resolved_default_model is not None,
+                    "resolved_default_model": resolved_default_model,
+                }
+            )
+            if not configured_ollama_model.strip():
+                ollama_health["message"] = "Set OLLAMA_MODEL to one of the installed Ollama models."
+                usable_providers["ollama"] = False
+            elif resolved_default_model is None:
+                ollama_health["message"] = (
+                    f"Configured model '{configured_ollama_model}' is not installed in Ollama."
+                )
+                usable_providers["ollama"] = False
+            else:
+                usable_providers["ollama"] = True
+        except HTTPException as e:
+            ollama_health["message"] = str(e.detail)
+            usable_providers["ollama"] = False
+        except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError) as e:
+            ollama_health["message"] = str(e)
+            usable_providers["ollama"] = False
+        provider_health["ollama"] = ollama_health
+
     configured_any = any(providers.values())
-    status = "healthy" if configured_any else "unconfigured"
+    usable_any = any(usable_providers.values())
+    if usable_any:
+        status = "healthy"
+    elif configured_any:
+        status = "degraded"
+    else:
+        status = "unconfigured"
 
     return {
         "status": status,
         "providers": providers,
+        "usable_providers": usable_providers,
+        "provider_health": provider_health,
         "models": {
             "openai": llm_config.openai_model,
             "anthropic": llm_config.anthropic_model,

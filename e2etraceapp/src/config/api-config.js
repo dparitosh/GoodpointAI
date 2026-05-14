@@ -42,11 +42,7 @@ const DEFAULT_CONFIG = {
     // Unified AI Workflow: Discover → Profile → Quality → ETL → Report
     AGENTIC_WORKFLOW_RUN: '/api/agentic/workflow/run',
     AGENTIC_WORKFLOW_STEP: (step) => `/api/agentic/workflow/step/${encodeURIComponent(step)}`,
-    // Per-step convenience aliases
-    AGENTIC_WORKFLOW_DISCOVER: '/api/agentic/workflow/step/discover',
-    AGENTIC_WORKFLOW_PROFILE:  '/api/agentic/workflow/step/profile',
-    AGENTIC_WORKFLOW_QUALITY:  '/api/agentic/workflow/step/quality',
-    AGENTIC_WORKFLOW_ETL:      '/api/agentic/workflow/step/etl',
+    // Kept only where still used directly by the UI; prefer AGENTIC_WORKFLOW_STEP() otherwise.
     AGENTIC_WORKFLOW_REPORT:   '/api/agentic/workflow/step/report',
 
     // File patterns

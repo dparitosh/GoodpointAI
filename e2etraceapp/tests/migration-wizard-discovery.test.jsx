@@ -151,14 +151,14 @@ async function advanceToStep2(fetchImpl) {
   await act(async () => { fireEvent.change(sourceSelect, { target: { value: SOURCE.id } }); });
   await act(async () => { fireEvent.change(targetSelect, { target: { value: TARGET.id } }); });
 
+  // Set the discovery fetch mock BEFORE clicking Next so auto-start uses it immediately
+  e2etraceFetchWithRetry.mockImplementation(fetchImpl);
+
   // Switch mock to the step-1→step-2 transition handler (workflow POST)
   vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ id: 'wf_test_001', name: 'My Discovery Test' }) });
 
   const nextBtn = screen.getByRole('button', { name: /next/i });
   await act(async () => { fireEvent.click(nextBtn); });
-
-  // Now on step 2 — switch mock to the fetchImpl for discovery calls
-  e2etraceFetchWithRetry.mockImplementation(fetchImpl);
 }
 
 // ── Shared discovery fetch builder ────────────────────────────────────────
@@ -256,11 +256,9 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
 
     await advanceToStep2(buildDiscoveryFetch({ sampleRecords, sodaResult: { overall_score: 1, status: 'pass', issues_count: 0 } }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
+    // Auto-start fires on entering step 2 — wait for it to complete
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // Should NOT show "Source Fields Not Detected"
@@ -284,11 +282,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
 
     await advanceToStep2(buildDiscoveryFetch({ sampleRecords, sodaResult: { overall_score: 1, status: 'pass', issues_count: 0 } }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // All four keys from both records should appear
@@ -307,11 +302,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       sodaResult: { overall_score: 1, status: 'pass', issues_count: 0 },
     }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     expect(screen.getByText(/source fields not detected/i)).toBeInTheDocument();
@@ -328,11 +320,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       sodaResult,
     }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // KPI strip shows "Data Quality" label and "SODA gate: PASS" sub-text
@@ -348,11 +337,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       sodaResult: null,
     }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // KPI strip shows "Data Quality" label and "Not yet scanned" sub-text when SODA unavailable
@@ -370,11 +356,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
 
     await advanceToStep2(buildDiscoveryFetch({ agentResult }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // Agent-inferred fields appear in both the chips panel and mapping rows
@@ -400,19 +383,18 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       return ok([]);
     });
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
+    // Auto-start fires and fails — wait for failed state
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
-    // "Continue Without Discovery" should appear (failed state)
+    // Both retry and skip buttons appear in failed state
+    expect(screen.getByRole('button', { name: /retry discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue without discovery/i })).toBeInTheDocument();
   });
 
-  // ── 8. Button disabled during in-flight, re-enabled after ─────────────────
-  it('disables the Run Discovery button while discovery is in-flight', async () => {
+  // ── 8. Progress card shown while in-flight, retry button shown after failure ─
+  it('shows progress card while discovery is in-flight, then retry button on failure', async () => {
     // Use a never-resolving promise for ETL run creation to freeze mid-flight
     let resolveRun;
     const runPromise = new Promise((res) => { resolveRun = res; });
@@ -426,23 +408,22 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       return ok([]);
     });
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
+    // Auto-start fires — progress card should be visible while frozen
+    await waitFor(() => {
+      expect(screen.getByText(/scanning your data/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
 
-    // While in-flight, button should show "Running Discovery..." and be disabled
-    expect(screen.getByRole('button', { name: /running discovery/i })).toBeDisabled();
-
-    // Resolve the run so the component can finish
+    // Resolve the run with a failure so the component can finish
     await act(async () => {
       resolveRun({ ok: false, status: 500, json: () => Promise.resolve({}) });
     });
 
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
-    // After completion, button is re-enabled
-    expect(screen.getByRole('button', { name: /run discovery/i })).not.toBeDisabled();
+    // After failure, retry button is shown
+    expect(screen.getByRole('button', { name: /retry discovery/i })).toBeInTheDocument();
   });
 
   // ── 9. Agent Director actions rendered in DiscoveryResults ───────────────
@@ -480,11 +461,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       ingestResult,
     }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // The "Agent-recommended actions" panel heading
@@ -512,11 +490,8 @@ describe('MigrationWizard – Step 2 Run Discovery', () => {
       sodaResult: { overall_score: 1, status: 'pass', issues_count: 0 },
     }));
 
-    const runBtn = screen.getByRole('button', { name: /run discovery/i });
-    await act(async () => { fireEvent.click(runBtn); });
-
     await waitFor(() => {
-      expect(screen.queryByText(/running discovery/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/scanning your data/i)).not.toBeInTheDocument();
     }, { timeout: 5000 });
 
     // Section heading should be "Source File Inventory" not "Entity Type Inventory"

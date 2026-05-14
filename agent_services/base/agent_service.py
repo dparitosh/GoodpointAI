@@ -176,10 +176,19 @@ class AgentService(ABC):
         ]
         current_max_tokens = max_tokens
         current_user_content = user_content
+        is_ollama = str(llm_provider).strip().lower() == "ollama"
+        if is_ollama:
+            ollama_cap = max(32, int(os.getenv("OLLAMA_MAX_TOKENS_CAP", "256")))
+            current_max_tokens = min(current_max_tokens, ollama_cap)
+            request_timeout = max(5.0, float(os.getenv("OLLAMA_REQUEST_TIMEOUT_SECONDS", "75")))
+            min_retry_max_tokens = max(32, int(os.getenv("OLLAMA_MIN_RETRY_MAX_TOKENS", "96")))
+        else:
+            request_timeout = 30.0
+            min_retry_max_tokens = 512
 
         for attempt in range(max_attempts):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=request_timeout) as client:
                     resp = await client.post(
                         f"{backend_url_resolved}/api/llm/chat",
                         params={"provider": llm_provider},
@@ -232,7 +241,7 @@ class AgentService(ABC):
                     return None
 
             except httpx.TimeoutException:
-                current_max_tokens = max(512, current_max_tokens // 2)
+                current_max_tokens = max(min_retry_max_tokens, current_max_tokens // 2)
                 logger.debug(
                     "LLM timeout (attempt %d) — retrying with max_tokens=%d",
                     attempt + 1, current_max_tokens,

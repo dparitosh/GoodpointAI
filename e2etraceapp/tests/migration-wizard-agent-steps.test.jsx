@@ -207,10 +207,7 @@ async function navigateToStep3(agentHandler) {
 
   await fillAndSubmitStep1();
 
-  // Step 2: trigger discovery failure
-  const runDiscBtn = await screen.findByRole('button', { name: /run discovery/i });
-  await act(async () => { fireEvent.click(runDiscBtn); });
-
+  // Step 2: auto-start fires and discovery fails (ETL run returns no run_id)
   // Wait for "Continue Without Discovery" (shown when discoveryStatus === 'failed')
   const contBtn = await screen.findByRole('button', { name: /continue without discovery/i }, { timeout: 6000 });
   await act(async () => { fireEvent.click(contBtn); });
@@ -235,7 +232,7 @@ async function navigateToStep3(agentHandler) {
 async function navigateToStep4(agentHandler) {
   // Profile step uses a success handler so profileAccepted gets set to true
   const profileSuccess = (u, opts) => {
-    if (u.includes('workflow/step/profile'))
+    if (u.includes('/api/agentic/semantic-profile'))
       return ok({ success: true, result: PROFILE_RESULT });
     if (agentHandler) return agentHandler(u, opts);
     return ok([]);
@@ -246,9 +243,7 @@ async function navigateToStep4(agentHandler) {
 
   await fillAndSubmitStep1();
 
-  // Step 2: trigger discovery failure
-  const runDiscBtn = await screen.findByRole('button', { name: /run discovery/i });
-  await act(async () => { fireEvent.click(runDiscBtn); });
+  // Step 2: auto-start fires and discovery fails (ETL run returns no run_id)
   const contBtn = await screen.findByRole('button', { name: /continue without discovery/i }, { timeout: 6000 });
   await act(async () => { fireEvent.click(contBtn); });
   await waitFor(
@@ -320,7 +315,7 @@ describe('MigrationWizard – initial render & navigation', () => {
     render(<MemoryRouter><MigrationWizard /></MemoryRouter>);
     await screen.findByLabelText(/workflow instance name/i);
     for (const label of ['Connect', 'Discover', 'Profile', 'Quality', 'ETL', 'Report']) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
   });
 
@@ -342,7 +337,7 @@ describe('MigrationWizard – Step 3 Semantic Profile', () => {
 
   it('profile agent success → profile status/insights visible', async () => {
     const handler = (u) => {
-      if (u.includes('workflow/step/profile'))
+      if (u.includes('/api/agentic/semantic-profile'))
         return ok({ success: true, result: PROFILE_RESULT });
       return ok([]);
     };
@@ -363,7 +358,7 @@ describe('MigrationWizard – Step 3 Semantic Profile', () => {
 
   it('profile agent failure → error/retry state shown', async () => {
     const handler = (u) => {
-      if (u.includes('workflow/step/profile')) return fail(503);
+      if (u.includes('/api/agentic/semantic-profile')) return fail(503);
       return ok([]);
     };
     await navigateToStep3(handler);
@@ -400,7 +395,7 @@ describe('MigrationWizard – Step 4 Data Quality', () => {
 
   it('quality agent success → quality score or status visible', async () => {
     const handler = (u) => {
-      if (u.includes('workflow/step/quality'))
+      if (u.includes('/api/agentic/quality-scan'))
         return ok({ success: true, result: QUALITY_RESULT });
       return ok([]);
     };
@@ -421,7 +416,7 @@ describe('MigrationWizard – Step 4 Data Quality', () => {
 
   it('quality agent failure → error or retry state shown', async () => {
     const handler = (u) => {
-      if (u.includes('workflow/step/quality')) return fail(503);
+      if (u.includes('/api/agentic/quality-scan')) return fail(503);
       return ok([]);
     };
     await navigateToStep4(handler);
@@ -437,6 +432,64 @@ describe('MigrationWizard – Step 4 Data Quality', () => {
         body.includes('failed') || body.includes('unavailable') ||
         body.includes('agent unavailable')
       ).toBe(true);
+    }, { timeout: 6000 });
+  });
+
+  it('data health report button renders AI Data Health Report panel on success', async () => {
+    const handler = (u) => {
+      if (u.includes('/api/agentic/task')) {
+        return ok({
+          success: true,
+          result: {
+            readiness_score: 84,
+            trust_analysis: {
+              overall_trust_score: 79,
+              trust_level: 'medium',
+              column_trust_scores: {
+                part_number: { trust_score: 91, flags: [] },
+                unit_cost: { trust_score: 62, flags: ['mixed_type'] },
+              },
+              columns_with_issues: ['unit_cost'],
+            },
+            semantic_header_map: {
+              part_number: 'Part Number',
+              unit_cost: 'Unit Cost',
+            },
+            distribution_anomalies: [
+              {
+                column: 'unit_cost',
+                severity: 'warning',
+                description: 'Mixed numeric and text values detected',
+              },
+            ],
+            inferred_rules: [
+              {
+                rule_name: 'Unit Cost Numeric',
+                rule_description: 'Unit cost should be numeric for all rows',
+                column: 'unit_cost',
+                rule_type: 'numeric_only',
+                confidence: 0.82,
+              },
+            ],
+            signals: [{ column: 'unit_cost', type: 'mixed_type', severity: 'warning' }],
+            files_scanned: 1,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+      return ok([]);
+    };
+
+    await navigateToStep4(handler);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /data health report/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/ai data health report/i)).toBeTruthy();
+      expect(screen.getByText(/semantic header map/i)).toBeTruthy();
+      expect(screen.getByText(/column trust breakdown/i)).toBeTruthy();
     }, { timeout: 6000 });
   });
 

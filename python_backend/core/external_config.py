@@ -19,12 +19,16 @@ dotenv_path = Path(__file__).resolve().parent.parent / '.env'
 # This handles the common case where GRAPH_TRACE_LOAD_DOTENV=true is written
 # inside .env (a self-referential bootstrap) — dotenv_values() reads the file
 # without mutating os.environ, so production env vars are never overridden here.
-_LOAD_DOTENV = (os.getenv("GRAPH_TRACE_LOAD_DOTENV") or "").strip().lower() in {"1", "true", "yes"}
+_load_dotenv_env = str(os.getenv("GRAPH_TRACE_LOAD_DOTENV") or "")
+_LOAD_DOTENV = _load_dotenv_env.strip().lower() in {"1", "true", "yes"}
 if not _LOAD_DOTENV and dotenv_path.exists():
     try:
         from dotenv import dotenv_values as _dotenv_values
         _peek = _dotenv_values(dotenv_path)
-        _LOAD_DOTENV = _peek.get("GRAPH_TRACE_LOAD_DOTENV", "").strip().lower() in {"1", "true", "yes"}
+        _bootstrap_flag = ""
+        if isinstance(_peek, dict):
+            _bootstrap_flag = _peek.get("GRAPH_TRACE_LOAD_DOTENV") or ""
+        _LOAD_DOTENV = str(_bootstrap_flag).strip().lower() in {"1", "true", "yes"}
     except Exception:  # pylint: disable=broad-exception-caught
         pass
 
@@ -141,7 +145,15 @@ class LLMConfig(BaseSettings):
     
     # Ollama Local
     ollama_base_url: str = Field(default="http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
-    ollama_model: str = Field(default="llama2", validation_alias="OLLAMA_MODEL")
+    ollama_model: str = Field(default="", validation_alias="OLLAMA_MODEL")
+    ollama_request_timeout_seconds: float = Field(default=120.0, validation_alias="OLLAMA_REQUEST_TIMEOUT_SECONDS")
+    ollama_default_max_tokens: int = Field(default=192, validation_alias="OLLAMA_DEFAULT_MAX_TOKENS")
+    ollama_max_tokens_cap: int = Field(default=256, validation_alias="OLLAMA_MAX_TOKENS_CAP")
+    ollama_classifier_max_tokens: int = Field(default=160, validation_alias="OLLAMA_CLASSIFIER_MAX_TOKENS")
+    ollama_guidance_max_tokens: int = Field(default=192, validation_alias="OLLAMA_GUIDANCE_MAX_TOKENS")
+    ollama_classifier_timeout_seconds: float = Field(default=20.0, validation_alias="OLLAMA_CLASSIFIER_TIMEOUT_SECONDS")
+    ollama_guidance_timeout_seconds: float = Field(default=20.0, validation_alias="OLLAMA_GUIDANCE_TIMEOUT_SECONDS")
+    ollama_min_retry_max_tokens: int = Field(default=96, validation_alias="OLLAMA_MIN_RETRY_MAX_TOKENS")
 
 
 class PLMConfig(BaseSettings):

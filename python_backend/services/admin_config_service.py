@@ -175,7 +175,7 @@ class AdminConfigService:
             return {
                 "provider": "ollama",
                 "api_key": "",  # Ollama doesn't require API key
-                "model": os.getenv("OLLAMA_MODEL", "llama2"),
+                "model": os.getenv("OLLAMA_MODEL", ""),
                 "endpoint": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             }
         else:

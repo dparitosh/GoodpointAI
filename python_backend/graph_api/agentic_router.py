@@ -9,6 +9,7 @@ import logging
 import uuid
 import re
 import json as _json
+import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from enum import Enum
@@ -19,6 +20,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from .dependencies import get_driver
+from .llm_integration_router import ChatMessage, LLMChatRequest, dispatch_chat_completion
 from core.db_session import get_db
 from models.quality_models import DiscoveryReport, DataQualityRule
 from models.report_hub_models import UnifiedReport
@@ -143,7 +145,9 @@ class ChatResponse(BaseModel):
     requires_followup: bool = False
     session_id: str
 
+
 class SystemStatus(BaseModel):
+    status: str  # Frontend-facing status
     active_agents: List[AgentDefinition]
     task_queue_size: int
     system_health: str
@@ -158,6 +162,176 @@ class GoalToWorkflowRequest(BaseModel):
     workflow_name: Optional[str] = None
     auto_start: bool = True
     execution_params: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _get_guidance_llm_budget(provider: str) -> int:
+    from core.external_config import llm_config
+
+    if str(provider).strip().lower() == "ollama":
+        return min(llm_config.ollama_guidance_max_tokens, llm_config.ollama_max_tokens_cap)
+    return 512
+
+
+def _get_guidance_llm_timeout(provider: str) -> float:
+    from core.external_config import llm_config
+
+    if str(provider).strip().lower() == "ollama":
+        return max(5.0, float(llm_config.ollama_guidance_timeout_seconds))
+    return 30.0
+
+
+def _get_guidance_prompt(provider: str) -> str:
+    if str(provider).strip().lower() == "ollama":
+        return (
+            "You are a friendly data assistant. Pick the single best first step from discovery, profiling, or quality. "
+            "Reply with compact JSON only using keys recommendation, headline, reason, expected_outcome, next_steps, complexity, estimated_time, tips. "
+            "Keep reason brief and next_steps to at most 3 items."
+        )
+    return (
+        "You are a friendly data assistant. "
+        "Given a user's dataset context, recommend the single best first step "
+        "from: discovery (scan files), profiling (understand columns), quality (fix issues). "
+        "If the user asks a specific question, tailor your recommendation to address it. "
+        "Use plain business language. Output strict JSON only:\n"
+        '{"recommendation":"discovery|profiling|quality","headline":"...","reason":"...","expected_outcome":"...",'
+        '"next_steps":[],"complexity":"low|medium|high","estimated_time":"...","tips":[]}'
+    )
+
+
+def _normalize_quality_score(score: Any) -> Optional[float]:
+    """Normalize 0-1 or 0-100 quality scores into a 0-100 percentage."""
+    if score is None:
+        return None
+    try:
+        numeric = float(score)
+    except (TypeError, ValueError):
+        return None
+    if 0.0 <= numeric <= 1.0:
+        return round(numeric * 100.0, 1)
+    return round(numeric, 1)
+
+
+def _build_local_report_result(
+    *,
+    prior_results: Dict[str, Any],
+    workflow_name: Optional[str],
+    run_id: Optional[str],
+    source_name: Optional[str],
+) -> Dict[str, Any]:
+    """Build a deterministic report when ReportingAgent/MCP is unavailable."""
+    discover = prior_results.get("discover", {}) if isinstance(prior_results, dict) else {}
+    profile = prior_results.get("profile", {}) if isinstance(prior_results, dict) else {}
+    quality = prior_results.get("quality", {}) if isinstance(prior_results, dict) else {}
+    etl = prior_results.get("etl", {}) if isinstance(prior_results, dict) else {}
+
+    files = discover.get("discovered_files") or discover.get("files") or []
+    file_profiles = discover.get("file_profiles") or files or []
+    semantic_insights = profile.get("semantic_insights") or profile
+    columns_profiled = (
+        semantic_insights.get("summary", {}).get("total_columns_analysed")
+        or len(semantic_insights.get("column_semantics") or [])
+        or len(semantic_insights.get("columns") or [])
+    )
+    files_discovered = len(files) or int(discover.get("file_count") or 0)
+    quality_score = _normalize_quality_score(
+        quality.get("quality_score") or quality.get("overall_score")
+    )
+    anomalies_found = int(
+        quality.get("anomalies_found")
+        or quality.get("total_violations")
+        or len(quality.get("rule_validation", {}).get("violations") or [])
+        or 0
+    )
+    records_loaded = int(
+        etl.get("records_loaded")
+        or etl.get("records_processed")
+        or etl.get("rows_loaded")
+        or 0
+    )
+
+    try:
+        from agent_services.reporting_agent.main import _compute_migration_readiness_score
+
+        readiness = _compute_migration_readiness_score(
+            file_profiles=file_profiles if isinstance(file_profiles, list) else [],
+            schema_drift=[],
+            anomalies=[],
+            quality_findings=quality if isinstance(quality, dict) else {},
+            fk_candidates=[],
+        )
+    except Exception:
+        base_score = quality_score if quality_score is not None else (85.0 if files_discovered > 0 else 60.0)
+        score = max(0.0, min(100.0, round(base_score - min(anomalies_found * 3, 20), 1)))
+        grade = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 45 else "F"
+        readiness = {
+            "score": score,
+            "grade": grade,
+            "reasoning": "Fallback report assembled locally because ReportingAgent or MCP was unavailable.",
+            "ready_for_migration": score >= 60,
+            "blockers": [],
+        }
+
+    recommendations: List[str] = []
+    if quality_score is not None and quality_score < 80:
+        recommendations.append("Review data quality findings before executing the migration pipeline.")
+    if columns_profiled == 0:
+        recommendations.append("Run semantic profiling to enrich the final migration report with column-level insights.")
+    if records_loaded == 0:
+        recommendations.append("Execute the ETL step to include migration throughput and load metrics in the report.")
+    if not recommendations:
+        recommendations.append("Pipeline artefacts look consistent. You can proceed with execution or export the report.")
+
+    step_summaries = {
+        "discover": {
+            "status": "completed" if discover else "pending",
+            "message": f"{files_discovered} file(s) discovered" if discover else "Discovery has not been run yet.",
+        },
+        "profile": {
+            "status": "completed" if profile else "pending",
+            "message": f"{columns_profiled} column(s) profiled" if profile else "Semantic profile not available.",
+        },
+        "quality": {
+            "status": "completed" if quality else "pending",
+            "message": (
+                f"Quality score {int(round(quality_score))}/100 with {anomalies_found} issue(s)"
+                if quality and quality_score is not None
+                else "Quality scan not available."
+            ),
+        },
+        "etl": {
+            "status": "completed" if etl else "pending",
+            "message": f"{records_loaded} record(s) loaded" if etl else "ETL execution metrics not available.",
+        },
+    }
+
+    report_label = workflow_name or source_name or "Pipeline"
+    return {
+        "report_id": str(uuid.uuid4()),
+        "report_title": f"Migration Report — {report_label}",
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "run_id": run_id,
+        "files_discovered": files_discovered,
+        "columns_profiled": columns_profiled,
+        "quality_score": quality_score,
+        "records_loaded": records_loaded,
+        "migration_readiness_score": readiness,
+        "executive_summary": (
+            f"Fallback report assembled for {report_label}. "
+            f"{files_discovered} file(s) were discovered, {columns_profiled} column(s) were profiled, "
+            f"and the current migration readiness score is {readiness.get('score', 'n/a')} "
+            f"({readiness.get('grade', 'n/a')})."
+        ),
+        "step_summaries": step_summaries,
+        "recommendations": recommendations,
+        "summary": {
+            "source_name": source_name,
+            "workflow_name": workflow_name,
+            "quality_score": quality_score,
+            "report_source": "local_fallback",
+        },
+        "_fallback": True,
+        "_mcp_unavailable": True,
+    }
 
 
 def _build_plm_agentic_phase_plan(
@@ -422,15 +596,6 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
         logger.warning("Smart guidance via MCP failed: %s", e)
 
     # ── Direct LLM fallback (no MCP required) ─────────────────────────────
-    _GUIDANCE_PROMPT = (
-        "You are a friendly data assistant. "
-        "Given a user's dataset context, recommend the single best first step "
-        "from: discovery (scan files), profiling (understand columns), quality (fix issues). "
-        "If the user asks a specific question, tailor your recommendation to address it. "
-        "Use plain business language. Output strict JSON only:\n"
-        '{"recommendation":"discovery|profiling|quality","headline":"...","reason":"...","expected_outcome":"...",'
-        '"next_steps":[],"complexity":"low|medium|high","estimated_time":"...","tips":[]}'
-    )
     user_msg = (
         f"Source: {req.source_name or 'not specified'}. "
         f"File count: {req.file_count or 'unknown'}. "
@@ -440,37 +605,37 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
     )
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            provider = req.llm_provider or "openai"
-            resp = await client.post(
-                "http://127.0.0.1:8011/api/llm/chat",
-                params={"provider": provider},
-                json={
-                    "messages": [
-                        {"role": "system", "content": _GUIDANCE_PROMPT},
-                        {"role": "user",   "content": user_msg},
+        provider = req.llm_provider or "openai"
+        llm_response = await asyncio.wait_for(
+            dispatch_chat_completion(
+                LLMChatRequest(
+                    messages=[
+                        ChatMessage(role="system", content=_get_guidance_prompt(provider)),
+                        ChatMessage(role="user", content=user_msg),
                     ],
-                    "temperature": 0.2,
-                    "max_tokens": 512,
-                },
+                    temperature=0.2,
+                    max_tokens=_get_guidance_llm_budget(provider),
+                ),
+                provider=provider,
+            ),
+            timeout=_get_guidance_llm_timeout(provider),
+        )
+        raw = llm_response.get("response", "")
+        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            g = _json.loads(m.group(0))
+            return SmartGuidanceResponse(
+                recommendation=g.get("recommendation", "discovery"),
+                headline=g.get("headline", "Start with Discovery"),
+                reason=g.get("reason", ""),
+                expected_outcome=g.get("expected_outcome", ""),
+                next_steps=g.get("next_steps", []),
+                complexity=g.get("complexity", "low"),
+                estimated_time=g.get("estimated_time", ""),
+                tips=g.get("tips", []),
+                llm_powered=True,
             )
-            if resp.is_success:
-                raw = resp.json().get("response", "")
-                raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
-                m = re.search(r"\{.*\}", raw, re.DOTALL)
-                if m:
-                    g = _json.loads(m.group(0))
-                    return SmartGuidanceResponse(
-                        recommendation=g.get("recommendation", "discovery"),
-                        headline=g.get("headline", "Start with Discovery"),
-                        reason=g.get("reason", ""),
-                        expected_outcome=g.get("expected_outcome", ""),
-                        next_steps=g.get("next_steps", []),
-                        complexity=g.get("complexity", "low"),
-                        estimated_time=g.get("estimated_time", ""),
-                        tips=g.get("tips", []),
-                        llm_powered=True,
-                    )
     except Exception as e:
         logger.warning("Smart guidance LLM fallback failed: %s", e)
 
@@ -521,20 +686,31 @@ async def get_smart_guidance(req: SmartGuidanceRequest):
     )
 
 
-@router.get("/status", response_model=SystemStatus)
+@router.get("/status")
 async def get_system_status():
     """Get current agentic system status"""
     try:
         status_data = await mcp_client.get_system_status()
-        return SystemStatus(**status_data)
+        # Build response with explicit status field for frontend
+        response = {
+            "status": status_data.get("system_health", "healthy"),  # Alias for frontend
+            "system_health": status_data.get("system_health", "unknown"),
+            "active_agents": status_data.get("active_agents", []),
+            "task_queue_size": status_data.get("task_queue_size", 0),
+            "performance_metrics": status_data.get("performance_metrics", {}),
+            "timestamp": status_data.get("timestamp", datetime.now().isoformat()),
+        }
+        return response
     except Exception as e:
         logger.warning("MCP unavailable for /status: %s", e)
-        return SystemStatus(
-            active_agents=[],
-            task_queue_size=0,
-            system_health="unavailable",
-            performance_metrics={"mcp_unavailable": True},
-        )
+        return {
+            "status": "unavailable",
+            "system_health": "unavailable",
+            "active_agents": [],
+            "task_queue_size": 0,
+            "performance_metrics": {"mcp_unavailable": True},
+            "timestamp": datetime.now().isoformat()
+        }
 
 @router.get("/agents", response_model=List[AgentDefinition])
 async def get_orchestrator_agents(
@@ -1929,6 +2105,22 @@ async def run_workflow_step(
             execution_time=(datetime.now() - start).total_seconds(),
         )
     except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+        if step_name == "report":
+            fallback_report = _build_local_report_result(
+                prior_results=req.prior_results,
+                workflow_name=req.params.get("workflow_name") if isinstance(req.params, dict) else None,
+                run_id=req.run_id,
+                source_name=req.params.get("source_name") if isinstance(req.params, dict) else None,
+            )
+            return WorkflowStepResult(
+                step=step_name,
+                status="completed",
+                agent_id="local_report_fallback",
+                agent_type="reporting_agent",
+                success=True,
+                result=fallback_report,
+                execution_time=(datetime.now() - start).total_seconds(),
+            )
         raise HTTPException(
             status_code=503,
             detail=f"MCP agent cluster unavailable for step '{step_name}': {e}",
@@ -2027,6 +2219,26 @@ async def run_full_workflow(req: WorkflowRunRequest):
                     break
 
         except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+            if step_name == "report":
+                fallback_report = _build_local_report_result(
+                    prior_results=prior_results,
+                    workflow_name=req.workflow_name,
+                    run_id=run_id,
+                    source_name=req.params.get("source_name") if isinstance(req.params, dict) else None,
+                )
+                sr = WorkflowStepResult(
+                    step=step_name,
+                    status="completed",
+                    agent_id="local_report_fallback",
+                    agent_type="reporting_agent",
+                    success=True,
+                    result=fallback_report,
+                    execution_time=(datetime.now() - step_start).total_seconds(),
+                )
+                step_results[step_name] = sr
+                completed.append(step_name)
+                prior_results[step_name] = fallback_report
+                continue
             sr = WorkflowStepResult(
                 step=step_name,
                 status="failed",

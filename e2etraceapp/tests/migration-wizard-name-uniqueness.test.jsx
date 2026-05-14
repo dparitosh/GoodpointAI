@@ -192,7 +192,7 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
 
     // Assert: wizard did NOT advance — step 1 heading still visible
     expect(screen.getByText('Configure Data Sources')).toBeInTheDocument();
-    expect(screen.queryByText('Discovery Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Discovery')).not.toBeInTheDocument();
   });
 
   it('POST 409: uses the generic fallback message when backend returns no detail', async () => {
@@ -231,7 +231,7 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
 
     // Wizard moved to step 2
     await waitFor(() =>
-      expect(screen.getByText('Discovery Agent')).toBeInTheDocument()
+      expect(screen.getByText('Data Discovery')).toBeInTheDocument()
     );
   });
 
@@ -239,18 +239,6 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
     // First POST succeeds — saves workflow id 'wf-existing'
     vi.mocked(fetch)
       .mockImplementationOnce(() => mockFetchResponse(200, { id: 'wf-existing', name: 'Original Name' }))
-      // SmartGuidancePanel mounts on step 2 and calls POST /api/agentic/smart-guidance
-      .mockImplementationOnce(() => mockFetchResponse(200, {
-        recommendation: 'discovery',
-        headline: 'Start with Discovery',
-        reason: 'No data has been scanned yet.',
-        expected_outcome: 'A summary of your files.',
-        next_steps: [],
-        complexity: 'low',
-        estimated_time: '2-5 minutes',
-        tips: [],
-        llm_powered: false,
-      }))
       // Go back to step 1, then PATCH → 409
       .mockImplementationOnce(() =>
         mockFetchResponse(409, { detail: 'A workflow named "Taken Name" already exists.' })
@@ -261,7 +249,7 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
     // Step 1 → step 2 (POST 200)
     let nextBtn = await fillStep1('Original Name');
     await act(async () => { fireEvent.click(nextBtn); });
-    await waitFor(() => expect(screen.getByText('Discovery Agent')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Data Discovery')).toBeInTheDocument());
 
     // Go back to step 1
     const prevBtn = screen.getByRole('button', { name: /previous/i });
@@ -283,7 +271,7 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
 
     // Still on step 1
     expect(screen.getByText('Configure Data Sources')).toBeInTheDocument();
-    expect(screen.queryByText('Discovery Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Discovery')).not.toBeInTheDocument();
   });
 
   it('network error on POST: wizard still advances (non-fatal path)', async () => {
@@ -300,7 +288,7 @@ describe('MigrationWizard – workflow name uniqueness (step 1 → step 2 naviga
     // Network errors are intentionally non-fatal — no toast, wizard advances
     expect(mockToastError).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(screen.getByText('Discovery Agent')).toBeInTheDocument()
+      expect(screen.getByText('Data Discovery')).toBeInTheDocument()
     );
   });
 

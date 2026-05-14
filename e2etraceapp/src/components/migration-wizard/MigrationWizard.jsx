@@ -451,6 +451,21 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   }, [currentStep, wizardData.workflowName, wizardData.sourceSystem, wizardData.targetSystem, wizardData.savedWorkflowId, stepStatus]);
 
+  // Auto-start discovery when the user reaches step 2 with source + target configured
+  useEffect(() => {
+    if (
+      currentStep === 2 &&
+      wizardData.sourceSystem &&
+      wizardData.targetSystem &&
+      wizardData.discoveryStatus === 'idle' &&
+      !discoveryInFlightRef.current
+    ) {
+      runDiscovery();
+    }
+  // runDiscovery is stable (useCallback); discoveryStatus guards against re-runs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, wizardData.sourceSystem, wizardData.targetSystem, wizardData.discoveryStatus]);
+
   // Step navigation
   const canProceed = useCallback((step) => {
     switch (step) {
@@ -1338,7 +1353,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     addRules([rule]);
   }, [addRules]);
 
-  // ── Step 3: Profile — DataProfilerAgent via MCP ──────────────────────────
+  // ── Step 3: Profile — DataProfilerAgent via /api/agentic/semantic-profile ──
+  // Uses the dedicated endpoint which has a heuristic fallback when MCP is unavailable,
+  // unlike /api/agentic/workflow/step/profile which is pure MCP passthrough (503 when down).
   const runProfileAgent = useCallback(async () => {
     if (!wizardData.sourceSystem && !wizardData.discoveryRunId) return;
     setOpLoading(prev => ({ ...prev, profile: true }));
@@ -1348,21 +1365,25 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         || (wizardData.discoverySample ? [{ file: wizardData.sourceSystem?.name || 'source', columns: Object.keys(wizardData.discoverySample[0] || {}).map(n => ({ name: n })) }] : []);
 
       const res = await e2etraceFetchWithRetry(
-        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_PROFILE}`,
+        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_SEMANTIC_PROFILE}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            source_id: wizardData.sourceSystem?.id || null,
-            folder_path: wizardData.sourceSystem?.connection?.file_path || null,
-            run_id: wizardData.discoveryRunId || null,
+            source_name: wizardData.sourceSystem?.name || null,
+            folder_path: wizardData.sourceSystem?.connection?.folder_path
+                      || wizardData.sourceSystem?.connection?.file_path || null,
             file_profiles: fileProfiles,
-            records: wizardData.discoverySample?.slice?.(0, 200) || [],
-            prior_results: {},
-            params: { source_name: wizardData.sourceSystem?.name },
+            discovery_run_id: wizardData.discoveryRunId || null,
+            save_report: true,
           }),
         }
       );
+      if (!res) throw new Error('No response from agent service');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail || errData?.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success !== false) {
         setWizardData(prev => ({
@@ -1388,31 +1409,33 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     }
   }, [wizardData.sourceSystem, wizardData.discoveryRunId, wizardData.discoverySample, wizardData.discoveryIntrospect]);
 
-  // ── Step 4: Quality — QualityMonitorAgent via MCP ───────────────────────
+  // ── Step 4: Quality — QualityMonitorAgent via /api/agentic/quality-scan ───
+  // Uses the dedicated endpoint which has a direct quality-scan fallback when MCP
+  // is unavailable, unlike /api/agentic/workflow/step/quality (pure MCP, 503 when down).
   const runQualityAgent = useCallback(async () => {
     if (!wizardData.sourceSystem && !wizardData.discoveryRunId) return;
     setOpLoading(prev => ({ ...prev, quality: true }));
     setWizardData(prev => ({ ...prev, qualityStatus: 'running', qualityResult: null, qualityError: null }));
     try {
       const res = await e2etraceFetchWithRetry(
-        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_WORKFLOW_QUALITY}`,
+        `${API_CONFIG?.API_BASE_URL || ''}${API_CONFIG.ENDPOINTS.AGENTIC_QUALITY_SCAN}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             source_id: wizardData.sourceSystem?.id || null,
-            folder_path: wizardData.sourceSystem?.connection?.file_path || null,
-            run_id: wizardData.discoveryRunId || null,
-            file_profiles: [],
-            records: wizardData.discoverySample?.slice?.(0, 500) || [],
-            prior_results: wizardData.profileResult ? { profile: wizardData.profileResult } : {},
-            params: {
-              source_name: wizardData.sourceSystem?.name,
-              profile_summary: wizardData.profileResult || null,
-            },
+            folder_path: wizardData.sourceSystem?.connection?.folder_path
+                      || wizardData.sourceSystem?.connection?.file_path || null,
+            scan_type: 'full',
+            save_report: true,
           }),
         }
       );
+      if (!res) throw new Error('No response from agent service');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail || errData?.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success !== false) {
         const result = data.result || data;
@@ -1449,7 +1472,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
     } finally {
       setOpLoading(prev => ({ ...prev, quality: false }));
     }
-  }, [wizardData.sourceSystem, wizardData.discoveryRunId, wizardData.discoverySample, wizardData.profileResult]);
+  }, [wizardData.sourceSystem]);
 
   // ── Step 6: Report — ReportingAgent via MCP ─────────────────────────────
   const generateAgentReport = useCallback(async () => {
@@ -1491,6 +1514,11 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           }),
         }
       );
+      if (!res) throw new Error('No response from agent service');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail || errData?.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       if (data.success !== false) {
         setWizardData(prev => ({
@@ -1537,8 +1565,12 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         },
         { retries: 1 }
       );
+      if (!res) throw new Error('No response from agent service');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail || `HTTP ${res.status}`);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || `HTTP ${res.status}`);
       // AgenticTaskResult wraps agent response in `.result`
       const report = data?.result ?? data;
       setWizardData(prev => ({ ...prev, dataHealthReport: report, dataHealthLoading: false }));
@@ -2197,8 +2229,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
   const renderSchemaStep = () => (
     <div className="wizard-step-content discovery-step">
-      <h3>Discovery Agent</h3>
-      <p className="step-description">Run discovery to generate SODA-driven insights and mapping hints</p>
+      <h3>Data Discovery</h3>
 
       {/* Warning when source/target not selected */}
       {(!wizardData.sourceSystem || !wizardData.targetSystem) && (
@@ -2211,80 +2242,59 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         </div>
       )}
 
-      {/* ── Smart Guidance panel: shown while discovery is idle ── */}
-      {wizardData.discoveryStatus === 'idle'
-        && wizardData.sourceSystem
-        && !smartGuidanceDismissed && (
-        <SmartGuidancePanel
-          sourceSystem={wizardData.sourceSystem}
-          fileCount={wizardData.discoverySample?.total_files ?? null}
-          fileTypes={wizardData.discoverySample?.file_types ?? null}
-          previousRuns={Boolean(wizardData.semanticProfile || wizardData.discoveryRunId)}
-          userRole="business"
-          onAction={(action) => {
-            setSmartGuidanceDismissed(true);
-            if (action === 'discovery' || action === 'profiling') {
-              runDiscovery();
-            }
-            // 'quality' is handled in step 4 — just dismiss the panel here
-          }}
-          onDismiss={() => setSmartGuidanceDismissed(true)}
-        />
+      {/* ── Running state: inline progress card ── */}
+      {opLoading.discovery && (
+        <div className="discovery-progress-card">
+          <i className="fas fa-spinner fa-spin discovery-progress-icon" />
+          <div>
+            <div className="discovery-progress-title">Scanning your data&hellip;</div>
+            <div className="discovery-progress-sub">Analyzing schema, quality, and generating AI mapping hints</div>
+          </div>
+        </div>
       )}
 
-      <div className="discovery-actions">
-        <div className="action-group">
-          <span className="step-number">1</span>
+      {/* ── Completed state: accept CTA + re-run link ── */}
+      {wizardData.discoveryStatus === 'completed' && (
+        <div className="discovery-cta-row">
+          <button
+            className="btn btn-success"
+            onClick={acceptDiscovery}
+            disabled={wizardData.discoveryAccepted}
+          >
+            <i className="fas fa-check" />
+            {wizardData.discoveryAccepted ? 'Discovery Accepted ✓' : 'Accept & Continue'}
+          </button>
+          <button
+            className="btn-link-muted"
+            onClick={runDiscovery}
+            disabled={opLoading.discovery}
+            title="Re-run discovery to refresh results"
+          >
+            <i className="fas fa-redo" /> Re-run
+          </button>
+        </div>
+      )}
+
+      {/* ── Failed state: retry + skip ── */}
+      {wizardData.discoveryStatus === 'failed' && (
+        <div className="discovery-cta-row">
+          {wizardData.discoveryError && (
+            <div className="discovery-error">{wizardData.discoveryError}</div>
+          )}
           <button
             className="btn btn-primary"
             onClick={runDiscovery}
-            disabled={!wizardData.sourceSystem || !wizardData.targetSystem || opLoading.discovery}
-            title={!wizardData.sourceSystem || !wizardData.targetSystem ? 'Complete Step 1 first to select source and target systems' : 'Run discovery to analyze your data'}
+            disabled={opLoading.discovery}
           >
-            {opLoading.discovery
-              ? <><i className="fas fa-spinner fa-spin" /> Running Discovery...</>
-              : <><i className="fas fa-search" /> Run Discovery</>}
+            <i className="fas fa-redo" /> Retry Discovery
           </button>
-          <p className="action-help">Analyze data quality and generate AI mapping suggestions</p>
+          <button
+            className="btn btn-warning"
+            onClick={acceptDiscovery}
+          >
+            <i className="fas fa-forward" /> Continue Without Discovery
+          </button>
         </div>
-
-        {wizardData.discoveryStatus === 'completed' && (
-          <div className="action-group">
-            <span className="step-number">2</span>
-            <button
-              className="btn btn-success"
-              onClick={acceptDiscovery}
-              disabled={wizardData.discoveryAccepted}
-            >
-              <i className="fas fa-check" /> {wizardData.discoveryAccepted ? 'Discovery Accepted ✓' : 'Accept & Continue'}
-            </button>
-            <p className="action-help">Review results above, then accept to proceed to field mapping</p>
-          </div>
-        )}
-        {wizardData.discoveryStatus === 'failed' && !wizardData.discoveryAccepted && (
-          <div className="action-group">
-            <span className="step-number">2</span>
-            <button
-              className="btn btn-warning"
-              onClick={acceptDiscovery}
-            >
-              <i className="fas fa-forward" /> Continue Without Discovery
-            </button>
-            <p className="action-help">Discovery failed — you can still map fields manually or use a template in the next step</p>
-          </div>
-        )}
-      </div>
-
-      {/* ── Error state ─────────────────────────────────────────────── */}
-      {wizardData.discoveryStatus === 'failed' && wizardData.discoveryError && (
-        <div className="discovery-error" style={{ marginTop: 12 }}>{wizardData.discoveryError}</div>
-      )}
-
-      {/* ── Idle placeholder ─────────────────────────────────────────── */}
-      {wizardData.discoveryStatus === 'idle' && wizardData.discoveryInsights.length === 0 && (
-        <p className="placeholder" style={{ marginTop: 12 }}>
-          Run Discovery to generate insights. You must accept discovery before continuing.
-        </p>
       )}
 
       {/* ── Discovery Intelligence Dashboard (DiscoveryResults widget) ─── */}
@@ -2672,7 +2682,10 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
 
         {/* Data Health Report panel */}
         {wizardData.dataHealthReport && (
-          <DataHealthPanel report={wizardData.dataHealthReport} />
+          <DataHealthPanel
+            healthReport={wizardData.dataHealthReport}
+            onApplyRule={applyInferredRule}
+          />
         )}
 
         {wizardData.qualityStatus === 'idle' && !qr && !wizardData.dataHealthReport && (
@@ -3610,7 +3623,7 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       </div>
       
       {/* Navigation */}
-      <div className="wizard-navigation">
+      <div className="wizard-navigation" style={{ '--wz-progress': `${Math.round((currentStep / steps.length) * 100)}%` }}>
         <button 
           className="btn btn-secondary"
           onClick={prevStep}
@@ -3619,8 +3632,9 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
           <i className="fas fa-arrow-left" /> Previous
         </button>
         
-        <div className="step-indicator-text">
-          Step {currentStep} of {steps.length}
+        <div className="step-indicator-text" aria-label={`Step ${currentStep} of ${steps.length}: ${steps[currentStep - 1]?.name}`}>
+          <span>Step {currentStep} of {steps.length}</span>
+          <strong>{steps[currentStep - 1]?.name}</strong>
         </div>
         
         {currentStep < steps.length ? (

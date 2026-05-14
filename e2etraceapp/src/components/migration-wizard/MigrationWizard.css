@@ -75,59 +75,89 @@
 }
 
 /* ============= WIZARD STEPS HEADER ============= */
+/* ── Keyframes ────────────────────────────────────────────────────── */
+@keyframes wz-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wz-step-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+@keyframes wz-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 0,102,204), 0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(var(--accent-rgb, 0,102,204), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 0,102,204), 0); }
+}
+@keyframes wz-connector-fill {
+  from { background-position: right center; }
+  to   { background-position: left center; }
+}
+@keyframes wz-count-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .wizard-steps {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 24px 32px;
+  align-items: center;
+  padding: 14px 24px;
   background: linear-gradient(135deg, var(--panel-bg, #e8eef4) 0%, var(--background-color, #f0f4f8) 100%);
   border-bottom: 1px solid var(--border-color);
-  gap: 8px;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
 }
 
 .wizard-step {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   cursor: default;
   transition: all 0.3s ease;
   flex: 1;
   position: relative;
   text-align: center;
-  min-width: 100px;
-  padding: 0 8px;
+  min-width: 70px;
+  padding: 0 4px;
 }
 
 /* Connector line between steps */
 .wizard-step:not(:last-child)::after {
   content: '';
   position: absolute;
-  top: 24px;
-  left: calc(50% + 30px);
-  width: calc(100% - 60px);
-  height: 3px;
+  top: 17px;
+  left: calc(50% + 22px);
+  width: calc(100% - 44px);
+  height: 2px;
   background: var(--border-color);
   z-index: 0;
+  border-radius: 1px;
+  transition: background 0.4s ease;
 }
 
 .wizard-step.completed:not(:last-child)::after,
 .wizard-step.past:not(:last-child)::after {
-  background: var(--success-color);
+  background: linear-gradient(90deg, var(--success-color), var(--success-color));
+  background-size: 200% 100%;
+  animation: wz-connector-fill 0.5s ease forwards;
 }
 
 .step-indicator {
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--panel-bg, #e8eef4);
-  border: 3px solid var(--border-color);
+  border: 2px solid var(--border-color);
   color: var(--text-secondary);
-  font-size: 18px;
-  transition: all 0.3s ease;
+  font-size: 13px;
+  transition: background 0.35s ease, border-color 0.35s ease, color 0.25s ease, box-shadow 0.35s ease, transform 0.25s ease;
   z-index: 1;
   flex-shrink: 0;
 }
@@ -136,20 +166,22 @@
   background: var(--accent-color, #0066CC);
   border-color: var(--accent-color, #0066CC);
   color: white;
-  box-shadow: 0 0 20px rgba(0, 102, 204, 0.4);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.18);
+  animation: wz-pulse-ring 2.2s ease-out infinite;
 }
 
 .wizard-step.completed .step-indicator {
   background: var(--success-color);
   border-color: var(--success-color);
   color: #fff;
+  animation: wz-step-pop 0.45s ease;
 }
 
 .wizard-step.past .step-indicator {
   background: var(--success-color);
   border-color: var(--success-color);
   color: #fff;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .step-info {
@@ -162,9 +194,10 @@
 .step-name {
   font-weight: 600;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 11.5px;
   transition: color 0.3s ease;
   line-height: 1.3;
+  letter-spacing: 0.01em;
 }
 
 .wizard-step.active .step-name {
@@ -176,15 +209,8 @@
   color: var(--success-color);
 }
 
-.step-description {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.3;
-  max-width: 120px;
-}
-
-.wizard-step.active .step-description {
-  color: var(--text-secondary);
+.wizard-step .step-description {
+  display: none;
 }
 
 .step-connector {
@@ -259,13 +285,27 @@
 .wizard-step-content {
   display: block;
   width: 100%;
+  animation: wz-fade-up 0.3s ease;
 }
 
 .wizard-step-content h3 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text-primary, #fff);
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-step-content h3::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 1.05em;
+  border-radius: 2px;
+  background: var(--accent-color, #0066CC);
+  flex-shrink: 0;
 }
 
 .step-description {
@@ -275,9 +315,9 @@
 
 /* ============= STEP 1: CONNECT ============= */
 .run-identity {
-  background: var(--bg-tertiary, #0f172a);
-  border-radius: 12px;
-  padding: 20px 24px;
+  background: var(--panel-bg, #e8eef4);
+  border-radius: 10px;
+  padding: 16px 20px;
   border: 1px solid var(--border-color);
   margin-bottom: 20px;
 }
@@ -287,8 +327,9 @@
   align-items: center;
   gap: 8px;
   color: var(--text-primary, #fff);
-  margin: 0 0 6px 0;
-  font-size: 16px;
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .run-identity-header p {
@@ -326,10 +367,15 @@
 }
 
 .source-panel {
-  background: var(--bg-tertiary, #0f172a);
-  border-radius: 12px;
-  padding: 24px;
+  background: var(--panel-bg, #e8eef4);
+  border-radius: 10px;
+  padding: 18px 20px;
   border: 1px solid var(--border-color);
+  transition: box-shadow 0.25s;
+}
+
+.source-panel:hover {
+  box-shadow: 0 3px 12px rgba(0,0,0,0.07);
 }
 
 .source-panel h4 {
@@ -337,8 +383,9 @@
   align-items: center;
   gap: 8px;
   color: var(--text-primary, #fff);
-  margin: 0 0 8px 0;
-  font-size: 18px;
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .source-panel > p {
@@ -352,8 +399,9 @@
   align-items: center;
   justify-content: center;
   color: var(--accent-color, #4361ee);
-  font-size: 32px;
-  padding-top: 36px;
+  font-size: 22px;
+  align-self: center;
+  opacity: 0.7;
 }
 
 .source-list {
@@ -371,17 +419,20 @@
   border-radius: 8px;
   border: 2px solid transparent;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.15s;
 }
 
 .source-option:hover {
   border-color: var(--accent-color);
   background: var(--accent-subtle);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
 }
 
 .source-option.selected {
   border-color: var(--accent-color);
   background: var(--accent-subtle);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
 .source-option.disabled {
@@ -587,12 +638,14 @@
 
 .ai-status-bar {
   display: flex;
-  gap: 24px;
-  margin-top: 24px;
-  padding: 16px;
-  background: var(--bg-tertiary, #0f172a);
+  gap: 20px;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: var(--bg-secondary, #1e293b);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   justify-content: center;
+  opacity: 0.85;
 }
 
 .status-indicator {
@@ -651,7 +704,12 @@
   border-left: 3px solid var(--border-color, #4361ee);
   border-radius: 10px;
   padding: 14px 16px;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
+}
+
+.discovery-insight:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .discovery-insight.info {
@@ -696,6 +754,59 @@
   color: var(--text-secondary, #888);
   font-size: 13px;
 }
+
+/* ── Discovery auto-run progress card ── */
+.discovery-progress-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-muted);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.discovery-progress-icon {
+  font-size: 22px;
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+.discovery-progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.discovery-progress-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ── Discovery CTA row (accept + re-run) ── */
+.discovery-cta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* Muted text-link style button for secondary actions like Re-run */
+.btn-link-muted {
+  background: none;
+  border: none;
+  padding: 6px 4px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s;
+}
+.btn-link-muted:hover:not(:disabled) { color: var(--accent-color); }
+.btn-link-muted:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ── Discovery data panels (inferred fields / sample / hints) ── */
 .discovery-data-panel {
@@ -1642,14 +1753,47 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 32px;
-  background: var(--bg-tertiary, #0f172a);
+  padding: 14px 28px;
+  background: var(--panel-bg, #e8eef4);
   border-top: 1px solid var(--border-color, #333);
+  position: relative;
+}
+
+/* Animated progress accent strip at top of nav bar */
+.wizard-navigation::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-color), var(--success-color));
+  width: var(--wz-progress, 0%);
+  transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 1px 4px rgba(0,102,204,0.2);
 }
 
 .step-indicator-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 110px;
+}
+
+.step-indicator-text > span {
   color: var(--text-secondary, #888);
-  font-size: 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.step-indicator-text strong {
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Button styles now in global buttons.css - only page-specific overrides below */
@@ -3066,6 +3210,16 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.quality-score-kpi:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  transform: translateY(-2px);
+}
+
+.qs-value {
+  animation: wz-count-in 0.4s ease;
 }
 
 .qs-value {
@@ -3105,6 +3259,12 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.quality-kpi:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+  transform: translateY(-1px);
 }
 
 .quality-kpi .kpi-value {

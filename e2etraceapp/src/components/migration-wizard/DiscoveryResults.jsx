@@ -11,6 +11,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import writeXlsxFile from 'write-excel-file';
 import './DiscoveryResults.css';
+import { buildFilePivotRows, buildIssueEntries, buildIssuePivotRows } from './dqExportUtils.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -328,43 +329,13 @@ export default function DiscoveryResults({
   // ── DQ issue records: derive per-row issues from the staged sample ──────────
   // For each sampled record we compute which fields are null/empty so the export
   // can cross-reference actual rows that drove the aggregate stats above.
-  const dqIssueRecords = useMemo(() => {
-    if (!Array.isArray(allRecords) || allRecords.length === 0) return [];
-    // Build a {jsonString: [rowIdx,...]} map to detect duplicates (full-row equality)
-    const seen = new Map();
-    const issues = [];
-    allRecords.forEach((row, idx) => {
-      if (!row || typeof row !== 'object') return;
-      const rowId = row.id ?? row.ID ?? row._id ?? row.uuid ?? row.key ?? `row-${idx + 1}`;
-      const nullFields = [];
-      Object.entries(row).forEach(([k, v]) => {
-        if (v === null || v === undefined || v === '' || (typeof v === 'string' && v.trim() === '')) {
-          nullFields.push(k);
-        }
-      });
-      // Duplicate detection
-      const sig = JSON.stringify(row);
-      const dupOf = seen.get(sig);
-      if (dupOf === undefined) {
-        seen.set(sig, idx + 1);
-      }
-      if (nullFields.length > 0 || dupOf !== undefined) {
-        issues.push({
-          rowNumber: idx + 1,
-          recordId: String(rowId),
-          nullFields,
-          duplicateOfRow: dupOf,
-          // Snapshot up to 5 non-null values so the CSV/XLSX shows context
-          snapshot: Object.entries(row)
-            .filter(([, v]) => v !== null && v !== undefined && v !== '')
-            .slice(0, 5)
-            .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
-            .join('; '),
-        });
-      }
-    });
-    return issues;
-  }, [allRecords]);
+  const dqIssueRecords = useMemo(
+    () => buildIssueEntries(allRecords, sample?.source_files || []),
+    [allRecords, sample]
+  );
+
+  const dqFilePivot = useMemo(() => buildFilePivotRows(dqReport), [dqReport]);
+  const dqIssuePivot = useMemo(() => buildIssuePivotRows(dqIssueRecords), [dqIssueRecords]);
 
   const exportDqCsv = useCallback(() => {
     const csvEscape = (v) => {
@@ -413,18 +384,18 @@ export default function DiscoveryResults({
     });
 
     // ── Sheet 3: Issue records (row-level cross-reference) ──────────────────
-    const issueHeader = 'Row #,Record ID,Issue Type,Affected Fields,Duplicate Of Row,Sample Values';
+    const issueHeader = 'File Name,Row #,Record ID,Issue Type,Affected Column,Duplicate Of Row,Sample Column,Sample Value,Sample Context';
     const issueLines  = dqIssueRecords.map(r => {
-      const types = [];
-      if (r.nullFields.length > 0) types.push('Null/Empty');
-      if (r.duplicateOfRow !== undefined) types.push('Duplicate');
       return [
+        r.fileName,
         r.rowNumber,
         r.recordId,
-        types.join('; '),
-        r.nullFields.join('; '),
+        r.issueType,
+        r.affectedColumn,
         r.duplicateOfRow ?? '',
-        r.snapshot,
+        r.sampleColumn,
+        r.sampleValue,
+        r.sampleContext,
       ].map(csvEscape).join(',');
     });
 
@@ -468,9 +439,9 @@ export default function DiscoveryResults({
 
     const COMMENT_STYLE = { backgroundColor: '#FFF2CC' };
     const headerRow = [
-      { value: 'File',              ...HEADER_STYLE },
-      { value: 'Field',             ...HEADER_STYLE },
-      { value: 'Type',              ...HEADER_STYLE },
+      { value: 'File Name',         ...HEADER_STYLE },
+      { value: 'Field Name',        ...HEADER_STYLE },
+      { value: 'Inferred Type',     ...HEADER_STYLE },
       { value: 'Total Records',     ...HEADER_STYLE },
       { value: 'Null Count',        ...HEADER_STYLE },
       { value: 'Unique Values',     ...HEADER_STYLE },
@@ -527,32 +498,75 @@ export default function DiscoveryResults({
       [{ value: 'Sample Records With Issues' }, { value: dqIssueRecords.length, type: Number, backgroundColor: dqIssueRecords.length > 0 ? '#FFC7CE' : '#C6EFCE' }],
     ];
 
+    const filePivotHeader = [
+      { value: 'File Name', ...HEADER_STYLE },
+      { value: 'Fields Profiled', ...HEADER_STYLE },
+      { value: 'Total Records', ...HEADER_STYLE },
+      { value: 'Total Null Values', ...HEADER_STYLE },
+      { value: 'Fields With Nulls', ...HEADER_STYLE },
+      { value: 'Low Completeness Fields', ...HEADER_STYLE },
+      { value: 'Duplicate Rows', ...HEADER_STYLE },
+      { value: 'Avg Completeness (%)', ...HEADER_STYLE },
+      { value: 'Fields With Issues', ...HEADER_STYLE },
+    ];
+    const filePivotRows = dqFilePivot.length > 0
+      ? dqFilePivot.map((row) => ([
+          { value: row.file, fontWeight: 'bold' },
+          { value: row.fieldsProfiled, type: Number },
+          { value: row.totalRecords, type: Number },
+          { value: row.totalNullValues, type: Number, backgroundColor: row.totalNullValues > 0 ? '#FFC7CE' : undefined },
+          { value: row.fieldsWithNulls, type: Number, backgroundColor: row.fieldsWithNulls > 0 ? '#FFEB9C' : undefined },
+          { value: row.lowCompletenessFields, type: Number, backgroundColor: row.lowCompletenessFields > 0 ? '#FFC7CE' : undefined },
+          { value: row.duplicateRows, type: Number, backgroundColor: row.duplicateRows > 0 ? '#FFEB9C' : undefined },
+          { value: row.avgCompleteness ?? 'N/A', type: row.avgCompleteness != null ? Number : String },
+          { value: row.fieldsWithIssues, type: Number, backgroundColor: row.fieldsWithIssues > 0 ? '#FFC7CE' : '#C6EFCE' },
+        ]))
+      : [[{ value: '(no file-level aggregates available)', span: 9, color: '#666666' }]];
+
+    const issuePivotHeader = [
+      { value: 'File Name', ...HEADER_STYLE },
+      { value: 'Total Issues', ...HEADER_STYLE },
+      { value: 'Null / Empty Issues', ...HEADER_STYLE },
+      { value: 'Duplicate Issues', ...HEADER_STYLE },
+    ];
+    const issuePivotRows = dqIssuePivot.length > 0
+      ? dqIssuePivot.map((row) => ([
+          { value: row.fileName, fontWeight: 'bold' },
+          { value: row.totalIssues, type: Number, backgroundColor: row.totalIssues > 0 ? '#FFC7CE' : '#C6EFCE' },
+          { value: row.nullEmptyIssues, type: Number, backgroundColor: row.nullEmptyIssues > 0 ? '#FFEB9C' : undefined },
+          { value: row.duplicateIssues, type: Number, backgroundColor: row.duplicateIssues > 0 ? '#FFEB9C' : undefined },
+        ]))
+      : [[{ value: '(no issue aggregates available)', span: 4, color: '#666666' }]];
+
     // ── Sheet 3: row-level issue cross-reference ───────────────────────────
     const issueHeaderRow = [
+      { value: 'File Name',         ...HEADER_STYLE },
       { value: 'Row #',             ...HEADER_STYLE },
       { value: 'Record ID',         ...HEADER_STYLE },
       { value: 'Issue Type',        ...HEADER_STYLE },
-      { value: 'Affected Fields',   ...HEADER_STYLE },
+      { value: 'Affected Column',   ...HEADER_STYLE },
       { value: 'Duplicate Of Row',  ...HEADER_STYLE },
-      { value: 'Sample Values',     ...HEADER_STYLE },
+      { value: 'Sample Column',     ...HEADER_STYLE },
+      { value: 'Sample Value',      ...HEADER_STYLE },
+      { value: 'Sample Context',    ...HEADER_STYLE },
     ];
     const issueDataRows = dqIssueRecords.map(r => {
-      const types = [];
-      if (r.nullFields.length > 0) types.push('Null/Empty');
-      if (r.duplicateOfRow !== undefined) types.push('Duplicate');
-      const isDup = r.duplicateOfRow !== undefined;
+      const isDup = r.issueType === 'Duplicate';
       return [
+        { value: r.fileName || '' },
         { value: r.rowNumber, type: Number },
         { value: r.recordId, fontWeight: 'bold' },
-        { value: types.join('; '), color: '#C00000', backgroundColor: isDup ? '#FFEB9C' : '#FFC7CE' },
-        { value: r.nullFields.join('; ') },
+        { value: r.issueType, color: '#C00000', backgroundColor: isDup ? '#FFEB9C' : '#FFC7CE' },
+        { value: r.affectedColumn },
         { value: r.duplicateOfRow ?? '', type: r.duplicateOfRow != null ? Number : String },
-        { value: r.snapshot },
+        { value: r.sampleColumn },
+        { value: r.sampleValue },
+        { value: r.sampleContext },
       ];
     });
     const issueSheet = issueDataRows.length > 0
       ? [issueHeaderRow, ...issueDataRows]
-      : [issueHeaderRow, [{ value: '(no row-level issues detected in sampled records)', span: 6, color: '#375623' }]];
+      : [issueHeaderRow, [{ value: '(no row-level issues detected in sampled records)', span: 9, color: '#375623' }]];
 
     // ── Sheet 4: Review Log — all rows with comments for audit traceability ───
     const reviewLogHeader = [
@@ -583,19 +597,21 @@ export default function DiscoveryResults({
       : [reviewLogHeader, [{ value: '(no review comments recorded)', span: 5, color: '#666666' }]];
 
     await writeXlsxFile(
-      [summaryData, [headerRow, ...dataRows], issueSheet, reviewLogSheet],
+      [summaryData, [filePivotHeader, ...filePivotRows], [issuePivotHeader, ...issuePivotRows], [headerRow, ...dataRows], issueSheet, reviewLogSheet],
       {
-        sheets: ['Summary', 'Field Detail', 'Issue Records', 'Review Log'],
+        sheets: ['Summary', 'File Pivot', 'Issue Pivot', 'Field Detail', 'Issue Log', 'Review Log'],
         fileName: `dq-report-${runId || 'discovery'}.xlsx`,
         columns: [
           [{ width: 32 }, { width: 24 }], // Summary sheet (2 cols)
+          [{ width: 28 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 16 }, { width: 20 }, { width: 14 }, { width: 18 }, { width: 16 }],
+          [{ width: 28 }, { width: 14 }, { width: 20 }, { width: 18 }],
           [{ width: 28 }, { width: 20 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 22 }, { width: 40 }, { width: 22 }],
-          [{ width: 8 }, { width: 28 }, { width: 18 }, { width: 32 }, { width: 16 }, { width: 60 }],
+          [{ width: 28 }, { width: 8 }, { width: 24 }, { width: 18 }, { width: 24 }, { width: 16 }, { width: 20 }, { width: 28 }, { width: 60 }],
           [{ width: 28 }, { width: 20 }, { width: 22 }, { width: 50 }, { width: 22 }],
         ],
       }
     );
-  }, [dqReport, dqIssueRecords, allRecords, runId, dqComments]);
+  }, [dqReport, dqIssueRecords, dqFilePivot, dqIssuePivot, allRecords, runId, dqComments]);
 
   // Don't render if there's genuinely nothing to show
   if (!introspect && !mappings.length && !allRecords.length && !insights.length) {

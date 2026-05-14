@@ -175,9 +175,9 @@ async def list_system_configs(
     configs = query.order_by(SystemConfiguration.category, SystemConfiguration.key).all()
     
     # Mask secrets if not requesting them
-    result = []
+    result: List[Dict[str, Any]] = []
     for config in configs:
-        config_dict = {
+        result.append({
             "id": config.id,
             "category": config.category,
             "key": config.key,
@@ -192,9 +192,8 @@ async def list_system_configs(
             "created_at": config.created_at,
             "updated_at": config.updated_at,
             "created_by": config.created_by,
-            "updated_by": config.updated_by
-        }
-        result.append(SystemConfigResponse(**config_dict))
+            "updated_by": config.updated_by,
+        })
     
     return result
 

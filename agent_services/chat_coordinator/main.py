@@ -138,6 +138,73 @@ Output STRICT JSON only (no markdown, no explanation):
 }}
 """
 
+_OLLAMA_MIGRATION_ASSISTANT_PROMPT = """\
+You are a PLM data migration assistant.
+
+Classify the user intent as exactly one of:
+- data_discovery
+- data_profiling
+- data_quality
+- migration
+- analysis
+- smart_guidance
+
+Return compact JSON only:
+{
+  "intent": "...",
+  "confidence": 0.0,
+  "requires_user_input": false,
+  "questions": [],
+  "ui_response": {
+    "summary": "...",
+    "next_steps": [],
+    "estimated_time": "...",
+    "complexity": "low | medium | high"
+  }
+}
+"""
+
+_OLLAMA_SMART_GUIDANCE_PROMPT = """\
+You are a friendly data assistant. Choose one first step: discovery, profiling, or quality.
+Return compact JSON only with keys recommendation, headline, reason, expected_outcome,
+next_steps, complexity, estimated_time, tips.
+Keep reason short and next_steps to at most 3 items.
+"""
+
+
+def _is_ollama_provider(provider: str) -> bool:
+    return str(provider).strip().lower() == "ollama"
+
+
+def _get_llm_request_settings(provider: str, purpose: str) -> dict:
+    if _is_ollama_provider(provider):
+        if purpose == "classification":
+            return {
+                "timeout": float(os.getenv("OLLAMA_CLASSIFIER_TIMEOUT_SECONDS", "20")),
+                "max_tokens": int(os.getenv("OLLAMA_CLASSIFIER_MAX_TOKENS", "160")),
+                "system_prompt": _OLLAMA_MIGRATION_ASSISTANT_PROMPT,
+            }
+        if purpose == "guidance":
+            return {
+                "timeout": float(os.getenv("OLLAMA_GUIDANCE_TIMEOUT_SECONDS", "20")),
+                "max_tokens": int(os.getenv("OLLAMA_GUIDANCE_MAX_TOKENS", "192")),
+                "system_prompt": _OLLAMA_SMART_GUIDANCE_PROMPT,
+            }
+
+    defaults = {
+        "classification": {
+            "timeout": 20.0,
+            "max_tokens": 1024,
+            "system_prompt": _MIGRATION_ASSISTANT_PROMPT,
+        },
+        "guidance": {
+            "timeout": 15.0,
+            "max_tokens": 512,
+            "system_prompt": _SMART_GUIDANCE_PROMPT,
+        },
+    }
+    return defaults[purpose]
+
 # Maps LLM intent labels → internal (intent, task_type, required_capabilities)
 _LLM_INTENT_MAP: dict[str, tuple[str, str, list[str]]] = {
     "data_discovery": (
@@ -338,8 +405,9 @@ class ChatCoordinatorAgent(AgentService):
         previous_runs = payload.get("previous_runs", "None")
         user_role     = payload.get("user_role", "business")
         llm_provider  = payload.get("llm_provider", "openai")
+        llm_settings  = _get_llm_request_settings(llm_provider, "classification")
 
-        filled = _MIGRATION_ASSISTANT_PROMPT.format(
+        filled = llm_settings["system_prompt"].format(
             user_message=message,
             source_name=source_name,
             file_count=file_count,
@@ -350,7 +418,7 @@ class ChatCoordinatorAgent(AgentService):
 
         try:
             backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=llm_settings["timeout"]) as client:
                 resp = await client.post(
                     f"{backend_url}/api/llm/chat",
                     params={"provider": llm_provider},
@@ -360,7 +428,7 @@ class ChatCoordinatorAgent(AgentService):
                             {"role": "user",   "content": message},
                         ],
                         "temperature": 0.1,
-                        "max_tokens": 1024,
+                        "max_tokens": llm_settings["max_tokens"],
                     },
                 )
                 if not resp.is_success:
@@ -583,8 +651,9 @@ class ChatCoordinatorAgent(AgentService):
         previous_runs = payload.get("previous_runs", False)
         user_role     = payload.get("user_role", "business")
         llm_provider  = payload.get("llm_provider", "openai")
+        llm_settings  = _get_llm_request_settings(llm_provider, "guidance")
 
-        filled = _SMART_GUIDANCE_PROMPT.format(
+        filled = llm_settings["system_prompt"].format(
             source_name=source_name,
             file_count=file_count,
             file_types=file_types,
@@ -594,7 +663,7 @@ class ChatCoordinatorAgent(AgentService):
 
         try:
             backend_url = os.getenv("GRAPH_TRACE_BACKEND_URL", "http://127.0.0.1:8011")
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=llm_settings["timeout"]) as client:
                 resp = await client.post(
                     f"{backend_url}/api/llm/chat",
                     params={"provider": llm_provider},
@@ -604,7 +673,7 @@ class ChatCoordinatorAgent(AgentService):
                             {"role": "user", "content": "What should I do first with my data?"},
                         ],
                         "temperature": 0.2,
-                        "max_tokens": 512,
+                        "max_tokens": llm_settings["max_tokens"],
                     },
                 )
                 if resp.is_success:

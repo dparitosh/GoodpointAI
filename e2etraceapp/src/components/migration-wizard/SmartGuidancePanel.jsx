@@ -78,6 +78,7 @@ const SmartGuidancePanel = ({
   previousRuns = false,
   userRole = 'business',
   onAction,
+  // eslint-disable-next-line no-unused-vars
   onDismiss,
 }) => {
   const [loading, setLoading] = useState(true);
@@ -86,8 +87,14 @@ const SmartGuidancePanel = ({
   const [nlpLoading, setNlpLoading] = useState(false);
   // Chat history: [{role:'assistant'|'user', text, guidance?}]
   const [chatHistory, setChatHistory] = useState([]);
+  // Progressive disclosure: which card indices have steps expanded
+  const [expandedCards, setExpandedCards] = useState({});
   const inputRef = useRef(null);
   const chatEndRef = useRef(null);
+
+  const toggleSteps = useCallback((idx) => {
+    setExpandedCards(prev => ({ ...prev, [idx]: !prev[idx] }));
+  }, []);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -125,9 +132,14 @@ const SmartGuidancePanel = ({
       const data = await resp.json();
 
       if (nlpText) {
-        // Replace the previous guidance card if the recommendation hasn't changed
-        // (avoids showing two identical cards when backend echoes the same advice)
         setChatHistory(prev => {
+          // If the last message is the user's question, always append the response after it
+          // (never move the answer above the user's message)
+          if (prev.length > 0 && prev[prev.length - 1].role === 'user') {
+            return [...prev, { role: 'assistant', text: data.headline, guidance: data }];
+          }
+          // Last message is already an assistant card — replace it only if same recommendation
+          // to avoid stacking two identical cards
           const lastAssistantIdx = prev.map((m, i) => m.role === 'assistant' && m.guidance ? i : -1).filter(i => i !== -1).pop();
           if (lastAssistantIdx != null && prev[lastAssistantIdx]?.guidance?.recommendation === data.recommendation) {
             const updated = [...prev];
@@ -242,88 +254,103 @@ const SmartGuidancePanel = ({
                 {isUser ? (
                   <span>{msg.text}</span>
                 ) : msgGuidance ? (
-                  <div className="sgp-guidance-card">
-                    {/* Rec badge + headline */}
-                    <div className="sgp-card-top">
-                      <span className={`sgp-rec-badge ${msgGuidance.recommendation}`}>
+                  <div className={`sgp-answer-card sgp-type-${msgGuidance.recommendation}`}>
+
+                    {/* ── Type pill + meta ── */}
+                    <div className="sgp-answer-top">
+                      <span className={`sgp-type-pill ${msgGuidance.recommendation}`}>
                         <i className={`fas ${msgMeta.icon}`} />
                         {msgMeta.label}
                       </span>
-                      {msgGuidance.estimated_time && (
-                        <span className="sgp-meta-chip">
-                          <i className="fas fa-clock" />
-                          {msgGuidance.estimated_time}
-                        </span>
-                      )}
-                      {msgGuidance.complexity && (
-                        <span className="sgp-meta-chip">
-                          <span className={`sgp-dot ${msgGuidance.complexity}`} />
-                          {msgGuidance.complexity.charAt(0).toUpperCase() + msgGuidance.complexity.slice(1)} effort
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="sgp-card-headline">{msgGuidance.headline}</p>
-
-                    {/* Two-column info */}
-                    <div className="sgp-card-grid">
-                      <div className="sgp-card-cell">
-                        <div className="sgp-cell-label">
-                          <i className="fas fa-question-circle" /> Why this first?
-                        </div>
-                        <p>{msgGuidance.reason}</p>
-                      </div>
-                      <div className="sgp-card-cell">
-                        <div className="sgp-cell-label">
-                          <i className="fas fa-flag-checkered" /> What you'll get
-                        </div>
-                        <p>{msgGuidance.expected_outcome}</p>
-                      </div>
-                    </div>
-
-                    {/* Steps */}
-                    {msgGuidance.next_steps?.length > 0 && (
-                      <div className="sgp-card-steps">
-                        <div className="sgp-cell-label">
-                          <i className="fas fa-list-ol" /> How it works
-                        </div>
-                        <ol className="sgp-steps-list">
-                          {msgGuidance.next_steps.map((step, si) => (
-                            <li key={si}>
-                              <span className="sgp-step-num">{si + 1}</span>
-                              <span>{step}</span>
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-
-                    {/* Tips */}
-                    {msgGuidance.tips?.length > 0 && (
-                      <div className="sgp-tips-row">
-                        {msgGuidance.tips.map((tip, ti) => (
-                          <span key={ti} className="sgp-tip-chip">
-                            <i className="fas fa-lightbulb" />
-                            {tip}
+                      <div className="sgp-answer-meta">
+                        {msgGuidance.estimated_time && (
+                          <span className="sgp-meta-tag">
+                            <i className="fas fa-clock" />
+                            {msgGuidance.estimated_time}
                           </span>
-                        ))}
+                        )}
+                        {msgGuidance.complexity && (
+                          <span className="sgp-meta-tag">
+                            <span className={`sgp-dot ${msgGuidance.complexity}`} />
+                            {msgGuidance.complexity.charAt(0).toUpperCase() + msgGuidance.complexity.slice(1)} effort
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Headline ── */}
+                    <h4 className="sgp-answer-headline">{msgGuidance.headline}</h4>
+
+                    {/* ── Reason — conversational prose, no label ── */}
+                    {msgGuidance.reason && (
+                      <p className="sgp-answer-prose">{msgGuidance.reason}</p>
+                    )}
+
+                    {/* ── Progressive disclosure: steps + outcome + tip ── */}
+                    {(msgGuidance.next_steps?.length > 0 || msgGuidance.expected_outcome || msgGuidance.tips?.length > 0) && (
+                      <div className="sgp-details-section">
+                        <button
+                          className="sgp-details-toggle"
+                          onClick={() => toggleSteps(idx)}
+                          aria-expanded={!!expandedCards[idx]}
+                        >
+                          <i className="fas fa-list-ol" />
+                          How it works
+                          <i className={`fas fa-chevron-${expandedCards[idx] ? 'up' : 'down'} sgp-toggle-chevron`} />
+                        </button>
+
+                        {expandedCards[idx] && (
+                          <div className="sgp-details-body">
+                            {/* Connected timeline steps */}
+                            {msgGuidance.next_steps?.length > 0 && (
+                              <div className="sgp-timeline">
+                                {msgGuidance.next_steps.map((step, si) => (
+                                  <div key={si} className="sgp-tl-item">
+                                    <div className="sgp-tl-marker">{si + 1}</div>
+                                    <div className="sgp-tl-text">{step}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Expected outcome callout */}
+                            {msgGuidance.expected_outcome && (
+                              <div className="sgp-outcome-row">
+                                <i className="fas fa-check-circle" />
+                                <span>{msgGuidance.expected_outcome}</span>
+                              </div>
+                            )}
+
+                            {/* Tip — single inline note */}
+                            {msgGuidance.tips?.length > 0 && (
+                              <p className="sgp-tip-note">
+                                <i className="fas fa-lightbulb" />
+                                {msgGuidance.tips[0]}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* Action buttons — only on last assistant message */}
+                    {/* ── Actions — only on last assistant message ── */}
                     {idx === chatHistory.length - 1 && (
-                      <div className="sgp-card-actions">
-                        <button className={`sgp-btn-primary c-${msgMeta.color}`} onClick={handleAction}>
+                      <div className="sgp-answer-actions">
+                        <button
+                          className={`sgp-cta-btn sgp-cta-${msgGuidance.recommendation}`}
+                          onClick={handleAction}
+                        >
                           <i className={`fas ${msgMeta.actionIcon}`} />
                           {msgMeta.actionLabel}
                         </button>
                         {onDismiss && (
-                          <button className="sgp-btn-ghost" onClick={onDismiss}>
+                          <button className="sgp-link-btn" onClick={onDismiss}>
                             I'll choose manually
                           </button>
                         )}
                       </div>
                     )}
+
                   </div>
                 ) : (
                   <span>{msg.text}</span>

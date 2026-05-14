@@ -163,14 +163,20 @@ export const useAgenticSystemStatus = () => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       
-      setStatus(data);
+      // Normalize response: ensure status field is set (use system_health as fallback)
+      const normalizedStatus = {
+        ...data,
+        status: data.status || data.system_health || 'unknown'
+      };
+      
+      setStatus(normalizedStatus);
       setActiveAgents(data.active_agents || []);
       
-      return data;
+      return normalizedStatus;
     } catch (err) {
       const errorMsg = err.name === 'AbortError' ? 'unavailable' : (err.message || 'Status check failed');
       setError(errorMsg);
-      setStatus({ status: 'unavailable' });
+      setStatus({ status: 'unavailable', system_health: 'unavailable' });
       // Don't throw - this is a health check
       return { status: 'unavailable', error: errorMsg };
     } finally {
