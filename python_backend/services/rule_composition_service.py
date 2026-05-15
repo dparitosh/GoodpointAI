@@ -16,9 +16,9 @@ from sqlalchemy import desc, asc
 from sqlalchemy.exc import IntegrityError
 
 from models.rule_composition_models import (
-    CompositeRuleORM, RuleTemplateORM, RuleGroupORM, RuleCompositionHistoryORM,
+    CompositeRuleORM, RuleCompositionTemplateORM, RuleGroupORM, RuleCompositionHistoryORM,
     CompositeRuleCreate, CompositeRuleUpdate, CompositeRule,
-    RuleTemplateCreate, RuleTemplate, RuleTemplateInstance,
+    RuleCompositionTemplateCreate, RuleCompositionTemplate, RuleCompositionTemplateInstance,
     RuleGroupCreate, RuleGroupUpdate, RuleGroup,
     RuleOperator, ConditionComparator, CompositionStrategy,
     RuleCompositionValidation, RuleOptimization
@@ -212,10 +212,10 @@ class RuleTemplateRepository:
     def __init__(self, session: Session):
         self.session = session
     
-    def create(self, template: RuleTemplateCreate) -> RuleTemplate:
+    def create(self, template: RuleCompositionTemplateCreate) -> RuleCompositionTemplate:
         """Create a new rule template"""
         try:
-            orm = RuleTemplateORM(
+            orm = RuleCompositionTemplateORM(
                 id=template.id.lower().strip(),
                 name=template.name,
                 description=template.description,
@@ -240,10 +240,10 @@ class RuleTemplateRepository:
             logger.error(f"Error creating template: {str(e)}")
             raise
     
-    def read(self, template_id: str) -> Optional[RuleTemplate]:
-        """Read a template by ID"""
-        orm = self.session.query(RuleTemplateORM).filter(
-            RuleTemplateORM.id == template_id.lower().strip()
+    def read(self, template_id: str) -> Optional[RuleCompositionTemplate]:
+        """Read a rule template by ID"""
+        orm = self.session.query(RuleCompositionTemplateORM).filter(
+            RuleCompositionTemplateORM.id == template_id.lower().strip()
         ).first()
         return self._to_pydantic(orm) if orm else None
     
@@ -252,13 +252,13 @@ class RuleTemplateRepository:
         category: str,
         skip: int = 0,
         limit: int = 50
-    ) -> List[RuleTemplate]:
+    ) -> List[RuleCompositionTemplate]:
         """List templates by category"""
         return [
             self._to_pydantic(orm)
-            for orm in self.session.query(RuleTemplateORM)
-            .filter(RuleTemplateORM.category == category, RuleTemplateORM.enabled == 1)
-            .order_by(desc(RuleTemplateORM.created_at))
+            for orm in self.session.query(RuleCompositionTemplateORM)
+            .filter(RuleCompositionTemplateORM.category == category, RuleCompositionTemplateORM.enabled == 1)
+            .order_by(desc(RuleCompositionTemplateORM.created_at))
             .offset(skip).limit(limit).all()
         ]
     
@@ -267,38 +267,38 @@ class RuleTemplateRepository:
         rule_type: str,
         skip: int = 0,
         limit: int = 50
-    ) -> List[RuleTemplate]:
+    ) -> List[RuleCompositionTemplate]:
         """List templates by rule type"""
         return [
             self._to_pydantic(orm)
-            for orm in self.session.query(RuleTemplateORM)
-            .filter(RuleTemplateORM.rule_type == rule_type, RuleTemplateORM.enabled == 1)
-            .order_by(desc(RuleTemplateORM.usage_count).desc())
+            for orm in self.session.query(RuleCompositionTemplateORM)
+            .filter(RuleCompositionTemplateORM.rule_type == rule_type, RuleCompositionTemplateORM.enabled == 1)
+            .order_by(desc(RuleCompositionTemplateORM.usage_count).desc())
             .offset(skip).limit(limit).all()
         ]
     
-    def list_all(self, skip: int = 0, limit: int = 50) -> List[RuleTemplate]:
+    def list_all(self, skip: int = 0, limit: int = 50) -> List[RuleCompositionTemplate]:
         """List all templates"""
         return [
             self._to_pydantic(orm)
-            for orm in self.session.query(RuleTemplateORM)
-            .filter(RuleTemplateORM.enabled == 1)
-            .order_by(desc(RuleTemplateORM.usage_count))
+            for orm in self.session.query(RuleCompositionTemplateORM)
+            .filter(RuleCompositionTemplateORM.enabled == 1)
+            .order_by(desc(RuleCompositionTemplateORM.usage_count))
             .offset(skip).limit(limit).all()
         ]
     
     def increment_usage(self, template_id: str):
         """Increment usage counter"""
-        orm = self.session.query(RuleTemplateORM).filter(
-            RuleTemplateORM.id == template_id.lower().strip()
+        orm = self.session.query(RuleCompositionTemplateORM).filter(
+            RuleCompositionTemplateORM.id == template_id.lower().strip()
         ).first()
         if orm:
             orm.usage_count += 1
             self.session.commit()
     
-    def _to_pydantic(self, orm: RuleTemplateORM) -> RuleTemplate:
+    def _to_pydantic(self, orm: RuleCompositionTemplateORM) -> RuleCompositionTemplate:
         """Convert ORM to Pydantic model"""
-        return RuleTemplate(
+        return RuleCompositionTemplate(
             id=orm.id,
             name=orm.name,
             description=orm.description,

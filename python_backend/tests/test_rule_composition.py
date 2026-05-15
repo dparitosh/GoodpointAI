@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.database import Base
 from models.rule_composition_models import (
-    CompositeRuleORM, RuleTemplateORM, RuleGroupORM,
+    CompositeRuleORM, RuleCompositionTemplateORM, RuleGroupORM,
     CompositeRuleCreate, CompositeRuleUpdate,
     RuleTemplateCreate, RuleGroupCreate, RuleGroupUpdate,
     RuleOperator, ConditionComparator

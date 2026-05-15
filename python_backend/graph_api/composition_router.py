@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from core.db_session import get_db
 from models.rule_composition_models import (
     CompositeRuleCreate, CompositeRuleUpdate, CompositeRule,
-    RuleTemplateCreate, RuleTemplate, RuleTemplateInstance,
+    RuleCompositionTemplateCreate, RuleCompositionTemplate, RuleCompositionTemplateInstance,
     RuleGroupCreate, RuleGroupUpdate, RuleGroup,
     RuleCompositionValidation, RuleOptimization,
     RuleOperator
@@ -138,9 +138,9 @@ async def delete_composite_rule(
 # Rule Template Endpoints
 # ============================================================================
 
-@router.post("/templates", response_model=RuleTemplate)
+@router.post("/templates", response_model=RuleCompositionTemplate)
 async def create_rule_template(
-    request: RuleTemplateCreate,
+    request: RuleCompositionTemplateCreate,
     db: Session = Depends(get_db)
 ):
     """
@@ -178,7 +178,7 @@ async def create_rule_template(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/templates/{template_id}", response_model=RuleTemplate)
+@router.get("/templates/{template_id}", response_model=RuleCompositionTemplate)
 async def get_rule_template(
     template_id: str,
     db: Session = Depends(get_db)
@@ -191,7 +191,7 @@ async def get_rule_template(
         return template
 
 
-@router.get("/templates/category/{category}", response_model=List[RuleTemplate])
+@router.get("/templates/category/{category}", response_model=List[RuleCompositionTemplate])
 async def list_templates_by_category(
     category: str,
     skip: int = Query(0, ge=0),
@@ -203,7 +203,7 @@ async def list_templates_by_category(
         return repo.list_by_category(category, skip, limit)
 
 
-@router.get("/templates/type/{rule_type}", response_model=List[RuleTemplate])
+@router.get("/templates/type/{rule_type}", response_model=List[RuleCompositionTemplate])
 async def list_templates_by_type(
     rule_type: str,
     skip: int = Query(0, ge=0),
@@ -215,7 +215,7 @@ async def list_templates_by_type(
         return repo.list_by_type(rule_type, skip, limit)
 
 
-@router.get("/templates", response_model=List[RuleTemplate])
+@router.get("/templates", response_model=List[RuleCompositionTemplate])
 async def list_all_rule_templates(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),

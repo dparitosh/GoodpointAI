@@ -93,7 +93,7 @@ class AuditEventCreate(BaseModel):
     details: Optional[Dict[str, Any]] = Field(default=None, description="Event details")
     source_ip: Optional[str] = Field(default=None, description="Client IP address")
     user_agent: Optional[str] = Field(default=None, description="User agent string")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+    extra_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
 class AuditEvent(AuditEventCreate):
@@ -204,7 +204,7 @@ class AuditLogORM(Base):
     details = mapped_column(JSON, nullable=True)
     source_ip = mapped_column(String(50), nullable=True)
     user_agent = mapped_column(String(500), nullable=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     enabled = mapped_column(Integer, default=1, index=True)  # Soft delete
 
@@ -228,7 +228,7 @@ class AuditLogORM(Base):
             details=self.details,
             source_ip=self.source_ip,
             user_agent=self.user_agent,
-            metadata=self.metadata,
+            extra_metadata=self.extra_metadata,
             created_at=self.created_at,
             enabled=bool(self.enabled),
         )
@@ -245,7 +245,7 @@ class ComplianceLogORM(Base):
     description = mapped_column(String(500), nullable=False)
     requirement = mapped_column(String(255), nullable=True)
     severity = mapped_column(String(50), default="info", index=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     __table_args__ = (
@@ -311,7 +311,7 @@ class AccessControlORM(Base):
     reason = mapped_column(String(500), nullable=True)
     granted_by = mapped_column(String(50), nullable=False)
     expires_at = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     enabled = mapped_column(Integer, default=1, index=True)

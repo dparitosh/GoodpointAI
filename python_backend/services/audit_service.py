@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from statistics import mean
 
-from sqlalchemy import Session, desc, and_, or_, func, ColumnElement
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, and_, or_, func, ColumnElement
 from sqlalchemy.exc import IntegrityError
 
 from models.audit_models import (

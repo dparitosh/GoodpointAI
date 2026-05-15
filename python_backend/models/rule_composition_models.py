@@ -111,7 +111,7 @@ class CompositeRuleCreate(BaseModel):
     operator: RuleOperator = Field(RuleOperator.AND, description="Composition operator")
     severity: str = Field("medium", description="Severity level")
     enabled: bool = Field(True, description="Is rule enabled")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
+    extra_metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
 
 class CompositeRuleUpdate(BaseModel):
@@ -122,7 +122,7 @@ class CompositeRuleUpdate(BaseModel):
     rule_ids: Optional[List[str]] = None
     severity: Optional[str] = None
     enabled: Optional[bool] = None
-    metadata: Optional[Dict[str, Any]] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
 
 
 class CompositeRule(BaseModel):
@@ -134,13 +134,13 @@ class CompositeRule(BaseModel):
     operator: RuleOperator
     severity: str
     enabled: bool
-    metadata: Optional[Dict[str, Any]]
+    extra_metadata: Optional[Dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
 
-class RuleTemplateCreate(BaseModel):
-    """Create a rule template"""
+class RuleCompositionTemplateCreate(BaseModel):
+    """Create a rule composition template"""
     id: str = Field(..., description="Template ID")
     name: str = Field(..., description="Template name")
     description: Optional[str] = Field(None, description="Template description")
@@ -152,8 +152,8 @@ class RuleTemplateCreate(BaseModel):
     enabled: bool = Field(True, description="Is template enabled")
 
 
-class RuleTemplateInstance(BaseModel):
-    """Rule instance created from template"""
+class RuleCompositionTemplateInstance(BaseModel):
+    """Rule instance created from composition template"""
     id: str
     template_id: str
     name: str
@@ -161,8 +161,8 @@ class RuleTemplateInstance(BaseModel):
     created_at: datetime
 
 
-class RuleTemplate(BaseModel):
-    """Rule template response model"""
+class RuleCompositionTemplate(BaseModel):
+    """Rule composition template response model"""
     id: str
     name: str
     description: Optional[str]
@@ -248,7 +248,7 @@ class CompositeRuleORM(Base):
     enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     
     # Additional metadata
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -267,9 +267,9 @@ class CompositeRuleORM(Base):
     )
 
 
-class RuleTemplateORM(Base):
-    """Reusable rule templates for common patterns"""
-    __tablename__ = "rule_templates"
+class RuleCompositionTemplateORM(Base):
+    """Reusable rule composition templates for common patterns"""
+    __tablename__ = "rule_composition_templates"
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)

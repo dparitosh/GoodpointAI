@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from core.database import get_db
+from core.db_session import get_db
 from models.audit_models import (
     AuditEventCreate, AuditEvent, ComplianceEventCreate, ComplianceEvent,
     DataRetentionPolicyCreate, DataRetentionPolicy, AccessControlCreate, AccessControl,

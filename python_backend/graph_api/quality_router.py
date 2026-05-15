@@ -17,7 +17,8 @@ import xml.etree.ElementTree as ET
 
 import httpx
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text, func
 from sqlalchemy.exc import SQLAlchemyError

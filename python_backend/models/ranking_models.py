@@ -59,7 +59,7 @@ class RankingFeedbackCreate(BaseModel):
     dwell_time_seconds: Optional[int] = Field(default=None, ge=0, description="Time spent on result")
     session_id: Optional[str] = Field(default=None, description="Search session ID")
     user_id: Optional[str] = Field(default=None, description="User ID (optional)")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+    extra_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
 class RankingFeedback(RankingFeedbackCreate):
@@ -80,7 +80,7 @@ class RankingParameterCreate(BaseModel):
     popularity_weight: float = Field(default=0.2, ge=0, le=1, description="Popularity signal weight (0-1)")
     ab_test_variant: ABTestVariant = Field(default=ABTestVariant.CONTROL, description="A/B test variant")
     enabled: bool = Field(default=True, description="Whether this model is active")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional configuration")
+    extra_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional configuration")
 
 
 class RankingParameter(RankingParameterCreate):
@@ -98,7 +98,7 @@ class RankingAnalyticsCreate(BaseModel):
     metric_value: float = Field(..., ge=0, le=1, description="Metric value (0-1 normalized)")
     query_count: int = Field(default=1, ge=1, description="Number of queries in measurement")
     feedback_count: int = Field(default=0, ge=0, description="Number of feedback signals")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+    extra_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
 class RankingAnalytics(RankingAnalyticsCreate):
@@ -161,7 +161,7 @@ class RankingFeedbackORM(Base):
     dwell_time_seconds = mapped_column(Integer, nullable=True)
     session_id = mapped_column(String(50), nullable=True, index=True)
     user_id = mapped_column(String(50), nullable=True, index=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     enabled = mapped_column(Integer, default=1, index=True)  # Soft delete
 
@@ -182,7 +182,7 @@ class RankingFeedbackORM(Base):
             dwell_time_seconds=self.dwell_time_seconds,
             session_id=self.session_id,
             user_id=self.user_id,
-            metadata=self.metadata,
+            extra_metadata=self.extra_metadata,
             created_at=self.created_at,
             enabled=bool(self.enabled),
         )
@@ -202,7 +202,7 @@ class RankingParameterORM(Base):
     popularity_weight = mapped_column(Float, default=0.2)
     ab_test_variant = mapped_column(String(50), default=ABTestVariant.CONTROL.value, index=True)
     enabled = mapped_column(Integer, default=1, index=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     usage_count = mapped_column(Integer, default=0)
@@ -225,7 +225,7 @@ class RankingParameterORM(Base):
             popularity_weight=self.popularity_weight,
             ab_test_variant=ABTestVariant(self.ab_test_variant),
             enabled=bool(self.enabled),
-            metadata=self.metadata,
+            extra_metadata=self.extra_metadata,
             created_at=self.created_at,
             updated_at=self.updated_at,
             usage_count=self.usage_count,
@@ -243,7 +243,7 @@ class RankingAnalyticsORM(Base):
     query_count = mapped_column(Integer, default=1)
     feedback_count = mapped_column(Integer, default=0)
     time_period = mapped_column(String(20), default="daily", index=True)
-    metadata = mapped_column(JSON, nullable=True)
+    extra_metadata = mapped_column(JSON, nullable=True)
     measured_at = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     __table_args__ = (
@@ -262,7 +262,7 @@ class RankingAnalyticsORM(Base):
             feedback_count=self.feedback_count,
             measured_at=self.measured_at,
             time_period=self.time_period,
-            metadata=self.metadata,
+            extra_metadata=self.extra_metadata,
         )
 
 
