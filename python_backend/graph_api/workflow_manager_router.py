@@ -939,32 +939,71 @@ async def list_workflows(
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ):
-    await _ensure_store_loaded(db)
+    try:
+        await _ensure_store_loaded(db)
 
-    async with _WORKFLOWS_STORE_LOCK:
-        workflows = list(WORKFLOWS_STORE.values())
+        async with _WORKFLOWS_STORE_LOCK:
+            workflows = list(WORKFLOWS_STORE.values())
 
-    if status:
-        workflows = [w for w in workflows if _normalize_status(w.get("status")).value == status.value]
-    if source_type:
-        workflows = [w for w in workflows if str(w.get("source_type") or "") == source_type]
-    if target_type:
-        workflows = [w for w in workflows if str(w.get("target_type") or "") == target_type]
-    if search:
-        s = search.lower()
-        workflows = [
-            w
-            for w in workflows
-            if s in str(w.get("name") or "").lower() or s in str(w.get("description") or "").lower()
-        ]
+        if status:
+            workflows = [w for w in workflows if _normalize_status(w.get("status")).value == status.value]
+        if source_type:
+            workflows = [w for w in workflows if str(w.get("source_type") or "") == source_type]
+        if target_type:
+            workflows = [w for w in workflows if str(w.get("target_type") or "") == target_type]
+        if search:
+            s = search.lower()
+            workflows = [
+                w
+                for w in workflows
+                if s in str(w.get("name") or "").lower() or s in str(w.get("description") or "").lower()
+            ]
 
-    total_count = len(workflows)
-    page_items = workflows[skip : skip + limit]
+        total_count = len(workflows)
+        page_items = workflows[skip : skip + limit]
 
-    if response is not None:
-        response.headers["X-Total-Count"] = str(total_count)
+        if response is not None:
+            response.headers["X-Total-Count"] = str(total_count)
 
-    return page_items
+        # Convert store dictionaries to response models to ensure proper serialization
+        result = []
+        for item in page_items:
+            try:
+                result.append(WorkflowInstanceResponse(
+                    id=item.get("id"),
+                    name=item.get("name"),
+                    description=item.get("description"),
+                    source_id=item.get("source_id"),
+                    source_name=item.get("source_name"),
+                    source_type=item.get("source_type"),
+                    target_id=item.get("target_id"),
+                    target_name=item.get("target_name"),
+                    target_type=item.get("target_type"),
+                    status=_normalize_status(item.get("status")),
+                    current_stage=_normalize_stage(item.get("current_stage")),
+                    progress_percentage=float(item.get("progress_percentage") or 0.0),
+                    total_records=int(item.get("total_records") or 0),
+                    processed_records=int(item.get("processed_records") or 0),
+                    failed_records=int(item.get("failed_records") or 0),
+                    quality_score=item.get("quality_score"),
+                    created_at=item.get("created_at"),
+                    updated_at=item.get("updated_at"),
+                    started_at=item.get("started_at"),
+                    completed_at=item.get("completed_at"),
+                    created_by=item.get("created_by"),
+                    schedule_enabled=bool(item.get("schedule_enabled") or False),
+                    schedule_cron=item.get("schedule_cron"),
+                    next_run_at=item.get("next_run_at"),
+                ))
+            except Exception as e:
+                logger.error("Failed to convert workflow item %s to response model: %s", item.get("id"), e)
+                # Skip malformed items
+                continue
+
+        return result
+    except Exception as e:
+        logger.error("Error listing workflows: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to list workflows: {str(e)}")
 
 
 @router.post("/", response_model=WorkflowInstanceResponse, status_code=201)

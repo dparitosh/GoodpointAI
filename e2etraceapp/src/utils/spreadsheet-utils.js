@@ -73,10 +73,34 @@ export async function sheetsToXlsxBlob(sheets) {
   }
 
   // In browsers, writeXlsxFile returns a Blob when no fileName is provided.
-  const blob =
-    dataList.length === 1
-      ? await writeXlsxFile(dataList[0], { sheet: names[0] || 'Sheet1' })
-      : await writeXlsxFile(dataList, { sheets: names });
+  let blob;
+  if (dataList.length === 1) {
+    blob = await writeXlsxFile(dataList[0], { sheet: names[0] || 'Sheet1' });
+  } else {
+    // For multiple sheets, convert to the format required by write-excel-file
+    // Each sheet needs { columns: [...], data: [...] }
+    const sheetsData = dataList.map((data) => {
+      if (!data.length) return { columns: [], data: [] };
+      
+      const headerRow = data[0]; // First row contains headers
+      const columns = headerRow.map((cell, idx) => ({
+        title: cell.value || `Column ${idx + 1}`,
+        key: `col${idx}`
+      }));
+      
+      const rows = data.slice(1).map((row) => {
+        const obj = {};
+        row.forEach((cell, idx) => {
+          obj[`col${idx}`] = cell.value || '';
+        });
+        return obj;
+      });
+      
+      return { columns, data: rows };
+    });
+    
+    blob = await writeXlsxFile(sheetsData, { sheets: names });
+  }
 
   return blob;
 }

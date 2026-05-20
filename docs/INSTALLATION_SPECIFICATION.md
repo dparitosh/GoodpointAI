@@ -98,6 +98,23 @@ The VS Code backend tasks run with dotenv loading enabled:
 
 ## Installation procedure (normative)
 
+### 0) PowerShell execution policy (Windows only)
+
+For Windows users, PowerShell scripts (`.ps1` files) require execution policy to be enabled.
+
+**Setup (run once)**:
+
+1. Open PowerShell **as Administrator**
+2. Run:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+3. Type `Y` and press Enter to confirm
+4. Verify: `Get-ExecutionPolicy` should return `RemoteSigned`
+
+**Troubleshooting**: If you cannot change execution policy globally:
+- Run scripts individually with: `powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1`
+
 ### 1) Postgres setup
 
 - A Postgres database MUST exist and be reachable from the backend host.
