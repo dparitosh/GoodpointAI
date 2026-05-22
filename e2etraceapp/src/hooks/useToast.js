@@ -2,7 +2,7 @@
  * Toast Notification Hook
  * Provides non-blocking notifications to replace window.alert
  */
-import { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 
 // Global toast state for singleton pattern
 let globalToasts = [];
@@ -90,30 +90,41 @@ export const toast = {
 
 /**
  * React hook for toast notifications
+ * 
+ * ✅ FIXED: Properly manages listeners with useEffect
+ * - Listener added only once on mount
+ * - Properly cleaned up on unmount
+ * - No memory leaks from duplicate listeners
  */
 export const useToast = () => {
   const [toasts, setToasts] = useState(globalToasts);
-
-  // Register listener on mount
   const listenerRef = useRef(null);
-  
-  if (!listenerRef.current) {
+
+  // Register listener ONCE on mount, cleanup on unmount
+  React.useEffect(() => {
+    // Store listener function
     listenerRef.current = setToasts;
     globalListeners.push(setToasts);
-  }
 
-  // Cleanup on unmount
-  const cleanup = useCallback(() => {
-    globalListeners = globalListeners.filter(l => l !== listenerRef.current);
+    // Cleanup function - runs on unmount
+    return () => {
+      if (listenerRef.current) {
+        globalListeners = globalListeners.filter(l => l !== listenerRef.current);
+      }
+    };
+  }, []); // Empty deps - run only once on mount
+
+  // Convenience dismissal function
+  const dismiss = useCallback((id) => {
+    dismissToast(id);
   }, []);
 
   return {
     toasts,
     showToast,
-    dismissToast,
+    dismissToast: dismiss,
     clearAllToasts,
-    toast,
-    cleanup
+    toast
   };
 };
 

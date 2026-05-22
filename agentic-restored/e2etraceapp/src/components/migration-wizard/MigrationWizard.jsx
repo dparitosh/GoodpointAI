@@ -1038,21 +1038,26 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
       setWizardData(prev => ({ ...prev, migrationStep: 'Step 3: Transforming data...', processedRecords: 3 }));
       
       // Build part_mapping from fieldMappings or use defaults
-      const partMapping = wizardData.fieldMappings.reduce((acc, m) => {
+      let partMapping = wizardData.fieldMappings.reduce((acc, m) => {
         const src = (m?.source_field || '').trim();
         const dest = (m?.target_field || '').trim();
         if (src && dest) acc[src] = dest;
         return acc;
-      }, {}) || {
-        part_number: 'part_number',
-        name: 'name',
-        category: 'classification',
-        revision: 'description'
-      };
+      }, {});
       
-      // Ensure required mappings exist
-      if (!partMapping.part_number) partMapping.part_number = 'part_number';
-      if (!partMapping.name) partMapping.name = 'name';
+      // Use default mappings if custom mappings are empty
+      if (Object.keys(partMapping).length === 0) {
+        partMapping = {
+          part_number: 'part_number',
+          name: 'name',
+          category: 'classification',
+          revision: 'description'
+        };
+      } else {
+        // Ensure required mappings exist
+        if (!partMapping.part_number) partMapping.part_number = 'part_number';
+        if (!partMapping.name) partMapping.name = 'name';
+      }
       
       await e2etraceFetchWithRetry(`${plmBaseUrl}/runs/${runId}/transform`, {
         method: 'POST',
@@ -1636,14 +1641,14 @@ const MigrationWizard = ({ embedded = false, initialStep = 1, onComplete }) => {
         <div className="template-selector">
           <label>Apply Template:</label>
           <select 
-            value={wizardData.selectedTemplate?.id || ''}
+            value={wizardData.selectedTemplate?.id ?? ''}
             onChange={(e) => {
               const template = mappingTemplates.find(t => t.id === e.target.value);
               if (template) applyTemplate(template);
             }}
           >
             <option value="">Select template...</option>
-            {mappingTemplates.map(t => (
+            {mappingTemplates && mappingTemplates.map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>

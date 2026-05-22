@@ -18,6 +18,30 @@ Optional (only if you want the features):
 - **Neo4j** (lineage graph)
 - **OpenSearch** (index/search)
 
+## PowerShell Execution Policy (Windows Users)
+
+If you encounter the error: `cannot be loaded because running scripts is disabled on this system`, you need to allow PowerShell script execution.
+
+Run PowerShell **as Administrator** and execute:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+This allows PowerShell scripts to run in the current user context. You can verify it worked with:
+
+```powershell
+Get-ExecutionPolicy
+```
+
+It should return `RemoteSigned` (or higher).
+
+**Alternative (per-command)**: You can bypass execution policy for a single script without changing global policy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
+
 ## 1) PostgreSQL (required)
 
 GraphTrace is **Postgres-only** for persistence.
@@ -50,44 +74,61 @@ Notes:
 
 - VS Code tasks start the backend with `GRAPH_TRACE_LOAD_DOTENV=true`, so `.env` is loaded automatically.
 
-## 2) Backend (FastAPI)
+## Quick Start: Bootstrap Script (All-in-one)
+
+For a fast setup, run the automated bootstrap script from the repo root:
+
+```powershell
+# From repo root
+.\agentic-restored\bootstrap.ps1
+```
+
+This handles **Backend + Frontend** setup in one go:
+
+- Creates Python virtual environment
+- Installs dependencies
+- Initializes database schema
+- Generates encryption key
+- Installs frontend dependencies
+
+Then proceed to: **4) Start the servers** below.
+
+---
+
+## Manual Installation (Step-by-step)
+
+### 2) Backend (FastAPI)
 
 From repo root:
 
-### Create a virtual environment
-
-```powershell
-python -m venv .venv
-./.venv/Scripts/Activate.ps1
-python -m pip install --upgrade pip
-```
-
-### Install backend dependencies
-
-```powershell
-pip install -r agentic-restored/python_backend/requirements.txt
-```
-
-### Initialize schema (Postgres)
+#### Create a virtual environment
 
 ```powershell
 Push-Location agentic-restored/python_backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+#### Install backend dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+#### Initialize schema (Postgres)
+
+```powershell
 python -m scripts.init_db_schema
+```
+
+Then return to repo root:
+
+```powershell
 Pop-Location
 ```
 
-### Start the API
-
-```powershell
-python -m uvicorn --app-dir agentic-restored/python_backend main:app --host 0.0.0.0 --port 8011 --reload
-```
-
-Verify:
-
-- Health: http://localhost:8011/health
-- OpenAPI: http://localhost:8011/docs
-
-## 3) Frontend (React/Vite)
+### 3) Frontend (React/Vite)
 
 ```powershell
 Push-Location agentic-restored/e2etraceapp
@@ -99,7 +140,53 @@ Open:
 
 - UI: http://localhost:5173
 
-## 4) Optional integrations
+## 4) Start the servers
+
+### Option A: VS Code tasks (recommended)
+
+Open VS Code and run the task:
+
+- **Start Full Stack (Frontend + Backend)** (or start each separately)
+
+### Option B: Manual start
+
+#### Backend
+
+From repo root:
+
+```powershell
+Push-Location agentic-restored/python_backend
+.\venv\Scripts\Activate.ps1
+python -m uvicorn main:app --host 0.0.0.0 --port 8011 --reload
+```
+
+#### Frontend
+
+From another terminal:
+
+```powershell
+Push-Location agentic-restored/e2etraceapp
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+### Option C: Scripts
+
+From `agentic-restored/`:
+
+- `start-all.ps1` (both servers)
+- `start-backend.ps1` (backend only)
+- `start-frontend.ps1` (frontend only)
+
+## 5) Verification
+
+Verify the installation:
+
+- Health: http://localhost:8011/health
+- OpenAPI: http://localhost:8011/docs
+- UI: http://localhost:5173
+- Admin: http://localhost:5173/#/admin
+
+## 6) Optional integrations
 
 ### Neo4j (optional)
 
@@ -116,4 +203,6 @@ Configure via the UI Admin pages:
 ## Troubleshooting
 
 - **503 from report/persistence endpoints**: Postgres not reachable/configured.
-- Ports in use: free **8011** (backend) and **5173** (frontend) and restart.
+- **Script execution blocked**: See [PowerShell Execution Policy](#powershell-execution-policy-windows-users) section above.
+- **Ports in use**: Free **8011** (backend) and **5173** (frontend), then restart.
+- **Schema initialization fails**: Verify `DATABASE_URL` in `agentic-restored/python_backend/.env` and that Postgres is running.
