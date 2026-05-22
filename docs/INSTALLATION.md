@@ -74,28 +74,9 @@ Notes:
 
 - VS Code tasks start the backend with `GRAPH_TRACE_LOAD_DOTENV=true`, so `.env` is loaded automatically.
 
-## Quick Start: Bootstrap Script (All-in-one)
+## Installation (Recommended: Manual Method)
 
-For a fast setup, run the automated bootstrap script from the repo root:
-
-```powershell
-# From repo root
-.\agentic-restored\bootstrap.ps1
-```
-
-This handles **Backend + Frontend** setup in one go:
-
-- Creates Python virtual environment
-- Installs dependencies
-- Initializes database schema
-- Generates encryption key
-- Installs frontend dependencies
-
-Then proceed to: **4) Start the servers** below.
-
----
-
-## Manual Installation (Step-by-step)
+The manual step-by-step approach is **reliable and predictable** across Windows environments. Use this method for consistent results.
 
 ### 2) Backend (FastAPI)
 
@@ -139,6 +120,25 @@ npm run dev -- --host 127.0.0.1 --port 5173
 Open:
 
 - UI: http://localhost:5173
+
+## Alternative: Bootstrap Script (One-Command Setup)
+
+If you prefer automated setup instead of the manual steps above, run the bootstrap script:
+
+```powershell
+# From repo root
+.\agentic-restored\bootstrap.ps1
+```
+
+This handles **Backend + Frontend** setup automatically in one command:
+
+- Creates Python virtual environment
+- Installs all dependencies  
+- Initializes database schema
+- Generates encryption key
+- Installs frontend npm packages
+
+**Note**: The bootstrap script may encounter pip cache-related issues on some Windows configurations. If you experience `pip` hash validation errors, use the **manual installation** method described above instead.
 
 ## 4) Start the servers
 

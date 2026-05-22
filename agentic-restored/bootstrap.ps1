@@ -4,6 +4,23 @@ Param(
   [switch]$RunDiagnostics
 )
 
+<#
+.SYNOPSIS
+    Automated bootstrap script for GraphTrace (Windows)
+    
+.DESCRIPTION
+    This script automates the installation of GraphTrace backend and frontend.
+    It is an alternative to the manual step-by-step installation in docs/INSTALLATION.md
+    
+    If you encounter pip errors (e.g., hash validation), use the manual installation method instead:
+    - Reference: docs/INSTALLATION.md (Manual Installation section)
+    - This involves manually running venv, pip install, and npm install commands
+    
+.NOTES
+    Recommended: Use manual installation method (docs/INSTALLATION.md) for most reliable setup
+    This bootstrap script is provided as a convenience for faster automated setup
+#>
+
 $ErrorActionPreference = 'Stop'
 
 function Assert-Command($name, $hint) {
@@ -15,6 +32,7 @@ function Assert-Command($name, $hint) {
 }
 
 Write-Host "GraphTrace bootstrap (Windows)" -ForegroundColor Green
+Write-Host "Alternative: Use manual installation (docs/INSTALLATION.md) for more reliable setup" -ForegroundColor Yellow
 
 Assert-Command python "Install Python 3.10+ and ensure it's on PATH."
 Assert-Command node "Install Node.js 18+ (includes npm)."
@@ -32,7 +50,14 @@ if (-not $SkipBackend) {
     & ".\venv\Scripts\Activate.ps1"
 
     python -m pip install --upgrade pip
-    python -m pip install -r requirements.txt
+    python -m pip cache purge
+    python -m pip install --no-cache-dir -r requirements.txt
+    
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "ERROR: pip install failed" -ForegroundColor Red
+      Write-Host "Fallback: Use manual installation method from docs/INSTALLATION.md" -ForegroundColor Yellow
+      exit 1
+    }
 
     $keyFile = Join-Path (Get-Location) ".graphtrace.encryption_key"
     if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {

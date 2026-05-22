@@ -33,6 +33,11 @@ if (-not $SkipBackend) {
 
     python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
+    
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "ERROR: pip install failed" -ForegroundColor Red
+      exit 1
+    }
 
     $keyFile = Join-Path (Get-Location) ".graphtrace.encryption_key"
     if (-not $env:GRAPH_TRACE_CONFIG_ENCRYPTION_KEY) {
