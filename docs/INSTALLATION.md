@@ -90,11 +90,46 @@ Notes:
 
 - VS Code tasks start the backend with `GRAPH_TRACE_LOAD_DOTENV=true`, so `.env` is loaded automatically.
 
+## 2) Optional: Ollama (Local LLM)
+
+For local embeddings and inference without external API calls:
+
+1. **Install Ollama**: https://ollama.ai
+2. **Pull a model**: `ollama pull llama2`
+3. **Configure in `.env`**:
+
+```dotenv
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+OLLAMA_TEMPERATURE=0.7
+OLLAMA_TIMEOUT_S=300
+```
+
+4. **Start Ollama**: `ollama serve`
+
+## 3) Optional: OpenSearch (Semantic Search)
+
+For semantic search and document indexing:
+
+1. **Install OpenSearch**: https://opensearch.org/docs/latest/install/index/
+2. **Start OpenSearch**: (usually runs on port 9200)
+3. **Configure in `.env`**:
+
+```dotenv
+OPENSEARCH_HOST=localhost
+OPENSEARCH_PORT=9200
+OPENSEARCH_USER=admin
+OPENSEARCH_PASSWORD=admin
+OPENSEARCH_SSL=false
+OPENSEARCH_TIMEOUT_S=30
+```
+
 ## Installation (Recommended: Manual Method)
 
 The manual step-by-step approach is **reliable and predictable** across Windows environments. Use this method for consistent results.
 
-### 2) Backend (FastAPI)
+### 4) Backend (FastAPI)
 
 From repo root:
 
@@ -125,7 +160,7 @@ Then return to repo root:
 Pop-Location
 ```
 
-### 3) Frontend (React/Vite)
+### 5) Frontend (React/Vite)
 
 ```powershell
 Push-Location agentic-restored/e2etraceapp
@@ -156,7 +191,7 @@ This handles **Backend + Frontend** setup automatically in one command:
 
 **Note**: The bootstrap script may encounter pip cache-related issues on some Windows configurations. If you experience `pip` hash validation errors, use the **manual installation** method described above instead.
 
-## 4) Start the servers
+## 6) Start the servers
 
 ### Option A: VS Code tasks (recommended)
 
@@ -193,7 +228,7 @@ From `agentic-restored/`:
 - `start-backend.ps1` (backend only)
 - `start-frontend.ps1` (frontend only)
 
-## 5) Verification
+## 7) Verification
 
 Verify the installation:
 
@@ -202,7 +237,7 @@ Verify the installation:
 - UI: http://localhost:5173
 - Admin: http://localhost:5173/#/admin
 
-## 6) Optional integrations
+## 8) Optional integrations
 
 ### Neo4j (optional)
 
