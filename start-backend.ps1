@@ -1,6 +1,7 @@
 # PowerShell script to start the GraphTrace Python backend
-# Usage: .\start-backend.ps1
-
+# Usage: .\start-backend.ps1#
+# If you encounter "script execution is disabled" error, use:
+#   powershell -ExecutionPolicy Bypass -File .\.\start-backend.ps1
 Write-Host "Starting GraphTrace Backend Server..." -ForegroundColor Green
 
     # Opt into repo-local `.env` loading for local development.

@@ -1,6 +1,7 @@
 # PowerShell script to start the GraphTrace React frontend
-# Usage: .\start-frontend.ps1
-
+# Usage: .\start-frontend.ps1#
+# If you encounter "script execution is disabled" error, use:
+#   powershell -ExecutionPolicy Bypass -File .\.\start-frontend.ps1
 Write-Host "Starting GraphTrace Frontend..." -ForegroundColor Green
 
 # Check if Node.js is installed
