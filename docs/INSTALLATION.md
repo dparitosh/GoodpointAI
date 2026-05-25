@@ -20,27 +20,43 @@ Optional (only if you want the features):
 
 ## PowerShell Execution Policy (Windows Users)
 
-If you encounter the error: `cannot be loaded because running scripts is disabled on this system`, you need to allow PowerShell script execution.
+If you encounter the error: `cannot be loaded because running scripts is disabled on this system`, you have several options:
 
-Run PowerShell **as Administrator** and execute:
+### Option 1: Bypass for Current Command (Recommended - No Policy Changes)
+
+Run the script with execution policy bypass for just that invocation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-all.ps1
+```
+
+This is the **safest approach** - it doesn't change your system policies.
+
+### Option 2: Set Execution Policy (Requires Admin)
+
+If you want to permanently allow scripts in your user context, run PowerShell **as Administrator**:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-This allows PowerShell scripts to run in the current user context. You can verify it worked with:
+Then verify it worked:
 
 ```powershell
-Get-ExecutionPolicy
+Get-ExecutionPolicy -List
 ```
 
-It should return `RemoteSigned` (or higher).
+**Note**: If you still get the error after setting `CurrentUser` scope, your `LocalMachine` scope policy may be more restrictive. In that case, use **Option 1** instead.
 
-**Alternative (per-command)**: You can bypass execution policy for a single script without changing global policy:
+### Option 3: Set at LocalMachine Level (Admin Only)
+
+For system-wide script access, run PowerShell **as Administrator**:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine
 ```
+
+**Important**: This requires Administrator privileges and affects all users on the machine.
 
 ## 1) PostgreSQL (required)
 
@@ -202,7 +218,7 @@ Configure via the UI Admin pages:
 
 ## Troubleshooting
 
+- **Script execution blocked (SecurityError)**: See [PowerShell Execution Policy](#powershell-execution-policy-windows-users) section above. Quick fix: `powershell -ExecutionPolicy Bypass -File .\start-all.ps1`
 - **503 from report/persistence endpoints**: Postgres not reachable/configured.
-- **Script execution blocked**: See [PowerShell Execution Policy](#powershell-execution-policy-windows-users) section above.
 - **Ports in use**: Free **8011** (backend) and **5173** (frontend), then restart.
 - **Schema initialization fails**: Verify `DATABASE_URL` in `agentic-restored/python_backend/.env` and that Postgres is running.

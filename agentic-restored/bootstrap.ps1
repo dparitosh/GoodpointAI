@@ -12,6 +12,9 @@ Param(
     This script automates the installation of GraphTrace backend and frontend.
     It is an alternative to the manual step-by-step installation in docs/INSTALLATION.md
     
+    If you encounter execution policy errors (SecurityError), use:
+    - powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+    
     If you encounter pip errors (e.g., hash validation), use the manual installation method instead:
     - Reference: docs/INSTALLATION.md (Manual Installation section)
     - This involves manually running venv, pip install, and npm install commands

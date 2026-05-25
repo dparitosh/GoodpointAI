@@ -1,5 +1,8 @@
 # PowerShell script to start both frontend and backend services
 # Usage: .\start-all.ps1
+#
+# If you encounter "script execution is disabled" error, use:
+#   powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 
 Write-Host "Starting GraphTrace Full Stack Application..." -ForegroundColor Green
 Write-Host ""
@@ -9,7 +12,7 @@ $scriptDir = $PSScriptRoot
 
 # Start backend in a new PowerShell window
 Write-Host "Starting Backend Server..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-File", "$scriptDir\start-backend.ps1"
+Start-Process powershell -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-File", "$scriptDir\start-backend.ps1"
 
 # Wait a bit for backend to start
 Write-Host "Waiting for backend to initialize..." -ForegroundColor Yellow
@@ -17,7 +20,7 @@ Start-Sleep -Seconds 3
 
 # Start frontend in a new PowerShell window
 Write-Host "Starting Frontend Server..." -ForegroundColor Cyan
-Start-Process powershell -ArgumentList "-NoExit", "-File", "$scriptDir\start-frontend.ps1"
+Start-Process powershell -ArgumentList "-ExecutionPolicy", "Bypass", "-NoExit", "-File", "$scriptDir\start-frontend.ps1"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green

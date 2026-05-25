@@ -4,6 +4,15 @@ Param(
   [switch]$RunDiagnostics
 )
 
+<#
+.SYNOPSIS
+    Automated bootstrap script for GraphTrace (Windows)
+    
+.NOTES
+    If you get "script execution is disabled" error, use:
+    powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+#>
+
 $ErrorActionPreference = 'Stop'
 
 function Assert-Command($name, $hint) {
