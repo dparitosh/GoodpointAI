@@ -2,12 +2,13 @@
 External Integration Configuration
 Manages all external service connections and credentials
 """
+import json
 import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List, Optional
 
 # Load environment variables
@@ -175,12 +176,46 @@ class FileSystemConfig(BaseSettings):
     json_input_path: str = Field(default="./data/json/input", validation_alias="JSON_INPUT_PATH")
     csv_input_path: str = Field(default="./data/csv/input", validation_alias="CSV_INPUT_PATH")
     
-    # Folder monitoring
+    # Folder monitoring - supports JSON array or semicolon-separated paths
+    # JSON format (recommended): WATCH_FOLDERS='["./data/watch","./uploads"]'
+    # String format: WATCH_FOLDERS="./data/watch;./uploads"
+    # If not set or empty, defaults to ["./data/watch"]
     watch_folders: List[str] = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
     
     # File size limits (in MB)
     max_upload_size_mb: int = Field(default=100, validation_alias="MAX_UPLOAD_SIZE_MB")
     max_batch_size_mb: int = Field(default=500, validation_alias="MAX_BATCH_SIZE_MB")
+    
+    @field_validator("watch_folders", mode="before")
+    @classmethod
+    def parse_watch_folders(cls, v):
+        """Parse watch_folders from string, JSON, or list format"""
+        if isinstance(v, list):
+            return v
+        if not v or not isinstance(v, str):
+            return ["./data/watch"]
+        
+        v = v.strip()
+        if not v:
+            return ["./data/watch"]
+        
+        # Try parsing as JSON array
+        if v.startswith("["):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse WATCH_FOLDERS as JSON: %s", v)
+        
+        # Try parsing as semicolon-separated paths (Windows style)
+        if ";" in v:
+            return [p.strip() for p in v.split(";") if p.strip()]
+        
+        # Try parsing as comma-separated paths
+        if "," in v:
+            return [p.strip() for p in v.split(",") if p.strip()]
+        
+        # Single path
+        return [v] if v else ["./data/watch"]
 
 
 class DatabaseConfig(BaseSettings):
