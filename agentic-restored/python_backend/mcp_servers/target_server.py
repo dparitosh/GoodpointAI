@@ -51,7 +51,7 @@ def _require_mcp():
 
         mod = importlib.import_module("mcp.server.fastmcp")
         return getattr(mod, "FastMCP")
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (ImportError, ModuleNotFoundError, AttributeError) as exc:
         raise RuntimeError(
             "MCP Python SDK is not installed. Install optional deps (see requirements.txt)."
         ) from exc
