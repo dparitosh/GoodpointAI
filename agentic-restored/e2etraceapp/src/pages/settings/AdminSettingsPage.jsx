@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import AdminConfigManager from '../../components/admin-config-manager';
+import AdminConfigManager from '../../components/admin-config-manager/index.jsx';
 import '../../components/admin-config-manager.css';
 
 function AdminSettingsPage() {
