@@ -18,6 +18,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 
 from core.db_session import get_db
+from models.error_models import (
+    ResourceNotFoundError,
+    ResourceAlreadyExistsError,
+    InvalidRequestError,
+    ConflictError,
+    DependencyError,
+)
 from models.admin_config_models import (
     # ORM Models
     SystemConfiguration,
@@ -361,7 +368,7 @@ async def get_system_config(config_id: int, db: Session = Depends(get_db)):
     """Get a specific system configuration."""
     config = db.query(SystemConfiguration).filter(SystemConfiguration.id == config_id).first()
     if not config:
-        raise HTTPException(status_code=404, detail="Configuration not found")
+        raise ResourceNotFoundError("SystemConfiguration", str(config_id))
     return config
 
 
@@ -373,7 +380,7 @@ async def get_system_config_by_key(category: str, key: str, db: Session = Depend
         SystemConfiguration.key == key
     ).first()
     if not config:
-        raise HTTPException(status_code=404, detail="Configuration not found")
+        raise ResourceNotFoundError("SystemConfiguration", f"{category}.{key}")
     return config
 
 
@@ -390,9 +397,9 @@ async def create_system_config(
         SystemConfiguration.key == config.key
     ).first()
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Configuration '{config.key}' already exists in category '{config.category}'"
+        raise ResourceAlreadyExistsError(
+            "SystemConfiguration",
+            f"{config.category}.{config.key}"
         )
     
     db_config = SystemConfiguration(**config.model_dump())
@@ -587,7 +594,7 @@ async def get_llm_provider(provider_id: str, db: Session = Depends(get_db)):
     """Get a specific LLM provider configuration."""
     provider = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+        raise ResourceNotFoundError("LLMProvider", provider_id)
     
     return LLMProviderResponse(
         id=provider.id,
@@ -631,7 +638,7 @@ async def create_llm_provider(
 
     existing = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Provider '{provider_id}' already exists")
+        raise ResourceAlreadyExistsError("LLMProvider", provider_id)
     
     # If setting as default, unset other defaults
     if provider.is_default:
