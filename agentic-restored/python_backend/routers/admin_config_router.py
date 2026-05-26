@@ -1980,3 +1980,95 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
         result["error"] = str(e)
     
     return result
+
+
+# ============================================================
+# Maintenance Endpoints (Admin Only)
+# ============================================================
+
+@router.post("/maintenance/migrate-database", response_model=Dict[str, Any])
+async def migrate_database(db: Session = Depends(get_db)):
+    """
+    Run database migrations to ensure schema consistency and
+    performance optimizations are applied (e.g., add missing indexes).
+    
+    This is an admin-only endpoint that should only be called during
+    maintenance windows or when explicitly requested.
+    """
+    result = {
+        "success": False,
+        "message": "Migration not completed",
+        "details": {}
+    }
+    
+    try:
+        from services.migration_runner import MigrationRunner
+        from core.database import DATABASE_URL
+        
+        runner = MigrationRunner(DATABASE_URL)
+        
+        # Run migrations
+        logger.info("Starting database migrations...")
+        runner.run_migrations()
+        
+        # Check schema health
+        schema_check = runner.check_schema()
+        
+        result["success"] = True
+        result["message"] = "Database migrations completed successfully"
+        result["details"] = {
+            "tables_count": len(schema_check["tables"]),
+            "indexes_created": sum(len(v) for v in schema_check["indexes"].values()),
+            "constraints": sum(len(v) for v in schema_check["constraints"].values()),
+        }
+        
+        logger.info("✓ Database migration completed: %s", result)
+        
+    except ImportError as e:
+        result["error"] = f"Migration module not found: {str(e)}"
+        logger.error("Migration import error: %s", e)
+    except Exception as e:
+        result["error"] = f"Migration failed: {str(e)}"
+        logger.error("Migration error: %s", e)
+    
+    return result
+
+
+@router.get("/maintenance/schema-health", response_model=Dict[str, Any])
+async def check_schema_health(db: Session = Depends(get_db)):
+    """
+    Check database schema health: tables, indexes, and constraints.
+    
+    This endpoint provides diagnostics about the database schema state
+    and can help identify missing optimizations.
+    """
+    result = {
+        "status": "unknown",
+        "schema": {}
+    }
+    
+    try:
+        from services.migration_runner import MigrationRunner
+        from core.database import DATABASE_URL
+        
+        runner = MigrationRunner(DATABASE_URL)
+        schema_check = runner.check_schema()
+        
+        result["status"] = "healthy"
+        result["schema"] = {
+            "tables": schema_check["tables"],
+            "indexes_by_table": schema_check["indexes"],
+            "constraints_by_table": schema_check["constraints"],
+            "summary": {
+                "total_tables": len(schema_check["tables"]),
+                "total_indexes": sum(len(v) for v in schema_check["indexes"].values()),
+                "total_constraints": sum(len(v) for v in schema_check["constraints"].values()),
+            }
+        }
+        
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = str(e)
+        logger.error("Schema health check error: %s", e)
+    
+    return result
