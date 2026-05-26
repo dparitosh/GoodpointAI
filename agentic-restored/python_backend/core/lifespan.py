@@ -56,7 +56,7 @@ def _get_neo4j_config_from_admin_center() -> dict:
                 }
         finally:
             db.close()
-    except Exception as exc:
+    except (SQLAlchemyError, AttributeError) as exc:
         logger.debug("Admin config not available for Neo4j, using env: %s", exc)
     
     # Fallback to environment variables
@@ -72,11 +72,11 @@ async def _neo4j_health_loop(driver: neo4j.AsyncDriver) -> None:
     while True:
         try:
             await asyncio.wait_for(driver.verify_connectivity(), timeout=5)
-        except TimeoutError:
-            logger.warning("Neo4j periodic connectivity verification timed out after 5s")
-        except asyncio.CancelledError:
+        except (TimeoutError, asyncio.CancelledError):
+            if isinstance(exc, TimeoutError):
+                logger.warning("Neo4j periodic connectivity verification timed out after 5s")
             return
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (AttributeError, ConnectionError, OSError) as exc:
             logger.warning("Neo4j periodic connectivity verification failed: %s", exc)
         await asyncio.sleep(max(1.0, float(NEO4J_HEALTHCHECK_INTERVAL_S)))
 
@@ -98,7 +98,7 @@ async def lifespan_manager(app: FastAPI):
         # Best-effort: allow API (and Neo4j) to start even if schema init fails.
         try:
             init_db()
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except (SQLAlchemyError, AttributeError, ImportError) as exc:
             logger.warning(
                 "DB schema initialization failed; starting API with DB marked unhealthy until verified: %s",
                 exc,
@@ -127,7 +127,7 @@ async def lifespan_manager(app: FastAPI):
                 seeded = seed_defaults(force=False)
                 if seeded:
                     logger.info("Seeded default DB configuration keys: %s", ", ".join(seeded))
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except (ImportError, ModuleNotFoundError, SQLAlchemyError, AttributeError) as exc:
                 logger.warning("DB config seeding failed (non-fatal): %s", exc)
 
         # Load Neo4j config from Admin Configuration Center (single source of truth)

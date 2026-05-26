@@ -78,7 +78,7 @@ def redacted_database_url() -> str:
         url = make_url(DATABASE_URL)
         # keep username visible, redact password
         return str(url.set(password="***"))
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (ValueError, ArgumentError, TypeError):
         return "(unavailable)"
 
 
@@ -96,7 +96,7 @@ def verify_database_connectivity(timeout_s: float = 5.0) -> Optional[str]:
             connection.execution_options(timeout=timeout_s)
             connection.execute(text("SELECT 1"))
         return None
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (SQLAlchemyError, OSError, TimeoutError) as exc:
         return f"{type(exc).__name__}: {exc}"
 
 

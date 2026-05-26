@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from cryptography.fernet import Fernet  # type: ignore
+from cryptography.fernet import Fernet, InvalidToken  # type: ignore
 
 
 def _derive_fernet_key(raw: str) -> bytes:
@@ -49,7 +49,7 @@ def get_fernet() -> Fernet:
         # or a passphrase (we'll derive a key deterministically).
         try:
             return Fernet(raw.encode("utf-8"))
-        except Exception:  # pylint: disable=broad-exception-caught
+        except (ValueError, TypeError, InvalidToken):
             return Fernet(_derive_fernet_key(raw))
 
     # Local-dev fallback: load from a local key file (ignored by git).
@@ -63,9 +63,9 @@ def get_fernet() -> Fernet:
             if file_raw:
                 try:
                     return Fernet(file_raw.encode("utf-8"))
-                except Exception:  # pylint: disable=broad-exception-caught
+                except (ValueError, TypeError, InvalidToken):
                     return Fernet(_derive_fernet_key(file_raw))
-    except Exception:  # pylint: disable=broad-exception-caught
+    except (OSError, IOError):
         # Ignore file fallback errors and continue to other sources.
         pass
 

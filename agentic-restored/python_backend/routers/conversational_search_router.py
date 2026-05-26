@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.db_session import get_db
 from services.admin_config_service import AdminConfigService
@@ -109,7 +110,7 @@ def _get_opensearch_service(db: Session):
     try:
         from graph_api.opensearch_router import get_service
         return get_service(db)
-    except Exception as e:
+    except (ImportError, ModuleNotFoundError, AttributeError) as e:
         logger.warning("OpenSearch service unavailable: %s", e)
         return None
 
@@ -119,7 +120,7 @@ def _get_graphrag_service():
     try:
         from services.neo4j_graphrag_service import Neo4jGraphRAGService
         return Neo4jGraphRAGService()
-    except Exception as e:
+    except (ImportError, ModuleNotFoundError, AttributeError) as e:
         logger.warning("GraphRAG service unavailable: %s", e)
         return None
 
@@ -133,7 +134,7 @@ def _get_search_config(db: Session) -> Dict[str, Any]:
         embedding_config = config_service.get_embedding_config()
         vector_model = embedding_config.get("model", "all-MiniLM-L6-v2")
         vector_dimension = embedding_config.get("dimension", 384)
-    except Exception:
+    except (SQLAlchemyError, KeyError, ValueError, AttributeError):
         vector_model = "sentence-transformers/all-MiniLM-L6-v2"
         vector_dimension = 384
     
@@ -143,7 +144,7 @@ def _get_search_config(db: Session) -> Dict[str, Any]:
         text_weight = float(search_settings.get("hybrid_text_weight", 0.5))
         vector_weight = float(search_settings.get("hybrid_vector_weight", 0.5))
         similarity_threshold = float(search_settings.get("similarity_threshold", 0.7))
-    except Exception:
+    except (SQLAlchemyError, KeyError, ValueError, AttributeError):
         text_weight = 0.5
         vector_weight = 0.5
         similarity_threshold = 0.7
@@ -169,7 +170,7 @@ def _get_search_config(db: Session) -> Dict[str, Any]:
                 }
                 for config in configs
             }
-    except Exception as e:
+    except (ImportError, ModuleNotFoundError, SQLAlchemyError, AttributeError) as e:
         logger.debug("Legacy search config not available: %s", e)
     
     # Return defaults with admin config values
@@ -224,7 +225,7 @@ def _generate_embedding(text: str, db: Optional[Session] = None) -> Optional[Lis
         embedding = get_embedding_for_text(text)
         if embedding:
             return embedding
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ImportError, ModuleNotFoundError, AttributeError, OSError) as e:  # OSError for network errors
         logger.debug("Embedding service unavailable: %s", e)
 
     import hashlib
@@ -411,7 +412,7 @@ def _semantic_search(
         
         logger.info("Semantic search for '%s' returned %d results", query, len(results))
         return results
-    except Exception as e:
+    except (SQLAlchemyError, KeyError, ValueError, AttributeError, OSError) as e:
         logger.error("Semantic search failed: %s", e, exc_info=True)
         return []
 
@@ -483,7 +484,7 @@ def _vector_search(
                     "metadata": {k: v for k, v in source.items() if k not in ["embedding", "content_vector"]},
                     "highlights": []
                 })
-        except Exception as knn_err:
+        except (KeyError, ValueError, AttributeError, OSError) as knn_err:
             logger.warning("KNN search failed, trying alternative: %s", knn_err)
         
         # If no KNN results, try More Like This for semantic similarity
@@ -523,11 +524,11 @@ def _vector_search(
                         "metadata": source.get("metadata", {}),
                         "highlights": []
                     })
-            except Exception as mlt_err:
+            except (KeyError, ValueError, AttributeError, OSError) as mlt_err:
                 logger.warning("MLT search also failed: %s", mlt_err)
         
         return results
-    except Exception as e:
+    except (SQLAlchemyError, KeyError, ValueError, AttributeError, OSError) as e:
         logger.error("Vector search failed: %s", e)
         return []
 
@@ -571,7 +572,7 @@ def _graphrag_search(
             }
             for i, src in enumerate(sources)
         ]
-    except Exception as e:
+    except (AttributeError, KeyError, ValueError, OSError) as e:
         logger.error("GraphRAG search failed: %s", e)
         return []
 
@@ -612,7 +613,7 @@ def _hybrid_search(
             results.extend(semantic_results)
             source_counts["semantic"] = len(semantic_results)
             logger.info("Semantic search returned %d results", len(semantic_results))
-        except Exception as e:
+        except (SQLAlchemyError, KeyError, ValueError, AttributeError, OSError) as e:
             logger.warning("Semantic search failed in hybrid: %s", e)
     
     # 2. Vector Search (KNN/Similarity)
@@ -626,7 +627,7 @@ def _hybrid_search(
             results.extend(vector_results)
             source_counts["vector"] = len(vector_results)
             logger.info("Vector search returned %d results", len(vector_results))
-        except Exception as e:
+        except (SQLAlchemyError, KeyError, ValueError, AttributeError, OSError) as e:
             logger.warning("Vector search failed in hybrid: %s", e)
     
     # 3. GraphRAG Search (Knowledge Graph)
@@ -640,7 +641,7 @@ def _hybrid_search(
             results.extend(graph_results)
             source_counts["graph"] = len(graph_results)
             logger.info("GraphRAG search returned %d results", len(graph_results))
-        except Exception as e:
+        except (AttributeError, KeyError, ValueError, OSError) as e:
             logger.warning("GraphRAG search failed in hybrid: %s", e)
     
     # Deduplicate by ID with score aggregation

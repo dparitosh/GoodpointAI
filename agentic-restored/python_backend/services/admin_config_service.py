@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ class AdminConfigService:
                     }
                     _config_cache.set(cache_key, config)
                     return config
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load LLM config from DB: %s", e)
         
         # Fallback to environment variables
@@ -217,7 +218,7 @@ class AdminConfigService:
                     config = self.get_llm_provider_config(db_config.provider)
                     _config_cache.set(cache_key, config)
                     return config
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load active LLM provider from DB: %s", e)
         
         # Fallback: check environment for available providers
@@ -256,7 +257,7 @@ class AdminConfigService:
                 if providers:
                     _config_cache.set(cache_key, providers)
                     return providers
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load LLM providers from DB: %s", e)
         
         # Fallback to checking env vars
@@ -331,7 +332,7 @@ class AdminConfigService:
                     }
                     _config_cache.set(cache_key, config)
                     return config
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load embedding config from DB: %s", e)
         
         # Fallback to environment variables
@@ -413,7 +414,7 @@ class AdminConfigService:
                     }
                     _config_cache.set(cache_key, config)
                     return config
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load connection config from DB: %s", e)
         
         # Fallback to environment variables
@@ -507,7 +508,7 @@ class AdminConfigService:
                     )
                     _config_cache.set(cache_key, value)
                     return value
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load system config from DB: %s", e)
         
         _config_cache.set(cache_key, default)
@@ -540,7 +541,7 @@ class AdminConfigService:
                 if configs:
                     _config_cache.set(cache_key, configs)
                     return configs
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load system configs from DB: %s", e)
         
         _config_cache.set(cache_key, configs)
@@ -597,7 +598,7 @@ class AdminConfigService:
                     enabled = flag.enabled
                     _config_cache.set(cache_key, enabled)
                     return enabled
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load feature flag from DB: %s", e)
         
         # Default to False for unknown flags
@@ -625,7 +626,7 @@ class AdminConfigService:
                 if flags:
                     _config_cache.set(cache_key, flags)
                     return flags
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load feature flags from DB: %s", e)
         
         _config_cache.set(cache_key, flags)
@@ -665,7 +666,7 @@ class AdminConfigService:
                 if db_config and db_config.api_key:
                     _config_cache.set(cache_key, db_config.api_key)
                     return db_config.api_key
-            except Exception as e:
+            except (SQLAlchemyError, AttributeError) as e:
                 logger.warning("Failed to load API key from DB: %s", e)
         
         # Fallback to environment variable
