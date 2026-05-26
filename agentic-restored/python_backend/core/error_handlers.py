@@ -29,7 +29,7 @@ async def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
     response = exc.to_response(path=str(request.url.path))
     return JSONResponse(
         status_code=exc.status_code,
-        content=response.model_dump(exclude_none=True)
+        content=response.model_dump(mode='json', exclude_none=True)
     )
 
 
@@ -97,7 +97,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
     response = validation_err.to_response(path=str(request.url.path))
     return JSONResponse(
         status_code=422,
-        content=response.model_dump(exclude_none=True)
+        content=response.model_dump(mode='json', exclude_none=True)
     )
 
 
@@ -115,5 +115,5 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     response = error.to_response(path=str(request.url.path))
     return JSONResponse(
         status_code=500,
-        content=response.model_dump(exclude_none=True)
+        content=response.model_dump(mode='json', exclude_none=True)
     )
