@@ -22,7 +22,9 @@ from core.error_handlers import (
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
+    api_error_handler,
 )
+from models.error_models import APIError
 from graph_api.router import router as graph_router
 from graph_api.data_analysis_router import router as data_analysis_router
 from graph_api.monitoring_router import router as monitoring_router
@@ -253,6 +255,11 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> Resp
     return await cast(Any, unhandled_exception_handler)(request, exc)
 
 
+async def _api_error_handler(request: Request, exc: APIError) -> Response:
+    return await cast(Any, api_error_handler)(request, exc)
+
+
+app.add_exception_handler(APIError, _api_error_handler)
 app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
 app.add_exception_handler(RequestValidationError, _validation_exception_handler)
 app.add_exception_handler(Exception, _unhandled_exception_handler)
