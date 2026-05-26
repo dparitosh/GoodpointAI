@@ -431,7 +431,7 @@ async def update_system_config(
     """Update a system configuration."""
     db_config = db.query(SystemConfiguration).filter(SystemConfiguration.id == config_id).first()
     if not db_config:
-        raise HTTPException(status_code=404, detail="Configuration not found")
+        raise ResourceNotFoundError("SystemConfiguration", str(config_id))
     
     old_value = {
         "value": db_config.value,
@@ -469,7 +469,7 @@ async def delete_system_config(
     """Delete a system configuration."""
     db_config = db.query(SystemConfiguration).filter(SystemConfiguration.id == config_id).first()
     if not db_config:
-        raise HTTPException(status_code=404, detail="Configuration not found")
+        raise ResourceNotFoundError("SystemConfiguration", str(config_id))
     
     # Log audit
     log_audit(
@@ -556,7 +556,7 @@ async def get_default_llm_provider(db: Session = Depends(get_db)):
         ).order_by(LLMProviderConfig.priority.desc()).first()
     
     if not provider:
-        raise HTTPException(status_code=404, detail="No LLM provider configured")
+        raise ResourceNotFoundError("LLMProvider", "default")
     
     return LLMProviderResponse(
         id=provider.id,
@@ -709,7 +709,7 @@ async def update_llm_provider(
     """Update an LLM provider configuration."""
     db_provider = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if not db_provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+        raise ResourceNotFoundError("LLMProvider", provider_id)
     
     old_value = {"name": db_provider.name, "status": db_provider.status}
     
@@ -783,7 +783,7 @@ async def delete_llm_provider(
     """Delete an LLM provider configuration."""
     db_provider = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if not db_provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+        raise ResourceNotFoundError("LLMProvider", provider_id)
     
     log_audit(
         db, "llm_provider", provider_id, "delete",
@@ -834,7 +834,7 @@ async def get_default_embedding_model(db: Session = Depends(get_db)):
         ).first()
     
     if not model:
-        raise HTTPException(status_code=404, detail="No embedding model configured")
+        raise ResourceNotFoundError("EmbeddingModel", "default")
     
     return model
 
@@ -844,7 +844,7 @@ async def get_embedding_model(model_id: str, db: Session = Depends(get_db)):
     """Get a specific embedding model configuration."""
     model = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="Embedding model not found")
+        raise ResourceNotFoundError("EmbeddingModel", model_id)
     return model
 
 
@@ -859,7 +859,7 @@ async def create_embedding_model(
 
     existing = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Embedding model '{model_id}' already exists")
+        raise ResourceAlreadyExistsError("EmbeddingModel", model_id)
     
     # If setting as default, unset other defaults
     if model.is_default:
@@ -891,7 +891,7 @@ async def update_embedding_model(
     """Update an embedding model configuration."""
     db_model = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if not db_model:
-        raise HTTPException(status_code=404, detail="Embedding model not found")
+        raise ResourceNotFoundError("EmbeddingModel", model_id)
     
     old_value = {"name": db_model.name, "status": db_model.status}
     
@@ -932,7 +932,7 @@ async def delete_embedding_model(
     """Delete an embedding model configuration."""
     db_model = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if not db_model:
-        raise HTTPException(status_code=404, detail="Embedding model not found")
+        raise ResourceNotFoundError("EmbeddingModel", model_id)
     
     log_audit(
         db, "embedding_model", model_id, "delete",
@@ -1004,7 +1004,7 @@ async def get_connection(conn_id: str, db: Session = Depends(get_db)):
     """Get a specific connection configuration."""
     conn = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if not conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
+        raise ResourceNotFoundError("Connection", conn_id)
     
     return ConnectionConfigResponse(
         id=conn.id,
@@ -1044,7 +1044,7 @@ async def create_connection(
 
     existing = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Connection '{conn_id}' already exists")
+        raise ResourceAlreadyExistsError("Connection", conn_id)
     
     # If setting as default, unset other defaults for same type
     if connection.is_default:
@@ -1110,7 +1110,7 @@ async def update_connection(
     """Update a connection configuration."""
     db_conn = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if not db_conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
+        raise ResourceNotFoundError("Connection", conn_id)
     
     old_value = {"name": db_conn.name, "status": db_conn.status}
     
@@ -1187,7 +1187,7 @@ async def delete_connection(
     """Delete a connection configuration."""
     db_conn = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if not db_conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
+        raise ResourceNotFoundError("Connection", conn_id)
     
     log_audit(
         db, "connection", conn_id, "delete",
@@ -1223,7 +1223,7 @@ async def get_feature_flag(flag_id: str, db: Session = Depends(get_db)):
     """Get a specific feature flag."""
     flag = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
     if not flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
+        raise ResourceNotFoundError("FeatureFlag", flag_id)
     return flag
 
 
@@ -1255,7 +1255,7 @@ async def create_feature_flag(
         flag_id = _generate_config_id(base_id, max_len=100)
         existing2 = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
         if existing2:
-            raise HTTPException(status_code=400, detail=f"Feature flag '{base_id}' already exists")
+            raise ResourceAlreadyExistsError("FeatureFlag", base_id)
     
     payload = flag.model_dump()
     payload["id"] = flag_id
@@ -1283,7 +1283,7 @@ async def update_feature_flag(
     """Update a feature flag."""
     db_flag = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
     if not db_flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
+        raise ResourceNotFoundError("FeatureFlag", flag_id)
     
     old_value = {"name": db_flag.name, "enabled": db_flag.enabled}
     
@@ -1316,7 +1316,7 @@ async def delete_feature_flag(
     """Delete a feature flag."""
     db_flag = db.query(FeatureFlag).filter(FeatureFlag.id == flag_id).first()
     if not db_flag:
-        raise HTTPException(status_code=404, detail="Feature flag not found")
+        raise ResourceNotFoundError("FeatureFlag", flag_id)
     
     log_audit(
         db, "feature_flag", flag_id, "delete",
@@ -1515,7 +1515,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
     """Test a connection configuration by ID."""
     conn = db.query(ConnectionConfig).filter(ConnectionConfig.id == conn_id).first()
     if not conn:
-        raise HTTPException(status_code=404, detail="Connection not found")
+        raise ResourceNotFoundError("Connection", conn_id)
     
     result = {"connection_id": conn_id, "connection_type": conn.connection_type, "success": False}
     
@@ -1854,7 +1854,7 @@ async def test_llm_provider(provider_id: str, db: Session = Depends(get_db)):
     """Test an LLM provider configuration."""
     provider = db.query(LLMProviderConfig).filter(LLMProviderConfig.id == provider_id).first()
     if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+        raise ResourceNotFoundError("LLMProvider", provider_id)
     
     result = {"provider_id": provider_id, "provider": provider.provider, "success": False}
     
@@ -1948,7 +1948,7 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
     """Test an embedding model configuration."""
     model = db.query(EmbeddingModelConfig).filter(EmbeddingModelConfig.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="Embedding model not found")
+        raise ResourceNotFoundError("EmbeddingModel", model_id)
     
     result = {"model_id": model_id, "provider": model.provider, "success": False}
     
