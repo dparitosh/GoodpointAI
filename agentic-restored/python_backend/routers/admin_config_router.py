@@ -116,7 +116,7 @@ def invalidate_config_cache():
         from services.admin_config_service import invalidate_config_cache as _invalidate
         _invalidate()
         logger.info("Admin config cache invalidated")
-    except Exception as e:
+    except (ImportError, AttributeError) as e:
         logger.warning("Failed to invalidate config cache: %s", e)
 
 
@@ -175,9 +175,9 @@ def _allowed_local_roots() -> List[Path]:
                 continue
             try:
                 candidates.append(Path(p))
-            except Exception:
+            except OSError:
                 continue
-    except Exception:
+    except (ImportError, OSError, ValueError, AttributeError):
         # Non-fatal: fall back to env + repo-local defaults.
         pass
 
@@ -192,7 +192,7 @@ def _allowed_local_roots() -> List[Path]:
                 continue
             try:
                 candidates.append(Path(p))
-            except Exception:
+            except OSError:
                 continue
 
     return [p.resolve() for p in candidates if p.exists()]
@@ -1655,7 +1655,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                     result["message"] = "S3 access verified"
                 except ImportError:
                     result["message"] = "boto3 is not installed. Install: pip install boto3"
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError, AttributeError) as e:
                     result["message"] = f"S3 connection failed: {str(e)}"
 
         elif conn_type == "azure_blob":
@@ -1698,7 +1698,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                 except RuntimeError:
                     # message already set
                     pass
-                except Exception as e:
+                except (OSError, ValueError, AttributeError, KeyError, asyncio.TimeoutError) as e:
                     result["message"] = f"Azure Blob connection failed: {str(e)}"
 
         elif conn_type == "onedrive":
@@ -1719,7 +1719,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                         result["message"] = "OneDrive token verified"
                     else:
                         result["message"] = f"OneDrive verification failed: HTTP {resp.status_code}"
-                except Exception as e:
+                except (ImportError, OSError, asyncio.TimeoutError, ValueError, KeyError) as e:
                     result["message"] = f"OneDrive verification failed: {str(e)}"
 
         elif conn_type == "google_drive":
@@ -1741,7 +1741,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                         result["message"] = "Google Drive token verified"
                     else:
                         result["message"] = f"Google Drive verification failed: HTTP {resp.status_code}"
-                except Exception as e:
+                except (ImportError, OSError, asyncio.TimeoutError, ValueError, KeyError) as e:
                     result["message"] = f"Google Drive verification failed: {str(e)}"
 
         elif conn_type == "powerquery":
@@ -1801,7 +1801,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                                     if k is None:
                                         continue
                                     headers[str(k)] = str(v)
-                        except Exception:
+                        except json.JSONDecodeError:
                             # Ignore invalid json; UI will warn
                             pass
 
@@ -1829,7 +1829,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
                         result["message"] = f"HTTP {resp.status_code} OK"
                     else:
                         result["message"] = f"HTTP {resp.status_code} from {url}"
-                except Exception as e:
+                except (ImportError, OSError, asyncio.TimeoutError, ValueError, KeyError, AttributeError) as e:
                     result["message"] = f"API test failed: {str(e)}"
             
         else:
@@ -1839,7 +1839,7 @@ async def test_connection_by_id(conn_id: str, db: Session = Depends(get_db)):
         conn.health_status = "healthy" if result["success"] else "failed"
         db.commit()
         
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, AttributeError, KeyError, asyncio.TimeoutError) as e:
         result["success"] = False
         result["error"] = str(e)
         conn.last_health_check = datetime.now(timezone.utc)
@@ -1937,7 +1937,7 @@ async def test_llm_provider(provider_id: str, db: Session = Depends(get_db)):
             result["message"] = f"Test not implemented for provider: {provider.provider}"
             result["success"] = True  # Assume OK if not testable
             
-    except Exception as e:
+    except (ImportError, OSError, asyncio.TimeoutError, ValueError, KeyError, AttributeError) as e:
         result["error"] = str(e)
     
     return result
@@ -1983,7 +1983,7 @@ async def test_embedding_model(model_id: str, db: Session = Depends(get_db)):
             result["message"] = f"Test not implemented for: {model.provider}"
             result["success"] = True
             
-    except Exception as e:
+    except (ImportError, OSError, asyncio.TimeoutError, ValueError, KeyError, AttributeError) as e:
         result["error"] = str(e)
     
     return result
@@ -2034,7 +2034,7 @@ async def migrate_database(db: Session = Depends(get_db)):
     except ImportError as e:
         result["error"] = f"Migration module not found: {str(e)}"
         logger.error("Migration import error: %s", e)
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, AttributeError, KeyError) as e:
         result["error"] = f"Migration failed: {str(e)}"
         logger.error("Migration error: %s", e)
     
@@ -2073,7 +2073,7 @@ async def check_schema_health(db: Session = Depends(get_db)):
             }
         }
         
-    except Exception as e:
+    except (ImportError, OSError, RuntimeError, ValueError, AttributeError, KeyError) as e:
         result["status"] = "error"
         result["error"] = str(e)
         logger.error("Schema health check error: %s", e)
