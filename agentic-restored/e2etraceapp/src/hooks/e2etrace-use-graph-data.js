@@ -47,7 +47,7 @@ export function useE2ETraceGraphData(setTableElements) {
     return () => {
         isMounted = false;
     };
-  }, [setTableElements]);
+  }, []);
 
   return { graphData, loading, loadingError, setGraphData };
 }
