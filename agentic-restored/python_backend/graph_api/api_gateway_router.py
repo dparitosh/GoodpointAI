@@ -183,7 +183,7 @@ async def proxy_request(request: ProxyRequest):
         raise HTTPException(status_code=504, detail="Gateway timeout") from None
     except httpx.ConnectError as e:
         raise HTTPException(status_code=502, detail=f"Bad gateway: {str(e)}") from e
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:
         logger.error("Proxy request failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -302,7 +302,7 @@ async def create_kong_service(name: str, url: str):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error creating Kong service: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -341,7 +341,7 @@ async def create_kong_route(route: APIRoute):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error creating Kong route: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -376,7 +376,7 @@ async def list_kong_services(
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error listing Kong services: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -412,7 +412,7 @@ async def add_kong_rate_limiting(service_name: str, config: RateLimitConfig):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error adding Kong rate limiting: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -444,7 +444,7 @@ async def create_kong_consumer(consumer: APIConsumer):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error creating Kong consumer: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -500,7 +500,7 @@ async def create_apigee_proxy(name: str, base_path: str, target_url: str):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error creating Apigee proxy: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -553,7 +553,7 @@ async def list_apigee_proxies(
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error listing Apigee proxies: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -610,7 +610,7 @@ async def create_apigee_product(
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error creating Apigee product: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -649,7 +649,7 @@ async def register_api_endpoint(route: APIRoute):
         
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, OSError, ValueError, KeyError, RuntimeError) as e:
         logger.error("Error registering API endpoint: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
