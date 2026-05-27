@@ -69,7 +69,7 @@ def main() -> int:
         sys.stdout.flush()
         return 0
 
-    except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+    except (OSError, RuntimeError, ValueError) as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
         # Always emit JSON so the backend can surface a deterministic error.
         sys.stdout.write(
             json.dumps(

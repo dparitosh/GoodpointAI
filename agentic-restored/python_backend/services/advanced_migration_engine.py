@@ -604,7 +604,7 @@ class AdvancedMigrationEngine:
             for ws in websockets_copy:
                 try:
                     await ws.send_json(message)
-                except Exception as e:  # pylint: disable=broad-except
+                except (OSError, RuntimeError, asyncio.CancelledError) as e:  # pylint: disable=broad-except
                     logger.warning("Failed to send to WebSocket: %s", e)
                     disconnected.append(ws)
             
