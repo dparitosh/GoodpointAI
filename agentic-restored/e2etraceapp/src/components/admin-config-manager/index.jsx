@@ -50,7 +50,7 @@ export function AdminConfigManager() {
   // Fetch data on component mount
   useEffect(() => {
     api.fetchData();
-  }, [api]);
+  }, [api.fetchData]);
 
   // Tab configuration
   const tabs = [
