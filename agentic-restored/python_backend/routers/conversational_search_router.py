@@ -907,7 +907,7 @@ async def get_search_suggestions(
         ]
         
         return {"suggestions": suggestions, "query": q}
-    except Exception as e:
+    except (OSError, ValueError, KeyError, RuntimeError, AttributeError) as e:
         logger.warning("Suggestions failed: %s", e)
         return {"suggestions": [], "query": q}
 
@@ -929,14 +929,14 @@ async def search_health(db: Session = Depends(get_db)):
         try:
             health = opensearch_service.health()
             opensearch_ok = health.get("status") in ["green", "yellow"]
-        except Exception:
+        except (OSError, RuntimeError, ValueError, AttributeError):
             pass
     
     if graphrag_service:
         try:
             health = graphrag_service.health_check()
             graphrag_ok = health.get("neo4j_connected", False)
-        except Exception:
+        except (OSError, RuntimeError, ValueError, AttributeError):
             pass
     
     return {
