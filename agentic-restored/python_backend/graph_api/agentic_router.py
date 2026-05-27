@@ -533,7 +533,7 @@ async def process_agentic_task(
     try:
         result = await orchestrator.execute_task(task, driver_instance)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, KeyError, OSError) as e:
         logger.error("Task processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Task processing failed: {str(e)}") from e
 
@@ -574,7 +574,7 @@ async def process_chat_message(
                 session_id=session_id
             )
     
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, KeyError, OSError) as e:
         logger.error("Chat processing failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Chat processing failed: {str(e)}") from e
 
@@ -622,7 +622,7 @@ async def get_agentic_system_status():
     try:
         # Return real orchestrator status (no fabricated payloads)
         return orchestrator.get_system_status()
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError) as e:
         logger.error("Error getting agentic system status: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -647,7 +647,7 @@ async def get_active_agents_list(
             "total_count": len(active_agents),
             "timestamp": datetime.now().isoformat(),
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, KeyError, OSError) as e:
         logger.error("Error getting active agents: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -675,7 +675,7 @@ async def get_agent_metrics():
             },
             "timestamp": datetime.now().isoformat(),
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, KeyError, OSError, TypeError) as e:
         logger.error("Error getting agent metrics: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 

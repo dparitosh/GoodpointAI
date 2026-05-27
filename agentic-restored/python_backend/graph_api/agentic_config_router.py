@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 import logging
 import json
 from datetime import datetime
+import asyncio
 
 from core.agentic_config_manager import config_manager
 
@@ -27,7 +28,7 @@ async def get_configuration() -> Dict[str, Any]:
             "status": "success",
             "data": config
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error getting configuration: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -44,7 +45,7 @@ async def update_configuration(
             trigger_deployment=trigger_deployment
         )
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error updating configuration: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -56,7 +57,7 @@ async def get_configuration_schema() -> Dict[str, Any]:
             "status": "success",
             "schema": config_manager.schema
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError) as e:
         logger.error("Error getting schema: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -93,7 +94,7 @@ async def validate_configuration(config_data: Dict[str, Any]) -> Dict[str, Any]:
             "error_path": list(e.path) if e.path else [],
             "error_value": e.instance
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Error validating configuration: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -106,7 +107,7 @@ async def get_deployment_status() -> Dict[str, Any]:
             "status": "success",
             "data": status
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error getting deployment status: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -118,7 +119,7 @@ async def trigger_deployment_endpoint(
     """Manually trigger deployment"""
     try:
         return await config_manager.trigger_deployment(deployment_config or {}, _background_tasks)
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error triggering deployment: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -130,7 +131,7 @@ async def trigger_deployment_legacy(
     """Trigger deployment with current configuration"""
     try:
         return await config_manager.trigger_deployment(deployment_config or {}, _background_tasks)
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error triggering deployment: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -143,7 +144,7 @@ async def get_configuration_analytics() -> Dict[str, Any]:
             "status": "success",
             "data": analytics
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error getting analytics: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -158,7 +159,7 @@ async def get_data_sources() -> Dict[str, Any]:
             "status": "success",
             "data": data_sources
         }
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error getting data sources: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -168,7 +169,7 @@ async def add_data_source(data_source_config: Dict[str, Any]) -> Dict[str, Any]:
     try:
         result = await config_manager.add_data_source(data_source_config)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Error adding data source: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -181,7 +182,7 @@ async def update_data_source(
     try:
         result = await config_manager.update_data_source(source_id, data_source_config)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Error updating data source: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -191,7 +192,7 @@ async def delete_data_source(source_id: str) -> Dict[str, Any]:
     try:
         result = await config_manager.delete_data_source(source_id)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Error deleting data source: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -201,7 +202,7 @@ async def test_data_source_connection(source_id: str) -> Dict[str, Any]:
     try:
         result = await config_manager.test_data_source_connection(source_id)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Error testing data source connection: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -217,7 +218,7 @@ async def export_configuration() -> Dict[str, Any]:
             "data": config_data,
             "timestamp": config_data.get("exported_at")
         }
-    except Exception as e:  # pylint: disable=broad-except
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Error exporting configuration: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e  # noqa: BLE001
 
@@ -227,7 +228,7 @@ async def import_configuration(config_data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         result = await config_manager.import_configuration(config_data)
         return result
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError, json.JSONDecodeError) as e:
         logger.error("Error importing configuration: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e  # noqa: BLE001
 
@@ -241,7 +242,7 @@ async def health_check() -> Dict[str, Any]:
             "health": health_status,
             "timestamp": datetime.now().isoformat()
         }
-    except Exception as e:  # pylint: disable=broad-except
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
         logger.error("Health check failed: %s", e)
         return {
             "status": "error",
@@ -275,6 +276,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 
     except WebSocketDisconnect:
         config_manager.remove_websocket_connection(websocket)
-    except Exception as e:  # pylint: disable=broad-except
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.CancelledError) as e:
         logger.error("WebSocket error: %s", e)
         config_manager.remove_websocket_connection(websocket)

@@ -74,7 +74,7 @@ class GraphAnalysisAgent:
             self.results = result
             return result
             
-        except Exception as e:
+        except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError) as e:
             self.status = "error"
             execution_time = (datetime.now() - start_time).total_seconds()
             self.metrics = {
@@ -627,7 +627,7 @@ async def execute_graph_analysis(
             agent_status=agent_status
         )
         
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, asyncio.TimeoutError, KeyError, TypeError) as e:
         logger.error("Graph analysis failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Graph analysis failed: {str(e)}") from e
 
@@ -643,7 +643,7 @@ async def execute_multi_agent_orchestration(
         result = await orchestrator.orchestrate_analysis(request, driver_instance)
         return result
         
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError) as e:
         logger.error("Multi-agent orchestration failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Orchestration failed: {str(e)}") from e
 
@@ -665,7 +665,7 @@ async def execute_single_agent(
             "results": result
         }
         
-    except Exception as e:
+    except (RuntimeError, AttributeError, ValueError, OSError, KeyError, asyncio.TimeoutError) as e:
         logger.error("Single agent execution failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}") from e
 
