@@ -80,7 +80,7 @@ logger.info("Loaded FastAPI app module from %s", __file__)
 # The VS Code tasks set GRAPH_TRACE_LOAD_DOTENV=true.
 try:
     import core.external_config as _external_config  # noqa: F401
-except Exception:  # pylint: disable=broad-exception-caught
+except (ImportError, ModuleNotFoundError, AttributeError):
     # Non-fatal: app can still start with environment/DB-backed config.
     pass
 
@@ -92,7 +92,7 @@ def _best_effort_seed_config() -> None:
         from scripts.seed_db_config import seed_defaults
 
         seed_defaults(force=False)
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (ImportError, ModuleNotFoundError, AttributeError, SQLAlchemyError) as exc:
         logger.debug("Early DB config seeding skipped: %s", exc)
 
 

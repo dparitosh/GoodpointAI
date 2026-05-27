@@ -6,6 +6,7 @@ import sys
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -58,7 +59,7 @@ def main():
         print(f"\n✅ Migration execution completed successfully!")
         return 0
         
-    except Exception as e:
+    except (SQLAlchemyError, ValueError, RuntimeError, AttributeError) as e:
         print(f"\n❌ Migration failed: {e}")
         import traceback
         traceback.print_exc()

@@ -313,7 +313,7 @@ class AdvancedMigrationEngine:
                         workflow_id=session.workflow_id,
                         timestamp=now_iso,
                     )
-        except Exception as e:  # pylint: disable=broad-except
+        except (AttributeError, KeyError, ValueError, SQLAlchemyError, OSError) as e:
             logger.warning("Lineage emit failed (best-effort): %s", e)
 
     def _is_terminal(self, state: MigrationState) -> bool:
@@ -565,7 +565,7 @@ class AdvancedMigrationEngine:
                 return
             logger.info("Migration %s was cancelled", session.session_id)
             await self._transition_state(session, MigrationState.CANCELLED, MigrationEvent.CANCEL)
-        except Exception as e:  # pylint: disable=broad-except
+        except (asyncio.TimeoutError, ValueError, RuntimeError, AttributeError) as e:
             logger.error("Migration %s failed: %s", session.session_id, e)
             session.errors.append(str(e))
             await self._transition_state(session, MigrationState.FAILED, "ERROR")
@@ -667,7 +667,7 @@ class AdvancedMigrationEngine:
         try:
             if self._lock.locked():
                 return self.sessions.get(session_id)
-        except Exception:  # pylint: disable=broad-except
+        except (RuntimeError, AttributeError):
             return self.sessions.get(session_id)
         return self.sessions.get(session_id)
     
@@ -705,7 +705,7 @@ class AdvancedMigrationEngine:
         if cancel and getattr(session, "task", None):
             try:
                 session.task.cancel()
-            except Exception:  # pylint: disable=broad-except
+            except (RuntimeError, AttributeError):
                 pass
 
         self.sessions.pop(session_id, None)
