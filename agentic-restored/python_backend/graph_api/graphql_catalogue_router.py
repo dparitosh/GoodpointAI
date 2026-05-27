@@ -81,7 +81,7 @@ async def list_queries(
         response.headers["X-Total-Count"] = str(len(queries))
 
         return queries
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:
         logger.error("List queries failed: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -101,7 +101,7 @@ async def get_query(
         return query
     except HTTPException:
         raise
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:
         logger.error("Get query failed: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -121,7 +121,7 @@ async def get_query_by_name(
         return query
     except HTTPException:
         raise
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as e:
         logger.error("Get query by name failed: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e)) from e
 

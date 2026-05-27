@@ -81,7 +81,7 @@ def _require_mcp():
 
         mod = importlib.import_module("mcp.server.fastmcp")
         return getattr(mod, "FastMCP")
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (ImportError, AttributeError) as exc:  # pylint: disable=broad-exception-caught
         raise RuntimeError(
             "MCP Python SDK is not installed. Install optional deps (see requirements.txt)."
         ) from exc
@@ -230,7 +230,7 @@ def _anomaly_analysis(reports: List[Dict[str, Any]]) -> Dict[str, Any]:
             if raw is None:
                 continue
             scores.append(float(raw))
-        except Exception:  # pylint: disable=broad-exception-caught
+        except (ValueError, TypeError) as exc:  # pylint: disable=broad-exception-caught
             continue
 
     return {

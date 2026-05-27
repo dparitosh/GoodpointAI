@@ -512,7 +512,7 @@ class AgenticConfigurationManager:
             for websocket in self.websocket_connections:
                 try:
                     await websocket.send_text(message_str)
-                except Exception:  # pylint: disable=broad-exception-caught
+                except (OSError, RuntimeError, asyncio.CancelledError):  # pylint: disable=broad-exception-caught
                     disconnected.append(websocket)
             
             # Remove disconnected clients
