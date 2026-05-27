@@ -31,7 +31,7 @@ def get_encrypted_config_payload(key: str) -> Optional[Dict[str, Any]]:
         if not isinstance(payload, dict):
             return None
         return payload
-    except Exception as exc:  # pylint: disable=broad-exception-caught
+    except (ValueError, OSError, AttributeError, KeyError) as exc:
         logger.debug("Failed to load encrypted config %r: %s", key, exc)
         return None
     finally:

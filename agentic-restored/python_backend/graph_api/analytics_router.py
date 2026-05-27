@@ -146,7 +146,7 @@ async def execute_sql_query(request: SQLQueryRequest):
             
     except HTTPException:
         raise
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError, asyncio.TimeoutError) as e:
         logger.error("SQL query execution error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -179,7 +179,7 @@ async def record_upload_metric(request: UploadMetricRequest):
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error recording upload metric: %s", e)
         detail = {
             "status": "error",
@@ -217,7 +217,7 @@ async def record_service_health(request: ServiceHealthRequest):
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error recording service health: %s", e)
         detail = {
             "status": "error",
@@ -253,7 +253,7 @@ async def record_migration_quality(request: MigrationQualityRequest):
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error recording migration quality: %s", e)
         detail = {
             "status": "error",
@@ -289,7 +289,7 @@ async def get_upload_metrics(
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error retrieving upload metrics: %s", e)
         detail = {
             "status": "error",
@@ -322,7 +322,7 @@ async def get_service_health_metrics(
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error retrieving service health metrics: %s", e)
         detail = {
             "status": "error",
@@ -355,7 +355,7 @@ async def get_migration_quality_metrics(
         
         return result
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Error retrieving migration quality metrics: %s", e)
         detail = {
             "status": "error",
@@ -391,7 +391,7 @@ async def analytics_health_check():
             "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
         
-    except Exception as e:
+    except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
         logger.error("Analytics health check failed: %s", e)
         detail = {
             "status": "error",

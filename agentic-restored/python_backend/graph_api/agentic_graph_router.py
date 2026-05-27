@@ -421,7 +421,7 @@ class AgenticGraphOrchestrator:
                 "execution_time": (datetime.now() - self.active_orchestrations[orchestration_id]["start_time"]).total_seconds()
             }
             
-        except Exception as e:
+        except (RuntimeError, ValueError, KeyError, OSError, AttributeError) as e:
             self.active_orchestrations[orchestration_id]["status"] = "error"
             self.active_orchestrations[orchestration_id]["error"] = str(e)
             raise

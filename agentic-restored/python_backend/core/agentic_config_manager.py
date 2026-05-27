@@ -259,7 +259,7 @@ class AgenticConfigurationManager:
         except jsonschema.ValidationError as e:
             logger.error("JSON schema validation error: %s", e)
             raise HTTPException(status_code=400, detail=f"Schema validation failed: {e}") from e
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (RuntimeError, OSError, ValueError, AttributeError, KeyError) as e:
             logger.error("Error updating configuration: %s", e)
             raise HTTPException(status_code=500, detail=f"Configuration update failed: {e}") from e
     
@@ -466,7 +466,7 @@ class AgenticConfigurationManager:
             
             return result
             
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (asyncio.TimeoutError, OSError, ValueError, RuntimeError) as e:  # pylint: disable=broad-exception-caught
             logger.error("Deployment failed: %s", e)
             self.deployment_status.status = "failed"
             self.deployment_status.completed_at = datetime.now()
@@ -694,7 +694,7 @@ class AgenticConfigurationManager:
                 "data": {"config": self.current_config.dict() if self.current_config else {}}
             }
             
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
             logger.error("Error adding data source: %s", e)
             raise HTTPException(status_code=500, detail=str(e)) from e
     
@@ -729,7 +729,7 @@ class AgenticConfigurationManager:
             
         except HTTPException:
             raise
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
             logger.error("Error updating data source: %s", e)
             raise HTTPException(status_code=500, detail=str(e)) from e
     
@@ -762,7 +762,7 @@ class AgenticConfigurationManager:
             
         except HTTPException:
             raise
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
             logger.error("Error deleting data source: %s", e)
             raise HTTPException(status_code=500, detail=str(e)) from e
     
@@ -810,7 +810,7 @@ class AgenticConfigurationManager:
                 
         except HTTPException:
             raise
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
             logger.error("Error testing data source connection: %s", e)
             return {
                 "status": "error",
@@ -857,7 +857,7 @@ class AgenticConfigurationManager:
             
         except ValidationError as e:
             raise HTTPException(status_code=400, detail=f"Invalid configuration format: {e}") from e
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError, KeyError) as e:
             logger.error("Error importing configuration: %s", e)
             raise HTTPException(status_code=500, detail=str(e)) from e
     
@@ -877,7 +877,7 @@ class AgenticConfigurationManager:
                 "status": "ok" if self.config_file.exists() else "warning",
                 "message": "Configuration file accessible" if self.config_file.exists() else "Configuration file not found"
             }
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except OSError as e:
             checks["config_file"] = {
                 "status": "error",
                 "message": str(e)
@@ -889,7 +889,7 @@ class AgenticConfigurationManager:
                 "status": "ok" if self.schema_file.exists() else "warning",
                 "message": "Schema file accessible" if self.schema_file.exists() else "Schema file not found"
             }
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except OSError as e:
             checks["schema_file"] = {
                 "status": "error",
                 "message": str(e)
@@ -907,7 +907,7 @@ class AgenticConfigurationManager:
                 "status": "ok",
                 "message": "Adapter factory initialized"
             }
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ValueError, OSError, RuntimeError, AttributeError) as e:
             checks["database_adapters"] = {
                 "status": "error",
                 "message": str(e)
