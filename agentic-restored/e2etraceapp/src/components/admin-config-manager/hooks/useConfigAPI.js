@@ -6,7 +6,7 @@ import { formatApiError } from '../utils/apiErrorFormatter';
 import { buildPayload } from '../utils/payloadBuilder';
 import { getSaveValidationError } from '../utils/validators';
 
-const API_BASE = `${process.env.VITE_API_BASE_URL || ''}/api/admin/config`;
+const API_BASE = `${import.meta.env.VITE_API_BASE_URL || ''}/api/admin/config`;
 
 export const useConfigAPI = (state, showMessage) => {
   const {
