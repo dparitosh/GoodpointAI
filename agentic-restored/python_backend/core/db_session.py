@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError
 
 from core.database import Base
 from core.external_config import database_config
@@ -90,28 +90,6 @@ DATABASE_URL = (
 )
 
 DATABASE_URL = normalize_sqlalchemy_postgres_url(DATABASE_URL)
-
-# Validate configuration
-if DATABASE_URL.startswith("sqlite:"):
-    error_msg = (
-        "SQLite is not supported as configured. "
-        "GraphTrace requires PostgreSQL for data persistence. "
-        "Configure via DATABASE_URL or POSTGRES_* environment variables. "
-        "See INSTALLATION.md and POSTGRESQL_CONNECTION_TROUBLESHOOTING.md"
-    )
-    logger.error(error_msg)
-    raise RuntimeError(error_msg)
-
-if not DATABASE_URL or not DATABASE_URL.startswith(("postgresql://", "postgresql+psycopg://")):
-    error_msg = (
-        f"Invalid database configuration: {redacted_database_url()}. "
-        f"Expected postgresql:// connection string. "
-        f"Check DATABASE_URL or POSTGRES_* environment variables."
-    )
-    logger.error(error_msg)
-    raise RuntimeError(error_msg)
-
-logger.info("Database URL configured: %s", redacted_database_url())
 
 connect_args: dict[str, object] = {}
 
@@ -196,30 +174,53 @@ def verify_database_connectivity(timeout_s: float = 5.0) -> Optional[str]:
         logger.info("✓ Database connection verified. Connected to: %s", redacted_database_url())
         return None
         
-    except TimeoutError as e:
-        error_msg = (
+    except TimeoutError:
+        timeout_msg = (
             f"Database connection timeout ({timeout_s}s). "
             f"Server may be unresponsive. Check POSTGRES_HOST and POSTGRES_PORT."
         )
-        logger.error(error_msg)
-        return error_msg
+        logger.error(timeout_msg)
+        return timeout_msg
         
-    except ConnectionError as e:
-        error_msg = (
+    except ConnectionError as conn_err:
+        conn_msg = (
             f"Cannot connect to PostgreSQL server. "
-            f"Check POSTGRES_HOST and POSTGRES_PORT are correct. Error: {e}"
+            f"Check POSTGRES_HOST and POSTGRES_PORT are correct. Error: {conn_err}"
         )
-        logger.error(error_msg)
-        return error_msg
+        logger.error(conn_msg)
+        return conn_msg
         
-    except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}"
+    except OperationalError as op_err:
+        op_msg = f"{type(op_err).__name__}: {op_err}"
         logger.error(
             "Database connectivity check failed: %s. Configuration: %s",
-            error_msg,
+            op_msg,
             redacted_database_url()
         )
-        return error_msg
+        return op_msg
+
+
+# Validate configuration after functions are defined
+if DATABASE_URL.startswith("sqlite:"):
+    error_msg = (
+        "SQLite is not supported as configured. "
+        "GraphTrace requires PostgreSQL for data persistence. "
+        "Configure via DATABASE_URL or POSTGRES_* environment variables. "
+        "See INSTALLATION.md and POSTGRESQL_CONNECTION_TROUBLESHOOTING.md"
+    )
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
+
+if not DATABASE_URL or not DATABASE_URL.startswith(("postgresql://", "postgresql+psycopg://")):
+    error_msg = (
+        f"Invalid database configuration: {redacted_database_url()}. "
+        f"Expected postgresql:// connection string. "
+        f"Check DATABASE_URL or POSTGRES_* environment variables."
+    )
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
+
+logger.info("Database URL configured: %s", redacted_database_url())
 
 
 def get_db() -> Generator[Session, None, None]:
