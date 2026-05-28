@@ -1,0 +1,267 @@
+/* ── AgentPipelineStrip ─────────────────────────────────────────────────── */
+
+.agent-pipeline-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel-bg, #1a1f2e);
+  border: 1px solid var(--border-color, #2a3144);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  min-height: 44px;
+}
+
+.agent-pipeline-strip.aps-live {
+  border-color: var(--accent-color, #0066CC);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--accent-color, #0066CC) 6%, var(--panel-bg, #1a1f2e)),
+    var(--panel-bg, #1a1f2e)
+  );
+}
+
+.agent-pipeline-strip.aps-no-workflow {
+  opacity: 0.75;
+}
+
+/* ── Context (left) ────────────────────────────────────────────────── */
+
+.aps-context {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.aps-route-icon {
+  color: var(--accent-color, #0066CC);
+  font-size: 14px;
+}
+
+.aps-workflow-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aps-no-workflow-label {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+}
+
+.aps-source-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  background: var(--badge-bg, rgba(255,255,255,0.06));
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* ── Stage chain (centre) ──────────────────────────────────────────── */
+
+.aps-stages {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  flex-wrap: nowrap;
+}
+
+.aps-connector {
+  display: flex;
+  align-items: center;
+  padding: 0 3px;
+}
+
+.aps-chevron {
+  font-size: 9px;
+  color: var(--text-muted, #6b7280);
+}
+
+.aps-chevron-done {
+  color: var(--success-color, #22c55e);
+}
+
+.aps-stage {
+  position: relative;
+}
+
+.aps-stage-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.aps-stage-link:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+/* Status dots */
+.aps-stage-status-dot i {
+  font-size: 11px;
+}
+
+.aps-idle  .aps-stage-status-dot i { color: var(--text-muted,  #6b7280); }
+.aps-done  .aps-stage-status-dot i { color: var(--success-color,#22c55e); }
+.aps-active .aps-stage-status-dot i { color: var(--accent-color, #3b82f6); }
+.aps-blocked .aps-stage-status-dot i { color: var(--error-color,  #ef4444); }
+
+/* Stage labels */
+.aps-stage-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted, #9ca3af);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.aps-done  .aps-stage-label { color: var(--success-color, #22c55e); }
+.aps-active .aps-stage-label { color: var(--accent-color,  #3b82f6); font-weight: 600; }
+.aps-blocked .aps-stage-label { color: var(--error-color,   #ef4444); }
+
+/* Current page highlight */
+.aps-current-page .aps-stage-link {
+  background: color-mix(in srgb, var(--accent-color, #0066CC) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color, #0066CC) 40%, transparent);
+}
+
+.aps-current-page .aps-stage-label {
+  color: var(--accent-color, #60a5fa);
+  font-weight: 700;
+}
+
+/* "Next" pill badge */
+.aps-next-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent-color, #3b82f6);
+  background: color-mix(in srgb, var(--accent-color, #3b82f6) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color, #3b82f6) 35%, transparent);
+  padding: 0px 5px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Next action stage pulse */
+.aps-next-action .aps-stage-link {
+  animation: aps-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes aps-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.72; }
+}
+
+/* ── Right CTAs ────────────────────────────────────────────────────── */
+
+.aps-next-cta,
+.aps-start-cta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.aps-next-cta {
+  background: var(--accent-color, #0066CC);
+  color: #fff;
+  margin-left: auto;
+}
+
+.aps-start-cta {
+  background: color-mix(in srgb, var(--accent-color, #0066CC) 18%, transparent);
+  color: var(--accent-color, #60a5fa);
+  border: 1px solid color-mix(in srgb, var(--accent-color, #0066CC) 40%, transparent);
+  margin-left: auto;
+}
+
+.aps-next-cta:hover,
+.aps-start-cta:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.aps-next-cta i:last-child {
+  font-size: 10px;
+}
+
+/* ── Health badge ──────────────────────────────────────────────────── */
+
+.aps-health-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #2a3144);
+  background: var(--background-color-offset, rgba(255,255,255,0.04));
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.aps-health-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.aps-health-ok   { background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: aps-health-glow 2.5s infinite; }
+.aps-health-warn { background: #f59e0b; }
+
+@keyframes aps-health-glow {
+  0%,100% { box-shadow: 0 0 0 0   rgba(34,197,94,0.45); }
+  60%     { box-shadow: 0 0 0 4px rgba(34,197,94,0);    }
+}
+
+.aps-health-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
+}
+
+
+
+/* ── Responsive collapse ───────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  .aps-workflow-name,
+  .aps-source-badge,
+  .aps-stage-label { display: none; }
+
+  .aps-next-cta span,
+  .aps-start-cta span { display: none; }
+
+  .aps-health-label { display: none; }
+}

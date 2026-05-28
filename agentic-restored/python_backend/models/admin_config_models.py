@@ -23,6 +23,103 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================
+# Supported Connection Types Registry
+# ============================================================
+
+SUPPORTED_CONNECTION_TYPES = {
+    # Database Connections
+    "postgres": {
+        "name": "PostgreSQL",
+        "category": "database",
+        "description": "PostgreSQL relational database",
+    },
+    "neo4j": {
+        "name": "Neo4j",
+        "category": "database",
+        "description": "Neo4j graph database",
+    },
+    "opensearch": {
+        "name": "OpenSearch",
+        "category": "database",
+        "description": "OpenSearch vector search and analytics",
+    },
+    "redis": {
+        "name": "Redis",
+        "category": "database",
+        "description": "Redis cache and session store",
+    },
+    
+    # REST API Connections
+    "api": {
+        "name": "API (Generic)",
+        "category": "api",
+        "description": "Generic HTTP API endpoint",
+    },
+    "rest_api": {
+        "name": "REST API",
+        "category": "api",
+        "description": "RESTful API service",
+    },
+    "webapi": {
+        "name": "Web API",
+        "category": "api",
+        "description": "Web service/API endpoint",
+    },
+    "openapi": {
+        "name": "OpenAPI/Swagger",
+        "category": "api",
+        "description": "OpenAPI specification endpoint",
+    },
+    "odata": {
+        "name": "OData Service",
+        "category": "api",
+        "description": "OData protocol service endpoint",
+    },
+    
+    # Cloud Storage
+    "s3": {
+        "name": "AWS S3",
+        "category": "storage",
+        "description": "Amazon S3 bucket",
+    },
+    "azure_blob": {
+        "name": "Azure Blob Storage",
+        "category": "storage",
+        "description": "Azure Blob Storage container",
+    },
+    
+    # File Systems
+    "local_folder": {
+        "name": "Local Folder",
+        "category": "filesystem",
+        "description": "Local file system directory",
+    },
+    "onedrive": {
+        "name": "OneDrive",
+        "category": "filesystem",
+        "description": "Microsoft OneDrive",
+    },
+    "google_drive": {
+        "name": "Google Drive",
+        "category": "filesystem",
+        "description": "Google Drive storage",
+    },
+    
+    # Special Types
+    "soda_external": {
+        "name": "Soda External Runner",
+        "category": "special",
+        "description": "External Python interpreter for Soda scans",
+    },
+    "powerquery": {
+        "name": "PowerQuery Editor",
+        "category": "special",
+        "description": "Power Query M Language editor",
+    },
+}
+
+
+# ============================================================
 # Enums
 # ============================================================
 
@@ -259,7 +356,42 @@ class APIKeyConfig(Base):
 class ConnectionConfig(Base):
     """
     External service connection configuration.
-    Stores connection settings for databases, APIs, etc.
+    Stores connection settings for databases, APIs, cloud storage, and file systems.
+    
+    Supported connection_type values (see SUPPORTED_CONNECTION_TYPES):
+    
+    DATABASE CONNECTIONS:
+    - postgres: PostgreSQL database
+    - neo4j: Neo4j graph database
+    - opensearch: OpenSearch vector search
+    - redis: Redis cache store
+    
+    EXTERNAL APIs:
+    - api: Generic HTTP API
+    - rest_api: RESTful API service
+    - webapi: Web API endpoint
+    - openapi: OpenAPI/Swagger specification
+    - odata: OData protocol service
+    
+    CLOUD STORAGE:
+    - s3: Amazon S3
+    - azure_blob: Azure Blob Storage
+    
+    FILE SYSTEMS:
+    - local_folder: Local file directory
+    - onedrive: Microsoft OneDrive
+    - google_drive: Google Drive
+    
+    SPECIAL:
+    - soda_external: External Python interpreter
+    - powerquery: Power Query M Language
+    
+    Authentication Support (in extra_options.auth_type):
+    - none: No authentication
+    - bearer: Bearer token (OAuth2/JWT)
+    - oauth2: OAuth2 flow
+    - api_key: Custom API key header
+    - basic: HTTP Basic Auth (username/password)
     """
     __tablename__ = "connection_configs"
 

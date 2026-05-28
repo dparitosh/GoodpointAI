@@ -387,7 +387,114 @@ def seed_connections(db: Session):
             },
             "status": "active" if soda_python else "inactive",
             "is_default": True,
-        }
+        },
+        # REST API Connection Templates
+        {
+            "id": "generic_rest_api",
+            "connection_type": "rest_api",
+            "name": "Generic REST API Template",
+            "description": "Template for connecting to generic REST API services",
+            "connection_string": "https://api.example.com/v1",
+            "extra_options": {
+                "auth_type": "none",
+                "test_path": "/health",
+                "timeout_s": 10.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "salesforce_api",
+            "connection_type": "rest_api",
+            "name": "Salesforce REST API",
+            "description": "Salesforce REST API with Bearer token authentication",
+            "connection_string": "https://yourdomain.salesforce.com/services/data/v59.0",
+            "extra_options": {
+                "auth_type": "bearer",
+                "test_path": "/sobjects",
+                "timeout_s": 15.0,
+                "headers_json": "{\"Sforce-Call-Options\": \"client=MyApp\"}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "custom_api_key",
+            "connection_type": "api",
+            "name": "Custom API with API Key",
+            "description": "Template for APIs using API Key authentication",
+            "connection_string": "https://api.yourservice.com",
+            "extra_options": {
+                "auth_type": "api_key",
+                "api_key_header": "X-API-Key",
+                "test_path": "/api/health",
+                "timeout_s": 10.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "openapi_service",
+            "connection_type": "openapi",
+            "name": "OpenAPI/Swagger Service",
+            "description": "OpenAPI specification endpoint (auto-discovers /openapi.json)",
+            "connection_string": "https://api.example.com",
+            "extra_options": {
+                "auth_type": "none",
+                "test_path": "/openapi.json",
+                "timeout_s": 10.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "odata_service",
+            "connection_type": "odata",
+            "name": "OData Service",
+            "description": "OData protocol endpoint (auto-discovers /$metadata)",
+            "connection_string": "https://services.odata.org/V4/Northwind",
+            "extra_options": {
+                "auth_type": "none",
+                "test_path": "/$metadata",
+                "timeout_s": 10.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "oauth2_service",
+            "connection_type": "rest_api",
+            "name": "OAuth2 Protected API",
+            "description": "REST API with OAuth2 bearer token",
+            "connection_string": "https://api.oauth.example.com/v2",
+            "extra_options": {
+                "auth_type": "oauth2",
+                "test_path": "/api/user",
+                "timeout_s": 15.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
+        {
+            "id": "basic_auth_api",
+            "connection_type": "webapi",
+            "name": "Web API with Basic Auth",
+            "description": "Web API using Basic (username/password) authentication",
+            "connection_string": "https://api.basicauth.example.com",
+            "extra_options": {
+                "auth_type": "basic",
+                "test_path": "/api/status",
+                "timeout_s": 10.0,
+                "headers_json": "{}"
+            },
+            "status": "inactive",
+            "is_default": False
+        },
     ]
     
     created_count = 0
@@ -399,7 +506,8 @@ def seed_connections(db: Session):
             created_count += 1
     
     db.commit()
-    logger.info("Created %s connection configurations", created_count)
+    logger.info(f"Created {created_count} core connection configurations")
+    logger.info("✓ REST API connection templates seeded successfully")
 
 
 def seed_feature_flags(db: Session):

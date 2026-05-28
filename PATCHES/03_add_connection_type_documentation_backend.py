@@ -1,0 +1,342 @@
+"""
+PATCH 03: Add Connection Type Documentation & Optional Database Constraint
+===========================================================================
+
+File 1: agentic-restored/python_backend/models/admin_config_models.py
+File 2: SQL Migration (optional, for production hardening)
+
+Description:
+- Documents supported connection types in the ConnectionConfig model
+- Adds validation for connection types
+- Provides optional SQL migration for database-level constraint
+- Improves code maintainability and prevents invalid types
+
+Deployment:
+1. Apply model changes to admin_config_models.py
+2. (Optional) Run SQL migration for database constraint
+3. Restart backend
+"""
+
+# ============================================================
+# PATCH 1: Update admin_config_models.py
+# ============================================================
+
+# ADD THIS CONSTANT SECTION NEAR THE TOP OF FILE (after imports, before classes):
+
+SUPPORTED_CONNECTION_TYPES = {
+    # Database Connections
+    "postgres": {
+        "name": "PostgreSQL",
+        "category": "database",
+        "description": "PostgreSQL relational database",
+        "requires": ["host", "port", "database", "username", "password"],
+        "optional": ["ssl_cert_path", "use_ssl", "pool_size", "max_overflow"]
+    },
+    "neo4j": {
+        "name": "Neo4j",
+        "category": "database",
+        "description": "Neo4j graph database",
+        "requires": ["host", "port", "username", "password"],
+        "optional": ["database", "use_ssl", "pool_size"]
+    },
+    "opensearch": {
+        "name": "OpenSearch",
+        "category": "database",
+        "description": "OpenSearch vector search and analytics",
+        "requires": ["host", "port"],
+        "optional": ["username", "password", "use_ssl", "extra_options"]
+    },
+    "redis": {
+        "name": "Redis",
+        "category": "database",
+        "description": "Redis cache and session store",
+        "requires": ["host", "port"],
+        "optional": ["database", "password", "use_ssl"]
+    },
+    
+    # REST API Connections
+    "api": {
+        "name": "API (Generic)",
+        "category": "api",
+        "description": "Generic HTTP API endpoint",
+        "requires": ["connection_string"],
+        "optional": ["extra_options.auth_type", "password", "extra_options.timeout_s", "extra_options.headers_json"]
+    },
+    "rest_api": {
+        "name": "REST API",
+        "category": "api",
+        "description": "RESTful API service",
+        "requires": ["connection_string"],
+        "optional": ["extra_options.auth_type", "password", "extra_options.test_path", "extra_options.timeout_s"]
+    },
+    "webapi": {
+        "name": "Web API",
+        "category": "api",
+        "description": "Web service/API endpoint",
+        "requires": ["connection_string"],
+        "optional": ["extra_options.auth_type", "username", "password"]
+    },
+    "openapi": {
+        "name": "OpenAPI/Swagger",
+        "category": "api",
+        "description": "OpenAPI specification endpoint",
+        "requires": ["connection_string"],
+        "optional": ["extra_options.auth_type", "password"]
+    },
+    "odata": {
+        "name": "OData Service",
+        "category": "api",
+        "description": "OData protocol service endpoint",
+        "requires": ["connection_string"],
+        "optional": ["extra_options.auth_type", "username", "password"]
+    },
+    
+    # Cloud Storage
+    "s3": {
+        "name": "AWS S3",
+        "category": "storage",
+        "description": "Amazon S3 bucket",
+        "requires": ["extra_options.bucket"],
+        "optional": ["extra_options.prefix", "extra_options.region", "username", "password"]
+    },
+    "azure_blob": {
+        "name": "Azure Blob Storage",
+        "category": "storage",
+        "description": "Azure Blob Storage container",
+        "requires": ["extra_options.account_name", "extra_options.container"],
+        "optional": ["extra_options.sas_token", "password"]
+    },
+    
+    # File Systems
+    "local_folder": {
+        "name": "Local Folder",
+        "category": "filesystem",
+        "description": "Local file system directory",
+        "requires": ["extra_options.folder_path"],
+        "optional": []
+    },
+    "onedrive": {
+        "name": "OneDrive",
+        "category": "filesystem",
+        "description": "Microsoft OneDrive",
+        "requires": ["password"],  # Access token in password field
+        "optional": ["extra_options.root_path", "extra_options.drive_id"]
+    },
+    "google_drive": {
+        "name": "Google Drive",
+        "category": "filesystem",
+        "description": "Google Drive storage",
+        "requires": ["password"],  # Access token in password field
+        "optional": ["extra_options.folder_id", "extra_options.shared_drive_id"]
+    },
+    
+    # Special Types
+    "soda_external": {
+        "name": "Soda External Runner",
+        "category": "special",
+        "description": "External Python interpreter for Soda scans",
+        "requires": ["extra_options.python_path"],
+        "optional": ["extra_options.timeout_s"]
+    },
+    "powerquery": {
+        "name": "PowerQuery Editor",
+        "category": "special",
+        "description": "Power Query M Language editor",
+        "requires": ["extra_options.m_query"],
+        "optional": ["extra_options.query_name", "extra_options.data_source_name"]
+    },
+}
+
+
+# ============================================================
+# UPDATE ConnectionConfig CLASS DOCSTRING:
+# ============================================================
+
+# FIND THIS:
+BEFORE_DOCSTRING = '''class ConnectionConfig(Base):
+    """
+    External service connection configuration.
+    Stores connection settings for databases, APIs, etc.
+    """'''
+
+# REPLACE WITH THIS:
+AFTER_DOCSTRING = '''class ConnectionConfig(Base):
+    """
+    External service connection configuration.
+    Stores connection settings for databases, APIs, cloud storage, and file systems.
+    
+    Supported connection_type values:
+    
+    DATABASE CONNECTIONS:
+    - postgres: PostgreSQL database
+    - neo4j: Neo4j graph database
+    - opensearch: OpenSearch vector search
+    - redis: Redis cache store
+    
+    EXTERNAL APIs:
+    - api: Generic HTTP API
+    - rest_api: RESTful API service
+    - webapi: Web API endpoint
+    - openapi: OpenAPI/Swagger specification
+    - odata: OData protocol service
+    
+    CLOUD STORAGE:
+    - s3: Amazon S3
+    - azure_blob: Azure Blob Storage
+    
+    FILE SYSTEMS:
+    - local_folder: Local file directory
+    - onedrive: Microsoft OneDrive
+    - google_drive: Google Drive
+    
+    SPECIAL:
+    - soda_external: External Python interpreter
+    - powerquery: Power Query M Language
+    
+    Authentication Support (in extra_options.auth_type):
+    - none: No authentication
+    - bearer: Bearer token (OAuth2/JWT)
+    - oauth2: OAuth2 flow
+    - api_key: Custom API key header
+    - basic: HTTP Basic Auth (username/password)
+    
+    See SUPPORTED_CONNECTION_TYPES dict for detailed field requirements.
+    """'''
+
+
+# ============================================================
+# PATCH 2: Optional SQL Migration for Database Constraint
+# ============================================================
+
+# Create file: agentic-restored/python_backend/alembic/versions/xxxx_add_connection_type_constraint.py
+# This adds a CHECK constraint to the connection_type column
+
+MIGRATION_CODE = '''"""Add connection type constraint
+
+Revision ID: 001_add_connection_type_constraint
+Revises: 
+Create Date: 2025-01-XX XX:XX:XX.XXXXXX
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '001_add_connection_type_constraint'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+VALID_CONNECTION_TYPES = (
+    # Database
+    'postgres', 'neo4j', 'opensearch', 'redis',
+    # APIs
+    'api', 'rest_api', 'webapi', 'openapi', 'odata',
+    # Storage
+    's3', 'azure_blob',
+    # File Systems
+    'local_folder', 'onedrive', 'google_drive',
+    # Special
+    'soda_external', 'powerquery'
+)
+
+
+def upgrade():
+    """Add CHECK constraint for valid connection types"""
+    op.execute(f"""
+        ALTER TABLE connection_configs
+        ADD CONSTRAINT ck_connection_type_valid
+        CHECK (connection_type IN ({','.join(repr(t) for t in VALID_CONNECTION_TYPES)}))
+    """)
+
+
+def downgrade():
+    """Remove CHECK constraint"""
+    op.execute("""
+        ALTER TABLE connection_configs
+        DROP CONSTRAINT ck_connection_type_valid
+    """)
+'''
+
+# ============================================================
+# PATCH 3: Optional - Update Pydantic Validation Schemas
+# ============================================================
+
+# In admin_config_models.py, add validation for ConnectionConfigCreate and ConnectionConfigUpdate:
+
+VALIDATION_SCHEMA = '''
+from pydantic import BaseModel, Field, field_validator
+
+class ConnectionConfigCreate(BaseModel):
+    """Schema for creating a new connection"""
+    connection_type: str = Field(..., description="Type of connection")
+    name: str = Field(..., description="Display name")
+    description: Optional[str] = None
+    connection_string: Optional[str] = None
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    extra_options: Optional[Dict[str, Any]] = None
+    
+    @field_validator('connection_type')
+    def validate_connection_type(cls, v):
+        """Validate that connection_type is supported"""
+        valid_types = list(SUPPORTED_CONNECTION_TYPES.keys())
+        if v not in valid_types:
+            raise ValueError(
+                f"Invalid connection_type: {v}. "
+                f"Must be one of: {', '.join(valid_types)}"
+            )
+        return v
+
+
+class ConnectionConfigUpdate(BaseModel):
+    """Schema for updating a connection"""
+    # ... same fields as Create but all optional
+    connection_type: Optional[str] = None
+    name: Optional[str] = None
+    # ... other fields
+    
+    @field_validator('connection_type')
+    def validate_connection_type(cls, v):
+        """Validate that connection_type is supported"""
+        if v is None:
+            return v
+        valid_types = list(SUPPORTED_CONNECTION_TYPES.keys())
+        if v not in valid_types:
+            raise ValueError(
+                f"Invalid connection_type: {v}. "
+                f"Must be one of: {', '.join(valid_types)}"
+            )
+        return v
+'''
+
+# ============================================================
+# DEPLOYMENT CHECKLIST:
+# ============================================================
+
+CHECKLIST = """
+☐ 1. Apply PATCH 01: Update seed_admin_configs.py to include REST API connections
+☐ 2. Apply PATCH 02: Update admin-config-manager.jsx frontend component
+☐ 3. Apply PATCH 03: Update admin_config_models.py with documentation
+☐ 4. (Optional) Create and apply SQL migration for CHECK constraint
+☐ 5. Run Python backend seed script:
+     cd agentic-restored/python_backend
+     python -m scripts.seed_admin_configs
+☐ 6. Rebuild frontend:
+     cd e2etraceapp
+     npm run build
+☐ 7. Restart backend service
+☐ 8. Test: Create new REST API connection in Admin Config UI
+☐ 9. Verify in database:
+     SELECT id, connection_type, name FROM connection_configs 
+     WHERE connection_type IN ('api', 'rest_api', 'webapi', 'openapi', 'odata');
+☐ 10. Test connection functionality with /connections/{id}/test endpoint
+"""
+
+print(CHECKLIST)
+"""
