@@ -5,6 +5,10 @@ import './MigrationPage.css';
 
 /**
  * Error boundary to catch rendering failures in the migration wizard.
+ * 
+ * NOTE: MigrationErrorBoundary MUST be a class component.
+ * React does not support Error Boundaries as functional components or hooks.
+ * This is why we use `class ... extends Component` instead of `const ... = () =>`.
  */
 class MigrationErrorBoundary extends Component {
   constructor(props) {

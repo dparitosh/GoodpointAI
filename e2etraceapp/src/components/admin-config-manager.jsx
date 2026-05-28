@@ -598,9 +598,11 @@ function ConnectionForm({ connection, onChange }) {
               <option value="local_folder">Local Folder</option>
               <option value="onedrive">OneDrive</option>
               <option value="google_drive">Google Drive</option>
+              <option value="sharepoint">SharePoint</option>
             </optgroup>
             
             <optgroup label="Other">
+              <option value="soda_external">Soda External Runner</option>
               <option value="powerquery">PowerQuery Editor</option>
             </optgroup>
           </select>
@@ -737,6 +739,32 @@ function ConnectionForm({ connection, onChange }) {
               placeholder='{"X-Custom-Header": "value", "X-Request-ID": "123"}'
               rows="3"
             />
+          </div>
+        </>
+      )}
+
+      {isSodaExternal && (
+        <>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Python Path</label>
+              <input 
+                type="text" 
+                value={extra.python_path || ''} 
+                onChange={e => updateExtra('python_path', e.target.value)}
+                placeholder="/usr/bin/python3 or C:\\Python\\python.exe"
+              />
+            </div>
+            <div className="form-group">
+              <label>Timeout (seconds)</label>
+              <input 
+                type="number" 
+                min="10" 
+                max="300" 
+                value={extra.timeout_s || 30} 
+                onChange={e => updateExtra('timeout_s', parseFloat(e.target.value))}
+              />
+            </div>
           </div>
         </>
       )}

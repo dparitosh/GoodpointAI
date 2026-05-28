@@ -104,6 +104,11 @@ SUPPORTED_CONNECTION_TYPES = {
         "category": "filesystem",
         "description": "Google Drive storage",
     },
+    "sharepoint": {
+        "name": "SharePoint",
+        "category": "filesystem",
+        "description": "Microsoft SharePoint document libraries",
+    },
     
     # Special Types
     "soda_external": {
