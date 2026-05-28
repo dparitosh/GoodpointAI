@@ -15,6 +15,12 @@ Param(
     If you encounter execution policy errors (SecurityError), use:
     - powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
     
+    PostgreSQL Configuration:
+    - Development: Set POSTGRES_PORT=5433 (or your local port)
+    - Production: Default POSTGRES_PORT=5432
+    - Use POSTGRES_* environment variables (more flexible than DATABASE_URL)
+    - See: POSTGRESQL_CONNECTION_TROUBLESHOOTING.md
+    
     If you encounter pip errors (e.g., hash validation), use the manual installation method instead:
     - Reference: docs/INSTALLATION.md (Manual Installation section)
     - This involves manually running venv, pip install, and npm install commands
@@ -26,6 +32,9 @@ Param(
 
 $ErrorActionPreference = 'Stop'
 
+# Set execution policy for this process
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+
 function Assert-Command($name, $hint) {
   if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
     Write-Host "Missing required command: $name" -ForegroundColor Red
@@ -36,6 +45,7 @@ function Assert-Command($name, $hint) {
 
 Write-Host "GraphTrace bootstrap (Windows)" -ForegroundColor Green
 Write-Host "Alternative: Use manual installation (docs/INSTALLATION.md) for more reliable setup" -ForegroundColor Yellow
+Write-Host "PostgreSQL Configuration Guide: See POSTGRESQL_CONNECTION_TROUBLESHOOTING.md" -ForegroundColor Cyan
 
 Assert-Command python "Install Python 3.10+ and ensure it's on PATH."
 Assert-Command node "Install Node.js 18+ (includes npm)."

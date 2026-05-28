@@ -30,6 +30,13 @@ Run the script with execution policy bypass for just that invocation:
 powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 ```
 
+Or using set execution policy for the process:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+.\start-all.ps1
+```
+
 This is the **safest approach** - it doesn't change your system policies.
 
 ### Option 2: Set Execution Policy (Requires Admin)
@@ -69,26 +76,52 @@ Create a database (example: `graphtrace`).
 If `psql` is available:
 
 ```powershell
-psql -U postgres -h localhost -p 5433 -c "CREATE DATABASE graphtrace;"
+psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE graphtrace;"
 ```
 
-> If your Postgres runs on a different port, use that port.
+> Replace `5432` with your PostgreSQL port if it's different.
 
 ### Configure backend connection
 
-Edit:
+**Two approaches:** (Option A recommended)
 
-- `agentic-restored/python_backend/.env`
+#### Option A: Use POSTGRES_* Environment Variables (RECOMMENDED)
 
-Set `DATABASE_URL` like:
+Edit `agentic-restored/python_backend/.env` and use individual variables:
 
 ```dotenv
-DATABASE_URL="postgresql://postgres:<password>@127.0.0.1:5433/graphtrace"
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password
+POSTGRES_DATABASE=graphtrace
+
+# DO NOT set DATABASE_URL - let it build from POSTGRES_* variables
 ```
 
-Notes:
+**Benefits:**
+- Defaults to port 5432 (standard PostgreSQL port)
+- Works with any port (dev: 5433, production: 5432)
+- More secure (credentials in env vars, not connection string)
+- Matches production deployment patterns
 
-- VS Code tasks start the backend with `GRAPH_TRACE_LOAD_DOTENV=true`, so `.env` is loaded automatically.
+#### Option B: Use DATABASE_URL (Legacy)
+
+Edit `agentic-restored/python_backend/.env`:
+
+```dotenv
+DATABASE_URL="postgresql://postgres:your_password@127.0.0.1:5432/graphtrace"
+```
+
+**Note:** This approach hardcodes the port. Use Option A for flexibility.
+
+#### Port Configuration
+
+- **Development (local)**: Usually port 5433 or 5432
+- **Production/Customer**: Standard port 5432 (unless custom)
+- **Application default**: Port 5432 (when using POSTGRES_* variables)
+
+See [POSTGRESQL_CONNECTION_TROUBLESHOOTING.md](../POSTGRESQL_CONNECTION_TROUBLESHOOTING.md) and [POSTGRES_QUICK_FIX.md](../POSTGRES_QUICK_FIX.md) for detailed configuration.
 
 ## 2) Optional: Ollama (Local LLM)
 

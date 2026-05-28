@@ -181,9 +181,15 @@ class FileSystemConfig(BaseSettings):
     # JSON format (recommended): WATCH_FOLDERS='["./data/watch","./uploads"]'
     # String format: WATCH_FOLDERS="./data/watch;./uploads"
     # If not set or empty, defaults to ["./data/watch"]
-    # NOTE: Using string default (not list) to ensure field_validator runs before JSON parsing
-    # This prevents JSON decode errors when WATCH_FOLDERS env var is unset/empty
-    watch_folders: List[str] = Field(default="./data/watch", validation_alias="WATCH_FOLDERS")
+    #
+    # NOTE: Field validator must handle parsing before Pydantic's JSON parsing.
+    # Using a string default allows the validator to run first, preventing JSONDecodeError
+    # when WATCH_FOLDERS environment variable is unset or empty.
+    watch_folders: List[str] = Field(
+        default="./data/watch",
+        validation_alias="WATCH_FOLDERS",
+        description="Directories to watch for file changes. Supports JSON array, semicolon/comma-separated, or single path."
+    )
     
     # File size limits (in MB)
     max_upload_size_mb: int = Field(default=100, validation_alias="MAX_UPLOAD_SIZE_MB")
@@ -230,18 +236,34 @@ class FileSystemConfig(BaseSettings):
                 logger.warning("WATCH_FOLDERS JSON parsed but not a list: %s", v)
                 return ["./data/watch"]
             except (json.JSONDecodeError, ValueError) as e:
-                logger.warning("Failed to parse WATCH_FOLDERS as JSON: %s. Error: %s", v, e)
+                logger.warning(
+                    "Failed to parse WATCH_FOLDERS='%s' as JSON. "
+                    "Falling back to default ['./data/watch']. "
+                    "Expected formats: JSON array like [\"./path1\",\"./path2\"], "
+                    "semicolon-separated like './path1;./path2', or single path. "
+                    "Error: %s",
+                    v, str(e)
+                )
                 return ["./data/watch"]
         
         # Semicolon-separated paths (Windows style): "path1;path2"
         if ";" in v:
-            return [p.strip() for p in v.split(";") if p.strip()]
+            paths = [p.strip() for p in v.split(";") if p.strip()]
+            if paths:
+                logger.info("Parsed WATCH_FOLDERS (semicolon-separated): %s", paths)
+                return paths
+            return ["./data/watch"]
         
         # Comma-separated paths: "path1,path2"
         if "," in v:
-            return [p.strip() for p in v.split(",") if p.strip()]
+            paths = [p.strip() for p in v.split(",") if p.strip()]
+            if paths:
+                logger.info("Parsed WATCH_FOLDERS (comma-separated): %s", paths)
+                return paths
+            return ["./data/watch"]
         
         # Single path: "./data/watch"
+        logger.info("Using single WATCH_FOLDERS path: %s", v)
         return [v] if v else ["./data/watch"]
 
 
