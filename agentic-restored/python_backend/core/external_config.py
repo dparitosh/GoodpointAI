@@ -181,7 +181,9 @@ class FileSystemConfig(BaseSettings):
     # JSON format (recommended): WATCH_FOLDERS='["./data/watch","./uploads"]'
     # String format: WATCH_FOLDERS="./data/watch;./uploads"
     # If not set or empty, defaults to ["./data/watch"]
-    watch_folders: List[str] = Field(default_factory=lambda: ["./data/watch"], validation_alias="WATCH_FOLDERS")
+    # NOTE: Using string default (not list) to ensure field_validator runs before JSON parsing
+    # This prevents JSON decode errors when WATCH_FOLDERS env var is unset/empty
+    watch_folders: List[str] = Field(default="./data/watch", validation_alias="WATCH_FOLDERS")
     
     # File size limits (in MB)
     max_upload_size_mb: int = Field(default=100, validation_alias="MAX_UPLOAD_SIZE_MB")
@@ -190,32 +192,56 @@ class FileSystemConfig(BaseSettings):
     @field_validator("watch_folders", mode="before")
     @classmethod
     def parse_watch_folders(cls, v):
-        """Parse watch_folders from string, JSON, or list format"""
+        """
+        Parse watch_folders from string, JSON, or list format.
+        
+        Supports multiple input formats:
+        - List: ["./data/watch", "./uploads"]
+        - JSON: '["./data/watch","./uploads"]'
+        - Semicolon: "./data/watch;./uploads"
+        - Comma: "./data/watch,./uploads"
+        - Single: "./data/watch"
+        - Empty/None: defaults to ["./data/watch"]
+        
+        This validator runs BEFORE Pydantic's default JSON parsing,
+        preventing JSONDecodeError on empty/unset environment variables.
+        """
+        # Already a list - return as-is
         if isinstance(v, list):
             return v
+        
+        # None, empty, or non-string - use default
         if not v or not isinstance(v, str):
             return ["./data/watch"]
         
+        # Strip whitespace
         v = v.strip()
+        
+        # Empty after stripping - use default
         if not v:
             return ["./data/watch"]
         
-        # Try parsing as JSON array
+        # JSON array format: '["path1","path2"]'
         if v.startswith("["):
             try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse WATCH_FOLDERS as JSON: %s", v)
+                result = json.loads(v)
+                if isinstance(result, list):
+                    return result
+                logger.warning("WATCH_FOLDERS JSON parsed but not a list: %s", v)
+                return ["./data/watch"]
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning("Failed to parse WATCH_FOLDERS as JSON: %s. Error: %s", v, e)
+                return ["./data/watch"]
         
-        # Try parsing as semicolon-separated paths (Windows style)
+        # Semicolon-separated paths (Windows style): "path1;path2"
         if ";" in v:
             return [p.strip() for p in v.split(";") if p.strip()]
         
-        # Try parsing as comma-separated paths
+        # Comma-separated paths: "path1,path2"
         if "," in v:
             return [p.strip() for p in v.split(",") if p.strip()]
         
-        # Single path
+        # Single path: "./data/watch"
         return [v] if v else ["./data/watch"]
 
 
