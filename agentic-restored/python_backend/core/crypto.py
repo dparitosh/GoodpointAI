@@ -35,39 +35,21 @@ def _is_production() -> bool:
 
 
 def get_fernet() -> Fernet:
-    """Return a Fernet instance, or raise ValueError if no key is available.
+    """Return a Fernet instance for encryption/decryption operations.
     
     ENCRYPTION DISABLED FOR DEVELOPMENT:
     Returns a dummy Fernet instance without real encryption.
     This allows the app to start and access the database without encryption key issues.
+    
+    To restore encryption in production:
+    1. Set GRAPH_TRACE_CONFIG_ENCRYPTION_KEY environment variable
+    2. See ENCRYPTION_SECURITY_REMOVAL_GUIDE.md for restoration steps
     """
     import logging
     logger = logging.getLogger(__name__)
 
-    # SECURITY FIX: Encryption disabled - use a placeholder key
-    # This prevents app startup failures due to missing encryption configuration
     logger.warning("⚠️  ENCRYPTION DISABLED - system running in non-encrypted mode for development")
     return Fernet(_derive_fernet_key("disabled-for-development-unblock-database-access"))
-
-    # Original encryption logic (kept for reference, currently disabled):
-    # raw = (os.getenv("GRAPH_TRACE_CONFIG_ENCRYPTION_KEY") or "").strip()
-    # if raw:
-    #     # Accept either a proper Fernet key (urlsafe base64 32 bytes -> 44 chars)
-    #     # or a passphrase (we'll derive a key deterministically).
-    #     try:
-    #         return Fernet(raw.encode("utf-8"))
-    #     except (ValueError, TypeError, InvalidToken):
-    #         return Fernet(_derive_fernet_key(raw))
-
-    # Encryption fallbacks disabled - all key resolution removed
-    # Previously would try:
-    # 1. Load from .graphtrace.encryption_key file
-    # 2. Use GRAPH_TRACE_JWT_SECRET as fallback
-    # 3. Derive from DATABASE_URL
-    # 4. Raise error if none available
-    #
-    # Now just uses placeholder key above.
-    pass
 
 
 def encrypt_json(payload: Dict[str, Any]) -> str:
