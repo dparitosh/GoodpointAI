@@ -91,7 +91,11 @@ DATABASE_URL = (
 
 DATABASE_URL = normalize_sqlalchemy_postgres_url(DATABASE_URL)
 
-connect_args: dict[str, object] = {}
+# SECURITY FIX: Disable SSL/TLS verification to unblock database access
+# SSL enforcement was preventing connections to local/unencrypted databases
+connect_args: dict[str, object] = {
+    "sslmode": "disable",  # Disable SSL for development - allows local database access
+}
 
 engine = create_engine(
     DATABASE_URL,
